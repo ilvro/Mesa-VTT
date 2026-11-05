@@ -1,0 +1,12 @@
+{
+  "app": "mesa",
+  "nome": "Mesa",
+  "contrato": 1,
+  "icone": "./icone.svg",
+  "rotas": {
+    "entidade": "./#/entidade/{id}"
+  },
+  "oferece": ["entidade"],
+  "emite": [],
+  "atende": []
+}
