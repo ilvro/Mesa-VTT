@@ -4,7 +4,7 @@ import { carregarEscolhas, escolhas, fichaDaAba, fichasEmAbas, layout, mapaAtual
 import { baseDoApp, inventario, sondarAplicativos } from '../app/inventario.ts';
 import { campanhaAtiva } from '../app/campanha.ts';
 import { enderecoDe } from '../app/aplicativos.ts';
-import { alternarPainel, presetDe, PRESETS, redimensionar, ROTULO_DO_PAINEL, ROTULO_DO_PRESET, visiveis, type Layout, type PainelId, type PresetId } from '../dominio/layout.ts';
+import { alternarPainel, escalaDoPainel, LARGURA_LOGICA_MINIMA, presetDe, PRESETS, redimensionar, ROTULO_DO_PAINEL, ROTULO_DO_PRESET, visiveis, type Layout, type PainelId, type PresetId } from '../dominio/layout.ts';
 import { enderecoDaFicha, enderecoDoAtlas } from '../dominio/sessao.ts';
 import { cx } from './cx.ts';
 import { Diario } from './Diario.tsx';
@@ -16,10 +16,29 @@ const LARGURA_DO_DIVISOR = 8;
 function foraDoAr(app: 'atlas' | 'ficha' | 'jukebox'): boolean { return inventario.value.find(i => i.app === app)?.estado === 'fora-do-ar'; }
 const SemApp = ({ nome }: { nome: string }) => <div class="painel-vazio" data-testid="painel-fora-do-ar"><p>{nome} não está ao lado da Mesa.</p><p class="meta">Suba tudo com “npm run mesa-dev”, na pasta do Atlas.</p></div>;
 
+/**
+ * Desenha o aplicativo numa largura lógica mínima e reduz a escala para caber no painel (ver `LARGURA_LOGICA_MINIMA`). O navegador cuida dos
+ * cliques e do foco dentro do `iframe` mesmo com a transformação. Com espaço de sobra, a escala é 1 e nada muda.
+ */
+function Escalado({ painel, children }: { painel: PainelId; children: preact.ComponentChildren }) {
+  const caixa = useRef<HTMLDivElement>(null), [largura, setLargura] = useState(0);
+  useEffect(() => {
+    const el = caixa.current; if (!el || typeof ResizeObserver === 'undefined') return;
+    const observador = new ResizeObserver(() => setLargura(el.clientWidth)); observador.observe(el); setLargura(el.clientWidth);
+    return () => observador.disconnect();
+  }, []);
+  const escala = escalaDoPainel(largura, LARGURA_LOGICA_MINIMA[painel]);
+  return (
+    <div class="escala-caixa" ref={caixa}>
+      <div class="escala" data-testid={`escala-${painel}`} data-escala={escala.toFixed(3)} style={escala === 1 ? undefined : { width: `${100 / escala}%`, height: `${100 / escala}%`, transform: `scale(${escala})` }}>{children}</div>
+    </div>
+  );
+}
+
 function PainelDoAtlas() {
   const m = mapaAtual.value;
   if (foraDoAr('atlas')) return <SemApp nome="O Atlas" />;
-  return <iframe class="quadro" data-testid="iframe-atlas" title="Atlas" src={enderecoDoAtlas(baseDoApp('atlas'), m?.mapaId ?? null)} allow="fullscreen; autoplay; clipboard-write" />;
+  return <Escalado painel="atlas"><iframe class="quadro" data-testid="iframe-atlas" title="Atlas" src={enderecoDoAtlas(baseDoApp('atlas'), m?.mapaId ?? null)} allow="fullscreen; autoplay; clipboard-write" /></Escalado>;
 }
 
 function PainelDasFichas() {
@@ -52,7 +71,7 @@ function PainelDasFichas() {
 
 function PainelDoJukebox() {
   if (foraDoAr('jukebox')) return <SemApp nome="O Jukebox" />;
-  return <iframe class="quadro" data-testid="iframe-jukebox" title="Jukebox" src={baseDoApp('jukebox')} allow="fullscreen; autoplay" />;
+  return <Escalado painel="jukebox"><iframe class="quadro" data-testid="iframe-jukebox" title="Jukebox" src={baseDoApp('jukebox')} allow="fullscreen; autoplay" /></Escalado>;
 }
 
 const CORPO: Record<PainelId, () => preact.JSX.Element> = { atlas: PainelDoAtlas, fichas: PainelDasFichas, jukebox: PainelDoJukebox, diario: Diario };

@@ -13,11 +13,11 @@ export const sessaoAtiva = signal<Sessao | null>(null);
 export const gravando = signal(false);
 export const linhas = computed(() => lerRegistro(sessaoAtiva.value?.registro ?? ''));
 export const roteiroDaSessao = computed(() => sessaoAtiva.value?.roteiro ?? []);
-/** As notas de cada item do roteiro, por chave do Ref. O contrato guarda só os Refs; as notas ficam no navegador, junto da sessão. */
-export const notasDoRoteiro = signal<Record<string, string>>({});
+/** As notas de cada item do roteiro, por chave do Ref: ficam na sessão, no banco da campanha (`Sessao.roteiroNotas`). */
+export const notasDoRoteiro = computed<Record<string, string>>(() => sessaoAtiva.value?.roteiroNotas ?? {});
 
 const chaveDaSessaoAtiva = (campanhaId: string) => `mesa:sessao-ativa:${campanhaId}`;
-const chaveDasNotas = (sessaoId: string) => `mesa:roteiro-notas:${sessaoId}`;
+const chaveDasNotasAntigas = (sessaoId: string) => `mesa:roteiro-notas:${sessaoId}`;
 const lerJson = (chave: string): unknown => { try { const t = localStorage.getItem(chave); return t ? JSON.parse(t) : null; } catch { return null; } };
 const gravarJson = (chave: string, valor: unknown): void => { try { localStorage.setItem(chave, JSON.stringify(valor)); } catch { /* sem armazenamento */ } };
 
@@ -34,7 +34,7 @@ async function gravarSessao(): Promise<void> {
   catch (erro) { avisar(`Não consegui gravar a sessão: ${mensagemDe(erro)}`, true); }
   finally { gravandoNoBanco = false; }
 }
-function alterarSessao(mudancas: Partial<Pick<Sessao, 'roteiro' | 'registro' | 'nome'>>): void {
+function alterarSessao(mudancas: Partial<Pick<Sessao, 'roteiro' | 'roteiroNotas' | 'registro' | 'nome'>>): void {
   const s = sessaoAtiva.value; if (!s) return;
   const nova = { ...s, ...mudancas };
   sessaoAtiva.value = nova;
@@ -67,6 +67,14 @@ function ouvirFatos(): void {
 }
 function pararDeOuvir(): void { desligarOuvintes.forEach(f => f()); desligarOuvintes = []; }
 
+/** Antes as notas do roteiro ficavam no `localStorage`; ao abrir uma sessão que ainda não tem notas no banco, elas passam para lá. */
+function migrarNotasAntigas(s: Sessao): void {
+  if (s.roteiroNotas !== undefined) return;
+  const antigas = podarNotas(Object(lerJson(chaveDasNotasAntigas(s.id))) as Record<string, string>, s.roteiro);
+  try { localStorage.removeItem(chaveDasNotasAntigas(s.id)); } catch { /* ignora */ }
+  if (Object.keys(antigas).length) alterarSessao({ roteiroNotas: antigas });
+}
+
 function lembrarSessaoAtiva(): void {
   const c = campanhaAtiva.value; if (!c) return;
   const s = sessaoAtiva.value;
@@ -75,7 +83,7 @@ function lembrarSessaoAtiva(): void {
 
 function abrirNaTela(s: Sessao, ligar: boolean): void {
   sessaoAtiva.value = s; ultimo = null;
-  notasDoRoteiro.value = podarNotas(Object(lerJson(chaveDasNotas(s.id))) as Record<string, string>, s.roteiro);
+  migrarNotasAntigas(s);
   gravando.value = ligar;
   if (ligar) ouvirFatos(); else pararDeOuvir();
   lembrarSessaoAtiva();
@@ -128,12 +136,13 @@ export function anotar(texto: string): void { if (texto.trim()) registrar(texto,
 export const adicionarAoRoteiro = (r: Ref): void => alterarSessao({ roteiro: adicionar(roteiroDaSessao.value, r) });
 export function removerDoRoteiro(i: number): void {
   const novo = removerItem(roteiroDaSessao.value, i);
-  alterarSessao({ roteiro: novo });
-  salvarNotas(podarNotas(notasDoRoteiro.value, novo));
+  alterarSessao({ roteiro: novo, roteiroNotas: podarNotas(notasDoRoteiro.value, novo) });
 }
 export const moverNoRoteiro = (i: number, delta: -1 | 1): void => alterarSessao({ roteiro: mover(roteiroDaSessao.value, i, delta) });
-function salvarNotas(notas: Record<string, string>): void { notasDoRoteiro.value = notas; const s = sessaoAtiva.value; if (s) gravarJson(chaveDasNotas(s.id), notas); }
-export function definirNotaDoItem(r: Ref, texto: string): void { salvarNotas({ ...notasDoRoteiro.value, [chaveDaRef(r)]: texto }); }
+export function definirNotaDoItem(r: Ref, texto: string): void {
+  const novas = podarNotas({ ...notasDoRoteiro.value, [chaveDaRef(r)]: texto }, roteiroDaSessao.value);
+  if (JSON.stringify(novas) !== JSON.stringify(notasDoRoteiro.value)) alterarSessao({ roteiroNotas: novas });
+}
 
 /** Abre o item do roteiro no aplicativo dono (o Atlas foca o mapa, a Ficha abre a ficha, o Jukebox toca a cena…). */
 export const abrirItemDoRoteiro = (r: Ref): Promise<'atendido' | 'aba' | 'falhou'> => abrirNoApp(r);

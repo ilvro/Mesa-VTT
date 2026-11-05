@@ -43,10 +43,10 @@ Nada vai para servidor. A campanha vive no IndexedDB `mesa-campanha-v1` da orige
 
 ## Modo sessão e diário
 
-A aba **Sessão** põe os aplicativos lado a lado, em `iframe`s da mesma origem: o **Atlas** embutido (`?embutido=1`: sem galeria, abre o mapa direto em Sessão), as **fichas** das personagens em abas e o **Jukebox**. Os divisores arrastam (ou as setas, com o divisor em foco), os painéis se escondem, cada um tem tela cheia, e há presets (Padrão, Mapa grande, Mapa e fichas, Com diário, Só o mapa). O layout é lembrado neste navegador; o mapa e as fichas escolhidos, por campanha.
+A aba **Sessão** põe os aplicativos lado a lado, em `iframe`s da mesma origem: o **Atlas** embutido (`?embutido=1`: sem galeria, abre o mapa direto em Sessão), as **fichas** das personagens em abas e o **Jukebox**. Os divisores arrastam (ou as setas, com o divisor em foco), os painéis se escondem, o Atlas e o Jukebox encolhem para caber em vez de apertar, cada um tem tela cheia, e há presets (Padrão, Mapa grande, Mapa e fichas, Com diário, Só o mapa). O layout é lembrado neste navegador; o mapa e as fichas escolhidos, por campanha.
 
 O painel **Diário** guarda a sessão no banco da campanha:
 
 - **Iniciar sessão** avisa os outros aplicativos (`mesa.sessao-iniciada`) e passa a registrar, com a hora, as rolagens, os mapas abertos, as regiões em que uma peça entrou, o que foi revelado aos jogadores, os documentos do Ateliê salvos e a música que toca. Você anota por cima (`> …`).
-- **Roteiro:** lista ordenada de mapas, cenas sonoras, documentos e fichas; clicar abre no aplicativo dono. A nota de cada item fica neste navegador (o contrato guarda só os Refs da sessão).
+- **Roteiro:** lista ordenada de mapas, cenas sonoras, documentos e fichas; clicar abre no aplicativo dono. A nota de cada item fica na própria sessão, no banco da campanha (`Sessao.roteiroNotas`).
 - **Exportar .md** gera título, data, roteiro e registro.

@@ -35,6 +35,12 @@ test('9.5a: o modo sessão mostra Atlas, fichas e Jukebox lado a lado, com layou
     await mesa.waitForSelector('[data-testid^="iframe-ficha-"]');
     assert.equal(await mesa.locator('[data-testid="sessao-mapa"] option:checked').textContent(), 'Casa dos Salgueiros');
     for (const id of ['atlas', 'fichas', 'jukebox']) assert.equal(await mesa.locator(`[data-testid="painel-corpo-${id}"]`).count(), 1, id);
+    // Painéis estreitos desenham o aplicativo numa largura mínima e encolhem (o Jukebox, que é estreito, mais que o Atlas); a Ficha não encolhe.
+    const escala = (id: string) => mesa.locator(`[data-testid="escala-${id}"]`).getAttribute('data-escala').then(Number);
+    await mesa.waitForFunction(() => Number(document.querySelector('[data-testid="escala-jukebox"]')?.getAttribute('data-escala')) < 1);
+    const eAtlas = await escala('atlas'), eJuke = await escala('jukebox');
+    assert.ok(eJuke >= 0.5 && eJuke < eAtlas && eAtlas < 1, `Jukebox ${eJuke} < Atlas ${eAtlas} < 1`);
+    assert.equal(await mesa.locator('[data-testid="escala-fichas"]').count(), 0, 'a Ficha se adapta sozinha');
     await mesa.waitForFunction(() => document.querySelectorAll('iframe').length >= 3);
 
     // O Atlas embutido: abre o mapa direto em Sessão, sem galeria, sem alternar modo, com o cabeçalho compacto e o projetor a um botão.
@@ -67,6 +73,7 @@ test('9.5a: o modo sessão mostra Atlas, fichas e Jukebox lado a lado, com layou
 
     // Layout: presets, painéis, divisor arrastado e por teclado, tela cheia, e tudo persiste ao recarregar.
     await mesa.click('[data-testid="preset-so-mapa"]');
+    await mesa.waitForFunction(() => document.querySelector('[data-testid="escala-atlas"]')?.getAttribute('data-escala') === '1.000');   // o mapa sozinho tem largura de sobra: sem redução
     assert.equal(await mesa.locator('[data-testid="painel-corpo-fichas"]').count(), 0); assert.equal(await mesa.locator('[data-testid="iframe-jukebox"]').count(), 0);
     await mesa.click('[data-testid="preset-padrao"]');
     assert.equal(await mesa.locator('[data-testid="painel-corpo-fichas"]').count(), 1);

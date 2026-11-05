@@ -46,6 +46,8 @@ export interface Sessao {
     data: number;
     /** Mapas, cenas sonoras, documentos… na ordem em que devem acontecer. */
     roteiro: Ref[];
+    /** Uma nota por item do roteiro, pela chave do Ref (`app/tipo/id`, a de `chaveDaRef`). Opcional; sessões antigas não têm. */
+    roteiroNotas?: Record<string, string>;
     registro: string;
     criadaEm: number;
     atualizadaEm: number;

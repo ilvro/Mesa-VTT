@@ -69,3 +69,18 @@ export function lerLayout(bruto: unknown): Layout {
   if (new Set(lidos.map(p => p.id)).size !== PAINEIS.length || !lidos.some(p => p.visivel)) return LAYOUT_PADRAO;
   return lidos;
 }
+
+/**
+ * A largura lógica mínima de cada painel, em pixels: abaixo dela o aplicativo dentro do `iframe` fica apertado (o Atlas sobrepõe as ferramentas
+ * e o Jukebox corta os menus). Em vez de mexer neles, a Mesa os desenha nessa largura e reduz a escala para caber no painel.
+ * A Ficha se adapta sozinha à largura e fica sem mínimo.
+ */
+export const LARGURA_LOGICA_MINIMA: Readonly<Partial<Record<PainelId, number>>> = { atlas: 900, jukebox: 520 };
+/** O quanto se reduz no máximo: abaixo de metade o texto deixa de ser legível, então o painel passa a mostrar menos em vez de encolher mais. */
+export const ESCALA_MINIMA = 0.5;
+
+/** A escala para um painel de `larguraPx` que pede `minimoPx` de largura lógica: 1 se cabe, senão a razão, nunca abaixo de `ESCALA_MINIMA`. */
+export function escalaDoPainel(larguraPx: number, minimoPx: number | undefined): number {
+  if (!minimoPx || !(larguraPx > 0) || larguraPx >= minimoPx) return 1;
+  return Math.max(ESCALA_MINIMA, larguraPx / minimoPx);
+}

@@ -26,7 +26,7 @@ async function esperarFatos(p: Page, n: number): Promise<string[]> {
   for (let i = 0; i < 60; i++) { const t = await fatos(p); if (t.length === n) return t; await p.waitForTimeout(150); }
   throw new Error(`Esperava ${n} linhas e há: ${(await fatos(p)).join(' | ')}`);
 }
-const sessoesDoBanco = (p: Page) => p.evaluate(() => new Promise<{ nome: string; registro: string; roteiro: { app: string; tipo: string; id: string }[] }[]>((ok, erro) => { const r = indexedDB.open('mesa-campanha-v1'); r.onerror = () => erro(r.error); r.onsuccess = () => { const db = r.result, q = db.transaction('sessoes').objectStore('sessoes').getAll(); q.onsuccess = () => { db.close(); ok(q.result); }; }; }));
+const sessoesDoBanco = (p: Page) => p.evaluate(() => new Promise<{ nome: string; registro: string; roteiro: { app: string; tipo: string; id: string }[]; roteiroNotas?: Record<string, string> }[]>((ok, erro) => { const r = indexedDB.open('mesa-campanha-v1'); r.onerror = () => erro(r.error); r.onsuccess = () => { const db = r.result, q = db.transaction('sessoes').objectStore('sessoes').getAll(); q.onsuccess = () => { db.close(); ok(q.result); }; }; }));
 
 test('9.5b: roteiro e registro da sessão: avisa o início, registra só os fatos certos, abre os itens, exporta em Markdown e sobrevive a recarregar', async () => {
   const ctx = await amb.navegador.newContext({ viewport: { width: 1600, height: 950 }, acceptDownloads: true });
@@ -99,13 +99,13 @@ test('9.5b: roteiro e registro da sessão: avisa o início, registra só os fato
     assert.match(md, /^# Noite na ilha\n/); assert.match(md, /## Roteiro\n\n1\. \*\*Casa dos Salgueiros\*\* — Atlas · mapa\n   > Começar pela chuva\n2\. \*\*Chuva forte\*\* — Jukebox · cena sonora/);
     assert.match(md, /- \d{2}:\d{2} Muirenn rolou Investigação: 17\n/); assert.match(md, /- \d{2}:\d{2} \*\*Nota:\*\* A porta rangeu\n/);
 
-    // No banco: a sessão tem o registro e o roteiro (só os Refs; as notas por item ficam no navegador).
+    // No banco: a sessão tem o registro, o roteiro e as notas dos itens.
     let guardada = (await sessoesDoBanco(mesa))[0]!;
     for (let i = 0; i < 40 && !(guardada.roteiro.length === 2 && guardada.registro.includes('A porta rangeu')); i++) { await mesa.waitForTimeout(150); guardada = (await sessoesDoBanco(mesa))[0]!; }
     assert.equal(guardada.nome, 'Noite na ilha'); assert.deepEqual(guardada.roteiro.map(r => `${r.app}/${r.tipo}`), ['atlas/mapa', 'jukebox/cena-sonora']);
-    assert.equal(guardada.roteiro[0]!.id, mapaId); assert.match(guardada.registro, /Muirenn rolou Investigação: 17/); assert.match(guardada.registro, /\[\d{2}:\d{2}\] > A porta rangeu/);
+    assert.equal(guardada.roteiro[0]!.id, mapaId); assert.deepEqual(guardada.roteiroNotas, { [`atlas/mapa/${mapaId}`]: 'Começar pela chuva' }, 'a nota do item está na sessão, no banco'); assert.match(guardada.registro, /Muirenn rolou Investigação: 17/); assert.match(guardada.registro, /\[\d{2}:\d{2}\] > A porta rangeu/);
 
-    // Recarregar: a sessão volta, ainda gravando, com as linhas e as notas do roteiro; um fato novo continua entrando.
+    // Recarregar: a sessão volta, ainda gravando, com as linhas e as notas do roteiro (vindas do banco); um fato novo continua entrando.
     await mesa.reload(); await mesa.waitForSelector('[data-testid="aba-sessao"]'); await mesa.click('[data-testid="aba-sessao"]');
     await mesa.waitForSelector('[data-testid="sessao-nome-ativa"]'); // (o painel do diário continua à vista: o layout é lembrado)
     assert.equal(await mesa.locator('[data-testid="sessao-nome-ativa"]').textContent(), 'Noite na ilha');
@@ -130,5 +130,30 @@ test('9.5b: roteiro e registro da sessão: avisa o início, registra só os fato
     assert.equal((await linhas(mesa)).length, totalParado + 1); assert.equal(await mesa.locator('[data-testid="sessao-estado"]').textContent(), 'Gravando');
     assert.ok((await linhas(mesa)).some(t => /Fim da noite$/.test(t)));
     assert.deepEqual(errosDaMesa, [], 'sem erros de script na Mesa');
+  } finally { await ctx.close(); }
+});
+
+test('9.5b: as notas do roteiro que estavam no navegador (versão antiga) passam para o banco ao abrir a sessão', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1500, height: 900 } });
+  try {
+    const mesa = await ctx.newPage();
+    await mesa.goto(`${amb.origem}/Mesa/`);
+    await mesa.click('[data-testid="aba-campanhas"]'); await mesa.fill('[data-testid="nova-campanha-nome"]', 'Migração'); await mesa.press('[data-testid="nova-campanha-nome"]', 'Enter');
+    await mesa.waitForSelector('[data-testid="tela-entidades"]');
+    const campanhaId = (await mesa.evaluate(() => localStorage.getItem('mesa:campanha-ativa')))!;
+    // Uma sessão antiga: o roteiro está no banco, mas a nota estava só no localStorage.
+    await mesa.evaluate(async ([campanhaId, mapa]) => {
+      const repo = (window as unknown as { __mesa: { repositorio(): { salvarSessao(s: unknown): Promise<void> } } }).__mesa.repositorio();
+      await repo.salvarSessao({ id: 'sessao-antiga', campanhaId, nome: 'Antiga', data: 1, roteiro: [mapa], registro: '', criadaEm: 1, atualizadaEm: 1 });
+      localStorage.setItem('mesa:roteiro-notas:sessao-antiga', JSON.stringify({ 'atlas/mapa/m1': 'Nota velha', 'atlas/mapa/fora': 'some' }));
+      localStorage.setItem(`mesa:sessao-ativa:${campanhaId}`, JSON.stringify({ id: 'sessao-antiga', gravando: false }));
+    }, [campanhaId, MAPA] as const);
+    await mesa.reload(); await mesa.click('[data-testid="aba-sessao"]'); await mesa.click('[data-testid="painel-diario"]');
+    await mesa.waitForSelector('[data-testid="diario"]');
+    assert.equal(await mesa.inputValue('[data-testid="roteiro-nota-0"]'), 'Nota velha');
+    let [s] = await sessoesDoBanco(mesa);
+    for (let i = 0; i < 40 && !s!.roteiroNotas; i++) { await mesa.waitForTimeout(150); [s] = await sessoesDoBanco(mesa); }
+    assert.deepEqual(s!.roteiroNotas, { 'atlas/mapa/m1': 'Nota velha' }, 'só a nota de um item que está no roteiro foi para o banco');
+    assert.equal(await mesa.evaluate(() => localStorage.getItem('mesa:roteiro-notas:sessao-antiga')), null, 'a cópia antiga foi apagada');
   } finally { await ctx.close(); }
 });

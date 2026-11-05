@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { alternarPainel, LAYOUT_PADRAO, lerLayout, PRESETS, presetDe, redimensionar, visiveis, type Layout } from '../../src/dominio/layout.ts';
+import { alternarPainel, ESCALA_MINIMA, escalaDoPainel, LARGURA_LOGICA_MINIMA, LAYOUT_PADRAO, lerLayout, PRESETS, presetDe, redimensionar, visiveis, type Layout } from '../../src/dominio/layout.ts';
 
 const soma = (l: Layout) => visiveis(l).reduce((a, p) => a + p.peso, 0);
 const peso = (l: Layout, id: string) => l.find(p => p.id === id)!.peso;
@@ -65,4 +65,13 @@ test('lerLayout: aceita um layout válido; lixo, repetição, peso ruim ou tudo 
   const ok = [{ id: 'jukebox', peso: 1, visivel: true }, { id: 'atlas', peso: 4, visivel: true }, { id: 'diario', peso: 1.5, visivel: false }, { id: 'fichas', peso: 2, visivel: false }];
   assert.deepEqual(lerLayout(ok), ok, 'a ordem guardada vale');
   for (const ruim of [null, 'x', [], [ok[0]], [...ok.slice(0, 3), { id: 'atlas', peso: 1, visivel: true }], ok.slice(0, 3), ok.map(p => ({ ...p, peso: 0 })), ok.map(p => ({ ...p, peso: NaN })), ok.map(p => ({ ...p, visivel: false })), ok.map(p => ({ ...p, id: 'outro' })), ok.map(p => ({ ...p, visivel: 'sim' }))]) assert.equal(lerLayout(ruim), LAYOUT_PADRAO);
+});
+
+test('escalaDoPainel: 1 quando cabe, a razão quando aperta, nunca abaixo da metade; sem mínimo ou largura inválida, 1', () => {
+  assert.equal(escalaDoPainel(900, 900), 1); assert.equal(escalaDoPainel(1400, 900), 1);
+  assert.equal(escalaDoPainel(720, 900), 0.8);
+  assert.equal(escalaDoPainel(260, 520), 0.5); assert.equal(escalaDoPainel(100, 520), ESCALA_MINIMA);
+  assert.equal(escalaDoPainel(300, undefined), 1); assert.equal(escalaDoPainel(0, 520), 1); assert.equal(escalaDoPainel(NaN, 520), 1);
+  assert.equal(LARGURA_LOGICA_MINIMA.fichas, undefined, 'a Ficha se adapta sozinha');
+  assert.ok(LARGURA_LOGICA_MINIMA.atlas! > LARGURA_LOGICA_MINIMA.jukebox!);
 });

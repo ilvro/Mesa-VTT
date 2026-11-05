@@ -55,12 +55,21 @@ export function validarLigacao(v) {
 }
 export function validarSessao(v) {
     objeto(v, 'sessao');
-    soCampos(v, ['id', 'campanhaId', 'nome', 'data', 'roteiro', 'registro', 'criadaEm', 'atualizadaEm'], 'sessao');
+    soCampos(v, ['id', 'campanhaId', 'nome', 'data', 'roteiro', 'roteiroNotas', 'registro', 'criadaEm', 'atualizadaEm'], 'sessao');
     falha(typeof v.id === 'string' && v.id.length > 0 && typeof v.campanhaId === 'string' && v.campanhaId.length > 0, 'Identificador ausente.', 'sessao.id');
     texto(v.nome, 'sessao.nome');
     tempo(v.data, 'sessao.data');
     refs(v.roteiro, 'sessao.roteiro');
     texto(v.registro, 'sessao.registro', 200_000);
+    if (v.roteiroNotas !== undefined) {
+        objeto(v.roteiroNotas, 'sessao.roteiroNotas');
+        const notas = Object.entries(v.roteiroNotas);
+        falha(notas.length <= 64, 'Notas demais no roteiro.', 'sessao.roteiroNotas');
+        for (const [chave, nota] of notas) {
+            falha(chave.length > 0 && chave.length <= 400, 'Chave de nota inválida.', `sessao.roteiroNotas.${chave}`);
+            texto(nota, `sessao.roteiroNotas.${chave}`, 300);
+        }
+    }
     tempo(v.criadaEm, 'sessao.criadaEm');
     tempo(v.atualizadaEm, 'sessao.atualizadaEm');
 }
