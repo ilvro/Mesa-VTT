@@ -8,8 +8,8 @@
 
 | Pasta | O quê |
 | --- | --- |
-| `src/dominio/` | Regras puras: filtros, busca sem acento, quem pode editar, etiquetas |
-| `src/app/` | Estado (signals), banco da campanha, tema, manifestos, rotas |
+| `src/dominio/` | Regras puras: filtros, busca sem acento, quem pode editar, notas com ligações, layout, sessão, registro e roteiro |
+| `src/app/` | Estado (signals), banco da campanha, tema, manifestos, inventário, barramento, sessão e registro, rotas |
 | `src/ui/` | Componentes Preact e o CSS |
 | `vendor/mesa-core/` | Cópia compilada e fixa do contrato (fonte no Atlas) |
 | `public/mesa.json` | Manifesto da Mesa |

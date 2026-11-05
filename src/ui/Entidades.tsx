@@ -4,8 +4,10 @@ import { alterarEntidade, busca, campanhaAtiva, criarEntidade, entidades, filtro
 import { abrirEntidade } from '../app/rotas.ts';
 import { contarPorTipo, lerTags, NOME_DO_APP, NOME_DO_TIPO_DE_REF, podeEditar, ROTULO_DO_TIPO, TIPOS_CRIAVEIS } from '../dominio/entidades.ts';
 import { descobrirApp, enderecoDe } from '../app/aplicativos.ts';
+import { ehRefDeEntidadeDaMesa } from '../dominio/notas.ts';
 import { formatarRef, type Ref } from '#mesa';
 import { cx } from './cx.ts';
+import { EditorDeNota } from './EditorDeNota.tsx';
 
 const tipoNovo = signal<TipoEntidade>('personagem');
 const nomeNovo = signal('');
@@ -46,7 +48,7 @@ function ChipDeRef({ r }: { r: Ref }) {
 }
 
 function Detalhe({ e }: { e: Entidade }) {
-  const editavel = podeEditar(e);
+  const editavel = podeEditar(e), refsVisiveis = e.refs.filter(r => !ehRefDeEntidadeDaMesa(r));
   return (
     <section class="detalhe" data-testid="detalhe">
       <header class="detalhe-topo">
@@ -71,14 +73,11 @@ function Detalhe({ e }: { e: Entidade }) {
           onBlur={ev => { const novas = lerTags(ev.currentTarget.value); if (JSON.stringify(novas) !== JSON.stringify(e.tags)) void alterarEntidade(e, { tags: novas }); }}
           onKeyDown={ev => { if (ev.key === 'Enter') ev.currentTarget.blur(); }} />
       </label>
-      <label class="campo">Notas
-        <textarea key={`notas-${e.id}`} rows={9} defaultValue={e.notas} disabled={!editavel} data-testid="campo-notas" placeholder="O que o mestre precisa lembrar…"
-          onBlur={ev => { const v = ev.currentTarget.value; if (v !== e.notas) void alterarEntidade(e, { notas: v }); }} />
-      </label>
+      <EditorDeNota key={`notas-${e.id}`} e={e} editavel={editavel} />
       <h3 class="faixa pequena">Onde aparece</h3>
-      {e.refs.length === 0
+      {refsVisiveis.length === 0
         ? <p class="dica">Ainda não está em nenhum aplicativo. O Atlas, a Ficha e os outros acrescentam aqui o que a representa neles.</p>
-        : <ul class="refs">{e.refs.map(r => <ChipDeRef key={formatarRef(r)} r={r} />)}</ul>}
+        : <ul class="refs">{refsVisiveis.map(r => <ChipDeRef key={formatarRef(r)} r={r} />)}</ul>}
     </section>
   );
 }

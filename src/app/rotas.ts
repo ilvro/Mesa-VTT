@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals';
 import { selecionadaId } from './campanha.ts';
 
-export type Tela = 'entidades' | 'campanhas';
+export type Tela = 'entidades' | 'campanhas' | 'aplicativos' | 'sessao';
 export const tela = signal<Tela>('entidades');
 
 /** `#/entidade/<id>` é o link profundo do manifesto (`mesa.json`). */
