@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Entidade } from '#mesa';
-import { contarPorTipo, filtrarEntidades, lerTags, podeEditar, semAcento } from '../../src/dominio/entidades.ts';
+import { contarPorTipo, filtrarEntidades, lerTags, podeEditar, ROTULO_DO_TIPO, semAcento } from '../../src/dominio/entidades.ts';
 
 const base = { campanhaId: 'c', refs: [], tags: [], notas: '', criadaPor: 'mesa', criadaEm: 1, atualizadaEm: 1 } as const;
 const e = (id: string, tipo: Entidade['tipo'], nome: string, extra: Partial<Entidade> = {}): Entidade => ({ ...base, id, tipo, nome, ...extra } as Entidade);
@@ -54,4 +54,13 @@ test('lerTags: tira vazias e repetidas (sem acento), corta no limite do contrato
   assert.equal(lerTags('x'.repeat(100))[0]!.length, 40);
   assert.equal(lerTags(Array.from({ length: 80 }, (_, i) => `t${i}`).join(',')).length, 50);
   assert.deepEqual(lerTags(''), []);
+});
+
+test('ameaca: tem rótulo próprio, conta separada de personagem e entra na busca por tipo', () => {
+  const lista = [e('1', 'personagem', 'Muirenn'), e('2', 'ameaca', 'Zumbi de Sangue'), e('3', 'ameaca', 'Ariranha')];
+  const c = contarPorTipo(lista);
+  assert.equal(c.ameaca, 2); assert.equal(c.personagem, 1);
+  assert.deepEqual(filtrarEntidades(lista, { tipo: 'ameaca' }).map(x => x.nome), ['Ariranha', 'Zumbi de Sangue']);
+  assert.deepEqual(filtrarEntidades(lista, { busca: 'zumbi' }).map(x => x.id), ['2']);
+  assert.deepEqual(ROTULO_DO_TIPO.ameaca, { singular: 'Ameaça', plural: 'Ameaças' });
 });
