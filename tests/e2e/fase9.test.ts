@@ -78,7 +78,7 @@ test('fase 9 (validação): a ficha vira peça, a rolagem aparece sobre ela e no
     await juke.waitForTimeout(1200);
 
     // 3. A Ficha de verdade publica as personagens; o Ateliê de verdade arquiva um bilhete com uma camada UV.
-    const ficha = await ctx.newPage(), errosDaFicha: string[] = []; ficha.on('pageerror', e => errosDaFicha.push(String(e).slice(0, 200))); ficha.on('console', m => { if (m.type() === 'error') errosDaFicha.push(m.text().slice(0, 200)); }); await ficha.goto(`${amb.origem}/Ficha/`);
+    const ficha = await ctx.newPage(), errosDaFicha: string[] = []; ficha.on('pageerror', e => errosDaFicha.push(String(e).slice(0, 200))); ficha.on('console', m => { if (m.type() === 'error') errosDaFicha.push(m.text().slice(0, 200)); }); await ficha.goto(`${amb.origem}/Dossie/`);
     await mesa.bringToFront();
     await mesa.waitForFunction(() => { const es = (window as unknown as { __mesa: { entidades(): { tipo: string; criadaPor: string; nome: string }[] } }).__mesa.entidades(); return es.some(e => e.tipo === 'personagem') && ['Aurora', 'Batalha'].every(n => es.some(e => e.tipo === 'cena' && e.criadaPor === 'jukebox' && e.nome === n)); }, null, { timeout: 60_000 });
     const entidades = await mesa.evaluate(() => (window as unknown as { __mesa: { entidades(): { tipo: string; nome: string; criadaPor: string; id: string; refs: { app: string; tipo: string; id: string }[] }[] } }).__mesa.entidades());

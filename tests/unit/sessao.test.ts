@@ -42,8 +42,8 @@ test('mapaEscolhido: o escolhido, se existe; senão o primeiro; senão nenhum', 
 test('endereços: o Atlas embutido com o mapa no hash; a Ficha pelo parâmetro; ids com caracteres especiais são codificados', () => {
   assert.equal(enderecoDoAtlas('http://x/Atlas/', 'm-casa'), 'http://x/Atlas/?embutido=1#/mapa/m-casa');
   assert.equal(enderecoDoAtlas('http://x/Atlas/', null), 'http://x/Atlas/?embutido=1');
-  assert.equal(enderecoDaFicha('http://x/Ficha/', 'sheet-1730'), 'http://x/Ficha/?ficha=sheet-1730');
-  assert.equal(enderecoDaFicha('http://x/Ficha/', 'a b&c'), 'http://x/Ficha/?ficha=a%20b%26c');
+  assert.equal(enderecoDaFicha('http://x/Dossie/', 'sheet-1730'), 'http://x/Dossie/?ficha=sheet-1730');
+  assert.equal(enderecoDaFicha('http://x/Dossie/', 'a b&c'), 'http://x/Dossie/?ficha=a%20b%26c');
 });
 
 test('lerEscolhas: aceita o formato certo e limpa o resto', () => {

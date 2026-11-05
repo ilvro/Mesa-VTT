@@ -1,7 +1,8 @@
 import { signal } from '@preact/signals';
 import { TIPOS_ENTIDADE, type Entidade, type TipoEntidade } from '#mesa';
 import { alterarEntidade, busca, campanhaAtiva, criarEntidade, entidades, filtroTipo, removerEntidade, selecionada, selecionadaId, visiveis } from '../app/campanha.ts';
-import { abrirEntidade } from '../app/rotas.ts';
+import { abrirEntidade, tela } from '../app/rotas.ts';
+import { sondarAplicativos } from '../app/inventario.ts';
 import { contarPorTipo, lerTags, NOME_DO_APP, NOME_DO_TIPO_DE_REF, podeEditar, ROTULO_DO_TIPO, TIPOS_CRIAVEIS } from '../dominio/entidades.ts';
 import { descobrirApp, enderecoDe } from '../app/aplicativos.ts';
 import { ehRefDeEntidadeDaMesa } from '../dominio/notas.ts';
@@ -76,8 +77,36 @@ function Detalhe({ e }: { e: Entidade }) {
       <EditorDeNota key={`notas-${e.id}`} e={e} editavel={editavel} />
       <h3 class="faixa pequena">Onde aparece</h3>
       {refsVisiveis.length === 0
-        ? <p class="dica">Ainda não está em nenhum aplicativo. O Atlas, a Ficha e os outros acrescentam aqui o que a representa neles.</p>
+        ? <p class="dica">Ainda não está em nenhum aplicativo. O Atlas, o Dossiê e os outros acrescentam aqui o que a representa neles.</p>
         : <ul class="refs">{refsVisiveis.map(r => <ChipDeRef key={formatarRef(r)} r={r} />)}</ul>}
+    </section>
+  );
+}
+
+function Visao({ nome }: { nome: string }) {
+  const lista = entidades.value, contagem = contarPorTipo(lista);
+  const recentes = [...lista].sort((a, b) => b.atualizadaEm - a.atualizadaEm).slice(0, 6);
+  const hora = new Date().getHours(), saudacao = hora < 6 ? 'Boa madrugada' : hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+  return (
+    <section class="visao" data-testid="visao-geral">
+      <p class="visao-saudacao">{saudacao}</p>
+      <h2 class="faixa grande">{nome}</h2>
+      <dl class="numeros" aria-label="Resumo da campanha">
+        <div><dd>{lista.length}</dd><dt>Entidades</dt></div>
+        {TIPOS_CRIAVEIS.filter(t => t !== 'sessao').map(t => <div key={t}><dd>{contagem[t]}</dd><dt>{ROTULO_DO_TIPO[t].plural}</dt></div>)}
+      </dl>
+      {recentes.length > 0 && (<>
+        <h3 class="faixa pequena">Mexidas por último</h3>
+        <ul class="recentes">{recentes.map(e => (
+          <li key={e.id}><button type="button" onClick={() => abrirEntidade(e.id)}><span class="item-tipo">{ROTULO_DO_TIPO[e.tipo].singular}</span><b>{e.nome}</b><span class="meta">{new Date(e.atualizadaEm).toLocaleDateString('pt-BR')}</span></button></li>
+        ))}</ul>
+      </>)}
+      <h3 class="faixa pequena">Começar</h3>
+      <div class="comecar">
+        <button type="button" class="comecar-cartao" onClick={() => document.querySelector<HTMLInputElement>('[data-testid="nova-entidade-nome"]')?.focus()}><b>Criar uma entidade</b><small>Personagem, lugar, pista, facção ou nota.</small></button>
+        <button type="button" class="comecar-cartao" onClick={() => { tela.value = 'sessao'; }}><b>Abrir a sessão</b><small>Os aplicativos lado a lado, com o diário.</small></button>
+        <button type="button" class="comecar-cartao" onClick={() => { tela.value = 'aplicativos'; void sondarAplicativos(); }}><b>Ver os aplicativos</b><small>O que a Mesa achou ao lado dela.</small></button>
+      </div>
     </section>
   );
 }
@@ -114,7 +143,7 @@ export function Entidades() {
             </ul>}
       </aside>
       <main class="coluna-detalhe">
-        {sel ? <Detalhe e={sel} /> : <div class="vazio"><h2>Escolha uma entidade</h2><p>Personagens, lugares, pistas e notas da campanha, com tudo o que as representa em cada aplicativo.</p></div>}
+        {sel ? <Detalhe e={sel} /> : <Visao nome={c.nome} />}
       </main>
     </div>
   );

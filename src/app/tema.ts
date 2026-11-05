@@ -2,7 +2,8 @@ import { signal } from '@preact/signals';
 import { aplicarTema, gravarTema, lerTema, observarTema, type Tema } from '#mesa';
 
 /** O tema vem do localStorage compartilhado da mesa (`mesa:tema`); trocar aqui troca em todas as abas e aplicativos abertos. */
-export const tema = signal<Tema>(lerTema(localStorage));
+const PADRAO: Tema = { id: 'mesa' };
+export const tema = signal<Tema>(lerTema(localStorage, PADRAO));
 
 export function iniciarTema(): () => void {
   aplicarTema(document.documentElement, tema.value);

@@ -9,7 +9,7 @@ export interface Campanha {
     nome: string;
     /** Ex.: 'ordem-paranormal'. Texto livre. */
     sistema: string;
-    tema: 'ordem' | 'prata' | 'neutro' | null;
+    tema: 'atlas' | 'mesa' | 'ordem' | 'vigilia' | 'neutro' | null;
     capa: string | null;
     criadaEm: number;
     atualizadaEm: number;

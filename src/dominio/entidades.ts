@@ -19,7 +19,7 @@ export const ROTULO_DO_TIPO: Readonly<Record<TipoEntidade, { singular: string; p
 export const TIPOS_CRIAVEIS: readonly TipoEntidade[] = ['personagem', 'lugar', 'pista', 'faccao', 'sessao', 'nota'];
 
 export const NOME_DO_APP: Readonly<Record<AppId, string>> = {
-  atlas: 'Atlas', ficha: 'Ficha', atelie: 'Ateliê', jukebox: 'Jukebox', tabletop: 'Tabletop', mesa: 'Mesa',
+  atlas: 'Atlas', ficha: 'Dossiê', atelie: 'Ateliê', jukebox: 'Jukebox', tabletop: 'Tabletop', mesa: 'Mesa',
 };
 
 /** O que cada aplicativo mostra da entidade, em palavras. */
@@ -29,7 +29,7 @@ export const NOME_DO_TIPO_DE_REF: Readonly<Record<string, string>> = {
 
 /** Pasta de cada aplicativo ao lado da Mesa (mesma origem, como no GitHub Pages e no `mesa-dev`). */
 export const PASTA_DO_APP: Readonly<Record<AppId, string>> = {
-  atlas: 'Atlas', ficha: 'Ficha', atelie: 'Atelie', jukebox: 'Jukebox', tabletop: 'Tabletop', mesa: 'Mesa',
+  atlas: 'Atlas', ficha: 'Dossie', atelie: 'Atelie', jukebox: 'Jukebox', tabletop: 'Tabletop', mesa: 'Mesa',
 };
 
 /** Minúsculas e sem acento: “Ateliê” casa com “atelie”. */

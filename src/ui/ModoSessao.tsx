@@ -45,8 +45,8 @@ function PainelDasFichas() {
   const abas = fichasEmAbas.value, ativa = fichaDaAba.value;
   const [abertas, setAbertas] = useState<string[]>([]);
   useEffect(() => { if (ativa && !abertas.includes(ativa.fichaId)) setAbertas(a => [...a, ativa.fichaId]); }, [ativa?.fichaId]);
-  if (foraDoAr('ficha')) return <SemApp nome="A Ficha" />;
-  if (!personagens.value.length) return <div class="painel-vazio" data-testid="fichas-vazio"><p>Nenhuma personagem com ficha nesta campanha.</p><p class="meta">Abra a Ficha com esta campanha ativa: ela publica as personagens aqui.</p></div>;
+  if (foraDoAr('ficha')) return <SemApp nome="O Dossiê" />;
+  if (!personagens.value.length) return <div class="painel-vazio" data-testid="fichas-vazio"><p>Nenhuma personagem com ficha nesta campanha.</p><p class="meta">Abra o Dossiê com esta campanha ativa: ela publica as personagens aqui.</p></div>;
   return (
     <>
       <div class="abas-fichas" role="tablist" aria-label="Fichas">

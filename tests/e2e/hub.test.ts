@@ -88,8 +88,8 @@ test('9.1a: a Mesa cria a campanha, o Atlas a vê, e o lugar criado pelo Atlas a
     assert.equal((await mesa.evaluate(() => (window as unknown as { __mesa: { entidades(): { nome: string; tipo: string }[] } }).__mesa.entidades())).filter(e => e.tipo === 'personagem')[0]?.nome, 'Muirenn', 'o banco manteve o nome');
 
     // 8. O tema vale para a mesa inteira: trocar na Mesa troca no Atlas (evento `storage`).
-    await mesa.click('[data-testid="tema-prata"]');
-    await atlas.waitForFunction(() => document.documentElement.dataset.tema === 'prata');
+    await mesa.click('[data-testid="tema-vigilia"]');
+    await atlas.waitForFunction(() => document.documentElement.dataset.tema === 'vigilia');
 
     assert.deepEqual(errosDaMesa, [], 'sem erros no console da Mesa');
     assert.deepEqual(errosDoAtlas.filter(e => !/favicon/.test(e)), [], 'sem erros no console do Atlas');

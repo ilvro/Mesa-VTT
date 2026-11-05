@@ -1,6 +1,6 @@
 # Mesa
 
-O hub da campanha: campanhas, personagens, lugares, pistas, facções e notas, com tudo o que cada coisa é em cada aplicativo (Atlas, Ficha, Ateliê, Jukebox). Faz parte da plataforma da mesa: ver [`../Atlas/docs/PLATAFORMA.md`](../Atlas/docs/PLATAFORMA.md).
+O hub da campanha: campanhas, personagens, lugares, pistas, facções e notas, com tudo o que cada coisa é em cada aplicativo (Atlas, Dossiê, Ateliê, Jukebox). Faz parte da plataforma da mesa: ver [`../Atlas/docs/PLATAFORMA.md`](../Atlas/docs/PLATAFORMA.md).
 
 > Estado: **Fase 9 do Atlas completa na Mesa** — campanhas, entidades por tipo (busca sem acento, etiquetas, refs com “Abrir”), notas com `[[ligações]]`, inventário de aplicativos pelos manifestos, **modo sessão** (Atlas, fichas e Jukebox lado a lado) e **diário** da sessão (roteiro e registro automático).
 
@@ -18,7 +18,7 @@ npm run build        # confere os tipos e gera dist/ (funciona em qualquer camin
 Para ver a Mesa ao lado de todos os aplicativos, numa origem só (como no GitHub Pages), um comando, na pasta do Atlas:
 
 ```bash
-cd ../Atlas && npm run mesa-dev      # http://127.0.0.1:5100/Mesa/  (Atlas, Ficha, Ateliê, Tabletop e Jukebox em /Atlas/, /Ficha/…)
+cd ../Atlas && npm run mesa-dev      # http://127.0.0.1:5100/Mesa/  (Atlas, Dossiê, Ateliê, Tabletop e Jukebox em /Atlas/, /Dossie/…)
 ```
 
 A aba **Aplicativos** da Mesa mostra, pelo `mesa.json` de cada um, quem está por perto: achado, sem manifesto (no ar, mas ainda fora do contrato, como o Tabletop) ou fora do ar.

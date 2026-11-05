@@ -24,9 +24,9 @@ export function Cabecalho() {
         <button type="button" class={cx('ficha', tela.value === 'aplicativos' && 'ativa')} data-testid="aba-aplicativos" onClick={() => { tela.value = 'aplicativos'; void sondarAplicativos(); }}>Aplicativos</button>
       </nav>
       <span class="espaco" />
-      <div class="grupo" role="group" aria-label="Tema">
+      <div class="grupo" role="radiogroup" aria-label="Tema">
         {TEMAS_BASE.map(id => (
-          <button key={id} type="button" class="botao-pilula" aria-pressed={tema.value.id === id} data-testid={`tema-${id}`} onClick={() => trocarTema({ id })}>{TEMAS[id].nome}</button>
+          <button key={id} type="button" class={cx('ficha', tema.value.id === id && 'ativa')} role="radio" aria-checked={tema.value.id === id} data-testid={`tema-${id}`} onClick={() => trocarTema({ id })}>{TEMAS[id].nome}</button>
         ))}
       </div>
     </header>

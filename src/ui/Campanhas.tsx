@@ -56,7 +56,7 @@ export function Campanhas() {
   return (
     <section class="pagina" data-testid="tela-campanhas">
       <div class="galeria-topo"><h2 class="faixa grande">Campanhas</h2></div>
-      <p class="dica">Todas as campanhas deste navegador, compartilhadas com o Atlas, a Ficha e os outros aplicativos da mesa.</p>
+      <p class="dica">Todas as campanhas deste navegador, compartilhadas com o Atlas, o Dossiê e os outros aplicativos da mesa.</p>
       <form class="barra-campanha" onSubmit={criar}>
         <input type="text" class="campo-inline" data-testid="nova-campanha-nome" placeholder="Nome da nova campanha" maxLength={200} value={nomeNovo.value} onInput={e => { nomeNovo.value = e.currentTarget.value; }} />
         <button type="submit" class="botao-pilula destaque" data-testid="criar-campanha" disabled={!nomeNovo.value.trim()}>Criar campanha</button>

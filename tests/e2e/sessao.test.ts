@@ -23,7 +23,7 @@ test('9.5a: o modo sessão mostra Atlas, fichas e Jukebox lado a lado, com layou
     const atlas = await ctx.newPage(); await atlas.goto(`${amb.origem}/Atlas/`);
     await atlas.click('[data-testid="novo-mapa"]'); await atlas.waitForSelector('[data-testid="area-do-mapa"] canvas', { timeout: 20_000 });
     await atlas.fill('#nome-do-mapa', 'Casa dos Salgueiros'); await atlas.press('#nome-do-mapa', 'Enter'); await atlas.keyboard.press('Control+s');
-    const ficha = await ctx.newPage(); await ficha.goto(`${amb.origem}/Ficha/`);
+    const ficha = await ctx.newPage(); await ficha.goto(`${amb.origem}/Dossie/`);
     await mesa.bringToFront();
     await mesa.waitForFunction(() => { const w = window as unknown as { __mesa: { entidades(): { tipo: string; nome: string }[] } }; const es = w.__mesa.entidades(); return es.some(e => e.tipo === 'personagem') && es.some(e => e.tipo === 'lugar' && e.nome === 'Casa dos Salgueiros'); }, null, { timeout: 40_000 });
     await mesa.waitForTimeout(2500);   // a Ficha termina de publicar as demais
@@ -63,7 +63,7 @@ test('9.5a: o modo sessão mostra Atlas, fichas e Jukebox lado a lado, com layou
 
     // A Ficha embutida: uma rolagem sai pelo barramento (que a Mesa ouve) e o Atlas embutido a mostra (sem peça no mapa: um aviso).
     await mesa.evaluate(() => { const w = window as unknown as { __rolagens: unknown[] }; w.__rolagens = []; const c = new BroadcastChannel('mesa:eventos'); c.onmessage = e => { if (e.data?.tipo === 'ficha.rolagem') w.__rolagens.push(e.data); }; });
-    const f = (await (async () => { for (let i = 0; i < 80; i++) { const q = quadro(mesa, 'Ficha'); if (q) return q; await mesa.waitForTimeout(250); } return undefined; })())!;
+    const f = (await (async () => { for (let i = 0; i < 80; i++) { const q = quadro(mesa, 'Dossie'); if (q) return q; await mesa.waitForTimeout(250); } return undefined; })())!;
     await f.waitForSelector('[data-roll]', { timeout: 40_000 });
     await f.locator('[data-roll]').first().click({ force: true }); await mesa.waitForTimeout(1500); await mesa.keyboard.press('Space');
     await mesa.waitForFunction(() => ((window as unknown as { __rolagens: unknown[] }).__rolagens ?? []).length > 0, null, { timeout: 30_000 });
@@ -102,7 +102,7 @@ test('9.5a: o modo sessão mostra Atlas, fichas e Jukebox lado a lado, com layou
     await segunda.click();
     await mesa.waitForSelector(`[data-testid="iframe-ficha-${idSegunda}"]`);
     assert.equal(await mesa.locator(`[data-testid="iframe-ficha-${idSegunda}"]`).isVisible(), true);
-    assert.match((await mesa.locator(`[data-testid="iframe-ficha-${idSegunda}"]`).getAttribute('src')) ?? '', new RegExp(`/Ficha/\\?ficha=${idSegunda}`));
+    assert.match((await mesa.locator(`[data-testid="iframe-ficha-${idSegunda}"]`).getAttribute('src')) ?? '', new RegExp(`/Dossie/\\?ficha=${idSegunda}`));
     assert.deepEqual(errosDaMesa, [], 'sem erros de script na Mesa');
   } finally { await ctx.close(); }
 });
