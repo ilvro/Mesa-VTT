@@ -78,7 +78,7 @@ test('fase 9 (validação): a ficha vira peça, a rolagem aparece sobre ela e no
     await juke.waitForTimeout(1200);
 
     // 3. A Ficha de verdade publica as personagens; o Ateliê de verdade arquiva um bilhete com uma camada UV.
-    const ficha = await ctx.newPage(); await ficha.goto(`${amb.origem}/Ficha/`);
+    const ficha = await ctx.newPage(), errosDaFicha: string[] = []; ficha.on('pageerror', e => errosDaFicha.push(String(e).slice(0, 200))); ficha.on('console', m => { if (m.type() === 'error') errosDaFicha.push(m.text().slice(0, 200)); }); await ficha.goto(`${amb.origem}/Ficha/`);
     await mesa.bringToFront();
     await mesa.waitForFunction(() => { const es = (window as unknown as { __mesa: { entidades(): { tipo: string; criadaPor: string; nome: string }[] } }).__mesa.entidades(); return es.some(e => e.tipo === 'personagem') && ['Aurora', 'Batalha'].every(n => es.some(e => e.tipo === 'cena' && e.criadaPor === 'jukebox' && e.nome === n)); }, null, { timeout: 60_000 });
     const entidades = await mesa.evaluate(() => (window as unknown as { __mesa: { entidades(): { tipo: string; nome: string; criadaPor: string; id: string; refs: { app: string; tipo: string; id: string }[] }[] } }).__mesa.entidades());
@@ -132,8 +132,12 @@ test('fase 9 (validação): a ficha vira peça, a rolagem aparece sobre ela e no
 
     // 6. A rolagem na Ficha de verdade aparece sobre a peça, no mapa e no projetor.
     await ficha.bringToFront(); await ficha.waitForSelector('[data-roll]', { timeout: 30_000 });
-    await ficha.locator('[data-roll]').first().click({ force: true }); await ficha.waitForTimeout(1500); await ficha.keyboard.press('Space');
-    await atlas.waitForFunction(() => (window as unknown as { __ouvidos: { tipo: string }[] }).__ouvidos.some(e => e.tipo === 'ficha.rolagem'), null, { timeout: 40_000 });
+    // No layout cinemático (o da personagem), alguns botões de rolagem ficam sob o retrato: clica num que esteja de fato à vista.
+    const livre = await ficha.evaluate(() => [...document.querySelectorAll('[data-roll]')].findIndex(b => { const r = b.getBoundingClientRect(); if (!r.width || !r.height) return false; const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return el === b || b.contains(el); }));
+    assert.ok(livre >= 0, 'a Ficha tem um botão de rolagem descoberto');
+    await ficha.locator('[data-roll]').nth(livre).click(); await ficha.waitForTimeout(1500); await ficha.keyboard.press('Space');
+    try { await atlas.waitForFunction(() => (window as unknown as { __ouvidos: { tipo: string }[] }).__ouvidos.some(e => e.tipo === 'ficha.rolagem'), null, { timeout: 40_000 }); }
+    catch (erro) { await ficha.screenshot({ path: 'test-results/fase9-ficha-falha.png' }); console.log('# erros da Ficha:', JSON.stringify(errosDaFicha)); throw erro; }
     await atlas.locator('[data-testid="rolagem-flutuante"]').first().waitFor({ timeout: 6000 }); await proj.locator('[data-testid="rolagem-flutuante"]').first().waitFor({ timeout: 6000 });
 
     // 7. A pista do Ateliê, inspecionada com a luz UV, no projetor.
