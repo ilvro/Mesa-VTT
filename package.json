@@ -12,7 +12,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5195 --strictPort",
     "dev:mesa": "MESA_DEV_PREFIX=/Mesa/ vite --host 127.0.0.1 --port 5195 --strictPort",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit -p tsconfig.build.json && vite build",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"tests/unit/**/*.test.ts\"",
     "test:e2e": "node --test --test-concurrency=1 \"tests/e2e/*.test.ts\""

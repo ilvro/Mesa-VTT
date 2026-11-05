@@ -1,7 +1,8 @@
 import { type AppId, type Ref } from './refs.ts';
 export declare const BANCO_CAMPANHA = "mesa-campanha-v1";
 export declare const VERSAO_BANCO_CAMPANHA = 1;
-export declare const TIPOS_ENTIDADE: readonly ['personagem', 'lugar', 'pista', 'cena', 'efeito', 'sessao', 'faccao', 'nota'];
+/** `ameaca`: um monstro ou inimigo (a ficha de ameaça da Ficha); diferente de `personagem`, que é de jogador. */
+export declare const TIPOS_ENTIDADE: readonly ['personagem', 'ameaca', 'lugar', 'pista', 'cena', 'efeito', 'sessao', 'faccao', 'nota'];
 export type TipoEntidade = (typeof TIPOS_ENTIDADE)[number];
 export interface Campanha {
     id: string;

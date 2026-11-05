@@ -5,6 +5,7 @@ export const APP_DA_MESA: AppId = 'mesa';
 
 export const ROTULO_DO_TIPO: Readonly<Record<TipoEntidade, { singular: string; plural: string }>> = {
   personagem: { singular: 'Personagem', plural: 'Personagens' },
+  ameaca: { singular: 'Ameaça', plural: 'Ameaças' },
   lugar: { singular: 'Lugar', plural: 'Lugares' },
   pista: { singular: 'Pista', plural: 'Pistas' },
   cena: { singular: 'Cena', plural: 'Cenas' },
@@ -50,7 +51,7 @@ export function filtrarEntidades(lista: readonly Entidade[], filtro: FiltroDeEnt
 }
 
 export function contarPorTipo(lista: readonly Entidade[]): Record<TipoEntidade, number> {
-  const contagem: Record<TipoEntidade, number> = { personagem: 0, lugar: 0, pista: 0, cena: 0, efeito: 0, sessao: 0, faccao: 0, nota: 0 };
+  const contagem: Record<TipoEntidade, number> = { personagem: 0, ameaca: 0, lugar: 0, pista: 0, cena: 0, efeito: 0, sessao: 0, faccao: 0, nota: 0 };
   for (const e of lista) contagem[e.tipo]++;
   return contagem;
 }
