@@ -1,18 +1,49 @@
 import { signal } from '@preact/signals';
-import { TIPOS_ENTIDADE, type Entidade, type TipoEntidade } from '#mesa';
-import { alterarEntidade, busca, campanhaAtiva, criarEntidade, entidades, filtroTipo, removerEntidade, selecionada, selecionadaId, visiveis } from '../app/campanha.ts';
+import { formatarRef, type Entidade, type Ref, type TipoEntidade } from '#mesa';
+import {
+  alterarEntidade,
+  avancarSelecao,
+  busca,
+  campanhaAtiva,
+  criarEntidade,
+  entidades,
+  filtroTipo,
+  ordem,
+  podeAvancar,
+  podeVoltar,
+  removerEntidade,
+  selecionada,
+  selecionadaId,
+  sidebarAberta,
+  tagAtiva,
+  visiveis,
+  voltarSelecao,
+} from '../app/campanha.ts';
 import { abrirEntidade, tela } from '../app/rotas.ts';
 import { sondarAplicativos } from '../app/inventario.ts';
-import { contarPorTipo, lerTags, NOME_DO_APP, NOME_DO_TIPO_DE_REF, podeEditar, ROTULO_DO_TIPO, TIPOS_CRIAVEIS } from '../dominio/entidades.ts';
+import {
+  contarPorTag,
+  contarPorTipo,
+  ehEncontro,
+  lerTags,
+  NOME_DO_APP,
+  NOME_DO_TIPO_DE_REF,
+  podeEditar,
+  ROTULO_DO_TIPO,
+  semAcento,
+  TIPOS_CRIAVEIS,
+  type CategoriaFiltro,
+  type OrdemColecao,
+} from '../dominio/entidades.ts';
 import { descobrirApp, enderecoDe } from '../app/aplicativos.ts';
 import { ehRefDeEntidadeDaMesa } from '../dominio/notas.ts';
-import { formatarRef, type Ref } from '#mesa';
 import { cx } from './cx.ts';
 import { EditorDeNota } from './EditorDeNota.tsx';
 
 const tipoNovo = signal<TipoEntidade>('personagem');
 const nomeNovo = signal('');
 const confirmando = signal<string | null>(null);
+const buscaTagLocal = signal('');
 
 async function criar(e: Event) {
   e.preventDefault();
@@ -20,16 +51,238 @@ async function criar(e: Event) {
   if (criada) { nomeNovo.value = ''; filtroTipo.value = null; busca.value = ''; abrirEntidade(criada.id); }
 }
 
-function Filtros() {
-  const contagem = contarPorTipo(entidades.value);
-  const usados = TIPOS_ENTIDADE.filter(t => contagem[t] > 0 || TIPOS_CRIAVEIS.includes(t));
+const CATEGORIAS_PADRAO: readonly { id: CategoriaFiltro | null; rotulo: string; testId: string; encontro?: boolean }[] = [
+  { id: null, rotulo: 'Tudo', testId: 'tipo-todos' },
+  { id: 'cena', rotulo: 'Cenas', testId: 'tipo-cena' },
+  { id: 'lugar', rotulo: 'Mapas', testId: 'tipo-lugar' },
+  { id: 'encontro', rotulo: '⚔ Encontros', testId: 'tipo-encontro', encontro: true },
+  { id: 'personagem', rotulo: 'Personagens', testId: 'tipo-personagem' },
+  { id: 'ameaca', rotulo: 'Ameaças', testId: 'tipo-ameaca' },
+  { id: 'pista', rotulo: 'Pistas', testId: 'tipo-pista' },
+  { id: 'faccao', rotulo: 'Facções', testId: 'tipo-faccao' },
+  { id: 'nota', rotulo: 'Notas', testId: 'tipo-nota' },
+];
+
+function selecionarCategoria(cat: CategoriaFiltro | null) {
+  if (cat === null) {
+    filtroTipo.value = null;
+  } else {
+    filtroTipo.value = filtroTipo.value === cat ? null : cat;
+  }
+}
+
+function BarraSuperior() {
+  const lista = entidades.value;
+  const contagem = contarPorTipo(lista);
+  const contagemEncontros = lista.filter(ehEncontro).length;
+
   return (
-    <div class="chips" role="group" aria-label="Tipo">
-      <button type="button" class={cx('chip', filtroTipo.value === null && 'ativa')} data-testid="tipo-todos" onClick={() => { filtroTipo.value = null; }}>Tudo <b>{entidades.value.length}</b></button>
-      {usados.map(t => (
-        <button key={t} type="button" class={cx('chip', filtroTipo.value === t && 'ativa')} data-testid={`tipo-${t}`} onClick={() => { filtroTipo.value = filtroTipo.value === t ? null : t; }}>{ROTULO_DO_TIPO[t].plural} <b>{contagem[t]}</b></button>
-      ))}
-    </div>
+    <header class="colecao-barra" data-testid="colecao-barra">
+      <div class="colecao-barra-nav">
+        <button
+          type="button"
+          class={cx('botao-icone-barra', !sidebarAberta.value && 'recolhido')}
+          data-testid="alternar-sidebar"
+          title={sidebarAberta.value ? 'Recolher etiquetas' : 'Mostrar etiquetas'}
+          aria-label="Alternar barra de etiquetas"
+          onClick={() => { sidebarAberta.value = !sidebarAberta.value; }}
+        >
+          {sidebarAberta.value ? '◧' : '◫'}
+        </button>
+        <div class="historico-botoes" role="group" aria-label="Histórico de navegação">
+          <button
+            type="button"
+            class="botao-icone-barra"
+            data-testid="historico-voltar"
+            title="Voltar seleção"
+            aria-label="Voltar"
+            disabled={!podeVoltar.value}
+            onClick={voltarSelecao}
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            class="botao-icone-barra"
+            data-testid="historico-avancar"
+            title="Avançar seleção"
+            aria-label="Avançar"
+            disabled={!podeAvancar.value}
+            onClick={avancarSelecao}
+          >
+            ›
+          </button>
+        </div>
+      </div>
+
+      <div class="chips colecao-categorias" role="group" aria-label="Categorias da coleção">
+        {CATEGORIAS_PADRAO.map(cat => {
+          const ativo = filtroTipo.value === cat.id;
+          const qtd = cat.id === null ? lista.length : cat.id === 'encontro' ? contagemEncontros : contagem[cat.id];
+          return (
+            <button
+              key={cat.testId}
+              type="button"
+              class={cx('chip', cat.encontro && 'chip-encontro', ativo && 'ativa')}
+              data-testid={cat.testId}
+              onClick={() => selecionarCategoria(cat.id)}
+            >
+              {cat.rotulo} <b>{qtd}</b>
+            </button>
+          );
+        })}
+        {contagem.efeito > 0 && (
+          <button
+            type="button"
+            class={cx('chip', filtroTipo.value === 'efeito' && 'ativa')}
+            data-testid="tipo-efeito"
+            onClick={() => selecionarCategoria('efeito')}
+          >
+            Efeitos <b>{contagem.efeito}</b>
+          </button>
+        )}
+        {contagem.sessao > 0 && (
+          <button
+            type="button"
+            class={cx('chip', filtroTipo.value === 'sessao' && 'ativa')}
+            data-testid="tipo-sessao"
+            onClick={() => selecionarCategoria('sessao')}
+          >
+            Sessões <b>{contagem.sessao}</b>
+          </button>
+        )}
+      </div>
+
+      <span class="espaco" />
+
+      <div class="colecao-barra-direita">
+        <input
+          type="search"
+          class="busca colecao-busca"
+          data-testid="busca"
+          placeholder="Buscar por nome, etiqueta ou nota"
+          value={busca.value}
+          onInput={ev => { busca.value = ev.currentTarget.value; }}
+        />
+        <select
+          class="seletor-ordem"
+          data-testid="seletor-ordem"
+          aria-label="Ordenar coleção"
+          value={ordem.value}
+          onChange={ev => { ordem.value = ev.currentTarget.value as OrdemColecao; }}
+        >
+          <option value="nome-asc">Nome (A-Z)</option>
+          <option value="nome-desc">Nome (Z-A)</option>
+          <option value="recentes">Mais recentes</option>
+        </select>
+        <button
+          type="button"
+          class="botao-pilula destaque botao-novo"
+          data-testid="abrir-criador"
+          title="Nova entidade"
+          onClick={() => {
+            const input = document.querySelector<HTMLInputElement>('[data-testid="nova-entidade-nome"]');
+            if (input) {
+              input.focus();
+              input.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+          }}
+        >
+          + Nova
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function SidebarColecao({ nomeCampanha }: { nomeCampanha: string }) {
+  const lista = entidades.value;
+  const tagsContadas = contarPorTag(lista);
+  const buscaLimpa = semAcento(buscaTagLocal.value.trim());
+  const tagsFiltradas = buscaLimpa
+    ? tagsContadas.filter(ct => ct.chave.includes(buscaLimpa) || semAcento(ct.tag).includes(buscaLimpa))
+    : tagsContadas;
+
+  return (
+    <aside
+      class={cx('colecao-sidebar', !sidebarAberta.value && 'recolhida')}
+      data-testid="colecao-sidebar"
+      aria-label="Árvore de Etiquetas da Coleção"
+    >
+      <div class="colecao-sidebar-topo">
+        <button
+          type="button"
+          class="colecao-sidebar-campanha"
+          data-testid="sidebar-campanha"
+          title="Gerenciar campanhas"
+          onClick={() => { tela.value = 'campanhas'; }}
+        >
+          <span class="icone-pasta" aria-hidden="true">📁</span>
+          <span class="nome-campanha" title={nomeCampanha}>{nomeCampanha}</span>
+        </button>
+      </div>
+
+      <div class="colecao-sidebar-secao">
+        <div class="colecao-sidebar-faixa">
+          <span class="faixa-tag-hash">#</span>
+          <span class="faixa-tag-titulo">Etiquetas</span>
+          <span class="meta">{tagsContadas.length}</span>
+        </div>
+        <input
+          type="search"
+          class="busca-tags"
+          data-testid="busca-tags"
+          placeholder="Filtrar etiquetas..."
+          value={buscaTagLocal.value}
+          onInput={ev => { buscaTagLocal.value = ev.currentTarget.value; }}
+        />
+        <div class="colecao-sidebar-tags" role="list">
+          <button
+            type="button"
+            class={cx('tag-item', tagAtiva.value === null && 'ativa')}
+            data-testid="tag-filtro-todas"
+            onClick={() => { tagAtiva.value = null; }}
+          >
+            <span class="tag-hash">#</span>
+            <span class="tag-nome">Todas as etiquetas</span>
+            <span class="tag-badge">{lista.length}</span>
+          </button>
+
+          {tagsFiltradas.length === 0 ? (
+            <p class="dica dica-tags">
+              {tagsContadas.length === 0 ? 'Sem etiquetas ainda.' : 'Nenhuma etiqueta encontrada.'}
+            </p>
+          ) : (
+            tagsFiltradas.map(ct => (
+              <button
+                key={ct.chave}
+                type="button"
+                class={cx('tag-item', tagAtiva.value === ct.chave && 'ativa')}
+                data-testid={`tag-filtro-${ct.chave}`}
+                onClick={() => { tagAtiva.value = tagAtiva.value === ct.chave ? null : ct.chave; }}
+              >
+                <span class="tag-hash">#</span>
+                <span class="tag-nome">{ct.tag}</span>
+                <span class="tag-badge">({ct.contagem})</span>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div class="espaco" />
+
+      <footer class="colecao-sidebar-rodape">
+        <button
+          type="button"
+          class="botao-gerenciar-campanha"
+          data-testid="gerenciar-campanha"
+          onClick={() => { tela.value = 'campanhas'; }}
+        >
+          ⚙ Gerenciar Campanha
+        </button>
+      </footer>
+    </aside>
   );
 }
 
@@ -115,36 +368,52 @@ export function Entidades() {
   const c = campanhaAtiva.value;
   if (!c) return <section class="pagina"><div class="vazio"><h2>Escolha uma campanha</h2><p>Use o seletor no topo ou crie uma na aba “Campanhas”.</p></div></section>;
   const lista = visiveis.value, sel = selecionada.value;
+
   return (
     <div class="entidades" data-testid="tela-entidades">
-      <aside class="coluna-lista">
-        <h2 class="faixa">{c.nome}</h2>
-        <form class="nova-entidade" onSubmit={criar}>
-          <select aria-label="Tipo da nova entidade" data-testid="novo-tipo" value={tipoNovo.value} onChange={ev => { tipoNovo.value = ev.currentTarget.value as TipoEntidade; }}>
-            {TIPOS_CRIAVEIS.map(t => <option key={t} value={t}>{ROTULO_DO_TIPO[t].singular}</option>)}
-          </select>
-          <input type="text" data-testid="nova-entidade-nome" placeholder="Nome e Enter" maxLength={200} value={nomeNovo.value} onInput={ev => { nomeNovo.value = ev.currentTarget.value; }} />
-          <button type="submit" class="botao-pilula destaque" data-testid="criar-entidade" disabled={!nomeNovo.value.trim()}>Criar</button>
-        </form>
-        <input type="search" class="busca" data-testid="busca" placeholder="Buscar por nome, etiqueta ou nota" value={busca.value} onInput={ev => { busca.value = ev.currentTarget.value; }} />
-        <Filtros />
-        {lista.length === 0
-          ? <p class="dica" data-testid="lista-vazia">{entidades.value.length === 0 ? 'Nada na campanha ainda. Crie uma entidade acima, ou crie mapas no Atlas: cada mapa vira um lugar aqui.' : 'Nenhum resultado para essa busca.'}</p>
-          : <ul class="lista" data-testid="lista-entidades">
-              {lista.map(e => (
-                <li key={e.id}>
-                  <button type="button" class={cx('item', selecionadaId.value === e.id && 'ativa')} data-testid={`entidade-${e.id}`} data-tipo={e.tipo} onClick={() => abrirEntidade(e.id)}>
-                    <span class="item-tipo">{ROTULO_DO_TIPO[e.tipo].singular}</span>
-                    <span class="item-nome">{e.nome}</span>
-                    {e.refs.length > 0 && <span class="item-apps">{[...new Set(e.refs.map(r => NOME_DO_APP[r.app]))].join(' · ')}</span>}
-                  </button>
-                </li>
-              ))}
-            </ul>}
-      </aside>
-      <main class="coluna-detalhe">
-        {sel ? <Detalhe e={sel} /> : <Visao nome={c.nome} />}
-      </main>
+      <SidebarColecao nomeCampanha={c.nome} />
+
+      <div class="colecao-corpo">
+        <BarraSuperior />
+
+        <div class="colecao-conteudo">
+          <aside class="coluna-lista">
+            <h2 class="faixa">{c.nome}</h2>
+            <form class="nova-entidade" onSubmit={criar}>
+              <select aria-label="Tipo da nova entidade" data-testid="novo-tipo" value={tipoNovo.value} onChange={ev => { tipoNovo.value = ev.currentTarget.value as TipoEntidade; }}>
+                {TIPOS_CRIAVEIS.map(t => <option key={t} value={t}>{ROTULO_DO_TIPO[t].singular}</option>)}
+              </select>
+              <input type="text" data-testid="nova-entidade-nome" placeholder="Nome e Enter" maxLength={200} value={nomeNovo.value} onInput={ev => { nomeNovo.value = ev.currentTarget.value; }} />
+              <button type="submit" class="botao-pilula destaque" data-testid="criar-entidade" disabled={!nomeNovo.value.trim()}>Criar</button>
+            </form>
+
+            {tagAtiva.value && (
+              <div class="filtro-ativo-tag">
+                <span>Tag ativa: <b>#{tagAtiva.value}</b></span>
+                <button type="button" class="botao-limpar-tag" title="Remover filtro de etiqueta" onClick={() => { tagAtiva.value = null; }}>×</button>
+              </div>
+            )}
+
+            {lista.length === 0
+              ? <p class="dica" data-testid="lista-vazia">{entidades.value.length === 0 ? 'Nada na campanha ainda. Crie uma entidade acima, ou crie mapas no Atlas: cada mapa vira um lugar aqui.' : 'Nenhum resultado para essa busca.'}</p>
+              : <ul class="lista" data-testid="lista-entidades">
+                  {lista.map(e => (
+                    <li key={e.id}>
+                      <button type="button" class={cx('item', selecionadaId.value === e.id && 'ativa')} data-testid={`entidade-${e.id}`} data-tipo={e.tipo} onClick={() => abrirEntidade(e.id)}>
+                        <span class="item-tipo">{ROTULO_DO_TIPO[e.tipo].singular}</span>
+                        <span class="item-nome">{e.nome}</span>
+                        {e.refs.length > 0 && <span class="item-apps">{[...new Set(e.refs.map(r => NOME_DO_APP[r.app]))].join(' · ')}</span>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>}
+          </aside>
+
+          <main class="coluna-detalhe">
+            {sel ? <Detalhe e={sel} /> : <Visao nome={c.nome} />}
+          </main>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { signal, computed } from '@preact/signals';
 import { abrirRepositorioCampanha, mesmaRef, type Campanha, type Entidade, type Ligacao, type RepositorioCampanha, type Tema, type TipoEntidade } from '#mesa';
-import { APP_DA_MESA, filtrarEntidades, podeEditar, type FiltroDeEntidades } from '../dominio/entidades.ts';
+import { APP_DA_MESA, filtrarEntidades, podeEditar, type CategoriaFiltro, type FiltroDeEntidades, type OrdemColecao } from '../dominio/entidades.ts';
 import { refDaEntidade, refsMencionados } from '../dominio/notas.ts';
 import { trocarTema } from './tema.ts';
 import { avisar, mensagemDe } from './toasts.ts';
@@ -14,11 +14,53 @@ export const campanhas = signal<Campanha[]>([]);
 export const campanhaAtiva = signal<Campanha | null>(null);
 export const entidades = signal<Entidade[]>([]);
 
-export const filtroTipo = signal<TipoEntidade | null>(null);
+export const filtroTipo = signal<CategoriaFiltro | null>(null);
 export const busca = signal('');
+export const tagAtiva = signal<string | null>(null);
+export const ordem = signal<OrdemColecao>('nome-asc');
+export const sidebarAberta = signal<boolean>(true);
 export const selecionadaId = signal<string | null>(null);
 
-export const visiveis = computed(() => filtrarEntidades(entidades.value, { tipo: filtroTipo.value, busca: busca.value } satisfies FiltroDeEntidades));
+export const historico = signal<(string | null)[]>([null]);
+export const indiceHistorico = signal<number>(0);
+export const podeVoltar = computed(() => indiceHistorico.value > 0);
+export const podeAvancar = computed(() => indiceHistorico.value < historico.value.length - 1);
+
+export function registrarSelecaoNoHistorico(id: string | null): void {
+  if (historico.value[indiceHistorico.value] === id) return;
+  const novo = historico.value.slice(0, indiceHistorico.value + 1);
+  novo.push(id);
+  historico.value = novo;
+  indiceHistorico.value = novo.length - 1;
+}
+
+export function voltarSelecao(): void {
+  if (indiceHistorico.value > 0) {
+    indiceHistorico.value--;
+    const id = historico.value[indiceHistorico.value] ?? null;
+    selecionadaId.value = id;
+    const alvo = id ? `#/entidade/${encodeURIComponent(id)}` : location.pathname + location.search;
+    try { history.replaceState(null, '', alvo); } catch { /* ignora */ }
+  }
+}
+
+export function avancarSelecao(): void {
+  if (indiceHistorico.value < historico.value.length - 1) {
+    indiceHistorico.value++;
+    const id = historico.value[indiceHistorico.value] ?? null;
+    selecionadaId.value = id;
+    const alvo = id ? `#/entidade/${encodeURIComponent(id)}` : location.pathname + location.search;
+    try { history.replaceState(null, '', alvo); } catch { /* ignora */ }
+  }
+}
+
+export const visiveis = computed(() =>
+  filtrarEntidades(
+    entidades.value,
+    { tipo: filtroTipo.value, busca: busca.value, tag: tagAtiva.value },
+    ordem.value,
+  )
+);
 export const selecionada = computed(() => entidades.value.find(e => e.id === selecionadaId.value) ?? null);
 
 const repo = (): RepositorioCampanha => {
@@ -68,7 +110,8 @@ export function observarCampanhaAtiva(): () => void {
 
 export async function escolherCampanha(id: string | null): Promise<void> {
   gravarCampanhaAtiva(id);
-  selecionadaId.value = null; busca.value = ''; filtroTipo.value = null;
+  selecionadaId.value = null; busca.value = ''; filtroTipo.value = null; tagAtiva.value = null; ordem.value = 'nome-asc';
+  historico.value = [null]; indiceHistorico.value = 0;
   await atualizar();
   // A campanha pode ter um tema próprio: ao entrar nela, a mesa inteira o veste.
   const c = campanhaAtiva.value;
@@ -108,7 +151,10 @@ export async function criarEntidade(tipo: TipoEntidade, nome: string, selecionar
   try {
     const e = await repo().criarEntidade({ campanhaId: c.id, tipo, nome: nome.trim() });
     await atualizar();
-    if (selecionar) selecionadaId.value = e.id;
+    if (selecionar) {
+      selecionadaId.value = e.id;
+      registrarSelecaoNoHistorico(e.id);
+    }
     return e;
   } catch (erro) { avisar(mensagemDe(erro), true); return null; }
 }
@@ -167,7 +213,10 @@ export async function alterarEntidade(e: Entidade, mudancas: Partial<Pick<Entida
 export async function removerEntidade(e: Entidade): Promise<void> {
   try {
     await repo().removerEntidade(e.id);
-    if (selecionadaId.value === e.id) selecionadaId.value = null;
+    if (selecionadaId.value === e.id) {
+      selecionadaId.value = null;
+      registrarSelecaoNoHistorico(null);
+    }
     await atualizar();
     avisar(`“${e.nome}” removida.`);
   } catch (erro) { avisar(mensagemDe(erro), true); }

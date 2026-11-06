@@ -19,7 +19,7 @@ Você pode abrir um chat dedicado na pasta `Projects/Mesa` e mandar o **Gemini 3
 
 ---
 
-### M2.1a — Layout de Coleção: Sidebar retrátil com árvore de `# Etiquetas`, histórico `<`/`>` e barra de categorias  ⬜
+### M2.1a — Layout de Coleção: Sidebar retrátil com árvore de `# Etiquetas`, histórico `<`/`>` e barra de categorias  ✅
 Objetivo: estruturar a tela da campanha no formato de Coleção (sidebar esquerda com seletor de campanha e árvore de etiquetas com contadores; barra superior com histórico `<`/`>`, abas de categorias com contadores, busca e ordenação).
 Depende de: —
 Ler: `src/dominio/entidades.ts`, `src/app/campanha.ts`, `src/ui/Entidades.tsx`, `src/ui/Cabecalho.tsx`, `src/ui/estilo.css`.

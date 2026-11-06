@@ -106,8 +106,60 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .linha-campos label { display: flex; flex-direction: column; gap: 4px; color: var(--apagado); font-size: 12px; flex: 1 1 130px; }
 .cartao-rodape { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-/* Entidades: lista à esquerda, detalhe à direita */
-.entidades { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); }
+/* Entidades: layout de Coleção com sidebar de etiquetas, barra superior de categorias, lista e detalhe */
+.entidades { flex: 1; min-height: 0; display: flex; overflow: hidden; position: relative; }
+
+/* Sidebar retrátil de Coleção (árvore de etiquetas) */
+.colecao-sidebar { width: 240px; flex: none; display: flex; flex-direction: column; background: var(--superficie); border-right: 1px solid var(--linha); overflow: hidden; transition: width 0.18s ease, opacity 0.18s ease; z-index: 2; }
+.colecao-sidebar.recolhida { width: 0; min-width: 0; border-right-color: transparent; opacity: 0; pointer-events: none; }
+.colecao-sidebar-topo { padding: 10px 14px; border-bottom: 1px solid var(--linha); display: flex; align-items: center; }
+.colecao-sidebar-campanha { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 6px 8px; border-radius: var(--raio); color: var(--texto); font-weight: 700; font-size: 13px; font-family: var(--titulo); letter-spacing: 0.05em; transition: background 0.15s, color 0.15s; }
+.colecao-sidebar-campanha:hover { background: var(--superficie-2); color: var(--acento); }
+.colecao-sidebar-campanha .icone-pasta { font-size: 15px; }
+.colecao-sidebar-campanha .nome-campanha { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+
+.colecao-sidebar-secao { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
+.colecao-sidebar-faixa { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--apagado); }
+.faixa-tag-hash { color: var(--acento); font-weight: 800; font-size: 13px; }
+.faixa-tag-titulo { flex: 1; }
+.busca-tags { width: 100%; font-size: 12px; padding: 6px 9px; }
+.colecao-sidebar-tags { display: flex; flex-direction: column; gap: 3px; overflow-y: auto; flex: 1; min-height: 0; padding-right: 2px; }
+.tag-item { display: flex; align-items: center; gap: 7px; width: 100%; padding: 6px 8px; border-radius: var(--raio); text-align: left; font-size: 12.5px; color: var(--apagado); transition: background 0.15s, color 0.15s; }
+.tag-item:hover { background: var(--superficie-2); color: var(--texto); }
+.tag-item.ativa { background: var(--acento-suave); color: var(--acento); font-weight: 700; }
+.tag-hash { color: var(--acento); font-weight: 700; }
+.tag-nome { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-badge { font-size: 11px; opacity: 0.75; flex: none; }
+.dica-tags { font-size: 12px; margin: 8px 4px; color: var(--apagado); }
+
+.colecao-sidebar-rodape { padding: 10px 14px; border-top: 1px solid var(--linha); display: flex; align-items: center; }
+.botao-gerenciar-campanha { width: 100%; text-align: left; padding: 6px 8px; border-radius: var(--raio); font-size: 12px; font-weight: 600; color: var(--apagado); transition: color 0.15s, background 0.15s; }
+.botao-gerenciar-campanha:hover { color: var(--texto); background: var(--superficie-2); }
+
+/* Corpo da Coleção: barra superior e divisão entre lista e detalhe */
+.colecao-corpo { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.colecao-barra { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--vidro); border-bottom: 1px solid var(--linha); flex-wrap: wrap; flex: none; }
+.colecao-barra-nav { display: flex; align-items: center; gap: 6px; }
+.historico-botoes { display: flex; align-items: center; gap: 2px; }
+.botao-icone-barra { width: 28px; height: 28px; display: inline-grid; place-items: center; border-radius: var(--raio); border: 1px solid var(--linha); background: var(--superficie-2); color: var(--apagado); font-size: 15px; font-weight: 700; line-height: 1; transition: border-color 0.15s, color 0.15s, background 0.15s; }
+.botao-icone-barra:hover:not(:disabled) { border-color: var(--acento); color: var(--texto); background: var(--superficie); }
+.botao-icone-barra:disabled { opacity: 0.35; cursor: default; }
+.botao-icone-barra.recolhido { color: var(--acento); border-color: var(--acento); }
+
+.colecao-categorias { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.chip-encontro { border-color: color-mix(in srgb, var(--perigo), var(--linha) 60%); }
+.chip-encontro:hover, .chip-encontro.ativa { border-color: var(--perigo); color: var(--perigo); background: color-mix(in srgb, var(--perigo), transparent 88%); }
+
+.colecao-barra-direita { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.colecao-busca { min-width: 220px; font-size: 12.5px; }
+.seletor-ordem { font-size: 12px; padding: 6px 10px; }
+.botao-novo { padding: 6px 12px; font-size: 11px; }
+
+.filtro-ativo-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 4px; background: var(--acento-suave); border: 1px solid var(--acento); color: var(--acento); font-size: 12px; margin-bottom: 2px; }
+.botao-limpar-tag { cursor: pointer; font-size: 14px; font-weight: 700; line-height: 1; padding: 0 3px; color: inherit; opacity: 0.8; }
+.botao-limpar-tag:hover { opacity: 1; }
+
+.colecao-conteudo { flex: 1; min-height: 0; min-width: 0; display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); }
 .coluna-lista { display: flex; flex-direction: column; gap: 10px; padding: 18px 16px; min-height: 0; overflow: auto; background: var(--painel); border-right: 1px solid var(--linha); }
 .coluna-lista .faixa { align-self: flex-start; margin-bottom: 2px; }
 .coluna-detalhe { min-width: 0; overflow: auto; padding: 24px clamp(16px, 3vw, 44px) 56px; }
@@ -148,8 +200,9 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 @media (prefers-reduced-motion: reduce) { .aviso-flutuante { animation: none; } }
 
 @media (max-width: 760px) {
-  .entidades { grid-template-columns: 1fr; }
+  .colecao-conteudo { grid-template-columns: 1fr; }
   .coluna-lista { border-right: 0; border-bottom: 1px solid var(--linha); max-height: 48vh; }
+  .colecao-sidebar { position: absolute; left: 0; top: 0; bottom: 0; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.65); z-index: 20; }
 }
 
 /* Notas com [[ligações]] */

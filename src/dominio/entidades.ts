@@ -35,19 +35,120 @@ export const PASTA_DO_APP: Readonly<Record<AppId, string>> = {
 /** Minúsculas e sem acento: “Ateliê” casa com “atelie”. */
 export const semAcento = (texto: string): string => texto.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('pt-BR');
 
-export interface FiltroDeEntidades { tipo?: TipoEntidade | null; busca?: string }
+export type CategoriaFiltro = TipoEntidade | 'encontro';
 
-/** Filtra por tipo e por busca (nome, etiquetas e notas, todos os termos). A ordem é alfabética, sem acento. */
-export function filtrarEntidades(lista: readonly Entidade[], filtro: FiltroDeEntidades = {}): Entidade[] {
+export interface FiltroDeEntidades {
+  tipo?: CategoriaFiltro | null;
+  busca?: string;
+  tag?: string | null;
+}
+
+export type OrdemColecao = 'nome-asc' | 'nome-desc' | 'recentes';
+
+export interface ContagemTag {
+  tag: string;
+  chave: string;
+  contagem: number;
+}
+
+/** Agrupa etiquetas sem diferenciar caixa/acento (`chave`), preservando a grafia mais usada (`tag`), ordenando por maior contagem e depois alfabeticamente. */
+export function contarPorTag(entidades: readonly Entidade[]): ContagemTag[] {
+  const grupos = new Map<string, { contagem: number; grafias: Map<string, number> }>();
+
+  for (const e of entidades) {
+    const vistasNaEntidade = new Set<string>();
+    for (const t of e.tags) {
+      const limpa = t.trim().replace(/^#/, '');
+      if (!limpa) continue;
+      const chave = semAcento(limpa);
+      if (vistasNaEntidade.has(chave)) continue;
+      vistasNaEntidade.add(chave);
+
+      let g = grupos.get(chave);
+      if (!g) {
+        g = { contagem: 0, grafias: new Map() };
+        grupos.set(chave, g);
+      }
+      g.contagem++;
+      g.grafias.set(limpa, (g.grafias.get(limpa) ?? 0) + 1);
+    }
+  }
+
+  const resultado: ContagemTag[] = [];
+  for (const [chave, g] of grupos) {
+    let melhorTag = '';
+    let maiorFreq = -1;
+    for (const [grafia, freq] of g.grafias) {
+      if (
+        freq > maiorFreq ||
+        (freq === maiorFreq && (melhorTag === '' || grafia.localeCompare(melhorTag, 'pt-BR') < 0))
+      ) {
+        maiorFreq = freq;
+        melhorTag = grafia;
+      }
+    }
+    resultado.push({ tag: melhorTag, chave, contagem: g.contagem });
+  }
+
+  return resultado.sort((a, b) => (b.contagem - a.contagem) || a.chave.localeCompare(b.chave, 'pt-BR'));
+}
+
+/** Reconhece cenas que são encontros (etiqueta 'encontro' ou 'combate', ou ligações/refs para ameaça). */
+export function ehEncontro(e: Pick<Entidade, 'tipo' | 'tags' | 'refs'>): boolean {
+  if (e.tipo !== 'cena') return false;
+  if (e.tags.some(t => {
+    const chave = semAcento(t.replace(/^#/, '').trim());
+    return chave === 'encontro' || chave === 'combate';
+  })) {
+    return true;
+  }
+  if (e.refs?.some(r => r.tipo === 'ameaca' || (r.app === 'ficha' && semAcento(r.id).includes('ameaca')))) {
+    return true;
+  }
+  return false;
+}
+
+/** Ordena uma lista de entidades conforme a regra de ordenação escolhida. */
+export function ordenarEntidades(lista: readonly Entidade[], ordem: OrdemColecao): Entidade[] {
+  const copia = [...lista];
+  if (ordem === 'nome-desc') {
+    return copia.sort((a, b) => semAcento(b.nome).localeCompare(semAcento(a.nome), 'pt-BR') || b.criadaEm - a.criadaEm);
+  }
+  if (ordem === 'recentes') {
+    return copia.sort((a, b) => (b.atualizadaEm || b.criadaEm) - (a.atualizadaEm || a.criadaEm) || b.criadaEm - a.criadaEm || semAcento(a.nome).localeCompare(semAcento(b.nome), 'pt-BR'));
+  }
+  // 'nome-asc'
+  return copia.sort((a, b) => semAcento(a.nome).localeCompare(semAcento(b.nome), 'pt-BR') || a.criadaEm - b.criadaEm);
+}
+
+/** Filtra por tipo/categoria, tag e por busca (nome, etiquetas e notas, todos os termos). Permite definir a ordenação. */
+export function filtrarEntidades(
+  lista: readonly Entidade[],
+  filtro: FiltroDeEntidades = {},
+  ordem: OrdemColecao = 'nome-asc',
+  tagLegada?: string | null,
+): Entidade[] {
   const termos = semAcento(filtro.busca ?? '').split(/\s+/).filter(Boolean);
-  return lista
-    .filter(e => !filtro.tipo || e.tipo === filtro.tipo)
+  const tagAlvo = filtro.tag ?? tagLegada;
+  const chaveTag = tagAlvo ? semAcento(tagAlvo.replace(/^#/, '').trim()) : null;
+
+  const filtradas = lista
+    .filter(e => {
+      if (!filtro.tipo) return true;
+      if (filtro.tipo === 'encontro') return ehEncontro(e);
+      return e.tipo === filtro.tipo;
+    })
+    .filter(e => {
+      if (!chaveTag) return true;
+      return e.tags.some(t => semAcento(t.replace(/^#/, '').trim()) === chaveTag);
+    })
     .filter(e => {
       if (!termos.length) return true;
       const palheiro = semAcento(`${e.nome} ${e.tags.join(' ')} ${e.notas}`);
       return termos.every(t => palheiro.includes(t));
-    })
-    .sort((a, b) => semAcento(a.nome).localeCompare(semAcento(b.nome), 'pt-BR') || a.criadaEm - b.criadaEm);
+    });
+
+  return ordenarEntidades(filtradas, ordem);
 }
 
 export function contarPorTipo(lista: readonly Entidade[]): Record<TipoEntidade, number> {
