@@ -37,6 +37,7 @@ import {
 } from '../dominio/entidades.ts';
 import { descobrirApp, enderecoDe } from '../app/aplicativos.ts';
 import { ehRefDeEntidadeDaMesa } from '../dominio/notas.ts';
+import { GradeDeColecao, modoExibicao } from './GradeDeColecao.tsx';
 import { cx } from './cx.ts';
 import { EditorDeNota } from './EditorDeNota.tsx';
 
@@ -156,6 +157,30 @@ function BarraSuperior() {
       <span class="espaco" />
 
       <div class="colecao-barra-direita">
+        <div class="modo-botoes" role="group" aria-label="Modo de exibição">
+          <button
+            type="button"
+            class={cx('botao-icone-barra', modoExibicao.value === 'grade' && 'ativa')}
+            data-testid="modo-grade"
+            title="Visualização em Grade"
+            aria-label="Grade"
+            aria-pressed={modoExibicao.value === 'grade'}
+            onClick={() => { modoExibicao.value = 'grade'; }}
+          >
+            ▦
+          </button>
+          <button
+            type="button"
+            class={cx('botao-icone-barra', modoExibicao.value === 'lista' && 'ativa')}
+            data-testid="modo-lista"
+            title="Visualização em Lista"
+            aria-label="Lista"
+            aria-pressed={modoExibicao.value === 'lista'}
+            onClick={() => { modoExibicao.value = 'lista'; }}
+          >
+            ☰
+          </button>
+        </div>
         <input
           type="search"
           class="busca colecao-busca"
@@ -315,6 +340,7 @@ function Detalhe({ e }: { e: Entidade }) {
               <button type="button" class="botao-pilula" onClick={() => { confirmando.value = null; }}>Cancelar</button>
             </>
           : <button type="button" class="botao-pilula perigo" data-testid="remover-entidade" onClick={() => { confirmando.value = e.id; }}>Remover</button>)}
+        <button type="button" class="botao-icone-texto fechar-detalhe" data-testid="fechar-detalhe" title="Fechar detalhes" aria-label="Fechar detalhes" onClick={() => abrirEntidade(null)}>✕</button>
       </header>
       {!editavel && <p class="aviso suave" data-testid="so-leitura">Criada pelo {NOME_DO_APP[e.criadaPor]}: só ele altera o nome, as etiquetas e as notas.</p>}
       <label class="campo">Nome
@@ -394,19 +420,15 @@ export function Entidades() {
               </div>
             )}
 
-            {lista.length === 0
-              ? <p class="dica" data-testid="lista-vazia">{entidades.value.length === 0 ? 'Nada na campanha ainda. Crie uma entidade acima, ou crie mapas no Atlas: cada mapa vira um lugar aqui.' : 'Nenhum resultado para essa busca.'}</p>
-              : <ul class="lista" data-testid="lista-entidades">
-                  {lista.map(e => (
-                    <li key={e.id}>
-                      <button type="button" class={cx('item', selecionadaId.value === e.id && 'ativa')} data-testid={`entidade-${e.id}`} data-tipo={e.tipo} onClick={() => abrirEntidade(e.id)}>
-                        <span class="item-tipo">{ROTULO_DO_TIPO[e.tipo].singular}</span>
-                        <span class="item-nome">{e.nome}</span>
-                        {e.refs.length > 0 && <span class="item-apps">{[...new Set(e.refs.map(r => NOME_DO_APP[r.app]))].join(' · ')}</span>}
-                      </button>
-                    </li>
-                  ))}
-                </ul>}
+            {lista.length === 0 ? (
+              <p class="dica" data-testid="lista-vazia">
+                {entidades.value.length === 0
+                  ? 'Nada na campanha ainda. Crie uma entidade acima, ou crie mapas no Atlas: cada mapa vira um lugar aqui.'
+                  : 'Nenhum resultado para essa busca.'}
+              </p>
+            ) : (
+              <GradeDeColecao lista={lista} />
+            )}
           </aside>
 
           <main class="coluna-detalhe">

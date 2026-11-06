@@ -2,6 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Entidade } from '#mesa';
 import {
+  agruparPorCategoria,
+  alternarModoExibicao,
+  alternarSecaoColapsada,
   contarPorTag,
   contarPorTipo,
   ehEncontro,
@@ -177,4 +180,45 @@ test('ehEncontro e filtro por categoria encontro', () => {
   const lista = [cena1, cena2, cena3, naoCena];
   const encontros = filtrarEntidades(lista, { tipo: 'encontro' });
   assert.deepEqual(encontros.map(x => x.id), ['c3', 'c1']);
+});
+
+test('agruparPorCategoria: separa por seções, isolando encontros de cenas e omitindo vazias', () => {
+  const lista = [
+    e('1', 'lugar', 'Mansão Velha'),
+    e('2', 'lugar', 'Cais Sombrio'),
+    e('3', 'personagem', 'Muirenn'),
+    e('4', 'cena', 'Investigação Noturna'),
+    e('5', 'cena', 'Batalha do Cais', { tags: ['encontro'] }),
+    e('6', 'nota', 'Anotações'),
+  ];
+
+  const secoes = agruparPorCategoria(lista);
+  assert.equal(secoes.length, 5);
+  assert.deepEqual(secoes.map(s => s.id), ['cena', 'lugar', 'encontro', 'personagem', 'nota']);
+
+  const cenas = secoes.find(s => s.id === 'cena')!;
+  assert.deepEqual(cenas.entidades.map(x => x.id), ['4']);
+
+  const lugares = secoes.find(s => s.id === 'lugar')!;
+  assert.deepEqual(lugares.entidades.map(x => x.id), ['1', '2']);
+
+  const encontros = secoes.find(s => s.id === 'encontro')!;
+  assert.deepEqual(encontros.entidades.map(x => x.id), ['5']);
+
+  const personagens = secoes.find(s => s.id === 'personagem')!;
+  assert.deepEqual(personagens.entidades.map(x => x.id), ['3']);
+
+  const notas = secoes.find(s => s.id === 'nota')!;
+  assert.deepEqual(notas.entidades.map(x => x.id), ['6']);
+});
+
+test('alternarModoExibicao e alternarSecaoColapsada', () => {
+  assert.equal(alternarModoExibicao('grade'), 'lista');
+  assert.equal(alternarModoExibicao('lista'), 'grade');
+
+  const s1 = new Set<string>();
+  const s2 = alternarSecaoColapsada(s1, 'lugar');
+  assert.equal(s2.has('lugar'), true);
+  const s3 = alternarSecaoColapsada(s2, 'lugar');
+  assert.equal(s3.has('lugar'), false);
 });

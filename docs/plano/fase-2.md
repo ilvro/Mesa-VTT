@@ -41,7 +41,7 @@ Testes: unitários em `tests/unit/entidades.test.ts` para `contarPorTag`, filtro
 Pronto quando: a tela de campanha mostra a sidebar de etiquetas com contadores e a barra de categorias no topo, filtrando por categoria + etiqueta + busca.
 Commit: feat(mesa): add Collection sidebar with tag tree, navigation history and category bar
 
-### M2.1b — Grade visual de cartões com miniaturas (`Cards` vs `Lista`), ordenação e seções colapsáveis  ⬜
+### M2.1b — Grade visual de cartões com miniaturas (`Cards` vs `Lista`), ordenação e seções colapsáveis  ✅
 Objetivo: exibir as entidades da campanha numa grade visual de cartões com miniaturas (`e.retrato` ou arte SVG por tipo), agrupadas em seções colapsáveis, com alternância entre Grade e Lista e gaveta lateral de detalhes.
 Depende de: M2.1a
 Ler: `src/ui/Entidades.tsx`, `src/dominio/entidades.ts`, `src/ui/estilo.css`.

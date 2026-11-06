@@ -157,6 +157,71 @@ export function contarPorTipo(lista: readonly Entidade[]): Record<TipoEntidade, 
   return contagem;
 }
 
+export interface SecaoColecao {
+  id: string;
+  rotulo: string;
+  entidades: Entidade[];
+}
+
+export type ModoExibicaoColecao = 'grade' | 'lista';
+
+/** Alterna entre os modos de exibição 'grade' e 'lista'. */
+export function alternarModoExibicao(atual: ModoExibicaoColecao): ModoExibicaoColecao {
+  return atual === 'grade' ? 'lista' : 'grade';
+}
+
+/** Alterna se uma seção está colapsada ou expandida, devolvendo um novo Set. */
+export function alternarSecaoColapsada(colapsadas: ReadonlySet<string>, chave: string): Set<string> {
+  const novo = new Set(colapsadas);
+  if (novo.has(chave)) novo.delete(chave);
+  else novo.add(chave);
+  return novo;
+}
+
+/** Agrupa uma lista de entidades por seções lógicas da coleção (Cenas, Lugares/Mapas, Encontros, Personagens, etc.). */
+export function agruparPorCategoria(lista: readonly Entidade[]): SecaoColecao[] {
+  const grupos = new Map<string, Entidade[]>();
+
+  for (const e of lista) {
+    const chave = e.tipo === 'cena' && ehEncontro(e) ? 'encontro' : e.tipo;
+    let grupo = grupos.get(chave);
+    if (!grupo) {
+      grupo = [];
+      grupos.set(chave, grupo);
+    }
+    grupo.push(e);
+  }
+
+  const ordemSecoes: readonly { id: string; rotulo: string }[] = [
+    { id: 'cena', rotulo: 'Cenas' },
+    { id: 'lugar', rotulo: 'Lugares / Mapas' },
+    { id: 'encontro', rotulo: '⚔ Encontros' },
+    { id: 'personagem', rotulo: 'Personagens' },
+    { id: 'ameaca', rotulo: 'Ameaças' },
+    { id: 'pista', rotulo: 'Pistas' },
+    { id: 'faccao', rotulo: 'Facções' },
+    { id: 'nota', rotulo: 'Notas' },
+    { id: 'efeito', rotulo: 'Efeitos' },
+    { id: 'sessao', rotulo: 'Sessões' },
+  ];
+
+  const resultado: SecaoColecao[] = [];
+  for (const s of ordemSecoes) {
+    const itens = grupos.get(s.id);
+    if (itens && itens.length > 0) {
+      resultado.push({ id: s.id, rotulo: s.rotulo, entidades: itens });
+    }
+  }
+
+  for (const [id, itens] of grupos) {
+    if (!ordemSecoes.some(s => s.id === id) && itens.length > 0) {
+      resultado.push({ id, rotulo: id, entidades: itens });
+    }
+  }
+
+  return resultado;
+}
+
 /** Quem criou a entidade altera tudo; os outros só mexem nas referências do próprio aplicativo (regra do repositório). */
 export const podeEditar = (e: Pick<Entidade, 'criadaPor'>, app: AppId = APP_DA_MESA): boolean => e.criadaPor === app;
 export const podeRemover = podeEditar;
