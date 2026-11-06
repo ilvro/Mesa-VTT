@@ -93,7 +93,7 @@ Testes: unitário verificando os pedidos emitidos ao ativar uma cena com mapa, m
 Pronto quando: clicar em "▶ Ativar Cena" na Mesa comanda o Atlas e o Jukebox e já seleciona o mapa no Modo Sessão.
 Commit: feat(mesa): add 1-click Scene & Encounter activation across Atlas and Jukebox
 
-### M2.3a — Serializador puro de Cofre em Disco (`Entidade` ↔ Markdown `.md` com frontmatter YAML)  ⬜
+### M2.3a — Serializador puro de Cofre em Disco (`Entidade` ↔ Markdown `.md` com frontmatter YAML)  ✅
 Objetivo: permitir exportar e importar toda a campanha como uma pasta de arquivos Markdown (`.md` com frontmatter YAML e `[[ligações]]`, compatível com Obsidian e com o futuro app Desktop).
 Depende de: —
 Ler: `src/dominio/notas.ts`, `src/dominio/entidades.ts`, `vendor/mesa-core/index.d.ts`.
