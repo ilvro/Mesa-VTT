@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Campanha, Entidade, Ligacao, Sessao } from '#mesa';
+import type { Campanha, Entidade, Ligacao, RepositorioCampanha, Sessao } from '#mesa';
 import {
   caminhoDaEntidade,
   criarSlug,
@@ -9,6 +9,12 @@ import {
   manifestoDoCofre,
   markdownParaEntidade,
 } from '../../src/dominio/cofre.ts';
+import {
+  criarDriverEmMemoria,
+  gerarPacoteCofre,
+  importarCofreDeTexto,
+  sincronizarCampanhaComPasta,
+} from '../../src/app/cofre.ts';
 
 const baseEntidade = (dados: Partial<Entidade> & { id: string; tipo: Entidade['tipo']; nome: string }): Entidade => ({
   campanhaId: 'camp-1',
@@ -222,5 +228,141 @@ Notas`;
     assert.equal(lerManifestoDoCofre('não é json'), null);
     assert.equal(lerManifestoDoCofre('{}'), null);
     assert.equal(lerManifestoDoCofre(JSON.stringify({ campanha: { nome: '' } })), null);
+  });
+
+  it('sincronizarCampanhaComPasta grava campanha.json, arquivos .md e retratos em memória', async () => {
+    const driver = criarDriverEmMemoria();
+    const campanha: Campanha = {
+      id: 'camp-sync-1',
+      nome: 'O Covil da Serpente',
+      sistema: 'ordem-paranormal',
+      tema: null,
+      capa: null,
+      criadaEm: 1730000000000,
+      atualizadaEm: 1730000000000,
+    };
+
+    const ent1 = baseEntidade({
+      id: 'ent-12345678',
+      campanhaId: 'camp-sync-1',
+      tipo: 'personagem',
+      nome: 'César Oliveira',
+      retrato: new Blob(['fake-image-bytes'], { type: 'image/webp' }),
+    });
+
+    const ent2 = baseEntidade({
+      id: 'ent-87654321',
+      campanhaId: 'camp-sync-1',
+      tipo: 'lugar',
+      nome: 'Floresta Nebulosa',
+    });
+
+    const res = await sincronizarCampanhaComPasta(driver, campanha, [ent1, ent2]);
+
+    assert.equal(res.campanhaId, 'camp-sync-1');
+    assert.ok(driver.arquivos.has('campanha.json'));
+    assert.ok(driver.arquivos.has('retratos/ent-12345678.webp'));
+    assert.ok(driver.arquivos.has('entidades/personagem/cesar-oliveira-ent-1234.md'));
+    assert.ok(driver.arquivos.has('entidades/lugar/floresta-nebulosa-ent-8765.md'));
+
+    const jsonCampanha = await driver.lerTexto('campanha.json');
+    assert.ok(jsonCampanha?.includes('O Covil da Serpente'));
+  });
+
+  it('sincronizarCampanhaComPasta remove arquivos órfãos que não pertencem mais à campanha', async () => {
+    const driver = criarDriverEmMemoria({
+      'entidades/lugar/antigo-orfa-12345678.md': '---\nid: orfa\n---',
+      'outra-pasta/qualquer.txt': 'preservar',
+    });
+
+    const campanha: Campanha = {
+      id: 'camp-sync-2',
+      nome: 'Campanha Limpa',
+      sistema: 'ordem-paranormal',
+      tema: null,
+      capa: null,
+      criadaEm: 1730000000000,
+      atualizadaEm: 1730000000000,
+    };
+
+    const novaEntidade = baseEntidade({
+      id: 'ent-nova',
+      campanhaId: 'camp-sync-2',
+      tipo: 'lugar',
+      nome: 'Mansão Nova',
+    });
+
+    const res = await sincronizarCampanhaComPasta(driver, campanha, [novaEntidade]);
+
+    assert.deepEqual(res.arquivosRemovidos, ['entidades/lugar/antigo-orfa-12345678.md']);
+    assert.equal(driver.arquivos.has('entidades/lugar/antigo-orfa-12345678.md'), false);
+    // Preserva arquivos de fora da pasta entidades
+    assert.equal(driver.arquivos.has('outra-pasta/qualquer.txt'), true);
+  });
+
+  it('gerarPacoteCofre e importarCofreDeTexto exportam e importam campanha e entidades completas', async () => {
+    const campanha: Campanha = {
+      id: 'camp-import-1',
+      nome: 'Operação Crisálida',
+      sistema: 'ordem-paranormal',
+      tema: 'ordem',
+      capa: null,
+      criadaEm: 1730000000000,
+      atualizadaEm: 1730000000000,
+    };
+
+    const e1 = baseEntidade({
+      id: 'ent-p1',
+      campanhaId: 'camp-import-1',
+      tipo: 'personagem',
+      nome: 'Rubens Naluti',
+      notas: 'Membro da equipe.',
+    });
+
+    const pacoteJson = gerarPacoteCofre(campanha, [e1]);
+
+    const campanhasSalvas: Campanha[] = [];
+    const entidadesSalvas: Entidade[] = [];
+
+    const mockRepo: RepositorioCampanha = {
+      criarCampanha: async (c) => {
+        const nova = { ...campanha, ...c };
+        campanhasSalvas.push(nova);
+        return nova;
+      },
+      salvarCampanha: async (c) => {
+        campanhasSalvas.push(c);
+      },
+      listarCampanhas: async () => campanhasSalvas,
+      obterCampanha: async (id) => campanhasSalvas.find(c => c.id === id),
+      removerCampanha: async () => {},
+      listarEntidades: async () => entidadesSalvas,
+      obterEntidade: async (id) => entidadesSalvas.find(e => e.id === id),
+      criarEntidade: async (d) => {
+        const e: Entidade = baseEntidade({ ...d, id: 'id-mock' });
+        entidadesSalvas.push(e);
+        return e;
+      },
+      salvarEntidade: async (e) => {
+        entidadesSalvas.push(e);
+      },
+      removerEntidade: async () => {},
+      entidadeDaRef: async () => undefined,
+      ligar: async (l) => ({ ...l, id: 'lig-1', criadaPor: 'mesa', criadaEm: Date.now() }),
+      listarLigacoes: async () => [],
+      removerLigacao: async () => {},
+      listarSessoes: async () => [],
+      salvarSessao: async () => {},
+      removerSessao: async () => {},
+      fechar: () => {},
+    };
+
+    const importada = await importarCofreDeTexto(pacoteJson, mockRepo);
+
+    assert.ok(importada);
+    assert.equal(importada.nome, 'Operação Crisálida');
+    assert.equal(campanhasSalvas.length, 1);
+    assert.equal(entidadesSalvas.length, 1);
+    assert.equal(entidadesSalvas[0]?.nome, 'Rubens Naluti');
   });
 });

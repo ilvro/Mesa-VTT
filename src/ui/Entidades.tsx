@@ -8,6 +8,7 @@ import {
   criarEntidade,
   entidades,
   filtroTipo,
+  ligacoes,
   ordem,
   podeAvancar,
   podeVoltar,
@@ -41,6 +42,14 @@ import { GradeDeColecao, modoExibicao } from './GradeDeColecao.tsx';
 import { EditorDeCena } from './EditorDeCena.tsx';
 import { cx } from './cx.ts';
 import { EditorDeNota } from './EditorDeNota.tsx';
+import {
+  desvincularPastaLocal,
+  exportarCofreJson,
+  importarCofreParaApp,
+  pastaVinculadaNome,
+  sincronizandoCofre,
+  vincularPastaLocal,
+} from '../app/cofre.ts';
 
 const tipoNovo = signal<TipoEntidade>('personagem');
 const nomeNovo = signal('');
@@ -246,7 +255,52 @@ function SidebarColecao({ nomeCampanha }: { nomeCampanha: string }) {
           <span class="icone-pasta" aria-hidden="true">📁</span>
           <span class="nome-campanha" title={nomeCampanha}>{nomeCampanha}</span>
         </button>
+
+        <div class="colecao-sidebar-acoes-cofre">
+          <button
+            type="button"
+            class={cx('botao-icone-cofre', pastaVinculadaNome.value && 'ativo')}
+            data-testid="vincular-pasta-cofre"
+            title={pastaVinculadaNome.value ? `Pasta vinculada: ${pastaVinculadaNome.value} (clique para desvincular)` : 'Vincular pasta local no computador (Cofre)'}
+            aria-label="Vincular pasta local"
+            onClick={() => {
+              if (pastaVinculadaNome.value) desvincularPastaLocal();
+              else void vincularPastaLocal();
+            }}
+          >
+            {sincronizandoCofre.value ? '🔄' : (pastaVinculadaNome.value ? '💾' : '📁')}
+          </button>
+          <button
+            type="button"
+            class="botao-icone-cofre"
+            data-testid="exportar-cofre"
+            title="Exportar cofre da campanha (.json)"
+            aria-label="Exportar cofre"
+            onClick={() => {
+              const c = campanhaAtiva.value;
+              if (c) exportarCofreJson(c, entidades.value, ligacoes.value);
+            }}
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            class="botao-icone-cofre"
+            data-testid="importar-cofre"
+            title="Importar cofre (.json)"
+            aria-label="Importar cofre"
+            onClick={() => void importarCofreParaApp()}
+          >
+            ↑
+          </button>
+        </div>
       </div>
+      {pastaVinculadaNome.value && (
+        <div class="tag-pasta-vinculada" title={`Sincronizando com ${pastaVinculadaNome.value}`}>
+          <span class="ponto-status" aria-hidden="true">●</span>
+          <span>{pastaVinculadaNome.value}</span>
+        </div>
+      )}
 
       <div class="colecao-sidebar-secao">
         <div class="colecao-sidebar-faixa">

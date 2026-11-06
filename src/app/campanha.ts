@@ -3,6 +3,7 @@ import { abrirRepositorioCampanha, mesmaRef, type Campanha, type Entidade, type 
 import { APP_DA_MESA, ehEncontro, filtrarEntidades, podeEditar, semAcento, type CategoriaFiltro, type FiltroDeEntidades, type OrdemColecao } from '../dominio/entidades.ts';
 import { refDaEntidade, refsMencionados } from '../dominio/notas.ts';
 import { casaCena, refParaLigacao } from '../dominio/cenas.ts';
+import { agendarSincronizacaoCofre } from './cofre.ts';
 import { trocarTema } from './tema.ts';
 import { avisar, mensagemDe } from './toasts.ts';
 
@@ -101,6 +102,7 @@ export async function atualizar(): Promise<void> {
     entidades.value = ativa ? await r.listarEntidades(ativa.id) : [];
     ligacoes.value = ativa ? await r.listarLigacoes(ativa.id) : [];
     if (selecionadaId.value && !entidades.value.some(e => e.id === selecionadaId.value)) selecionadaId.value = null;
+    if (ativa) agendarSincronizacaoCofre(ativa, entidades.value, ligacoes.value);
   } catch (erro) { console.warn('Mesa: não consegui atualizar', erro); }
 }
 

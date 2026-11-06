@@ -110,7 +110,7 @@ Testes: unitários de ida e volta (`entidadeParaMarkdown` → `markdownParaEntid
 Pronto quando: qualquer campanha e suas entidades convertem para `.md` + `campanha.json` e voltam sem perda de dados.
 Commit: feat(mesa): add pure Vault Markdown/YAML serializer for desktop and Obsidian compatibility
 
-### M2.3b — Sincronização de Cofre Local (`📁 Vincular pasta no computador`) para Desktop e Web  ⬜
+### M2.3b — Sincronização de Cofre Local (`📁 Vincular pasta no computador`) para Desktop e Web  ✅
 Objetivo: adicionar na sidebar de Coleção da Mesa a opção de vincular uma pasta real no computador (via File System Access API / Desktop bridge) ou baixar/importar o Cofre da campanha.
 Depende de: M2.1a, M2.3a
 Ler: `src/dominio/cofre.ts`, `src/app/campanha.ts`, `src/ui/Entidades.tsx`.

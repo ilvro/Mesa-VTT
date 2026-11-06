@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals';
 import { TEMAS, TEMAS_BASE, type Campanha } from '#mesa';
 import { alterarCampanha, campanhaAtiva, campanhas, criarCampanha, escolherCampanha, removerCampanha } from '../app/campanha.ts';
+import { importarCofreParaApp } from '../app/cofre.ts';
 import { tela } from '../app/rotas.ts';
 import { cx } from './cx.ts';
 
@@ -60,6 +61,7 @@ export function Campanhas() {
       <form class="barra-campanha" onSubmit={criar}>
         <input type="text" class="campo-inline" data-testid="nova-campanha-nome" placeholder="Nome da nova campanha" maxLength={200} value={nomeNovo.value} onInput={e => { nomeNovo.value = e.currentTarget.value; }} />
         <button type="submit" class="botao-pilula destaque" data-testid="criar-campanha" disabled={!nomeNovo.value.trim()}>Criar campanha</button>
+        <button type="button" class="botao-pilula" data-testid="importar-cofre-campanhas" title="Importar cofre (.json)" onClick={() => void importarCofreParaApp()}>↑ Importar Cofre</button>
       </form>
       {campanhas.value.length === 0
         ? <div class="vazio"><h2>Nenhuma campanha ainda</h2><p>Crie a primeira acima. Ela aparece também no Atlas.</p></div>
