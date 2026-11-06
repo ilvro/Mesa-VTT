@@ -4,6 +4,7 @@ import type { Entidade, TipoEntidade } from '#mesa';
 import { filtroTipo, selecionadaId } from '../app/campanha.ts';
 import { abrirEntidade } from '../app/rotas.ts';
 import { abrirNoApp } from '../app/barramento.ts';
+import { ativarCena } from '../app/sessao.ts';
 import { ehRefDeEntidadeDaMesa } from '../dominio/notas.ts';
 import {
   agruparPorCategoria,
@@ -183,6 +184,20 @@ export function CartaoColecao({ e }: { e: Entidade }) {
         <span class={cx('cartao-tipo-selo', encontro && 'selo-encontro')}>
           {encontro ? 'Encontro' : ROTULO_DO_TIPO[e.tipo].singular}
         </span>
+        {e.tipo === 'cena' && (
+          <button
+            type="button"
+            class="cartao-ativar-atalho"
+            data-testid={`ativar-cena-cartao-${e.id}`}
+            title={encontro ? 'Lançar encontro de combate' : 'Ativar cena no Atlas e Jukebox'}
+            onClick={ev => {
+              ev.stopPropagation();
+              void ativarCena(e);
+            }}
+          >
+            {encontro ? '⚔' : '▶'}
+          </button>
+        )}
         {principalRef && (
           <button
             type="button"

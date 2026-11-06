@@ -124,3 +124,90 @@ export function candidatosDePistas(
     .filter(e => (e.tipo === 'pista' || e.refs.some(r => r.app === 'atelie')) && !ligadas.has(e.id))
     .sort((a, b) => semAcento(a.nome).localeCompare(semAcento(b.nome), 'pt-BR'));
 }
+
+export interface PedidoBarramentoPlanejado {
+  pedido: string;
+  dados: Record<string, unknown>;
+}
+
+export interface PlanoDeAtivacaoDeCena {
+  mapaId: string | null;
+  refMapa: Ref | null;
+  refTrilha: Ref | null;
+  pedidos: PedidoBarramentoPlanejado[];
+  fichasIds: string[];
+}
+
+/**
+ * Planeja os comandos que ativam uma cena no Atlas e no Jukebox:
+ * - Se `catalogoSuportaPrepararCena`: envia 'atlas.preparar-cena' com `{ mapa: refMapa, fichas: refsFichas }`
+ * - Fallback: envia 'atlas.focar' com `{ ref: refMapa }`
+ * - Se houver trilha sonora: envia 'jukebox.tocar' com `{ ref: refTrilha }`
+ */
+export function planejarAtivacaoDeCena(
+  pacote: PacoteDeCena,
+  catalogoSuportaPrepararCena = false,
+): PlanoDeAtivacaoDeCena {
+  let mapaId: string | null = null;
+  let refMapa: Ref | null = null;
+
+  if (pacote.mapa) {
+    refMapa = pacote.mapa.ref;
+    if (pacote.mapa.ref.app === 'atlas' && pacote.mapa.ref.tipo === 'mapa') {
+      mapaId = pacote.mapa.ref.id;
+    } else if (pacote.mapa.entidade) {
+      const refAtlas = pacote.mapa.entidade.refs.find(r => r.app === 'atlas' && r.tipo === 'mapa');
+      mapaId = refAtlas ? refAtlas.id : pacote.mapa.entidade.id;
+    } else {
+      mapaId = pacote.mapa.ref.id;
+    }
+  }
+
+  const refTrilha = pacote.trilha ? pacote.trilha.ref : null;
+
+  const refsFichas: Ref[] = [];
+  const fichasIds: string[] = [];
+
+  for (const p of pacote.participantes) {
+    const refFicha = p.entidade?.refs.find(r => r.app === 'ficha') ?? (p.ref.app === 'ficha' ? p.ref : null);
+    if (refFicha) {
+      refsFichas.push(refFicha);
+      fichasIds.push(refFicha.id);
+    } else if (p.entidade) {
+      fichasIds.push(p.entidade.id);
+    } else {
+      fichasIds.push(p.ref.id);
+    }
+  }
+
+  const pedidos: PedidoBarramentoPlanejado[] = [];
+
+  if (refMapa) {
+    if (catalogoSuportaPrepararCena) {
+      pedidos.push({
+        pedido: 'atlas.preparar-cena',
+        dados: { mapa: refMapa, fichas: refsFichas },
+      });
+    } else {
+      pedidos.push({
+        pedido: 'atlas.focar',
+        dados: { ref: refMapa },
+      });
+    }
+  }
+
+  if (refTrilha) {
+    pedidos.push({
+      pedido: 'jukebox.tocar',
+      dados: { ref: refTrilha },
+    });
+  }
+
+  return {
+    mapaId,
+    refMapa,
+    refTrilha,
+    pedidos,
+    fichasIds,
+  };
+}

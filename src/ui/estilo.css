@@ -411,3 +411,9 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .botao-icone-cofre.ativo { border-color: #98c379; color: #98c379; background: rgba(152, 195, 121, 0.15); }
 .tag-pasta-vinculada { font-size: 11px; color: #98c379; display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 4px; background: rgba(152, 195, 121, 0.1); margin: 0 10px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tag-pasta-vinculada .ponto-status { font-size: 8px; color: #98c379; }
+
+/* ---- Ações de Ativação de Cena & Encontro ---- */
+.editor-cena-acoes-topo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.botao-ativar-cena { font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 6px; }
+.cartao-ativar-atalho { position: absolute; right: 38px; top: 8px; z-index: 2; border: 1px solid var(--linha-forte); background: var(--superficie); color: var(--texto); border-radius: 4px; padding: 2px 6px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+.cartao-ativar-atalho:hover { background: var(--acento); color: #0b0c10; border-color: var(--acento); }

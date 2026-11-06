@@ -9,6 +9,7 @@ import {
   casaCena,
   entidadePorRef,
   extrairPacoteDeCena,
+  planejarAtivacaoDeCena,
   refParaLigacao,
 } from '../../src/dominio/cenas.ts';
 import { refDaEntidade } from '../../src/dominio/notas.ts';
@@ -284,5 +285,119 @@ describe('cenas e encontros (domínio)', () => {
     assert.equal(ehEncontro(cenaEncontro), true);
     assert.equal(ehEncontro(cenaCombate), true);
     assert.equal(ehEncontro(outroTipo), false);
+  });
+
+  describe('planejarAtivacaoDeCena', () => {
+    it('gera atlas.preparar-cena e jukebox.tocar quando catalogo suporta preparar-cena', () => {
+      const mapaRef: Ref = { app: 'atlas', tipo: 'mapa', id: 'mapa-mansao' };
+      const trilhaRef: Ref = { app: 'jukebox', tipo: 'cena-sonora', id: 'trilha-suspense' };
+      const fichaArthurRef: Ref = { app: 'ficha', tipo: 'ficha', id: 'ficha-arthur' };
+      const fichaZumbiRef: Ref = { app: 'ficha', tipo: 'ficha', id: 'ficha-zumbi' };
+
+      const pacote = {
+        cenaId: 'cena-1',
+        mapa: {
+          ref: mapaRef,
+          ligacaoId: 'lig-mapa',
+          entidade: baseEntidade({
+            id: 'lugar-1',
+            tipo: 'lugar',
+            nome: 'Mansão',
+            refs: [mapaRef],
+          }),
+        },
+        trilha: {
+          ref: trilhaRef,
+          ligacaoId: 'lig-trilha',
+        },
+        participantes: [
+          {
+            ref: fichaArthurRef,
+            ehAmeaca: false,
+            ligacaoId: 'lig-p1',
+            entidade: baseEntidade({
+              id: 'p1',
+              tipo: 'personagem',
+              nome: 'Arthur',
+              refs: [fichaArthurRef],
+            }),
+          },
+          {
+            ref: fichaZumbiRef,
+            ehAmeaca: true,
+            ligacaoId: 'lig-p2',
+            entidade: baseEntidade({
+              id: 'a1',
+              tipo: 'ameaca',
+              nome: 'Zumbi',
+              refs: [fichaZumbiRef],
+            }),
+          },
+        ],
+        pistas: [],
+      };
+
+      const plano = planejarAtivacaoDeCena(pacote, true);
+
+      assert.equal(plano.mapaId, 'mapa-mansao');
+      assert.deepEqual(plano.refMapa, mapaRef);
+      assert.deepEqual(plano.refTrilha, trilhaRef);
+      assert.deepEqual(plano.fichasIds, ['ficha-arthur', 'ficha-zumbi']);
+
+      assert.equal(plano.pedidos.length, 2);
+      assert.deepEqual(plano.pedidos[0], {
+        pedido: 'atlas.preparar-cena',
+        dados: {
+          mapa: mapaRef,
+          fichas: [fichaArthurRef, fichaZumbiRef],
+        },
+      });
+      assert.deepEqual(plano.pedidos[1], {
+        pedido: 'jukebox.tocar',
+        dados: { ref: trilhaRef },
+      });
+    });
+
+    it('gera atlas.focar como fallback seguro quando catalogo nao suporta preparar-cena', () => {
+      const mapaRef: Ref = { app: 'atlas', tipo: 'mapa', id: 'mapa-floresta' };
+      const pacote = {
+        cenaId: 'cena-2',
+        mapa: {
+          ref: mapaRef,
+          ligacaoId: 'lig-mapa',
+        },
+        trilha: null,
+        participantes: [],
+        pistas: [],
+      };
+
+      const plano = planejarAtivacaoDeCena(pacote, false);
+
+      assert.equal(plano.mapaId, 'mapa-floresta');
+      assert.equal(plano.refTrilha, null);
+      assert.equal(plano.pedidos.length, 1);
+      assert.deepEqual(plano.pedidos[0], {
+        pedido: 'atlas.focar',
+        dados: { ref: mapaRef },
+      });
+    });
+
+    it('retorna plano vazio para cena sem mapa e sem trilha', () => {
+      const pacote = {
+        cenaId: 'cena-3',
+        mapa: null,
+        trilha: null,
+        participantes: [],
+        pistas: [],
+      };
+
+      const plano = planejarAtivacaoDeCena(pacote, true);
+
+      assert.equal(plano.mapaId, null);
+      assert.equal(plano.refMapa, null);
+      assert.equal(plano.refTrilha, null);
+      assert.deepEqual(plano.pedidos, []);
+      assert.deepEqual(plano.fichasIds, []);
+    });
   });
 });

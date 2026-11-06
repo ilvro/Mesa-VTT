@@ -1,9 +1,10 @@
 import { Fragment } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { carregarEscolhas, escolhas, fichaDaAba, fichasEmAbas, layout, mapaAtual, mapas, mudarEscolhas, mudarLayout, personagens, alternarFicha, restaurarLayoutPadrao } from '../app/sessao.ts';
+import { ativarCena, carregarEscolhas, escolhas, fichaDaAba, fichasEmAbas, layout, mapaAtual, mapas, mudarEscolhas, mudarLayout, personagens, alternarFicha, restaurarLayoutPadrao } from '../app/sessao.ts';
 import { baseDoApp, inventario, sondarAplicativos } from '../app/inventario.ts';
-import { campanhaAtiva } from '../app/campanha.ts';
+import { campanhaAtiva, entidades } from '../app/campanha.ts';
 import { enderecoDe } from '../app/aplicativos.ts';
+import { ehEncontro } from '../dominio/entidades.ts';
 import { alternarPainel, escalaDoPainel, LARGURA_LOGICA_MINIMA, presetDe, PRESETS, redimensionar, ROTULO_DO_PAINEL, ROTULO_DO_PRESET, visiveis, type Layout, type PainelId, type PresetId } from '../dominio/layout.ts';
 import { enderecoDaFicha, enderecoDoAtlas } from '../dominio/sessao.ts';
 import { cx } from './cx.ts';
@@ -83,6 +84,7 @@ export function ModoSessao() {
 
   if (!c) return <section class="pagina"><div class="vazio"><h2>Escolha uma campanha</h2><p>O modo sessão junta o mapa, as fichas e a música da campanha ativa.</p></div></section>;
   const l = layout.value, v = visiveis(l), preset = presetDe(l);
+  const cenasDisponiveis = entidades.value.filter(e => e.tipo === 'cena');
 
   const arrastar = (indice: number) => (ev: PointerEvent) => {
     const alvo = ev.currentTarget as HTMLElement, caixa = area.current; if (!caixa) return;
@@ -105,6 +107,27 @@ export function ModoSessao() {
         <label class="linha-campanha">Mapa
           <select data-testid="sessao-mapa" value={mapaAtual.value?.mapaId ?? ''} disabled={mapas.value.length === 0} onChange={ev => mudarEscolhas({ mapaId: ev.currentTarget.value || null })}>
             {mapas.value.length === 0 ? <option value="">Nenhum mapa na campanha</option> : mapas.value.map(m => <option key={m.mapaId} value={m.mapaId}>{m.nome}</option>)}
+          </select>
+        </label>
+        <label class="linha-campanha">Cena / Encontro
+          <select
+            data-testid="sessao-cena"
+            value=""
+            disabled={cenasDisponiveis.length === 0}
+            onChange={ev => {
+              const id = ev.currentTarget.value;
+              if (!id) return;
+              const cenaSel = entidades.value.find(x => x.id === id);
+              if (cenaSel) void ativarCena(cenaSel);
+              ev.currentTarget.value = '';
+            }}
+          >
+            <option value="">{cenasDisponiveis.length === 0 ? 'Nenhuma cena criada' : '▶ Ativar Cena…'}</option>
+            {cenasDisponiveis.map(cs => (
+              <option key={cs.id} value={cs.id}>
+                {ehEncontro(cs) ? '⚔ ' : '🎬 '}{cs.nome}
+              </option>
+            ))}
           </select>
         </label>
         <div class="chips" role="group" aria-label="Layout">

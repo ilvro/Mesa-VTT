@@ -7,6 +7,7 @@ import {
   extrairPacoteDeCena,
 } from '../dominio/cenas.ts';
 import { ehEncontro } from '../dominio/entidades.ts';
+import { ativarCena } from '../app/sessao.ts';
 import {
   alternarEncontroDaCena,
   desvincularDaCena,
@@ -42,16 +43,27 @@ export function EditorDeCena({ e, editavel }: { e: Entidade; editavel: boolean }
           <span class="icone-secao" aria-hidden="true">🎬</span>
           <h4>Pacote da Cena & Encontro</h4>
         </div>
-        <button
-          type="button"
-          class={cx('botao-toggle-encontro', eCombate && 'ativo')}
-          data-testid="toggle-encontro"
-          disabled={!editavel}
-          title={eCombate ? 'Remover marcação de encontro de combate' : 'Marcar como encontro de combate'}
-          onClick={() => void alternarEncontroDaCena(e)}
-        >
-          ⚔ {eCombate ? 'Encontro de Combate' : 'Marcar como Encontro'}
-        </button>
+        <div class="editor-cena-acoes-topo">
+          <button
+            type="button"
+            class="botao-pilula destaque botao-ativar-cena"
+            data-testid="ativar-cena"
+            title={eCombate ? 'Lançar encontro no Atlas e Jukebox' : 'Ativar cena no Atlas e Jukebox'}
+            onClick={() => void ativarCena(e)}
+          >
+            {eCombate ? '⚔ Lançar Encontro' : '▶ Ativar Cena'}
+          </button>
+          <button
+            type="button"
+            class={cx('botao-toggle-encontro', eCombate && 'ativo')}
+            data-testid="toggle-encontro"
+            disabled={!editavel}
+            title={eCombate ? 'Remover marcação de encontro de combate' : 'Marcar como encontro de combate'}
+            onClick={() => void alternarEncontroDaCena(e)}
+          >
+            ⚔ {eCombate ? 'Encontro de Combate' : 'Marcar como Encontro'}
+          </button>
+        </div>
       </div>
 
       <p class="editor-cena-descricao">

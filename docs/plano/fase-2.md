@@ -78,7 +78,7 @@ Testes: unitários em `tests/unit/cenas.test.ts` montando e lendo o pacote de um
 Pronto quando: selecionar uma Cena ou Encontro na Mesa permite vincular visualmente o mapa, a música, os monstros do encontro e as pistas.
 Commit: feat(mesa): add visual Scene and Encounter builder using campaign links
 
-### M2.2b — Ação "▶ Ativar Cena / ⚔ Lançar Encontro" na Coleção e no Modo Sessão  ⬜
+### M2.2b — Ação "▶ Ativar Cena / ⚔ Lançar Encontro" na Coleção e no Modo Sessão  ✅
 Objetivo: adicionar o botão de 1 clique que ativa uma Cena ou Encontro, abrindo o mapa no Atlas, tocando a trilha no Jukebox e registrando no Diário da Sessão.
 Depende de: M2.2a
 Ler: `src/ui/EditorDeCena.tsx`, `src/ui/ModoSessao.tsx`, `src/ui/Diario.tsx`, `src/app/barramento.ts`, `src/app/registro.ts`.
