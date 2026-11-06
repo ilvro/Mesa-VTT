@@ -1,7 +1,8 @@
 import { signal, computed } from '@preact/signals';
 import { abrirRepositorioCampanha, mesmaRef, type Campanha, type Entidade, type Ligacao, type RepositorioCampanha, type Tema, type TipoEntidade } from '#mesa';
-import { APP_DA_MESA, filtrarEntidades, podeEditar, type CategoriaFiltro, type FiltroDeEntidades, type OrdemColecao } from '../dominio/entidades.ts';
+import { APP_DA_MESA, ehEncontro, filtrarEntidades, podeEditar, semAcento, type CategoriaFiltro, type FiltroDeEntidades, type OrdemColecao } from '../dominio/entidades.ts';
 import { refDaEntidade, refsMencionados } from '../dominio/notas.ts';
+import { casaCena, refParaLigacao } from '../dominio/cenas.ts';
 import { trocarTema } from './tema.ts';
 import { avisar, mensagemDe } from './toasts.ts';
 
@@ -13,6 +14,7 @@ export const repositorio = signal<RepositorioCampanha | null | 'indisponivel'>(n
 export const campanhas = signal<Campanha[]>([]);
 export const campanhaAtiva = signal<Campanha | null>(null);
 export const entidades = signal<Entidade[]>([]);
+export const ligacoes = signal<Ligacao[]>([]);
 
 export const filtroTipo = signal<CategoriaFiltro | null>(null);
 export const busca = signal('');
@@ -97,6 +99,7 @@ export async function atualizar(): Promise<void> {
     const ativa = lista.find(c => c.id === id) ?? null;
     if (ativa?.id !== campanhaAtiva.value?.id || ativa?.atualizadaEm !== campanhaAtiva.value?.atualizadaEm) campanhaAtiva.value = ativa;
     entidades.value = ativa ? await r.listarEntidades(ativa.id) : [];
+    ligacoes.value = ativa ? await r.listarLigacoes(ativa.id) : [];
     if (selecionadaId.value && !entidades.value.some(e => e.id === selecionadaId.value)) selecionadaId.value = null;
   } catch (erro) { console.warn('Mesa: não consegui atualizar', erro); }
 }
@@ -220,4 +223,157 @@ export async function removerEntidade(e: Entidade): Promise<void> {
     await atualizar();
     avisar(`“${e.nome}” removida.`);
   } catch (erro) { avisar(mensagemDe(erro), true); }
+}
+
+/** Vincula um Mapa/Cômodo como o cenário desta cena (ligação `esta-em`). */
+export async function vincularMapaNaCena(cena: Entidade, mapa: Entidade): Promise<boolean> {
+  const r = repo();
+  const c = campanhaAtiva.value;
+  if (!c) return false;
+  try {
+    await comRefDaMesa(cena);
+    await comRefDaMesa(mapa);
+    const de = refParaLigacao(cena);
+    const para = refParaLigacao(mapa);
+
+    // Substitui mapa anterior da cena caso já exista
+    const todas = await r.listarLigacoes(c.id);
+    const refCena = refDaEntidade(cena.id);
+    const antigas = todas.filter(
+      l => l.tipo === 'esta-em' && l.criadaPor === APP_DA_MESA && casaCena(l.de, cena, refCena),
+    );
+    for (const antiga of antigas) {
+      await r.removerLigacao(antiga.id);
+    }
+
+    await r.ligar({ campanhaId: c.id, de, para, tipo: 'esta-em' });
+    await atualizar();
+    avisar(`Mapa “${mapa.nome}” vinculado à cena.`);
+    return true;
+  } catch (erro) {
+    avisar(mensagemDe(erro), true);
+    return false;
+  }
+}
+
+/** Vincula uma Trilha Sonora/Cena Sonora do Jukebox a esta cena (ligação `toca-em`). */
+export async function vincularTrilhaNaCena(cena: Entidade, trilha: Entidade): Promise<boolean> {
+  const r = repo();
+  const c = campanhaAtiva.value;
+  if (!c) return false;
+  try {
+    await comRefDaMesa(cena);
+    await comRefDaMesa(trilha);
+    const de = refParaLigacao(cena);
+    const para = refParaLigacao(trilha);
+
+    // Substitui trilha anterior da cena caso já exista
+    const todas = await r.listarLigacoes(c.id);
+    const refCena = refDaEntidade(cena.id);
+    const antigas = todas.filter(
+      l => l.tipo === 'toca-em' && l.criadaPor === APP_DA_MESA && casaCena(l.de, cena, refCena),
+    );
+    for (const antiga of antigas) {
+      await r.removerLigacao(antiga.id);
+    }
+
+    await r.ligar({ campanhaId: c.id, de, para, tipo: 'toca-em' });
+    await atualizar();
+    avisar(`Trilha sonora “${trilha.nome}” vinculada à cena.`);
+    return true;
+  } catch (erro) {
+    avisar(mensagemDe(erro), true);
+    return false;
+  }
+}
+
+/** Vincula um participante (personagem ou ameaça) ao encontro da cena (ligação `aparece-em`). */
+export async function vincularParticipanteNaCena(cena: Entidade, participante: Entidade): Promise<boolean> {
+  const r = repo();
+  const c = campanhaAtiva.value;
+  if (!c) return false;
+  try {
+    await comRefDaMesa(cena);
+    await comRefDaMesa(participante);
+    const de = refParaLigacao(participante);
+    const para = refParaLigacao(cena);
+
+    const todas = await r.listarLigacoes(c.id);
+    const jaExiste = todas.some(
+      l => l.tipo === 'aparece-em' && mesmaRef(l.de, de) && mesmaRef(l.para, para),
+    );
+    if (!jaExiste) {
+      await r.ligar({ campanhaId: c.id, de, para, tipo: 'aparece-em' });
+    }
+    await atualizar();
+    avisar(`“${participante.nome}” adicionado à cena.`);
+    return true;
+  } catch (erro) {
+    avisar(mensagemDe(erro), true);
+    return false;
+  }
+}
+
+/** Vincula uma pista à cena (ligação `revela`). */
+export async function vincularPistaNaCena(cena: Entidade, pista: Entidade): Promise<boolean> {
+  const r = repo();
+  const c = campanhaAtiva.value;
+  if (!c) return false;
+  try {
+    await comRefDaMesa(cena);
+    await comRefDaMesa(pista);
+    const de = refParaLigacao(cena);
+    const para = refParaLigacao(pista);
+
+    const todas = await r.listarLigacoes(c.id);
+    const jaExiste = todas.some(
+      l => l.tipo === 'revela' && mesmaRef(l.de, de) && mesmaRef(l.para, para),
+    );
+    if (!jaExiste) {
+      await r.ligar({ campanhaId: c.id, de, para, tipo: 'revela' });
+    }
+    await atualizar();
+    avisar(`Pista “${pista.nome}” vinculada à cena.`);
+    return true;
+  } catch (erro) {
+    avisar(mensagemDe(erro), true);
+    return false;
+  }
+}
+
+/** Desvincula qualquer item de uma cena (remove a ligação no banco da campanha). */
+export async function desvincularDaCena(ligacaoId: string, nomeItem?: string): Promise<boolean> {
+  const r = repo();
+  try {
+    await r.removerLigacao(ligacaoId);
+    await atualizar();
+    if (nomeItem) {
+      avisar(`“${nomeItem}” desvinculado.`);
+    } else {
+      avisar('Vínculo removido.');
+    }
+    return true;
+  } catch (erro) {
+    avisar(mensagemDe(erro), true);
+    return false;
+  }
+}
+
+/** Alterna a marcação da cena como encontro de combate (etiqueta #encontro). */
+export async function alternarEncontroDaCena(cena: Entidade): Promise<boolean> {
+  const eh = ehEncontro(cena);
+  let novasTags: string[];
+  if (eh) {
+    novasTags = cena.tags.filter(t => {
+      const k = semAcento(t.replace(/^#/, '').trim());
+      return k !== 'encontro' && k !== 'combate';
+    });
+  } else {
+    novasTags = [...cena.tags, 'encontro'];
+  }
+  const ok = await alterarEntidade(cena, { tags: novasTags });
+  if (ok) {
+    avisar(!eh ? 'Cena marcada como encontro de combate.' : 'Removida dos encontros de combate.');
+  }
+  return ok;
 }

@@ -59,7 +59,7 @@ Testes: verificar que todos os testes existentes e o novo teste de agrupamento/a
 Pronto quando: a coleção exibe os cartões quadrados com miniaturas (como na referência do Atlas VTT) e abre a gaveta de detalhes ao clicar.
 Commit: feat(mesa): add visual thumbnail card grid and collapsible sections to campaign collection
 
-### M2.2a — Construtor de Encontros (`Encontros`) e Pacotes de Cena (`Cenas`)  ⬜
+### M2.2a — Construtor de Encontros (`Encontros`) e Pacotes de Cena (`Cenas`)  ✅
 Objetivo: permitir que o mestre monte uma Cena completa (Mapa + Clima + Música do Jukebox + Pistas) ou um Encontro (lista de Ameaças e Personagens participantes) diretamente no painel de detalhe da entidade na Mesa.
 Depende de: M2.1b
 Ler: `src/ui/Entidades.tsx` (`Detalhe`), `src/app/campanha.ts`, `vendor/mesa-core/index.d.ts` (`ligar`, `listarLigacoes`, `removerLigacao`, `TipoLigacao`).

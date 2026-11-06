@@ -38,6 +38,7 @@ import {
 import { descobrirApp, enderecoDe } from '../app/aplicativos.ts';
 import { ehRefDeEntidadeDaMesa } from '../dominio/notas.ts';
 import { GradeDeColecao, modoExibicao } from './GradeDeColecao.tsx';
+import { EditorDeCena } from './EditorDeCena.tsx';
 import { cx } from './cx.ts';
 import { EditorDeNota } from './EditorDeNota.tsx';
 
@@ -353,6 +354,7 @@ function Detalhe({ e }: { e: Entidade }) {
           onBlur={ev => { const novas = lerTags(ev.currentTarget.value); if (JSON.stringify(novas) !== JSON.stringify(e.tags)) void alterarEntidade(e, { tags: novas }); }}
           onKeyDown={ev => { if (ev.key === 'Enter') ev.currentTarget.blur(); }} />
       </label>
+      {e.tipo === 'cena' && <EditorDeCena key={`cena-${e.id}`} e={e} editavel={editavel} />}
       <EditorDeNota key={`notas-${e.id}`} e={e} editavel={editavel} />
       <h3 class="faixa pequena">Onde aparece</h3>
       {refsVisiveis.length === 0
