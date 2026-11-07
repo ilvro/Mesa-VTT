@@ -13,6 +13,9 @@
     "dev": "vite --host 127.0.0.1 --port 5195 --strictPort",
     "dev:mesa": "MESA_DEV_PREFIX=/Mesa/ vite --host 127.0.0.1 --port 5195 --strictPort",
     "build": "tsc --noEmit -p tsconfig.build.json && vite build",
+    "desktop:prep": "node scripts/build-desktop.ts",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "node scripts/build-desktop.ts && tauri build",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"tests/unit/**/*.test.ts\"",
     "test:e2e": "node --test --test-concurrency=1 \"tests/e2e/*.test.ts\""

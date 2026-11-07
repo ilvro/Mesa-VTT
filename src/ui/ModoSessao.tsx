@@ -10,6 +10,7 @@ import { enderecoDaFicha, enderecoDoAtlas } from '../dominio/sessao.ts';
 import { cx } from './cx.ts';
 import { Diario } from './Diario.tsx';
 import { carregarSessoes } from '../app/registro.ts';
+import { abrirProjetorNoSegundoMonitor } from '../app/desktop.ts';
 
 const LARGURA_DO_DIVISOR = 8;
 
@@ -137,6 +138,15 @@ export function ModoSessao() {
           {l.map(p => <button key={p.id} type="button" class={cx('chip', p.visivel && 'ativa')} aria-pressed={p.visivel} data-testid={`painel-${p.id}`} onClick={() => mudarLayout(alternarPainel(layout.value, p.id))}>{ROTULO_DO_PAINEL[p.id]}</button>)}
         </div>
         <span class="espaco" />
+        <button
+          type="button"
+          class="botao-pilula"
+          title="Abrir visão do projetor para os jogadores na TV ou 2º monitor"
+          data-testid="sessao-abrir-projetor"
+          onClick={() => { void abrirProjetorNoSegundoMonitor(mapaAtual.value?.mapaId ?? null); }}
+        >
+          📽 Projetor
+        </button>
         <button type="button" class="botao-pilula" data-testid="layout-padrao" onClick={restaurarLayoutPadrao}>Layout padrão</button>
       </div>
       <div class={cx('sessao-paineis', arrastando && 'arrastando')} ref={area} data-testid="sessao-paineis">

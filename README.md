@@ -23,6 +23,25 @@ cd ../Atlas && npm run mesa-dev      # http://127.0.0.1:5100/Mesa/  (Atlas, Doss
 
 A aba **Aplicativos** da Mesa mostra, pelo `mesa.json` de cada um, quem está por perto: achado, sem manifesto (no ar, mas ainda fora do contrato, como o Tabletop) ou fora do ar.
 
+## Aplicativo Desktop (Tauri v2)
+
+A Mesa conta com um invólucro desktop leve nativo baseado em **Tauri v2**, unificando toda a plataforma (Mesa, Atlas, Dossiê, Ateliê e Jukebox) sob a mesma janela e origem local, com suporte a **Projetor em 2º Monitor**:
+
+- O comando nativo Rust `abrir_projetor_segundo_monitor` detecta monitores conectados via `app_handle.available_monitors()`, escolhe o monitor secundário (ou TV conectada) e abre a visão limpa dos jogadores do Atlas em tela cheia/borderless.
+- No modo Sessão, o botão rápido `📽 Projetor` abre o mapa ativo diretamente na TV ou segundo monitor.
+- No navegador, a Mesa utiliza a moderna *Window Management / Multi-Screen API* (`window.getScreenDetails()`) com fallback elegante para janela popup.
+
+```bash
+# 1. Empacotar todos os aplicativos em dist-desktop/
+npm run desktop:prep
+
+# 2. Rodar em modo desenvolvimento com hot-reload (conecta no mesa-dev em http://127.0.0.1:5100/Mesa/)
+npm run desktop:dev
+
+# 3. Gerar instalador nativo do sistema (.AppImage / .deb no Linux, .exe / .msi no Windows, .dmg no macOS)
+npm run desktop:build
+```
+
 ## Testes
 
 ```bash
