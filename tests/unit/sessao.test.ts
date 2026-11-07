@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Entidade } from '#mesa';
-import { ESCOLHAS_VAZIAS, enderecoDaFicha, enderecoDoAtlas, fichaAtiva, fichasDaSessao, lerEscolhas, mapaEscolhido, mapasDaCampanha, personagensComFicha } from '../../src/dominio/sessao.ts';
+import { ESCOLHAS_VAZIAS, enderecoDaFicha, enderecoDoAtlas, fichaAtiva, fichasDaSessao, filtrarPersonagensSessao, lerEscolhas, mapaEscolhido, mapasDaCampanha, personagensComFicha } from '../../src/dominio/sessao.ts';
 
 const base = { campanhaId: 'c', tags: [], notas: '', criadaPor: 'atlas', criadaEm: 1, atualizadaEm: 1 } as const;
 const e = (id: string, tipo: Entidade['tipo'], nome: string, refs: Entidade['refs']): Entidade => ({ ...base, id, tipo, nome, refs } as unknown as Entidade);
@@ -51,3 +51,28 @@ test('lerEscolhas: aceita o formato certo e limpa o resto', () => {
   assert.deepEqual(lerEscolhas({ mapaId: '', fichas: 'x', ativa: 7 }), ESCOLHAS_VAZIAS);
   assert.deepEqual(lerEscolhas(null), ESCOLHAS_VAZIAS); assert.deepEqual(lerEscolhas('lixo'), ESCOLHAS_VAZIAS);
 });
+
+test('filtrarPersonagensSessao: busca vazia retorna todos; busca sem acento e case insensitive; mantém ficha ativa', () => {
+  const chars = [
+    { fichaId: 'f1', nome: 'Éowyn' },
+    { fichaId: 'f2', nome: 'Aragorn' },
+    { fichaId: 'f3', nome: 'Légolas' },
+    { fichaId: 'f4', nome: 'Gimli' },
+  ];
+
+  // Busca vazia
+  assert.deepEqual(filtrarPersonagensSessao(chars, '').map(c => c.fichaId), ['f1', 'f2', 'f3', 'f4']);
+  assert.deepEqual(filtrarPersonagensSessao(chars, '   ').map(c => c.fichaId), ['f1', 'f2', 'f3', 'f4']);
+
+  // Busca sem acento
+  assert.deepEqual(filtrarPersonagensSessao(chars, 'eowyn').map(c => c.fichaId), ['f1']);
+  assert.deepEqual(filtrarPersonagensSessao(chars, 'legolas').map(c => c.fichaId), ['f3']);
+  assert.deepEqual(filtrarPersonagensSessao(chars, 'ar').map(c => c.fichaId), ['f2']);
+
+  // Mantém ficha ativa mesmo quando não bate na busca
+  assert.deepEqual(filtrarPersonagensSessao(chars, 'gimli', 'f1').map(c => c.fichaId), ['f1', 'f4']);
+  // Sem ficha ativa ou com ficha ativa que bate
+  assert.deepEqual(filtrarPersonagensSessao(chars, 'gimli', 'f4').map(c => c.fichaId), ['f4']);
+  assert.deepEqual(filtrarPersonagensSessao(chars, 'inexistente', null).map(c => c.fichaId), []);
+});
+

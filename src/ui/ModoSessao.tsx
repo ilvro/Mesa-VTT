@@ -1,16 +1,19 @@
 import { Fragment } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { signal } from '@preact/signals';
 import { ativarCena, carregarEscolhas, escolhas, fichaDaAba, fichasEmAbas, layout, mapaAtual, mapas, mudarEscolhas, mudarLayout, personagens, alternarFicha, restaurarLayoutPadrao } from '../app/sessao.ts';
 import { baseDoApp, inventario, sondarAplicativos } from '../app/inventario.ts';
 import { campanhaAtiva, entidades } from '../app/campanha.ts';
 import { enderecoDe } from '../app/aplicativos.ts';
 import { ehEncontro } from '../dominio/entidades.ts';
 import { alternarPainel, escalaDoPainel, LARGURA_LOGICA_MINIMA, presetDe, PRESETS, redimensionar, ROTULO_DO_PAINEL, ROTULO_DO_PRESET, visiveis, type Layout, type PainelId, type PresetId } from '../dominio/layout.ts';
-import { enderecoDaFicha, enderecoDoAtlas } from '../dominio/sessao.ts';
+import { enderecoDaFicha, enderecoDoAtlas, filtrarPersonagensSessao } from '../dominio/sessao.ts';
 import { cx } from './cx.ts';
 import { Diario } from './Diario.tsx';
 import { carregarSessoes } from '../app/registro.ts';
 import { abrirProjetorNoSegundoMonitor } from '../app/desktop.ts';
+
+export const buscaPersonagemSessao = signal('');
 
 const LARGURA_DO_DIVISOR = 8;
 
@@ -49,14 +52,55 @@ function PainelDasFichas() {
   useEffect(() => { if (ativa && !abertas.includes(ativa.fichaId)) setAbertas(a => [...a, ativa.fichaId]); }, [ativa?.fichaId]);
   if (foraDoAr('ficha')) return <SemApp nome="O Dossiê" />;
   if (!personagens.value.length) return <div class="painel-vazio" data-testid="fichas-vazio"><p>Nenhuma personagem com ficha nesta campanha.</p><p class="meta">Abra o Dossiê com esta campanha ativa: ela publica as personagens aqui.</p></div>;
+
+  const termo = buscaPersonagemSessao.value;
+  const abasFiltradas = filtrarPersonagensSessao(abas, termo, ativa?.fichaId);
+  const personagensFiltrados = filtrarPersonagensSessao(personagens.value, termo);
+
   return (
     <>
       <div class="abas-fichas" role="tablist" aria-label="Fichas">
-        {abas.map(f => <button key={f.fichaId} type="button" role="tab" aria-selected={ativa?.fichaId === f.fichaId} class={cx('chip', ativa?.fichaId === f.fichaId && 'ativa')} data-testid={`ficha-aba-${f.fichaId}`} onClick={() => mudarEscolhas({ ativa: f.fichaId })}>{f.nome}</button>)}
+        <input
+          type="search"
+          class="sessao-busca-personagens"
+          data-testid="sessao-busca-personagens"
+          placeholder="Buscar personagem…"
+          value={termo}
+          onInput={ev => { buscaPersonagemSessao.value = (ev.currentTarget as HTMLInputElement).value; }}
+        />
+        {abasFiltradas.map(f => (
+          <button
+            key={f.fichaId}
+            type="button"
+            role="tab"
+            aria-selected={ativa?.fichaId === f.fichaId}
+            class={cx('chip', ativa?.fichaId === f.fichaId && 'ativa')}
+            data-testid={`ficha-aba-${f.fichaId}`}
+            onClick={() => mudarEscolhas({ ativa: f.fichaId })}
+          >
+            {f.nome}
+          </button>
+        ))}
         <details class="escolher-fichas">
           <summary class="chip" data-testid="escolher-fichas">Personagens…</summary>
           <ul class="menu-fichas">
-            {personagens.value.map(p => <li key={p.fichaId}><label><input type="checkbox" checked={abas.some(a => a.fichaId === p.fichaId)} data-testid={`ficha-escolher-${p.fichaId}`} onChange={() => alternarFicha(p.fichaId)} /> {p.nome}</label></li>)}
+            {personagensFiltrados.length === 0 ? (
+              <li class="menu-fichas-vazio">Nenhum personagem com “{termo}”.</li>
+            ) : (
+              personagensFiltrados.map(p => (
+                <li key={p.fichaId}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={abas.some(a => a.fichaId === p.fichaId)}
+                      data-testid={`ficha-escolher-${p.fichaId}`}
+                      onChange={() => alternarFicha(p.fichaId)}
+                    />{' '}
+                    {p.nome}
+                  </label>
+                </li>
+              ))
+            )}
           </ul>
         </details>
       </div>

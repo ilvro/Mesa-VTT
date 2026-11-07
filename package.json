@@ -16,6 +16,7 @@
     "desktop:prep": "node scripts/build-desktop.ts",
     "desktop:dev": "tauri dev",
     "desktop:build": "node scripts/build-desktop.ts && tauri build",
+    "desktop:install": "node scripts/install-desktop.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"tests/unit/**/*.test.ts\"",
     "test:e2e": "node --test --test-concurrency=1 \"tests/e2e/*.test.ts\""

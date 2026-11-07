@@ -1,4 +1,5 @@
 import type { Entidade, Ref } from '#mesa';
+import { semAcento } from './entidades.ts';
 
 /** Um mapa do Atlas que a campanha conhece: o “lugar” (entidade) e o id do mapa (do Ref `mesa:atlas/mapa/<id>`). */
 export interface MapaDaCampanha { entidadeId: string; nome: string; mapaId: string }
@@ -51,4 +52,18 @@ export function lerEscolhas(bruto: unknown): EscolhasDaSessao {
 
 /** O mapa escolhido, se ainda existe na campanha; senão o primeiro; senão nenhum. */
 export const mapaEscolhido = (mapas: readonly MapaDaCampanha[], escolhido: string | null): MapaDaCampanha | null => mapas.find(m => m.mapaId === escolhido) ?? mapas[0] ?? null;
+
+/**
+ * Filtra personagens da sessão por nome (sem acento, case-insensitive).
+ * Se fichaAtivaId for fornecido, a personagem correspondente é sempre mantida na lista.
+ */
+export function filtrarPersonagensSessao<T extends { fichaId: string; nome: string }>(
+  lista: readonly T[],
+  termoBusca: string,
+  fichaAtivaId?: string | null,
+): T[] {
+  const limpo = semAcento(termoBusca.trim());
+  if (!limpo) return [...lista];
+  return lista.filter(item => (fichaAtivaId != null && item.fichaId === fichaAtivaId) || semAcento(item.nome).includes(limpo));
+}
 
