@@ -8,6 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const mesaRoot = path.resolve(__dirname, '..');
 const binaryPath = path.join(mesaRoot, 'src-tauri', 'target', 'release', 'mesa-vtt');
+const launcherScript = path.join(mesaRoot, 'scripts', 'launch-desktop.mjs');
 const iconSrc = path.join(mesaRoot, 'src-tauri', 'icons', '128x128.png');
 
 const homeDir = os.homedir();
@@ -32,11 +33,14 @@ const hasBinary = fs.existsSync(binaryPath);
 let execCommand = binaryPath;
 
 if (!hasBinary) {
-  console.log(`[desktop:install] Aviso: o binário nativo ainda não foi compilado em:`);
-  console.log(`  ${binaryPath}`);
-  console.log(`  Configurando atalho com fallback para 'npm --prefix "${mesaRoot}" run desktop:dev'.`);
-  console.log(`  Para compilar o binário nativo final, execute: npm run desktop:build`);
-  execCommand = `npm --prefix "${mesaRoot}" run desktop:dev`;
+  try {
+    fs.chmodSync(launcherScript, 0o755);
+  } catch {
+    // ignora
+  }
+  console.log(`[desktop:install] Configurando inicializador desktop nativo (WebKit2GTK / Tauri):`);
+  console.log(`  ${launcherScript}`);
+  execCommand = `"${process.execPath}" "${launcherScript}"`;
 } else {
   console.log(`[desktop:install] Binário nativo encontrado: ${binaryPath}`);
 }
