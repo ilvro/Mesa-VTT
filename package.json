@@ -7,7 +7,8 @@
     "node": ">=22.18.0"
   },
   "imports": {
-    "#mesa": "./vendor/mesa-core/index.js"
+    "#mesa": "./vendor/mesa-core/index.js",
+    "#mesa/ponte": "./vendor/mesa-core/ponte.js"
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5195 --strictPort",

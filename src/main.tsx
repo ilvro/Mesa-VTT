@@ -28,3 +28,6 @@ setInterval(() => { if (document.visibilityState === 'visible' && tela.value ===
 if (import.meta.env.DEV || new URLSearchParams(location.search).has('diagnostico')) {
   Object.defineProperty(window, '__mesa', { value: Object.freeze({ repositorio: () => repositorio.value, campanhas: () => campanhas.value, campanhaAtiva: () => campanhaAtiva.value, entidades: () => entidades.value }), configurable: true });
 }
+
+// Ponte do assistente: só em desenvolvimento (o build de produção não a contém; ver `npm run ponte:verificar` no Atlas).
+if (import.meta.env.DEV) void import('./app/ponte.ts');
