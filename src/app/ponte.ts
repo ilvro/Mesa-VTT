@@ -1,8 +1,11 @@
 // Só em desenvolvimento: importado por `main.tsx` dentro de `if (import.meta.env.DEV)`; o Vite elimina o chunk do build.
 import { conectarPonte, ferramentasDaCampanha, json } from '#mesa/ponte';
+import { SeloDoAssistente, estadoDaPonte } from '../ui/SeloDoAssistente.tsx';
+import { seloDoAssistente } from './assistente-slot.ts';
 import { campanhaAtiva, obterRepositorio } from './campanha.ts';
+import { oQueVejo } from './o-que-vejo.ts';
 
-conectarPonte({
+const cliente = conectarPonte({
   app: 'mesa', titulo: 'Mesa',
   ferramentas: [
     ...ferramentasDaCampanha(async () => obterRepositorio()),
@@ -15,5 +18,15 @@ conectarPonte({
         return [json(c ? { id: c.id, nome: c.nome, sistema: c.sistema } : 'nenhuma')];
       },
     },
+    {
+      nome: 'mesa_o_que_vejo',
+      descricao: 'O que o mestre tem na tela da Mesa agora: a campanha, a tela atual (coleção, sessão, campanhas, aplicativos) e o item aberto (a entidade selecionada). Use para entender "esta sessão", "este personagem".',
+      esquema: { type: 'object', properties: {}, required: [], additionalProperties: false },
+      async executar() { return [json(oQueVejo())]; },
+    },
   ],
 });
+
+estadoDaPonte.value = cliente.estado();
+cliente.aoMudarEstado(e => { estadoDaPonte.value = e; });
+seloDoAssistente.value = SeloDoAssistente;

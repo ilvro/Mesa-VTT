@@ -44,8 +44,24 @@ export interface OpcoesPonte {
     /** Para testes: substitui `setTimeout`/`clearTimeout`. */
     agendar?: (fn: () => void, ms: number) => unknown;
     cancelar?: (id: unknown) => void;
+    /** Para testes: substitui `Date.now`. */
+    agora?: () => number;
+}
+export type ConexaoDaPonte = 'desligada' | 'conectando' | 'conectada';
+export interface EstadoDaPonte {
+    conexao: ConexaoDaPonte;
+    /** Há alguma chamada de ferramenta em curso. */
+    ocupada: boolean;
+    /** Milissegundos desde 1970 do início da última chamada, ou `null`. */
+    ultimaChamadaEm: number | null;
+    /** Quantas ferramentas a aba oferece. */
+    ferramentas: number;
 }
 export interface ClienteDaPonte {
+    /** O estado agora (um instantâneo novo a cada mudança). */
+    estado(): EstadoDaPonte;
+    /** Chama `fn` a cada mudança de estado; devolve a função que cancela. */
+    aoMudarEstado(fn: (estado: EstadoDaPonte) => void): () => void;
     atualizar(ferramentas: FerramentaDaPonte[]): void;
     fechar(): void;
 }

@@ -13,6 +13,22 @@ export function conectarPonte(opcoes) {
     let ferramentas = opcoes.ferramentas, socket = null, fechado = false, tentativas = 0, temporizador = null, avisou = false;
     const agendar = opcoes.agendar ?? ((fn, ms) => setTimeout(fn, ms)), cancelar = opcoes.cancelar ?? (id => clearTimeout(id));
     const endereco = () => opcoes.url ?? `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/__ponte`;
+    let conexao = 'conectando', emCurso = 0, ultimaChamadaEm = null, instantaneo;
+    const ouvintes = new Set(), agora = opcoes.agora ?? Date.now;
+    const fotografar = () => ({ conexao, ocupada: emCurso > 0, ultimaChamadaEm, ferramentas: ferramentas.length });
+    instantaneo = fotografar();
+    const mudou = () => {
+        const novo = fotografar();
+        if (novo.conexao === instantaneo.conexao && novo.ocupada === instantaneo.ocupada && novo.ultimaChamadaEm === instantaneo.ultimaChamadaEm && novo.ferramentas === instantaneo.ferramentas)
+            return;
+        instantaneo = novo;
+        for (const fn of [...ouvintes]) {
+            try {
+                fn(novo);
+            }
+            catch { /* ouvinte com defeito não derruba a ponte */ }
+        }
+    };
     const enviar = (m) => { try {
         socket?.send(JSON.stringify(m));
     }
@@ -24,6 +40,18 @@ export function conectarPonte(opcoes) {
         foco(); };
     async function atender(id, nome, args) {
         const f = ferramentas.find(x => x.nome === nome);
+        ultimaChamadaEm = agora();
+        emCurso++;
+        mudou();
+        try {
+            await executarChamada(id, f, nome, args);
+        }
+        finally {
+            emCurso--;
+            mudou();
+        }
+    }
+    async function executarChamada(id, f, nome, args) {
         if (!f) {
             enviar({ tipo: 'resultado', id, ok: false, erro: `Ferramenta desconhecida: ${nome}` });
             return;
@@ -47,7 +75,9 @@ export function conectarPonte(opcoes) {
             return;
         }
         socket = s;
-        s.onopen = () => { tentativas = 0; avisou = false; registrar(); if (typeof document === 'undefined' || document.hasFocus?.() !== false)
+        conexao = 'conectando';
+        mudou();
+        s.onopen = () => { tentativas = 0; avisou = false; conexao = 'conectada'; mudou(); registrar(); if (typeof document === 'undefined' || document.hasFocus?.() !== false)
             foco(); };
         s.onmessage = ev => {
             let m;
@@ -65,8 +95,11 @@ export function conectarPonte(opcoes) {
         };
         s.onerror = () => { };
         s.onclose = () => {
-            if (socket === s)
+            if (socket === s) {
                 socket = null;
+                conexao = 'desligada';
+                mudou();
+            }
             if (!avisou) {
                 avisou = true;
                 console.info(`[ponte] sem ponte do assistente (${opcoes.app}); tentando de novo em segundo plano.`);
@@ -87,10 +120,14 @@ export function conectarPonte(opcoes) {
         document.addEventListener('visibilitychange', aoVisibilidade);
     conectar();
     return {
+        estado: () => instantaneo,
+        aoMudarEstado(fn) { ouvintes.add(fn); return () => { ouvintes.delete(fn); }; },
         atualizar(novas) { ferramentas = novas; if (socket)
-            registrar(); },
+            registrar(); mudou(); },
         fechar() {
             fechado = true;
+            conexao = 'desligada';
+            mudou();
             if (temporizador !== null) {
                 cancelar(temporizador);
                 temporizador = null;
