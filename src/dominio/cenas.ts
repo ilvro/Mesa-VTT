@@ -18,6 +18,7 @@ export interface PacoteDeCena {
   trilha: ItemVinculado | null;
   participantes: ParticipanteCena[];
   pistas: ItemVinculado[];
+  momento?: string | null;
 }
 
 /** Localiza qual entidade da campanha uma referência representa. */
@@ -83,7 +84,10 @@ export function extrairPacoteDeCena(
     return semAcento(nomeA).localeCompare(semAcento(nomeB), 'pt-BR');
   });
 
-  return { cenaId: cena.id, mapa, trilha, participantes, pistas };
+  const tagMomento = cena.tags.find(t => semAcento(t.replace(/^#/, '').trim()).startsWith('momento:'));
+  const momento = tagMomento ? tagMomento.replace(/^#/, '').trim().slice('momento:'.length).trim() || null : null;
+
+  return { cenaId: cena.id, mapa, trilha, participantes, pistas, momento };
 }
 
 /** Lugares disponíveis para vincular como mapa da cena. */
@@ -200,6 +204,13 @@ export function planejarAtivacaoDeCena(
     pedidos.push({
       pedido: 'jukebox.tocar',
       dados: { ref: refTrilha },
+    });
+  }
+
+  if (pacote.momento && refMapa) {
+    pedidos.push({
+      pedido: 'atlas.momento',
+      dados: { mapa: refMapa, momento: pacote.momento },
     });
   }
 

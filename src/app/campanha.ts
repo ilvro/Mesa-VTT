@@ -379,3 +379,15 @@ export async function alternarEncontroDaCena(cena: Entidade): Promise<boolean> {
   }
   return ok;
 }
+
+/** Define ou remove o momento de abertura de uma cena (etiqueta momento:<id-ou-nome>). */
+export async function definirMomentoDaCena(cena: Entidade, momento: string | null): Promise<boolean> {
+  const limpo = momento?.trim() ?? '';
+  const semMomento = cena.tags.filter(t => !semAcento(t.replace(/^#/, '').trim()).startsWith('momento:'));
+  const novasTags = limpo ? [...semMomento, `momento:${limpo}`] : semMomento;
+  const ok = await alterarEntidade(cena, { tags: novasTags });
+  if (ok) {
+    avisar(limpo ? `Momento de abertura “${limpo}” configurado.` : 'Momento de abertura removido.');
+  }
+  return ok;
+}

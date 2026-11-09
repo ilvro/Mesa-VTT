@@ -10,6 +10,7 @@ import { ehEncontro } from '../dominio/entidades.ts';
 import { ativarCena } from '../app/sessao.ts';
 import {
   alternarEncontroDaCena,
+  definirMomentoDaCena,
   desvincularDaCena,
   entidades,
   ligacoes,
@@ -122,6 +123,57 @@ export function EditorDeCena({ e, editavel }: { e: Entidade; editavel: boolean }
           )
         )}
       </section>
+
+      {/* 🎬 MOMENTO DE ABERTURA */}
+      {pacote.mapa && (
+        <section class="secao-vinculo" data-testid="secao-momento-abertura">
+          <div class="secao-vinculo-cabecalho">
+            <span class="secao-rotulo">⚡ Momento de Abertura</span>
+            {pacote.momento && (
+              <span class="tag-status vinculada">Configurado</span>
+            )}
+          </div>
+
+          <div class="card-vinculado" data-testid="momento-vinculado">
+            <span class="icone-vinculo">🎬</span>
+            {editavel ? (
+              <input
+                type="text"
+                class="campo-texto"
+                data-testid="input-momento-abertura"
+                placeholder="Nome ou ID do momento no Atlas (ex.: O Porão Acorda)…"
+                style={{ flex: 1 }}
+                value={pacote.momento ?? ''}
+                onBlur={ev => {
+                  const val = (ev.target as HTMLInputElement).value.trim();
+                  if (val !== (pacote.momento ?? '')) {
+                    void definirMomentoDaCena(e, val || null);
+                  }
+                }}
+                onKeyDown={ev => {
+                  if (ev.key === 'Enter') {
+                    (ev.target as HTMLInputElement).blur();
+                  }
+                }}
+              />
+            ) : (
+              <span class="nome-vinculo">{pacote.momento || 'Nenhum momento configurado'}</span>
+            )}
+            {editavel && pacote.momento && (
+              <button
+                type="button"
+                class="botao-desvincular"
+                data-testid="desvincular-momento"
+                title="Remover momento de abertura"
+                aria-label="Remover momento de abertura"
+                onClick={() => void definirMomentoDaCena(e, null)}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* 🎵 TRILHA SONORA */}
       <section class="secao-vinculo">

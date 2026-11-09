@@ -399,5 +399,51 @@ describe('cenas e encontros (domínio)', () => {
       assert.deepEqual(plano.pedidos, []);
       assert.deepEqual(plano.fichasIds, []);
     });
+
+    it('inclui atlas.momento no plano quando ha mapa e momento configurados', () => {
+      const mapaRef: Ref = { app: 'atlas', tipo: 'mapa', id: 'mapa-mansao' };
+      const pacote = {
+        cenaId: 'cena-momento',
+        mapa: {
+          ref: mapaRef,
+          ligacaoId: 'lig-mapa',
+        },
+        trilha: null,
+        participantes: [],
+        pistas: [],
+        momento: 'O Porão Acorda',
+      };
+
+      const plano = planejarAtivacaoDeCena(pacote, true);
+      assert.equal(plano.pedidos.length, 2);
+      assert.equal(plano.pedidos[0]?.pedido, 'atlas.preparar-cena');
+      assert.deepEqual(plano.pedidos[1], {
+        pedido: 'atlas.momento',
+        dados: {
+          mapa: mapaRef,
+          momento: 'O Porão Acorda',
+        },
+      });
+    });
+
+    it('extrairPacoteDeCena extrai momento a partir de tag momento:<nome>', () => {
+      const cena = baseEntidade({
+        id: 'c-momento',
+        tipo: 'cena',
+        nome: 'A Aparição',
+        tags: ['#investigação', 'momento:Susto no Corredor'],
+      });
+      const pacote = extrairPacoteDeCena(cena, [], []);
+      assert.equal(pacote.momento, 'Susto no Corredor');
+
+      const cenaSem = baseEntidade({
+        id: 'c-sem',
+        tipo: 'cena',
+        nome: 'Calmaria',
+        tags: [],
+      });
+      const pacoteSem = extrairPacoteDeCena(cenaSem, [], []);
+      assert.equal(pacoteSem.momento, null);
+    });
   });
 });

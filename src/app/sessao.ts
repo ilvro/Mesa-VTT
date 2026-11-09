@@ -107,6 +107,9 @@ export async function ativarCena(cena: Entidade): Promise<boolean> {
     ? `⚔ Encontro de combate iniciado: ${cena.nome}`
     : `🎬 Cena ativada: ${cena.nome}`;
   anotar(textoAnotacao);
+  if (pacote.momento) {
+    anotar(`⚡ Momento de abertura: ${pacote.momento}`);
+  }
 
   // 4. Feedback visual
   avisar(combate ? `Encontro “${cena.nome}” lançado!` : `Cena “${cena.nome}” ativada!`);
