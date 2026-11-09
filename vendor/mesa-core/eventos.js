@@ -29,6 +29,8 @@ export const CATALOGO = {
     'jukebox.tocar': { natureza: 'pedido', dono: 'jukebox', validar: ref('ref') },
     /** Toca uma vez, por cima da música, um efeito do Jukebox (uma faixa de gênero `sfx`): `mesa:jukebox/efeito/<titulo-em-minusculas-sem-acento>`. */
     'jukebox.efeito': { natureza: 'pedido', dono: 'jukebox', validar: ref('ref') },
+    /** Para todas as faixas que estão tocando com fade de `ms` milissegundos (padrão: 1000). */
+    'jukebox.parar': { natureza: 'pedido', dono: 'jukebox', validar: num('ms', true) },
     'atlas.focar': { natureza: 'pedido', dono: 'atlas', validar: ref('ref') },
     'atlas.preparar-cena': { natureza: 'pedido', dono: 'atlas', validar: todos(refOuNulo('mapa'), texto('comodo', true), texto('clima', true), listaDeRefs('fichas', true)) },
     'ficha.abrir': { natureza: 'pedido', dono: 'ficha', validar: ref('ref') },
