@@ -196,6 +196,35 @@ conteudo.add_script(WebKit2.UserScript.new(
     "(function(){var o=window.open;window.open=function(u,n,f){try{window.webkit.messageHandlers.mesaJanela.postMessage(String(f||''))}catch(e){}return o.apply(window,arguments)}})();",
     WebKit2.UserContentInjectedFrames.TOP_FRAME, WebKit2.UserScriptInjectionTime.START, None, None))
 
+# Escolha de pasta (input webkitdirectory, usado pela Jukebox para carregar presets): o WebKitGTK não a implementa e
+# entrega a pasta como se fosse um arquivo. A página avisa antes de abrir o seletor; o atalho mostra um seletor de
+# pasta e entrega todos os arquivos dela (com subpastas).
+pasta_pedida = [False]
+conteudo.connect('script-message-received::mesaPasta', lambda _c, _r: pasta_pedida.__setitem__(0, True))
+conteudo.register_script_message_handler('mesaPasta')
+conteudo.add_script(WebKit2.UserScript.new(
+    "(function(){var c=HTMLElement.prototype.click;HTMLInputElement.prototype.click=function(){try{if(this.type==='file'&&(this.webkitdirectory||this.hasAttribute('webkitdirectory'))){window.webkit.messageHandlers.mesaPasta.postMessage('')}}catch(e){}return c.apply(this,arguments)}})();",
+    WebKit2.UserContentInjectedFrames.ALL_FRAMES, WebKit2.UserScriptInjectionTime.START, None, None))
+
+def ao_escolher_arquivo(wv, pedido):
+    if not pasta_pedida[0]:
+        return False
+    pasta_pedida[0] = False
+    dialogo = Gtk.FileChooserNative.new('Escolha a pasta', wv.get_toplevel(), Gtk.FileChooserAction.SELECT_FOLDER, 'Escolher', 'Cancelar')
+    if dialogo.run() != Gtk.ResponseType.ACCEPT:
+        pedido.cancel()
+        return True
+    raiz = dialogo.get_filename()
+    arquivos = []
+    for atual, pastas, nomes in os.walk(raiz):
+        pastas[:] = [d for d in pastas if not d.startswith('.')]
+        arquivos += [os.path.join(atual, n) for n in nomes if not n.startswith('.')]
+    if arquivos:
+        pedido.select_files(sorted(arquivos))
+    else:
+        pedido.cancel()
+    return True
+
 def configurar_webview(wv):
     s = wv.get_settings()
     s.set_user_agent_with_application_details('MesaVTT', '1')
@@ -317,6 +346,7 @@ def preparar_view(wv):
     configurar_webview(wv)
     wv.connect('create', ao_pedir_janela)
     wv.connect('decide-policy', ao_decidir)
+    wv.connect('run-file-chooser', ao_escolher_arquivo)
     wv.connect('close', lambda v: fechar_aba(v) if isinstance(v.get_parent(), Gtk.Notebook) else v.get_toplevel().destroy())
 
 def aba_existente(uri):
