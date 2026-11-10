@@ -8,7 +8,12 @@ export const tela = signal<Tela>('entidades');
 const ENTIDADE = /^#\/entidade\/(.+)$/;
 
 export function lerHash(): void {
-  const m = ENTIDADE.exec(decodeURIComponent(location.hash));
+  const hash = decodeURIComponent(location.hash);
+  if (hash === '#/campanhas') {
+    tela.value = 'campanhas';
+    return;
+  }
+  const m = ENTIDADE.exec(hash);
   if (m) {
     selecionadaId.value = m[1]!;
     registrarSelecaoNoHistorico(m[1]!);

@@ -1,7 +1,7 @@
 // Só em desenvolvimento (entra pela ponte). Ferramentas de escrita da Mesa; o contexto é injetável para testar sem DOM.
-import { chaveDaRef, formatarRef, lerRef, TIPOS_LIGACAO, type Entidade, type Ligacao, type Ref, type Sessao, type TipoEntidade, type TipoLigacao } from '#mesa';
+import { chaveDaRef, formatarRef, lerRef, TIPOS_LIGACAO, type Campanha, type Entidade, type Ligacao, type Ref, type Sessao, type TipoEntidade, type TipoLigacao } from '#mesa';
 import { json, type FerramentaDaPonte } from '#mesa/ponte';
-import { NOME_DO_APP, TIPOS_CRIAVEIS, ehEncontro, podeEditar } from '../dominio/entidades.ts';
+import { NOME_DO_APP, TIPOS_CRIAVEIS, ehEncontro, podarElenco, podeEditar, semAcento, temFichaDePersonagem } from '../dominio/entidades.ts';
 import { candidatosDeTrilha, entidadePorRef, extrairPacoteDeCena, type PacoteDeCena } from '../dominio/cenas.ts';
 import { adicionar, MAXIMO_DO_ROTEIRO, podarNotas, removerItem } from '../dominio/roteiro.ts';
 
@@ -349,6 +349,149 @@ export function ferramentasDeCena(ctx: ContextoDeCenas): FerramentaDaPonte[] {
           indis.length ? `Não achei ${indis.join(', ')} ao lado da Mesa (sem mesa.json); peça ao mestre para abrir ou subir o app.` : '',
         ].filter(Boolean).join(' ');
         return [json({ apps: resultado, ...(aviso ? { aviso } : {}) })];
+      },
+    },
+  ];
+}
+
+export interface ContextoDeElenco {
+  campanha(): Promise<Pick<Campanha, 'id' | 'nome' | 'elenco'> | null>;
+  entidades(): Promise<Entidade[]>;
+  salvarElenco(elenco: string[]): Promise<boolean>;
+}
+
+const resumoPersonagemElenco = (e: Entidade) => {
+  const ficha = e.refs.find(r => r.app === 'ficha' && r.tipo === 'ficha');
+  return {
+    id: e.id,
+    nome: e.nome,
+    temFicha: temFichaDePersonagem(e),
+    ...(ficha ? { fichaRef: formatarRef(ficha) } : {}),
+  };
+};
+
+function montarRetornoDeElenco(elenco: readonly string[] | undefined, todas: readonly Entidade[]) {
+  const personagens = todas.filter(e => e.tipo === 'personagem');
+  const porId = new Map(personagens.map(e => [e.id, e]));
+  const idsElenco = (elenco ?? []).filter(id => porId.has(id));
+  const conjunto = new Set(idsElenco);
+  const noElenco = idsElenco.map(id => resumoPersonagemElenco(porId.get(id)!));
+  const foraDoElenco = personagens
+    .filter(e => !conjunto.has(e.id))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+    .map(resumoPersonagemElenco);
+  return {
+    definido: elenco !== undefined,
+    elenco: noElenco,
+    foraDoElenco,
+  };
+}
+
+function resolverPersonagem(termo: unknown, campo: string, todas: readonly Entidade[]): Entidade {
+  if (typeof termo !== 'string' || !termo.trim()) {
+    throw new Error(`"${campo}" deve conter IDs, Refs ou nomes de personagens.`);
+  }
+  const bruto = termo.trim();
+  const idLimpo = bruto.replace(/^mesa:mesa\/entidade\//, '');
+  const porId = todas.find(e => e.id === idLimpo);
+  if (porId) {
+    if (porId.tipo !== 'personagem') {
+      throw new Error(`"${porId.nome}" é ${porId.tipo}, não personagem. Só personagens entram no elenco.`);
+    }
+    return porId;
+  }
+  const ref = lerRef(bruto);
+  const porRef = ref ? entidadePorRef(ref, todas as Entidade[]) : todas.find(e => e.refs.some(r => r.app === 'ficha' && r.id === bruto));
+  if (porRef) {
+    if (porRef.tipo !== 'personagem') {
+      throw new Error(`"${porRef.nome}" é ${porRef.tipo}, não personagem. Só personagens entram no elenco.`);
+    }
+    return porRef;
+  }
+  const chave = semAcento(bruto);
+  const candidatos = todas.filter(e => semAcento(e.nome) === chave);
+  const personagem = candidatos.find(e => e.tipo === 'personagem' && temFichaDePersonagem(e))
+    ?? candidatos.find(e => e.tipo === 'personagem')
+    ?? candidatos[0];
+  if (personagem) {
+    if (personagem.tipo !== 'personagem') {
+      throw new Error(`"${personagem.nome}" é ${personagem.tipo}, não personagem. Só personagens entram no elenco.`);
+    }
+    return personagem;
+  }
+  throw new Error(`Personagem "${bruto}" não encontrado nesta campanha. Use mesa_elenco_ler ou campanha_ler.`);
+}
+
+export function ferramentasDeElenco(ctx: ContextoDeElenco): FerramentaDaPonte[] {
+  const exigirCampanha = async () => {
+    const c = await ctx.campanha();
+    if (!c) throw new Error(SEM_CAMPANHA);
+    return c;
+  };
+  const lerLista = (v: unknown, campo: string): unknown[] => {
+    if (v === undefined) return [];
+    if (!Array.isArray(v)) throw new Error(`"${campo}" deve ser uma lista de IDs, Refs ou nomes de personagens.`);
+    return v;
+  };
+
+  return [
+    {
+      nome: 'mesa_elenco',
+      descricao: 'Escolhe quem faz parte do elenco recorrente da campanha (os PJs e NPCs que aparecem no painel Personagens do Atlas). Aceita IDs de entidades da Mesa, Refs (ex.: "mesa:ficha/ficha/...") ou nomes de personagens. Se ambos acrescentar e remover forem omitidos, define o elenco vazio []. Devolve o elenco com nomes e quem ficou de fora.',
+      esquema: {
+        type: 'object',
+        required: [],
+        additionalProperties: false,
+        properties: {
+          acrescentar: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'IDs de entidades, Refs ou nomes de personagens a incluir no elenco (na ordem informada).',
+          },
+          remover: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'IDs de entidades, Refs ou nomes de personagens a tirar do elenco.',
+          },
+        },
+      },
+      async executar(args) {
+        const c = await exigirCampanha();
+        const todas = await ctx.entidades();
+        const aAcrescentar = lerLista(args.acrescentar, 'acrescentar').map(v => resolverPersonagem(v, 'acrescentar', todas).id);
+        const aRemover = new Set(
+          lerLista(args.remover, 'remover').map(v => {
+            if (typeof v === 'string' && c.elenco?.includes(v.trim())) return v.trim();
+            return resolverPersonagem(v, 'remover', todas).id;
+          }),
+        );
+
+        const baseInicial = c.elenco !== undefined
+          ? podarElenco(c.elenco, todas) ?? []
+          : (aAcrescentar.length === 0 && aRemover.size > 0
+              ? todas.filter(temFichaDePersonagem).map(e => e.id)
+              : []);
+
+        const proximo = baseInicial.filter(id => !aRemover.has(id));
+        for (const id of aAcrescentar) {
+          if (!aRemover.has(id) && !proximo.includes(id)) proximo.push(id);
+        }
+
+        if (!(await ctx.salvarElenco(proximo))) {
+          throw new Error('Não consegui salvar o elenco da campanha (veja o aviso na Mesa).');
+        }
+        const atualizada = await ctx.campanha();
+        return [json(montarRetornoDeElenco(atualizada?.elenco ?? proximo, await ctx.entidades()))];
+      },
+    },
+    {
+      nome: 'mesa_elenco_ler',
+      descricao: 'Lê o elenco da campanha ativa (quem aparece no painel Personagens do Atlas) e lista os personagens que estão de fora.',
+      esquema: { type: 'object', properties: {}, required: [], additionalProperties: false },
+      async executar() {
+        const c = await exigirCampanha();
+        const todas = await ctx.entidades();
+        return [json(montarRetornoDeElenco(c.elenco, todas))];
       },
     },
   ];

@@ -1,6 +1,6 @@
 import { signal, computed } from '@preact/signals';
 import { abrirRepositorioCampanha, mesmaRef, type Campanha, type Entidade, type Ligacao, type Ref, type RepositorioCampanha, type TipoLigacao, type Tema, type TipoEntidade } from '#mesa';
-import { APP_DA_MESA, ehEncontro, filtrarEntidades, podeEditar, semAcento, type CategoriaFiltro, type FiltroDeEntidades, type OrdemColecao } from '../dominio/entidades.ts';
+import { APP_DA_MESA, ehEncontro, filtrarEntidades, podarElenco, podeEditar, semAcento, type CategoriaFiltro, type FiltroDeEntidades, type OrdemColecao } from '../dominio/entidades.ts';
 import { refDaEntidade, refsMencionados } from '../dominio/notas.ts';
 import { casaCena, refParaLigacao } from '../dominio/cenas.ts';
 import { agendarSincronizacaoCofre } from './cofre.ts';
@@ -20,6 +20,7 @@ export const ligacoes = signal<Ligacao[]>([]);
 export const filtroTipo = signal<CategoriaFiltro | null>(null);
 export const busca = signal('');
 export const tagAtiva = signal<string | null>(null);
+export const soElenco = signal<boolean>(false);
 export const ordem = signal<OrdemColecao>('nome-asc');
 export const sidebarAberta = signal<boolean>(true);
 export const selecionadaId = signal<string | null>(null);
@@ -60,7 +61,13 @@ export function avancarSelecao(): void {
 export const visiveis = computed(() =>
   filtrarEntidades(
     entidades.value,
-    { tipo: filtroTipo.value, busca: busca.value, tag: tagAtiva.value },
+    {
+      tipo: filtroTipo.value,
+      busca: busca.value,
+      tag: tagAtiva.value,
+      soElenco: soElenco.value,
+      ...(campanhaAtiva.value?.elenco !== undefined ? { elenco: campanhaAtiva.value.elenco } : {}),
+    },
     ordem.value,
   )
 );
@@ -98,7 +105,13 @@ export async function atualizar(): Promise<void> {
     campanhas.value = lista;
     const id = lerCampanhaAtivaSalva();
     const ativa = lista.find(c => c.id === id) ?? null;
-    if (ativa?.id !== campanhaAtiva.value?.id || ativa?.atualizadaEm !== campanhaAtiva.value?.atualizadaEm) campanhaAtiva.value = ativa;
+    if (
+      ativa?.id !== campanhaAtiva.value?.id ||
+      ativa?.atualizadaEm !== campanhaAtiva.value?.atualizadaEm ||
+      JSON.stringify(ativa?.elenco) !== JSON.stringify(campanhaAtiva.value?.elenco)
+    ) {
+      campanhaAtiva.value = ativa;
+    }
     entidades.value = ativa ? await r.listarEntidades(ativa.id) : [];
     ligacoes.value = ativa ? await r.listarLigacoes(ativa.id) : [];
     if (selecionadaId.value && !entidades.value.some(e => e.id === selecionadaId.value)) selecionadaId.value = null;
@@ -108,14 +121,14 @@ export async function atualizar(): Promise<void> {
 
 /** Quando outra aba troca a campanha ativa, esta acompanha. */
 export function observarCampanhaAtiva(): () => void {
-  const ouvinte = (e: StorageEvent) => { if (e.key === null || e.key === CHAVE_CAMPANHA_ATIVA) void atualizar(); };
+  const ouvinte = (e: StorageEvent) => { if (e.key === null || e.key === CHAVE_CAMPANHA_ATIVA || e.key === 'mesa:campanha-atualizada') void atualizar(); };
   window.addEventListener('storage', ouvinte);
   return () => window.removeEventListener('storage', ouvinte);
 }
 
 export async function escolherCampanha(id: string | null): Promise<void> {
   gravarCampanhaAtiva(id);
-  selecionadaId.value = null; busca.value = ''; filtroTipo.value = null; tagAtiva.value = null; ordem.value = 'nome-asc';
+  selecionadaId.value = null; busca.value = ''; filtroTipo.value = null; tagAtiva.value = null; soElenco.value = false; ordem.value = 'nome-asc';
   historico.value = [null]; indiceHistorico.value = 0;
   await atualizar();
   // A campanha pode ter um tema próprio: ao entrar nela, a mesa inteira o veste.
@@ -132,14 +145,36 @@ export async function criarCampanha(nome: string): Promise<Campanha | null> {
   } catch (erro) { avisar(mensagemDe(erro), true); return null; }
 }
 
-export async function alterarCampanha(c: Campanha, mudancas: Partial<Pick<Campanha, 'nome' | 'sistema' | 'tema'>>): Promise<boolean> {
+export async function alterarCampanha(c: Campanha, mudancas: Partial<Pick<Campanha, 'nome' | 'sistema' | 'tema' | 'elenco'>>): Promise<boolean> {
   try {
-    const nova: Campanha = { ...c, ...mudancas, atualizadaEm: Date.now() };
+    const nova: Campanha = { ...c, ...mudancas, atualizadaEm: Math.max(Date.now(), c.atualizadaEm + 1) };
+    if (nova.elenco !== undefined) {
+      const ents = await repo().listarEntidades(c.id);
+      nova.elenco = podarElenco(nova.elenco, ents);
+    }
     await repo().salvarCampanha(nova);
+    try { localStorage.setItem('mesa:campanha-atualizada', `${c.id}:${nova.atualizadaEm}`); } catch { /* ignora */ }
     if (mudancas.tema && campanhaAtiva.value?.id === c.id) trocarTema({ id: mudancas.tema } satisfies Tema);
     await atualizar();
     return true;
   } catch (erro) { avisar(mensagemDe(erro), true); await atualizar(); return false; }
+}
+
+export async function definirElenco(c: Campanha, ids: readonly string[] = []): Promise<boolean> {
+  return alterarCampanha(c, { elenco: [...ids] });
+}
+
+export async function alternarPersonagemNoElenco(c: Campanha, entidadeId: string): Promise<boolean> {
+  const atual = c.elenco ?? [];
+  const novo = atual.includes(entidadeId) ? atual.filter(id => id !== entidadeId) : [...atual, entidadeId];
+  return alterarCampanha(c, { elenco: novo });
+}
+
+export async function salvarElencoDaCampanha(elenco: readonly string[]): Promise<boolean> {
+  if (!campanhaAtiva.value) await atualizar();
+  const c = campanhaAtiva.value;
+  if (!c) return false;
+  return alterarCampanha(c, { elenco: [...elenco] });
 }
 
 export async function removerCampanha(c: Campanha): Promise<void> {

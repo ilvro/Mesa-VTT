@@ -1,12 +1,102 @@
 import { signal } from '@preact/signals';
-import { TEMAS, TEMAS_BASE, type Campanha } from '#mesa';
-import { alterarCampanha, campanhaAtiva, campanhas, criarCampanha, escolherCampanha, removerCampanha } from '../app/campanha.ts';
+import { useEffect, useState } from 'preact/hooks';
+import { TEMAS, TEMAS_BASE, type Campanha, type Entidade } from '#mesa';
+import {
+  alterarCampanha,
+  alternarPersonagemNoElenco,
+  campanhaAtiva,
+  campanhas,
+  criarCampanha,
+  definirElenco,
+  entidades,
+  escolherCampanha,
+  removerCampanha,
+  repositorio,
+} from '../app/campanha.ts';
 import { importarCofreParaApp } from '../app/cofre.ts';
 import { tela } from '../app/rotas.ts';
+import { personagensParaElenco } from '../dominio/entidades.ts';
 import { cx } from './cx.ts';
 
 const nomeNovo = signal('');
 const confirmando = signal<string | null>(null);
+
+function RetratoDoElenco({ e }: { e: Entidade }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!e.retrato) { setUrl(null); return; }
+    try {
+      if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+        const u = URL.createObjectURL(e.retrato);
+        setUrl(u);
+        return () => { try { URL.revokeObjectURL(u); } catch { /* ignora */ } };
+      }
+    } catch { setUrl(null); }
+  }, [e.retrato]);
+
+  if (url) return <img src={url} alt={e.nome} class="elenco-retrato" loading="lazy" />;
+  return <span class="elenco-retrato elenco-retrato-vazio" aria-hidden="true">{e.nome.slice(0, 1).toUpperCase()}</span>;
+}
+
+function SecaoElenco({ c }: { c: Campanha }) {
+  const ativa = campanhaAtiva.value?.id === c.id;
+  const [outras, setOutras] = useState<Entidade[]>([]);
+  const r = repositorio.value;
+
+  useEffect(() => {
+    if (ativa || !r || r === 'indisponivel') return;
+    let cancelado = false;
+    void r.listarEntidades(c.id, { tipo: 'personagem' }).then(lista => {
+      if (!cancelado) setOutras(lista);
+    }).catch(() => {});
+    return () => { cancelado = true; };
+  }, [ativa, c.id, c.atualizadaEm, r]);
+
+  const base = ativa ? entidades.value : outras;
+  const { noElenco, todos } = personagensParaElenco(base, c.elenco);
+  const idsNoElenco = new Set(noElenco.map(e => e.id));
+
+  return (
+    <section class="campanha-elenco" data-testid={`elenco-${c.id}`}>
+      <div class="elenco-cabecalho">
+        <h3 class="faixa pequena">Elenco</h3>
+        {c.elenco === undefined ? (
+          <>
+            <span class="meta">Sem elenco definido (todos aparecem no Atlas).</span>
+            <button type="button" class="botao-pilula" data-testid="definir-elenco" onClick={() => void definirElenco(c, [])}>
+              Definir elenco
+            </button>
+          </>
+        ) : (
+          <span class="meta" data-testid="elenco-contagem">{noElenco.length} no elenco</span>
+        )}
+      </div>
+      {todos.length === 0 ? (
+        <p class="dica">Nenhum personagem com ficha no Dossiê nesta campanha.</p>
+      ) : (
+        <ul class="elenco-lista" data-testid="elenco-lista">
+          {todos.map(e => {
+            const participa = idsNoElenco.has(e.id);
+            return (
+              <li key={e.id} class={cx('elenco-item', participa && 'no-elenco')} data-testid={`elenco-item-${e.id}`}>
+                <RetratoDoElenco e={e} />
+                <span class="elenco-nome">{e.nome}</span>
+                <button
+                  type="button"
+                  class={cx('botao-pilula', !participa && 'destaque')}
+                  data-testid={participa ? `elenco-sair-${e.id}` : `elenco-entrar-${e.id}`}
+                  onClick={() => void alternarPersonagemNoElenco(c, e.id)}
+                >
+                  {participa ? 'Sair' : 'Entrar'}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 async function criar(e: Event) {
   e.preventDefault();
@@ -35,6 +125,7 @@ function CartaoDeCampanha({ c }: { c: Campanha }) {
             </select>
           </label>
         </div>
+        <SecaoElenco c={c} />
         <div class="cartao-rodape">
           {ativa
             ? <span class="selo">Campanha ativa</span>

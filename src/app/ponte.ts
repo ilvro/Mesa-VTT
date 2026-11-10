@@ -3,8 +3,8 @@ import { conectarPonte, ferramentasDaCampanha, json } from '#mesa/ponte';
 import { SeloDoAssistente, estadoDaPonte } from '../ui/SeloDoAssistente.tsx';
 import { seloDoAssistente } from './assistente-slot.ts';
 import { abrirAplicativo } from './aplicativos.ts';
-import { alternarEncontroDaCena, alterarEntidade, atualizar, campanhaAtiva, criarEntidade, definirMomentoDaCena, ligarRefs, obterRepositorio, vincularMapaNaCena, vincularParticipanteNaCena, vincularPistaNaCena, vincularTrilhaNaCena } from './campanha.ts';
-import { ferramentasDeCena, ferramentasDeEntidade, ferramentasDeSessao } from './ponte-escrita.ts';
+import { alternarEncontroDaCena, alterarEntidade, atualizar, campanhaAtiva, criarEntidade, definirMomentoDaCena, ligarRefs, obterRepositorio, salvarElencoDaCampanha, vincularMapaNaCena, vincularParticipanteNaCena, vincularPistaNaCena, vincularTrilhaNaCena } from './campanha.ts';
+import { ferramentasDeCena, ferramentasDeElenco, ferramentasDeEntidade, ferramentasDeSessao } from './ponte-escrita.ts';
 import { oQueVejo } from './o-que-vejo.ts';
 import { alterarSessaoPorId, carregarSessoes, planejarSessao } from './registro.ts';
 
@@ -33,6 +33,11 @@ const cliente = conectarPonte({
       campanha: campanhaDaChamada, entidades: entidadesDoBanco, ligacoes: ligacoesDoBanco,
       vincularMapa: vincularMapaNaCena, vincularTrilha: vincularTrilhaNaCena, vincularParticipante: vincularParticipanteNaCena, vincularPista: vincularPistaNaCena,
       alternarEncontro: alternarEncontroDaCena, definirMomento: definirMomentoDaCena, abrirApp: app => abrirAplicativo(app),
+    }),
+    ...ferramentasDeElenco({
+      campanha: async () => { const c = await campanhaDaChamada(); return c ? (await obterRepositorio().obterCampanha(c.id)) ?? null : null; },
+      entidades: entidadesDoBanco,
+      salvarElenco: salvarElencoDaCampanha,
     }),
     {
       nome: 'mesa_campanha_atual',

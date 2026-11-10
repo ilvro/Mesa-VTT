@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import type { Entidade } from '#mesa';
 import {
   agruparPorCategoria,
+  alterarListaDeElenco,
   alternarModoExibicao,
   alternarSecaoColapsada,
   contarPorTag,
@@ -11,6 +12,8 @@ import {
   filtrarEntidades,
   lerTags,
   ordenarEntidades,
+  personagensParaElenco,
+  podarElenco,
   podeEditar,
   ROTULO_DO_TIPO,
   semAcento,
@@ -221,4 +224,45 @@ test('alternarModoExibicao e alternarSecaoColapsada', () => {
   assert.equal(s2.has('lugar'), true);
   const s3 = alternarSecaoColapsada(s2, 'lugar');
   assert.equal(s3.has('lugar'), false);
+});
+
+test('elenco: entrar/sair, podar IDs órfãos, ordenar elenco primeiro e filtrar só o elenco', () => {
+  const comFicha = (id: string, nome: string) =>
+    e(id, 'personagem', nome, { criadaPor: 'ficha', refs: [{ app: 'ficha', tipo: 'ficha', id: `f-${id}` }] });
+  const p1 = comFicha('p1', 'Zara');
+  const p2 = comFicha('p2', 'Álvaro');
+  const p3 = comFicha('p3', 'Breno');
+  const semFicha = e('p4', 'personagem', 'Vendedor Sem Ficha');
+  const lugar = e('l1', 'lugar', 'Praça');
+  const todas = [p1, p2, p3, semFicha, lugar];
+
+  assert.deepEqual(podarElenco(['p3', 'orfao', 'l1', 'p1', 'p3'], todas), ['p3', 'p1']);
+
+  // Sem elenco definido: todos os personagens com ficha entram em ordem alfabética
+  const semElenco = personagensParaElenco(todas, undefined);
+  assert.deepEqual(semElenco.noElenco.map(x => x.id), []);
+  assert.deepEqual(semElenco.foraDoElenco.map(x => x.id), ['p2', 'p3', 'p1']);
+  assert.deepEqual(semElenco.todos.map(x => x.id), ['p2', 'p3', 'p1']);
+
+  // Com elenco definido: os do elenco vêm primeiro na ordem do elenco; os demais vêm depois em ordem alfabética
+  const comElenco = personagensParaElenco(todas, ['p1', 'orfao', 'p3']);
+  assert.deepEqual(comElenco.noElenco.map(x => x.id), ['p1', 'p3']);
+  assert.deepEqual(comElenco.foraDoElenco.map(x => x.id), ['p2']);
+  assert.deepEqual(comElenco.todos.map(x => x.id), ['p1', 'p3', 'p2']);
+
+  // Entrar e sair do elenco
+  let elenco = alterarListaDeElenco(['p1', 'orfao'], todas, { acrescentar: ['p2'] });
+  assert.deepEqual(elenco, ['p1', 'p2']);
+  elenco = alterarListaDeElenco(elenco, todas, { remover: ['p1'] });
+  assert.deepEqual(elenco, ['p2']);
+
+  // Filtro "Só o elenco" na coleção
+  assert.deepEqual(
+    filtrarEntidades(todas, { soElenco: true, elenco: ['p1', 'p3'] }).map(x => x.id),
+    ['p3', 'p1'],
+  );
+  assert.deepEqual(
+    filtrarEntidades(todas, { soElenco: true, elenco: [] }),
+    [],
+  );
 });

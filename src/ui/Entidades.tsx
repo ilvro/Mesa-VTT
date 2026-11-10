@@ -16,6 +16,7 @@ import {
   selecionada,
   selecionadaId,
   sidebarAberta,
+  soElenco,
   tagAtiva,
   visiveis,
   voltarSelecao,
@@ -162,6 +163,16 @@ function BarraSuperior() {
             Sessões <b>{contagem.sessao}</b>
           </button>
         )}
+        <button
+          type="button"
+          class={cx('chip', soElenco.value && 'ativa')}
+          data-testid="filtro-so-elenco"
+          aria-pressed={soElenco.value}
+          title="Mostrar apenas personagens do elenco da campanha"
+          onClick={() => { soElenco.value = !soElenco.value; }}
+        >
+          Só o elenco
+        </button>
       </div>
 
       <span class="espaco" />

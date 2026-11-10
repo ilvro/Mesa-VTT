@@ -149,7 +149,7 @@ test('entidade: sem campanha ativa, erro legível', async () => {
   await assert.rejects(f.mesa_entidade_criar!.executar({ tipo: 'lugar', nome: 'a' }), /Nenhuma campanha/);
 });
 
-import { ferramentasDeCena, type ContextoDeCenas } from '../../src/app/ponte-escrita.ts';
+import { ferramentasDeCena, ferramentasDeElenco, type ContextoDeCenas, type ContextoDeElenco } from '../../src/app/ponte-escrita.ts';
 
 function montarCenas() {
   const mk = (id: string, tipo: Entidade['tipo'], nome: string, criadaPor: Entidade['criadaPor'], refs: Ref[] = [], tags: string[] = []): Entidade =>
@@ -205,4 +205,66 @@ test('abrir apps: abre, avisa do bloqueio e do app ausente; recusa app inválido
   assert.deepEqual(r.apps, { atlas: 'aberto', jukebox: 'bloqueado', atelie: 'indisponivel' });
   assert.match(r.aviso, /bloqueou.*jukebox.*Abrir/); assert.match(r.aviso, /atelie/);
   await assert.rejects(f.mesa_abrir_apps!.executar({ apps: ['tabletop'] }), /inválidos/);
+});
+
+test('elenco: mesa_elenco por nome, id e ref; poda órfãos; mesa_elenco_ler lista elenco e fora', async () => {
+  const mk = (id: string, tipo: Entidade['tipo'], nome: string, fichaId?: string): Entidade => ({
+    id,
+    campanhaId: 'c1',
+    tipo,
+    nome,
+    tags: [],
+    notas: '',
+    refs: fichaId ? [{ app: 'ficha', tipo: 'ficha', id: fichaId }] : [],
+    criadaPor: fichaId ? 'ficha' : 'mesa',
+    criadaEm: 0,
+    atualizadaEm: 0,
+  });
+  let ents: Entidade[] = [
+    mk('p1', 'personagem', 'Áurea', 'f-aurea'),
+    mk('p2', 'personagem', 'Dante', 'f-dante'),
+    mk('p3', 'personagem', 'Taverneiro', 'f-tav'),
+    mk('l1', 'lugar', 'Cais'),
+  ];
+  let elencoAtual: string[] | undefined = undefined;
+  const ctx: ContextoDeElenco = {
+    campanha: async () => ({
+      id: 'c1',
+      nome: 'Campanha',
+      ...(elencoAtual !== undefined ? { elenco: elencoAtual } : {}),
+    }),
+    entidades: async () => ents,
+    salvarElenco: async novo => {
+      const idsPersonagens = new Set(ents.filter(e => e.tipo === 'personagem').map(e => e.id));
+      elencoAtual = novo.filter(id => idsPersonagens.has(id));
+      return true;
+    },
+  };
+  const f = Object.fromEntries(ferramentasDeElenco(ctx).map(t => [t.nome, t]));
+
+  // Antes de definir elenco
+  const antes = await texto(f.mesa_elenco_ler!.executar({}));
+  assert.equal(antes.definido, false);
+  assert.equal(antes.elenco.length, 0);
+  assert.deepEqual(antes.foraDoElenco.map((x: { id: string }) => x.id), ['p1', 'p2', 'p3']);
+
+  // Acrescentar por nome (sem acento/caixa) e por ref de ficha
+  const depois1 = await texto(
+    f.mesa_elenco!.executar({ acrescentar: ['mesa:ficha/ficha/f-dante', 'aurea'] }),
+  );
+  assert.equal(depois1.definido, true);
+  assert.deepEqual(depois1.elenco.map((x: { nome: string }) => x.nome), ['Dante', 'Áurea']);
+  assert.deepEqual(depois1.foraDoElenco.map((x: { nome: string }) => x.nome), ['Taverneiro']);
+
+  // Remover por nome e acrescentar por id; ID órfão no banco é podado
+  elencoAtual = ['orfao', 'p2', 'p1'];
+  const depois2 = await texto(
+    f.mesa_elenco!.executar({ remover: ['Dante'], acrescentar: ['p3'] }),
+  );
+  assert.deepEqual(depois2.elenco.map((x: { id: string }) => x.id), ['p1', 'p3']);
+  assert.deepEqual(depois2.foraDoElenco.map((x: { id: string }) => x.id), ['p2']);
+
+  // Recusar lugar ou inexistente
+  await assert.rejects(f.mesa_elenco!.executar({ acrescentar: ['Cais'] }), /não personagem/);
+  await assert.rejects(f.mesa_elenco!.executar({ acrescentar: ['Inexistente'] }), /não encontrado/);
 });

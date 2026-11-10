@@ -41,6 +41,9 @@ export interface FiltroDeEntidades {
   tipo?: CategoriaFiltro | null;
   busca?: string;
   tag?: string | null;
+  /** Quando verdadeiro e `elenco` está definido, filtra entidades `personagem` para mostrar só o elenco. */
+  soElenco?: boolean;
+  elenco?: readonly string[];
 }
 
 export type OrdemColecao = 'nome-asc' | 'nome-desc' | 'recentes';
@@ -131,9 +134,11 @@ export function filtrarEntidades(
   const termos = semAcento(filtro.busca ?? '').split(/\s+/).filter(Boolean);
   const tagAlvo = filtro.tag ?? tagLegada;
   const chaveTag = tagAlvo ? semAcento(tagAlvo.replace(/^#/, '').trim()) : null;
+  const elencoSet = filtro.soElenco && filtro.elenco !== undefined ? new Set(filtro.elenco) : null;
 
   const filtradas = lista
     .filter(e => {
+      if (elencoSet && (e.tipo !== 'personagem' || !elencoSet.has(e.id))) return false;
       if (!filtro.tipo) return true;
       if (filtro.tipo === 'encontro') return ehEncontro(e);
       return e.tipo === filtro.tipo;
@@ -237,3 +242,63 @@ export function lerTags(texto: string): string[] {
 }
 
 export const ehAppConhecido = (valor: string): valor is AppId => (APPS as readonly string[]).includes(valor);
+
+/** Entidade `personagem` que tem ficha no Dossiê (`ref.app === 'ficha' && ref.tipo === 'ficha'`). */
+export function temFichaDePersonagem(e: Pick<Entidade, 'tipo' | 'refs'>): boolean {
+  return e.tipo === 'personagem' && e.refs.some(r => r.app === 'ficha' && r.tipo === 'ficha');
+}
+
+/** Remove do elenco os ids que já não correspondem a uma entidade `personagem` da campanha (e sem repetir), preservando a ordem. */
+export function podarElenco(elenco: readonly string[], entidades: readonly Pick<Entidade, 'id' | 'tipo'>[]): string[] {
+  const validos = new Set(entidades.filter(e => e.tipo === 'personagem').map(e => e.id));
+  const vistos = new Set<string>();
+  const resultado: string[] = [];
+  for (const id of elenco) {
+    if (validos.has(id) && !vistos.has(id)) {
+      vistos.add(id);
+      resultado.push(id);
+    }
+  }
+  return resultado;
+}
+
+/**
+ * Personagens que têm ficha no Dossiê, separados entre os que estão no elenco (na ordem do elenco)
+ * e os que estão fora (em ordem alfabética). Na tela da campanha, `todos` traz os do elenco primeiro.
+ */
+export function personagensParaElenco(
+  entidades: readonly Entidade[],
+  elenco?: readonly string[],
+): { noElenco: Entidade[]; foraDoElenco: Entidade[]; todos: Entidade[] } {
+  const comFicha = entidades.filter(temFichaDePersonagem);
+  if (!elenco) {
+    const ordenados = ordenarEntidades(comFicha, 'nome-asc');
+    return { noElenco: [], foraDoElenco: ordenados, todos: ordenados };
+  }
+  const porId = new Map(comFicha.map(e => [e.id, e]));
+  const noElenco: Entidade[] = [];
+  const idsNoElenco = new Set<string>();
+  for (const id of elenco) {
+    const e = porId.get(id);
+    if (e && !idsNoElenco.has(id)) {
+      idsNoElenco.add(id);
+      noElenco.push(e);
+    }
+  }
+  const foraDoElenco = ordenarEntidades(comFicha.filter(e => !idsNoElenco.has(e.id)), 'nome-asc');
+  return { noElenco, foraDoElenco, todos: [...noElenco, ...foraDoElenco] };
+}
+
+/** Aplica entradas e saídas ao elenco (podando ids sem entidade `personagem` na campanha). */
+export function alterarListaDeElenco(
+  elencoAtual: readonly string[] | undefined,
+  entidades: readonly Pick<Entidade, 'id' | 'tipo'>[],
+  mudancas: { acrescentar?: readonly string[]; remover?: readonly string[] },
+): string[] {
+  const removerSet = new Set(mudancas.remover ?? []);
+  const base = (elencoAtual ?? []).filter(id => !removerSet.has(id));
+  for (const id of mudancas.acrescentar ?? []) {
+    if (!removerSet.has(id) && !base.includes(id)) base.push(id);
+  }
+  return podarElenco(base, entidades);
+}

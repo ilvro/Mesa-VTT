@@ -105,6 +105,15 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .linha-campos { display: flex; gap: 12px; flex-wrap: wrap; }
 .linha-campos label { display: flex; flex-direction: column; gap: 4px; color: var(--apagado); font-size: 12px; flex: 1 1 130px; }
 .cartao-rodape { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.campanha-elenco { display: flex; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px solid var(--linha); }
+.elenco-cabecalho { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.elenco-cabecalho .faixa.pequena { margin: 0; flex: 1; }
+.elenco-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.elenco-item { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: var(--raio); border: 1px solid var(--linha); background: var(--superficie-2); }
+.elenco-item.no-elenco { border-color: var(--acento); background: var(--acento-suave); }
+.elenco-retrato { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex: none; background: var(--superficie); border: 1px solid var(--linha); }
+.elenco-retrato-vazio { display: inline-grid; place-items: center; font: 700 12px var(--titulo); color: var(--acento); }
+.elenco-nome { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Entidades: layout de Coleção com sidebar de etiquetas, barra superior de categorias, lista e detalhe */
 .entidades { flex: 1; min-height: 0; display: flex; overflow: hidden; position: relative; }
