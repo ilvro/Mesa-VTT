@@ -3,12 +3,15 @@ import { conectarPonte, ferramentasDaCampanha, json } from '#mesa/ponte';
 import { SeloDoAssistente, estadoDaPonte } from '../ui/SeloDoAssistente.tsx';
 import { seloDoAssistente } from './assistente-slot.ts';
 import { campanhaAtiva, obterRepositorio } from './campanha.ts';
+import { ferramentasDeSessao } from './ponte-escrita.ts';
 import { oQueVejo } from './o-que-vejo.ts';
+import { alterarSessaoPorId, planejarSessao, sessoes } from './registro.ts';
 
 const cliente = conectarPonte({
   app: 'mesa', titulo: 'Mesa',
   ferramentas: [
     ...ferramentasDaCampanha(async () => obterRepositorio()),
+    ...ferramentasDeSessao({ campanha: () => campanhaAtiva.value, sessoes: () => sessoes.value, planejar: planejarSessao, alterar: alterarSessaoPorId }),
     {
       nome: 'mesa_campanha_atual',
       descricao: 'A campanha selecionada no hub da Mesa (id, nome e sistema), ou "nenhuma".',

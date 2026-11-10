@@ -42,6 +42,32 @@ function alterarSessao(mudancas: Partial<Pick<Sessao, 'roteiro' | 'roteiroNotas'
   void gravarSessao();
 }
 
+/** Cria uma sessão planejada (para a próxima mesa): vai para o banco e para a lista, mas não abre nem grava (diferente de `iniciarSessao`). */
+export async function planejarSessao(nome: string, data?: number): Promise<Sessao | null> {
+  const c = campanhaAtiva.value; if (!c) return null;
+  const agora = Date.now();
+  const sessao: Sessao = { id: crypto.randomUUID(), campanhaId: c.id, nome: nome.trim() || `Sessão de ${new Date(data ?? agora).toLocaleDateString('pt-BR')}`, data: data ?? agora, roteiro: [], registro: '', criadaEm: agora, atualizadaEm: agora };
+  try { await obterRepositorio().salvarSessao(sessao); } catch (erro) { avisar(mensagemDe(erro), true); return null; }
+  sessoes.value = [sessao, ...sessoes.value];
+  return sessao;
+}
+
+/** Altera qualquer sessão da campanha, não só a aberta. Se for a aberta, `sessaoAtiva` fica em dia. Devolve a sessão nova, ou `null` se não existe. */
+export async function alterarSessaoPorId(id: string, mudancas: Partial<Pick<Sessao, 'roteiro' | 'roteiroNotas' | 'registro' | 'nome' | 'data'>>): Promise<Sessao | null> {
+  const atual = sessoes.value.find(x => x.id === id); if (!atual) return null;
+  if (sessaoAtiva.value?.id === id) {
+    const nova = { ...(sessaoAtiva.value), ...mudancas, atualizadaEm: Date.now() };
+    sessaoAtiva.value = nova;
+    sessoes.value = sessoes.value.map(x => (x.id === id ? nova : x));
+    void gravarSessao();
+    return nova;
+  }
+  const nova = { ...atual, ...mudancas, atualizadaEm: Date.now() };
+  try { await obterRepositorio().salvarSessao(nova); } catch (erro) { avisar(mensagemDe(erro), true); return null; }
+  sessoes.value = sessoes.value.map(x => (x.id === id ? nova : x));
+  return nova;
+}
+
 // ---------- O registro: ouve os fatos do barramento enquanto a sessão grava ----------
 let desligarOuvintes: (() => void)[] = [];
 let ultimo: { texto: string; em: number } | null = null;
