@@ -131,3 +131,61 @@ test('entidade: sem campanha ativa, erro legível', async () => {
   const { f } = montarEntidades(false);
   await assert.rejects(f.mesa_entidade_criar!.executar({ tipo: 'lugar', nome: 'a' }), /Nenhuma campanha/);
 });
+
+import { ferramentasDeCena, type ContextoDeCenas } from '../../src/app/ponte-escrita.ts';
+
+function montarCenas() {
+  const mk = (id: string, tipo: Entidade['tipo'], nome: string, criadaPor: Entidade['criadaPor'], refs: Ref[] = [], tags: string[] = []): Entidade =>
+    ({ id, campanhaId: 'c1', tipo, nome, tags, notas: '', refs, criadaPor, criadaEm: 0, atualizadaEm: 0 } as Entidade);
+  let ents: Entidade[] = [
+    mk('cena1', 'cena', 'Emboscada na ponte', 'mesa'), mk('npc', 'personagem', 'Mira', 'mesa'),
+    mk('ravina', 'lugar', 'Ravina', 'atlas', [mapa('rav')]), mk('tensao', 'cena', 'Tensão', 'jukebox', [{ app: 'jukebox', tipo: 'cena-sonora', id: 't1' }]),
+    mk('b1', 'ameaca', 'Bandido 1', 'ficha', [{ app: 'ficha', tipo: 'ameaca', id: 'f1' }]), mk('b2', 'ameaca', 'Bandido 2', 'ficha', [{ app: 'ficha', tipo: 'ameaca', id: 'f2' }]),
+    mk('carta', 'pista', 'Carta', 'atelie', [{ app: 'atelie', tipo: 'documento', id: 'd1' }]),
+  ];
+  const ligs: Ligacao[] = [];
+  const lig = async (cena: Entidade, outro: Entidade, tipo: Ligacao['tipo'], inverso = false) => {
+    const a = outro.refs[0] ?? refDaEntidade(outro.id), b = refDaEntidade(cena.id);
+    ligs.push({ id: `l${ligs.length}`, campanhaId: 'c1', de: inverso ? a : b, para: inverso ? b : a, tipo, criadaPor: 'mesa', criadaEm: 0 } as Ligacao);
+    return true;
+  };
+  const abertos: string[] = [];
+  const ctx: ContextoDeCenas = {
+    campanha: () => ({ id: 'c1', nome: 'C' }), entidades: () => ents, ligacoes: () => ligs,
+    vincularMapa: (c, m) => lig(c, m, 'esta-em'), vincularTrilha: (c, t) => lig(c, t, 'toca-em'),
+    vincularParticipante: (c, p) => lig(c, p, 'aparece-em', true), vincularPista: (c, p) => lig(c, p, 'revela'),
+    alternarEncontro: async c => { ents = ents.map(e => (e.id === c.id ? { ...e, tags: e.tags.includes('encontro') ? [] : ['encontro'] } : e)); return true; },
+    definirMomento: async (c, m) => { ents = ents.map(e => (e.id === c.id ? { ...e, tags: [...e.tags.filter(t => !t.startsWith("momento:")), ...(m ? [`momento:${m}`] : [])] } : e)); return true; },
+    abrirApp: async app => { abertos.push(app); return app === 'jukebox' ? 'bloqueado' : app === 'atelie' ? 'indisponivel' : 'aberto'; },
+  };
+  return { f: Object.fromEntries(ferramentasDeCena(ctx).map(t => [t.nome, t])), ligs, abertos };
+}
+
+test('cena: montar com mapa, trilha, dois participantes, pista, encontro e momento; ler devolve nomes', async () => {
+  const { f, ligs } = montarCenas();
+  const r = await texto(f.mesa_cena_montar!.executar({ cenaId: 'cena1', mapa: 'ravina', trilha: 'tensao', participantes: ['b1', 'b2'], pistas: ['carta'], encontro: true, momento: 'Chegada' }));
+  assert.deepEqual(ligs.map(l => l.tipo), ['esta-em', 'toca-em', 'aparece-em', 'aparece-em', 'revela']);
+  assert.equal(r.mapa.nome, 'Ravina'); assert.equal(r.trilha.nome, 'Tensão'); assert.deepEqual(r.participantes.map((p: { nome: string }) => p.nome), ['Bandido 1', 'Bandido 2']);
+  assert.equal(r.pistas[0].nome, 'Carta'); assert.equal(r.encontro, true); assert.equal(r.momento, 'Chegada');
+  const l = await texto(f.mesa_cena_ler!.executar({ cenaId: 'cena1' }));
+  assert.deepEqual(l, r);
+});
+
+test('cena: erros legíveis (não é cena, entidade inexistente, tipo errado) sem gravar nada', async () => {
+  const { f, ligs } = montarCenas();
+  await assert.rejects(f.mesa_cena_montar!.executar({ cenaId: 'ravina', mapa: 'ravina' }), /não uma cena/);
+  await assert.rejects(f.mesa_cena_montar!.executar({ cenaId: 'cena1', mapa: 'nada' }), /não há entidade com id "nada"/);
+  await assert.rejects(f.mesa_cena_montar!.executar({ cenaId: 'cena1', mapa: 'ravina', participantes: ['ravina'] }), /participantes.*lugar.*personagem ou ameaça/);
+  await assert.rejects(f.mesa_cena_montar!.executar({ cenaId: 'cena1', trilha: 'npc' }), /Jukebox/);
+  await assert.rejects(f.mesa_cena_montar!.executar({ cenaId: 'cena1' }), /Nada a montar/);
+  assert.equal(ligs.length, 0);
+});
+
+test('abrir apps: abre, avisa do bloqueio e do app ausente; recusa app inválido', async () => {
+  const { f, abertos } = montarCenas();
+  const r = await texto(f.mesa_abrir_apps!.executar({ apps: ['atlas', 'jukebox', 'atelie', 'atlas'] }));
+  assert.deepEqual(abertos, ['atlas', 'jukebox', 'atelie']);
+  assert.deepEqual(r.apps, { atlas: 'aberto', jukebox: 'bloqueado', atelie: 'indisponivel' });
+  assert.match(r.aviso, /bloqueou.*jukebox.*Abrir/); assert.match(r.aviso, /atelie/);
+  await assert.rejects(f.mesa_abrir_apps!.executar({ apps: ['tabletop'] }), /inválidos/);
+});

@@ -1,7 +1,8 @@
 // Só em desenvolvimento (entra pela ponte). Ferramentas de escrita da Mesa; o contexto é injetável para testar sem DOM.
 import { chaveDaRef, formatarRef, lerRef, TIPOS_LIGACAO, type Entidade, type Ligacao, type Ref, type Sessao, type TipoEntidade, type TipoLigacao } from '#mesa';
 import { json, type FerramentaDaPonte } from '#mesa/ponte';
-import { NOME_DO_APP, TIPOS_CRIAVEIS, podeEditar } from '../dominio/entidades.ts';
+import { NOME_DO_APP, TIPOS_CRIAVEIS, ehEncontro, podeEditar } from '../dominio/entidades.ts';
+import { candidatosDeTrilha, entidadePorRef, extrairPacoteDeCena, type PacoteDeCena } from '../dominio/cenas.ts';
 import { adicionar, MAXIMO_DO_ROTEIRO, podarNotas, removerItem } from '../dominio/roteiro.ts';
 
 export interface ContextoDeSessoes {
@@ -218,6 +219,130 @@ export function ferramentasDeEntidade(ctx: ContextoDeEntidades): FerramentaDaPon
         const de = lerRefDoClaude(args.de), para = lerRefDoClaude(args.para);
         const l = await ctx.ligar(de, para, tipo as TipoLigacao);
         return [json({ id: l.id, de: formatarRef(l.de), para: formatarRef(l.para), tipo: l.tipo })];
+      },
+    },
+  ];
+}
+
+export type EstadoDeAbrirApp = 'aberto' | 'bloqueado' | 'indisponivel';
+export interface ContextoDeCenas {
+  campanha(): { id: string; nome: string } | null;
+  entidades(): Entidade[];
+  ligacoes(): Ligacao[];
+  vincularMapa(cena: Entidade, mapa: Entidade): Promise<boolean>;
+  vincularTrilha(cena: Entidade, trilha: Entidade): Promise<boolean>;
+  vincularParticipante(cena: Entidade, p: Entidade): Promise<boolean>;
+  vincularPista(cena: Entidade, pista: Entidade): Promise<boolean>;
+  alternarEncontro(cena: Entidade): Promise<boolean>;
+  definirMomento(cena: Entidade, momento: string | null): Promise<boolean>;
+  /** Abre o app pelo manifesto. `bloqueado`: o navegador recusou a janela e a Mesa já mostrou o aviso com o botão "Abrir". */
+  abrirApp(app: AppAbrivel): Promise<EstadoDeAbrirApp>;
+}
+
+export const APPS_ABRIVEIS = ['atlas', 'ficha', 'atelie', 'jukebox'] as const;
+export type AppAbrivel = (typeof APPS_ABRIVEIS)[number];
+
+const nomeDe = (e: Entidade | undefined): string | null => e?.nome ?? null;
+const itemComNome = (i: { ref: Ref; entidade?: Entidade } | null) => (i ? { ref: formatarRef(i.ref), entidadeId: i.entidade?.id ?? null, nome: nomeDe(i.entidade) } : null);
+export function pacoteComNomes(p: PacoteDeCena, cena: Entidade) {
+  return {
+    cenaId: p.cenaId, cena: cena.nome, encontro: ehEncontro(cena),
+    mapa: itemComNome(p.mapa), trilha: itemComNome(p.trilha),
+    participantes: p.participantes.map(x => ({ ...itemComNome(x)!, tipo: x.ehAmeaca ? 'ameaca' : 'personagem' })),
+    pistas: p.pistas.map(itemComNome),
+    momento: p.momento ?? null,
+  };
+}
+
+const MOMENTO = 'Nome (ou id) de um momento do mapa da cena, criado no Atlas (atlas_momento). Vira a etiqueta "momento:<texto>"; ao ativar a cena a Mesa pede ao Atlas que toque esse momento NO MAPA vinculado (o Atlas procura por id ou nome, sem diferenciar maiúsculas). Só funciona com mapa vinculado. Texto vazio remove o momento.';
+
+export function ferramentasDeCena(ctx: ContextoDeCenas): FerramentaDaPonte[] {
+  const exigirCampanha = () => { const c = ctx.campanha(); if (!c) throw new Error(SEM_CAMPANHA); return c; };
+  const achar = (v: unknown, campo: string): Entidade => {
+    if (typeof v !== 'string' || !v.trim()) throw new Error(`"${campo}" deve ser o id de uma entidade da campanha.`);
+    const bruto = v.trim(), todas = ctx.entidades();
+    const porId = todas.find(e => e.id === bruto.replace(/^mesa:mesa\/entidade\//, ''));
+    if (porId) return porId;
+    const ref = lerRef(bruto);
+    const porRef = ref ? entidadePorRef(ref, todas) : undefined;
+    if (porRef) return porRef;
+    throw new Error(`"${campo}": não há entidade com id "${bruto}" nesta campanha. Use campanha_ler para ver as entidades (o mapa, a trilha, as fichas e as pistas aparecem como entidades de seus apps).`);
+  };
+  const exigir = (e: Entidade, campo: string, ok: boolean, esperado: string) => {
+    if (!ok) throw new Error(`"${campo}": "${e.nome}" é ${e.tipo} (do ${NOME_DO_APP[e.criadaPor] ?? e.criadaPor}), mas aqui se espera ${esperado}.`);
+    return e;
+  };
+  const lerLista = (v: unknown, campo: string): string[] => { if (v === undefined) return []; if (!Array.isArray(v)) throw new Error(`"${campo}" deve ser uma lista de ids de entidades.`); return v as string[]; };
+  const cenaDe = (v: unknown): Entidade => {
+    const e = achar(v, 'cenaId');
+    if (e.tipo !== 'cena') throw new Error(`"${e.nome}" é ${e.tipo}, não uma cena. Crie a cena com mesa_entidade_criar { tipo: "cena" }.`);
+    return e;
+  };
+  const atual = (id: string) => ctx.entidades().find(e => e.id === id)!;
+  const pacote = (cena: Entidade) => pacoteComNomes(extrairPacoteDeCena(cena, ctx.entidades(), ctx.ligacoes()), cena);
+  const falha = (o: string) => new Error(`Não consegui ${o} (veja o aviso na Mesa).`);
+
+  return [
+    {
+      nome: 'mesa_cena_montar',
+      descricao: `Monta uma cena da campanha (entidade do tipo "cena"): mapa, trilha sonora, participantes, pistas, momento de abertura e marca de encontro. Todos os ids são de ENTIDADES da campanha (campanha_ler lista as entidades; mapas e cômodos do Atlas aparecem como "lugar", cenas sonoras do Jukebox como cena/efeito do Jukebox, fichas como personagem/ameaça, documentos do Ateliê como pista). "mapa" e "trilha" trocam o anterior; participantes e pistas acrescentam. Tudo é conferido antes de gravar. Devolve o pacote resultante com nomes. O ativar da cena (Modo Sessão) usa esse pacote.`,
+      esquema: {
+        type: 'object', required: ['cenaId'], additionalProperties: false,
+        properties: {
+          cenaId: { type: 'string', description: 'Id da entidade cena.' },
+          mapa: { type: 'string', description: 'Id da entidade lugar (mapa ou cômodo do Atlas).' },
+          trilha: { type: 'string', description: 'Id da entidade da cena sonora/efeito do Jukebox.' },
+          participantes: { type: 'array', items: { type: 'string' }, description: 'Ids de personagens e ameaças.' },
+          pistas: { type: 'array', items: { type: 'string' }, description: 'Ids de pistas (documentos do Ateliê).' },
+          momento: { type: 'string', description: MOMENTO },
+          encontro: { type: 'boolean', description: 'true marca a cena como encontro de combate (etiqueta "encontro"); false desmarca.' },
+        },
+      },
+      async executar(args) {
+        exigirCampanha();
+        const cena = cenaDe(args.cenaId);
+        const um = (v: unknown, campo: string, ok: (e: Entidade) => boolean, esperado: string) => (v === undefined ? null : (e => exigir(e, campo, ok(e), esperado))(achar(v, campo)));
+        const mapa = um(args.mapa, 'mapa', e => e.tipo === 'lugar' || e.refs.some(r => r.app === 'atlas'), 'um lugar do Atlas (mapa ou cômodo)');
+        const trilha = um(args.trilha, 'trilha', e => candidatosDeTrilha([e]).length > 0, 'uma cena sonora ou efeito do Jukebox');
+        const parts = lerLista(args.participantes, 'participantes').map(v => { const e = achar(v, 'participantes'); return exigir(e, 'participantes', e.tipo === 'personagem' || e.tipo === 'ameaca', 'um personagem ou ameaça'); });
+        const pistas = lerLista(args.pistas, 'pistas').map(v => { const e = achar(v, 'pistas'); return exigir(e, 'pistas', e.tipo === 'pista' || e.refs.some(r => r.app === 'atelie'), 'uma pista (documento do Ateliê)'); });
+        if (args.momento !== undefined && typeof args.momento !== 'string') throw new Error('"momento" deve ser texto (nome ou id do momento).');
+        if (args.encontro !== undefined && typeof args.encontro !== 'boolean') throw new Error('"encontro" deve ser verdadeiro ou falso.');
+        const momento = typeof args.momento === 'string' ? args.momento.trim().replace(/^momento:/i, '').trim() : undefined;
+        if (!(mapa || trilha || parts.length || pistas.length || momento !== undefined || args.encontro !== undefined)) throw new Error('Nada a montar: informe mapa, trilha, participantes, pistas, momento ou encontro.');
+
+        if (mapa && !(await ctx.vincularMapa(atual(cena.id), mapa))) throw falha(`vincular o mapa "${mapa.nome}"`);
+        if (trilha && !(await ctx.vincularTrilha(atual(cena.id), trilha))) throw falha(`vincular a trilha "${trilha.nome}"`);
+        for (const p of parts) if (!(await ctx.vincularParticipante(atual(cena.id), p))) throw falha(`pôr "${p.nome}" na cena`);
+        for (const p of pistas) if (!(await ctx.vincularPista(atual(cena.id), p))) throw falha(`vincular a pista "${p.nome}"`);
+        if (typeof args.encontro === 'boolean' && ehEncontro(atual(cena.id)) !== args.encontro && !(await ctx.alternarEncontro(atual(cena.id)))) throw falha('mudar a marca de encontro');
+        if (momento !== undefined && !(await ctx.definirMomento(atual(cena.id), momento || null))) throw falha('definir o momento');
+        const final = atual(cena.id);
+        return [json(pacote(final))];
+      },
+    },
+    {
+      nome: 'mesa_cena_ler',
+      descricao: 'Lê o que está montado numa cena: mapa, trilha, participantes (personagens e ameaças), pistas, momento de abertura e se é encontro, com os nomes.',
+      esquema: { type: 'object', required: ['cenaId'], additionalProperties: false, properties: { cenaId: { type: 'string', description: 'Id da entidade cena.' } } },
+      async executar(args) { exigirCampanha(); return [json(pacote(cenaDe(args.cenaId)))]; },
+    },
+    {
+      nome: 'mesa_abrir_apps',
+      descricao: 'Abre outros aplicativos da plataforma em abas novas (pelo manifesto de cada um, ao lado da Mesa). O navegador pode bloquear a aba quando o mestre não clicou; nesse caso a Mesa mostra um aviso com o botão "Abrir" e a resposta diz que ficou pendente do clique do mestre.',
+      esquema: { type: 'object', required: ['apps'], additionalProperties: false, properties: { apps: { type: 'array', items: { type: 'string', enum: [...APPS_ABRIVEIS] } } } },
+      async executar(args) {
+        if (!Array.isArray(args.apps) || !args.apps.length) throw new Error(`"apps" deve ser uma lista com ${APPS_ABRIVEIS.join(', ')}.`);
+        const invalidos = args.apps.filter(a => !(APPS_ABRIVEIS as readonly unknown[]).includes(a));
+        if (invalidos.length) throw new Error(`Apps inválidos: ${invalidos.map(String).join(', ')}. Aceitos: ${APPS_ABRIVEIS.join(', ')}.`);
+        const resultado: Record<string, EstadoDeAbrirApp> = {};
+        for (const app of [...new Set(args.apps as AppAbrivel[])]) resultado[app] = await ctx.abrirApp(app);
+        const bloq = Object.keys(resultado).filter(a => resultado[a] === 'bloqueado'), indis = Object.keys(resultado).filter(a => resultado[a] === 'indisponivel');
+        const aviso = [
+          bloq.length ? `O navegador bloqueou a abertura de ${bloq.join(', ')}: a Mesa mostrou um aviso com o botão "Abrir"; peça ao mestre para clicar.` : '',
+          indis.length ? `Não achei ${indis.join(', ')} ao lado da Mesa (sem mesa.json); peça ao mestre para abrir ou subir o app.` : '',
+        ].filter(Boolean).join(' ');
+        return [json({ apps: resultado, ...(aviso ? { aviso } : {}) })];
       },
     },
   ];
