@@ -133,7 +133,7 @@ export interface ContextoDeEntidades {
 }
 
 export const TIPOS_DO_ASSISTENTE: readonly TipoEntidade[] = [...TIPOS_CRIAVEIS, 'cena', 'ameaca'];
-const REF_DA_MESA = 'As entidades da Mesa têm a referência "mesa:mesa/entidade/<id>" (o id vem de mesa_entidade_criar ou de campanha_listar/campanha_entidade_ler).';
+const REF_DA_MESA = 'As entidades da Mesa têm a referência "mesa:mesa/entidade/<id>" (o id vem de mesa_entidade_criar, de campanha_ler (que lista as entidades) ou de campanha_entidade_ler).';
 
 const lerTagsDoClaude = (v: unknown): string[] => {
   if (!Array.isArray(v) || v.some(t => typeof t !== 'string')) throw new Error('"tags" deve ser uma lista de textos.');
@@ -193,7 +193,7 @@ export function ferramentasDeEntidade(ctx: ContextoDeEntidades): FerramentaDaPon
         exigirCampanha();
         const id = String(args.id ?? '').replace(/^mesa:mesa\/entidade\//, '');
         const e = ctx.entidades().find(x => x.id === id);
-        if (!e) throw new Error(`Não há entidade com id "${id}" nesta campanha. Use campanha_listar ou mesa_entidade_criar.`);
+        if (!e) throw new Error(`Não há entidade com id "${id}" nesta campanha. Use campanha_ler para ver as entidades, ou mesa_entidade_criar.`);
         if (!podeEditar(e)) throw new Error(`"${e.nome}" é do ${NOME_DO_APP[e.criadaPor] ?? e.criadaPor} (criada por ele); a Mesa só edita o que criou. Peça ao mestre para alterar no ${NOME_DO_APP[e.criadaPor] ?? e.criadaPor}.`);
         const mudancas: Partial<Pick<Entidade, 'nome' | 'tags' | 'notas'>> = {};
         if (args.nome !== undefined) { if (typeof args.nome !== 'string' || !args.nome.trim()) throw new Error('"nome" não pode ser vazio.'); mudancas.nome = args.nome.trim(); }
