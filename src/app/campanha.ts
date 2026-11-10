@@ -1,5 +1,5 @@
 import { signal, computed } from '@preact/signals';
-import { abrirRepositorioCampanha, mesmaRef, type Campanha, type Entidade, type Ligacao, type RepositorioCampanha, type Tema, type TipoEntidade } from '#mesa';
+import { abrirRepositorioCampanha, mesmaRef, type Campanha, type Entidade, type Ligacao, type Ref, type RepositorioCampanha, type TipoLigacao, type Tema, type TipoEntidade } from '#mesa';
 import { APP_DA_MESA, ehEncontro, filtrarEntidades, podeEditar, semAcento, type CategoriaFiltro, type FiltroDeEntidades, type OrdemColecao } from '../dominio/entidades.ts';
 import { refDaEntidade, refsMencionados } from '../dominio/notas.ts';
 import { casaCena, refParaLigacao } from '../dominio/cenas.ts';
@@ -213,6 +213,18 @@ export async function alterarEntidade(e: Entidade, mudancas: Partial<Pick<Entida
     await atualizar();
     return true;
   } catch (erro) { avisar(mensagemDe(erro), true); await atualizar(); return false; }
+}
+
+/** Liga duas referências (uso da ponte do assistente). Entidades da Mesa ganham o Ref da Mesa, para a ligação sair junto quando elas forem removidas. Lança em caso de erro. */
+export async function ligarRefs(de: Ref, para: Ref, tipo: TipoLigacao): Promise<Ligacao> {
+  const r = repo(), c = campanhaAtiva.value;
+  if (!c) throw new Error('Nenhuma campanha selecionada.');
+  for (const ref of [de, para]) {
+    if (ref.app === 'mesa' && ref.tipo === 'entidade') { const e = await r.obterEntidade(ref.id); if (e && podeEditar(e)) await comRefDaMesa(e); }
+  }
+  const l = await r.ligar({ campanhaId: c.id, de, para, tipo });
+  await atualizar();
+  return l;
 }
 
 export async function removerEntidade(e: Entidade): Promise<void> {

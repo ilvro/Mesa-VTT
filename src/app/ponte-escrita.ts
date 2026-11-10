@@ -1,6 +1,7 @@
 // Só em desenvolvimento (entra pela ponte). Ferramentas de escrita da Mesa; o contexto é injetável para testar sem DOM.
-import { chaveDaRef, formatarRef, lerRef, type Ref, type Sessao } from '#mesa';
+import { chaveDaRef, formatarRef, lerRef, TIPOS_LIGACAO, type Entidade, type Ligacao, type Ref, type Sessao, type TipoEntidade, type TipoLigacao } from '#mesa';
 import { json, type FerramentaDaPonte } from '#mesa/ponte';
+import { NOME_DO_APP, TIPOS_CRIAVEIS, podeEditar } from '../dominio/entidades.ts';
 import { adicionar, MAXIMO_DO_ROTEIRO, podarNotas, removerItem } from '../dominio/roteiro.ts';
 
 export interface ContextoDeSessoes {
@@ -115,6 +116,108 @@ export function ferramentasDeSessao(ctx: ContextoDeSessoes): FerramentaDaPonte[]
         const nova = await ctx.alterar(id, { roteiro, roteiroNotas: notas, ...(typeof args.nome === 'string' ? { nome: args.nome.trim() } : {}) });
         if (!nova) throw new Error('Não consegui gravar a sessão (veja o aviso na Mesa).');
         return [json({ ...resumo(nova), ignorados })];
+      },
+    },
+  ];
+}
+
+export interface ContextoDeEntidades {
+  campanha(): { id: string; nome: string } | null;
+  entidades(): Entidade[];
+  /** Cria sem mudar a seleção da Mesa. */
+  criar(tipo: TipoEntidade, nome: string): Promise<Entidade | null>;
+  /** Grava (e sincroniza as `[[ligações]]` quando há notas). */
+  alterar(e: Entidade, mudancas: Partial<Pick<Entidade, 'nome' | 'tags' | 'notas'>>): Promise<boolean>;
+  ligar(de: Ref, para: Ref, tipo: TipoLigacao): Promise<Ligacao>;
+}
+
+export const TIPOS_DO_ASSISTENTE: readonly TipoEntidade[] = [...TIPOS_CRIAVEIS, 'cena', 'ameaca'];
+const REF_DA_MESA = 'As entidades da Mesa têm a referência "mesa:mesa/entidade/<id>" (o id vem de mesa_entidade_criar ou de campanha_listar/campanha_entidade_ler).';
+
+const lerTagsDoClaude = (v: unknown): string[] => {
+  if (!Array.isArray(v) || v.some(t => typeof t !== 'string')) throw new Error('"tags" deve ser uma lista de textos.');
+  return [...new Set((v as string[]).map(t => t.trim().replace(/^#/, '')).filter(Boolean))];
+};
+const textoOpcional = (v: unknown, campo: string): string | undefined => {
+  if (v === undefined) return undefined;
+  if (typeof v !== 'string') throw new Error(`"${campo}" deve ser texto.`);
+  return v;
+};
+const resumoDaEntidade = (e: Entidade) => ({ id: e.id, ref: `mesa:mesa/entidade/${e.id}`, tipo: e.tipo, nome: e.nome, tags: e.tags, notas: e.notas, criadaPor: e.criadaPor });
+
+export function ferramentasDeEntidade(ctx: ContextoDeEntidades): FerramentaDaPonte[] {
+  const exigirCampanha = () => { const c = ctx.campanha(); if (!c) throw new Error(SEM_CAMPANHA); return c; };
+  return [
+    {
+      nome: 'mesa_entidade_criar',
+      descricao: `Cria uma entidade na campanha ativa (aparece na coleção da Mesa, sem mudar o que o mestre está vendo). Tipos: ${TIPOS_DO_ASSISTENTE.join(', ')}. As notas aceitam [[Nome]] para citar outra entidade (cria a ligação "menciona"; o nome tem de existir). ${REF_DA_MESA}`,
+      esquema: {
+        type: 'object', required: ['tipo', 'nome'], additionalProperties: false,
+        properties: {
+          tipo: { type: 'string', enum: [...TIPOS_DO_ASSISTENTE] },
+          nome: { type: 'string' },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Etiquetas sem "#" (ex.: ["ferreiro"]). Use "encontro" em cenas de combate.' },
+          notas: { type: 'string', description: 'Texto livre; [[Nome]] liga a outra entidade.' },
+        },
+      },
+      async executar(args) {
+        exigirCampanha();
+        const tipo = String(args.tipo ?? '');
+        if (!(TIPOS_DO_ASSISTENTE as readonly string[]).includes(tipo)) throw new Error(`Tipo inválido: "${tipo}". Tipos aceitos: ${TIPOS_DO_ASSISTENTE.join(', ')}.`);
+        if (typeof args.nome !== 'string' || !args.nome.trim()) throw new Error('"nome" é obrigatório.');
+        const tags = args.tags === undefined ? undefined : lerTagsDoClaude(args.tags);
+        const notas = textoOpcional(args.notas, 'notas');
+        const criada = await ctx.criar(tipo as TipoEntidade, args.nome);
+        if (!criada) throw new Error('Não consegui criar a entidade (veja o aviso na Mesa).');
+        if ((tags && tags.length) || notas) {
+          if (!(await ctx.alterar(criada, { ...(tags?.length ? { tags } : {}), ...(notas ? { notas } : {}) }))) throw new Error(`A entidade "${criada.nome}" foi criada (id ${criada.id}), mas não consegui gravar tags/notas (veja o aviso na Mesa). Use mesa_entidade_editar.`);
+        }
+        return [json(resumoDaEntidade(ctx.entidades().find(e => e.id === criada.id) ?? criada))];
+      },
+    },
+    {
+      nome: 'mesa_entidade_editar',
+      descricao: `Edita uma entidade criada pela Mesa (nome, tags, notas). As de outros aplicativos (ex.: fichas do Dossiê) são recusadas. "notas" troca o texto; "acrescentarNotas" soma ao fim (se os dois vierem, troca e depois soma). As [[ligações]] das notas são refeitas. Não remove entidades. ${REF_DA_MESA}`,
+      esquema: {
+        type: 'object', required: ['id'], additionalProperties: false,
+        properties: {
+          id: { type: 'string', description: 'Id da entidade (sem o prefixo "mesa:mesa/entidade/").' },
+          nome: { type: 'string' },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Troca todas as etiquetas.' },
+          notas: { type: 'string', description: 'Troca o texto das notas.' },
+          acrescentarNotas: { type: 'string', description: 'Texto somado ao fim das notas.' },
+        },
+      },
+      async executar(args) {
+        exigirCampanha();
+        const id = String(args.id ?? '').replace(/^mesa:mesa\/entidade\//, '');
+        const e = ctx.entidades().find(x => x.id === id);
+        if (!e) throw new Error(`Não há entidade com id "${id}" nesta campanha. Use campanha_listar ou mesa_entidade_criar.`);
+        if (!podeEditar(e)) throw new Error(`"${e.nome}" é do ${NOME_DO_APP[e.criadaPor] ?? e.criadaPor} (criada por ele); a Mesa só edita o que criou. Peça ao mestre para alterar no ${NOME_DO_APP[e.criadaPor] ?? e.criadaPor}.`);
+        const mudancas: Partial<Pick<Entidade, 'nome' | 'tags' | 'notas'>> = {};
+        if (args.nome !== undefined) { if (typeof args.nome !== 'string' || !args.nome.trim()) throw new Error('"nome" não pode ser vazio.'); mudancas.nome = args.nome.trim(); }
+        if (args.tags !== undefined) mudancas.tags = lerTagsDoClaude(args.tags);
+        const notas = textoOpcional(args.notas, 'notas'), mais = textoOpcional(args.acrescentarNotas, 'acrescentarNotas');
+        if (notas !== undefined || mais) {
+          const base = notas ?? e.notas;
+          mudancas.notas = mais ? (base.trim() ? `${base.replace(/\s+$/, '')}\n\n${mais}` : mais) : base;
+        }
+        if (!Object.keys(mudancas).length) throw new Error('Nada a mudar: informe nome, tags, notas ou acrescentarNotas.');
+        if (!(await ctx.alterar(e, mudancas))) throw new Error('Não consegui gravar (veja o aviso na Mesa).');
+        return [json(resumoDaEntidade(ctx.entidades().find(x => x.id === id) ?? { ...e, ...mudancas }))];
+      },
+    },
+    {
+      nome: 'mesa_ligar',
+      descricao: `Liga duas coisas da campanha (ex.: um NPC a um lugar). "de" e "para" são referências: objeto {app, tipo, id} ou texto "mesa:app/tipo/id". ${REF_DA_MESA} Tipos de ligação: ${TIPOS_LIGACAO.join(', ')}. Ex.: personagem "esta-em" lugar; pista "revela" personagem.`,
+      esquema: { type: 'object', required: ['de', 'para', 'tipo'], additionalProperties: false, properties: { de: refEsquema, para: refEsquema, tipo: { type: 'string', enum: [...TIPOS_LIGACAO] } } },
+      async executar(args) {
+        exigirCampanha();
+        const tipo = String(args.tipo ?? '');
+        if (!(TIPOS_LIGACAO as readonly string[]).includes(tipo)) throw new Error(`Tipo de ligação inválido: "${tipo}". Tipos aceitos: ${TIPOS_LIGACAO.join(', ')}.`);
+        const de = lerRefDoClaude(args.de), para = lerRefDoClaude(args.para);
+        const l = await ctx.ligar(de, para, tipo as TipoLigacao);
+        return [json({ id: l.id, de: formatarRef(l.de), para: formatarRef(l.para), tipo: l.tipo })];
       },
     },
   ];

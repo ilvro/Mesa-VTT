@@ -2,8 +2,8 @@
 import { conectarPonte, ferramentasDaCampanha, json } from '#mesa/ponte';
 import { SeloDoAssistente, estadoDaPonte } from '../ui/SeloDoAssistente.tsx';
 import { seloDoAssistente } from './assistente-slot.ts';
-import { campanhaAtiva, obterRepositorio } from './campanha.ts';
-import { ferramentasDeSessao } from './ponte-escrita.ts';
+import { alterarEntidade, campanhaAtiva, criarEntidade, entidades, ligarRefs, obterRepositorio } from './campanha.ts';
+import { ferramentasDeEntidade, ferramentasDeSessao } from './ponte-escrita.ts';
 import { oQueVejo } from './o-que-vejo.ts';
 import { alterarSessaoPorId, planejarSessao, sessoes } from './registro.ts';
 
@@ -12,6 +12,7 @@ const cliente = conectarPonte({
   ferramentas: [
     ...ferramentasDaCampanha(async () => obterRepositorio()),
     ...ferramentasDeSessao({ campanha: () => campanhaAtiva.value, sessoes: () => sessoes.value, planejar: planejarSessao, alterar: alterarSessaoPorId }),
+    ...ferramentasDeEntidade({ campanha: () => campanhaAtiva.value, entidades: () => entidades.value, criar: (t, n) => criarEntidade(t, n, false), alterar: alterarEntidade, ligar: ligarRefs }),
     {
       nome: 'mesa_campanha_atual',
       descricao: 'A campanha selecionada no hub da Mesa (id, nome e sistema), ou "nenhuma".',
