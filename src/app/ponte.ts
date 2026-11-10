@@ -3,19 +3,34 @@ import { conectarPonte, ferramentasDaCampanha, json } from '#mesa/ponte';
 import { SeloDoAssistente, estadoDaPonte } from '../ui/SeloDoAssistente.tsx';
 import { seloDoAssistente } from './assistente-slot.ts';
 import { abrirAplicativo } from './aplicativos.ts';
-import { alternarEncontroDaCena, alterarEntidade, campanhaAtiva, criarEntidade, definirMomentoDaCena, entidades, ligacoes, ligarRefs, obterRepositorio, vincularMapaNaCena, vincularParticipanteNaCena, vincularPistaNaCena, vincularTrilhaNaCena } from './campanha.ts';
+import { alternarEncontroDaCena, alterarEntidade, atualizar, campanhaAtiva, criarEntidade, definirMomentoDaCena, ligarRefs, obterRepositorio, vincularMapaNaCena, vincularParticipanteNaCena, vincularPistaNaCena, vincularTrilhaNaCena } from './campanha.ts';
 import { ferramentasDeCena, ferramentasDeEntidade, ferramentasDeSessao } from './ponte-escrita.ts';
 import { oQueVejo } from './o-que-vejo.ts';
-import { alterarSessaoPorId, planejarSessao, sessoes } from './registro.ts';
+import { alterarSessaoPorId, carregarSessoes, planejarSessao } from './registro.ts';
+
+/** A campanha da chamada: a da tela ou, se a tela ainda não a tem, a salva no navegador (`atualizar` a valida no banco). Os dados vêm sempre do banco, não dos signals. */
+async function campanhaDaChamada(): Promise<{ id: string; nome: string } | null> {
+  if (!campanhaAtiva.value) await atualizar();
+  const c = campanhaAtiva.value;
+  return c ? { id: c.id, nome: c.nome } : null;
+}
+async function entidadesDoBanco() { const c = await campanhaDaChamada(); return c ? obterRepositorio().listarEntidades(c.id) : []; }
+async function ligacoesDoBanco() { const c = await campanhaDaChamada(); return c ? obterRepositorio().listarLigacoes(c.id) : []; }
 
 const cliente = conectarPonte({
   app: 'mesa', titulo: 'Mesa',
   ferramentas: [
     ...ferramentasDaCampanha(async () => obterRepositorio()),
-    ...ferramentasDeSessao({ campanha: () => campanhaAtiva.value, sessoes: () => sessoes.value, planejar: planejarSessao, alterar: alterarSessaoPorId }),
-    ...ferramentasDeEntidade({ campanha: () => campanhaAtiva.value, entidades: () => entidades.value, criar: (t, n) => criarEntidade(t, n, false), alterar: alterarEntidade, ligar: ligarRefs }),
+    ...ferramentasDeSessao({
+      campanha: campanhaDaChamada,
+      sessoes: async () => { const c = await campanhaDaChamada(); return c ? obterRepositorio().listarSessoes(c.id) : []; },
+      planejar: planejarSessao,
+      alterar: async (id, mudancas) => { await carregarSessoes(); return alterarSessaoPorId(id, mudancas); },   // a cópia da tela pode estar velha ou vazia
+      recarregar: carregarSessoes,
+    }),
+    ...ferramentasDeEntidade({ campanha: campanhaDaChamada, entidades: entidadesDoBanco, criar: (t, n) => criarEntidade(t, n, false), alterar: alterarEntidade, ligar: ligarRefs }),
     ...ferramentasDeCena({
-      campanha: () => campanhaAtiva.value, entidades: () => entidades.value, ligacoes: () => ligacoes.value,
+      campanha: campanhaDaChamada, entidades: entidadesDoBanco, ligacoes: ligacoesDoBanco,
       vincularMapa: vincularMapaNaCena, vincularTrilha: vincularTrilhaNaCena, vincularParticipante: vincularParticipanteNaCena, vincularPista: vincularPistaNaCena,
       alternarEncontro: alternarEncontroDaCena, definirMomento: definirMomentoDaCena, abrirApp: app => abrirAplicativo(app),
     }),

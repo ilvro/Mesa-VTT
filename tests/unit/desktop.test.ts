@@ -77,16 +77,7 @@ test('planejarMontagemDesktop: calcula plano de cópia para cada aplicativo e re
   const raiz = '/workspace';
   const dist = '/workspace/Mesa/dist-desktop';
 
-  // Simula sistema de arquivos onde Atelie usa dist-pages e os demais usam dist
-  const mockChecar = (caminho: string) => {
-    return (
-      caminho.includes('/Mesa/dist') ||
-      caminho.includes('/Atlas/dist') ||
-      caminho.includes('/Dossie/dist') ||
-      caminho.includes('/Atelie/dist-pages') ||
-      caminho === '/workspace/Jukebox'
-    );
-  };
+  const mockChecar = (caminho: string) => caminho === '/workspace/Jukebox' || caminho.endsWith('/dist-desktop-app');
 
   const plano = planejarMontagemDesktop(raiz, dist, mockChecar);
 
@@ -102,7 +93,19 @@ test('planejarMontagemDesktop: calcula plano de cópia para cada aplicativo e re
   assert.ok(apps.includes('Jukebox:Jukebox'));
 
   const atelie = plano.apps.find(a => a.id === 'Atelie');
-  assert.equal(atelie?.origemEscolhida, '/workspace/Atelie/dist-pages');
+  assert.equal(atelie?.origemEscolhida, '/workspace/Atelie/dist-desktop-app');
+  assert.deepEqual(atelie?.compilar, [
+    { cwd: '/workspace/Atelie', comando: 'npx', args: ['vite', 'build', '--mode', 'desktop', '--outDir', 'dist-desktop-app'] },
+  ]);
+
+  for (const id of ['Mesa', 'Atlas', 'Dossie']) {
+    const app = plano.apps.find(a => a.id === id);
+    assert.equal(app?.origemEscolhida, `/workspace/${id}/dist-desktop-app`);
+    assert.deepEqual(app?.compilar?.at(-1)?.args, ['vite', 'build', '--mode', 'desktop', '--outDir', 'dist-desktop-app']);
+  }
+  // O Dossiê gera as fichas padrão antes do build; Jukebox segue estático, sem build.
+  assert.deepEqual(plano.apps.find(a => a.id === 'Dossie')?.compilar?.[0], { cwd: '/workspace/Dossie', comando: 'node', args: ['scripts/gen-default-sheets.js'] });
+  assert.equal(plano.apps.find(a => a.id === 'Jukebox')?.compilar, undefined);
 });
 
 test('ehAmbienteDesktop: detecta presença das APIs do Tauri no objeto window', () => {

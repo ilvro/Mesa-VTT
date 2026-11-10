@@ -5,7 +5,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { execSync, spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,14 +17,17 @@ const PORT = 5100;
 const HOST = '127.0.0.1';
 
 // 1. Se o binário nativo Rust/Tauri já estiver compilado, executa diretamente.
-if (fs.existsSync(binaryPath)) {
-  const child = spawn(binaryPath, process.argv.slice(2), { stdio: 'inherit' });
-  child.on('exit', code => process.exit(code ?? 0));
-} else {
-  iniciarAppDesktop().catch(err => {
-    console.error('[Mesa VTT] Falha ao iniciar aplicativo desktop:', err);
-    process.exit(1);
-  });
+// (Só quando o arquivo é executado; importá-lo, como nos testes, não tem efeitos.)
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  if (fs.existsSync(binaryPath)) {
+    const child = spawn(binaryPath, process.argv.slice(2), { stdio: 'inherit' });
+    child.on('exit', code => process.exit(code ?? 0));
+  } else {
+    iniciarAppDesktop().catch(err => {
+      console.error('[Mesa VTT] Falha ao iniciar aplicativo desktop:', err);
+      process.exit(1);
+    });
+  }
 }
 
 function portaEmUso(port, host) {
@@ -58,7 +61,7 @@ const MIME_TYPES = {
   '.wasm': 'application/wasm',
 };
 
-function iniciarServidorEstatico(rootDir, port, host) {
+export function iniciarServidorEstatico(rootDir, port, host) {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
       try {
@@ -111,16 +114,40 @@ function iniciarServidorEstatico(rootDir, port, host) {
   });
 }
 
+/**
+ * Sobe o servidor estático e, se o Atlas (irmão da Mesa) estiver disponível, hospeda nele a ponte do assistente
+ * (`/__ponte`, token em `Atlas/.ponte`). Sem o Atlas ou sem `node_modules`, avisa no stderr e segue sem a ponte.
+ * Com `port` 0 a origem da ponte acompanha a porta sorteada.
+ */
+export async function iniciarServidorComPonte({ rootDir, port, host, raizAtlas = path.resolve(mesaRoot, '..', 'Atlas'), pastaDoToken = path.join(raizAtlas, '.ponte') }) {
+  const server = await iniciarServidorEstatico(rootDir, port, host);
+  const porta = server.address().port;
+  let ponte = null;
+  try {
+    const modulo = await import(pathToFileURL(path.join(raizAtlas, 'scripts', 'ponte', 'servidor.ts')).href);
+    ponte = modulo.criarPonte({ origem: `http://${host}:${porta}`, pastaDoToken });
+    server.on('upgrade', (req, socket, cabeca) => {
+      if ((req.url ?? '').split('?')[0] === modulo.CAMINHO_DA_PONTE && ponte.aceitar(req, socket, cabeca)) return;
+      socket.destroy();
+    });
+  } catch (e) {
+    ponte = null;
+    console.error('[Mesa VTT] Ponte do assistente indisponível (o app abre sem ela):', e instanceof Error ? e.message : e);
+    server.on('upgrade', (_req, socket) => socket.destroy());
+  }
+  return { server, ponte, porta, fechar() { try { ponte?.fechar?.(); } catch {} server.close(); server.closeAllConnections?.(); } };
+}
+
 async function iniciarAppDesktop() {
   const jaRodando = await portaEmUso(PORT, HOST);
-  let server = null;
+  let hospedeiro = null;
 
   if (!jaRodando) {
     if (!fs.existsSync(path.join(distDesktop, 'Mesa', 'index.html'))) {
       console.log('[Mesa VTT] Preparando pacote desktop (dist-desktop)...');
       execSync('npm run desktop:prep', { cwd: mesaRoot, stdio: 'inherit' });
     }
-    server = await iniciarServidorEstatico(distDesktop, PORT, HOST);
+    hospedeiro = await iniciarServidorComPonte({ rootDir: distDesktop, port: PORT, host: HOST });
   }
 
   const targetUrl = `http://${HOST}:${PORT}/Mesa/`;
@@ -171,6 +198,7 @@ conteudo.add_script(WebKit2.UserScript.new(
 
 def configurar_webview(wv):
     s = wv.get_settings()
+    s.set_user_agent_with_application_details('MesaVTT', '1')
     s.set_enable_webgl(True)
     s.set_enable_webaudio(True)
     s.set_media_playback_requires_user_gesture(False)
@@ -378,7 +406,7 @@ Gtk.main()
   });
 
   py.on('exit', code => {
-    if (server) server.close();
+    if (hospedeiro) hospedeiro.fechar();
     if (code && code !== 0) {
       spawn('xdg-open', [targetUrl], { stdio: 'ignore', detached: true }).unref();
     }

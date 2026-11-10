@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,8 +7,19 @@ export interface AppMontagemDesktop {
   id: string;
   pastaDestino: string;
   origemEscolhida: string;
-  tipo: 'dist' | 'dist-pages' | 'estatico';
+  tipo: 'dist' | 'dist-pages' | 'desktop-app' | 'estatico';
+  /** Comandos que geram a origem (build com a ponte do assistente), rodados em ordem antes da cópia. */
+  compilar?: ComandoBuildDesktop[];
 }
+
+export interface ComandoBuildDesktop {
+  cwd: string;
+  comando: string;
+  args: string[];
+}
+
+/** Pasta de saída do build `desktop` (com a ponte do assistente) dentro de cada projeto; fica fora do git. */
+export const SAIDA_BUILD_DESKTOP = 'dist-desktop-app';
 
 export interface PlanoDeMontagemDesktop {
   raizProjetos: string;
@@ -50,35 +62,45 @@ export function planejarMontagemDesktop(
   const configs: Array<{
     id: string;
     pastaDestino: string;
-    tipo: 'dist' | 'dist-pages' | 'estatico';
+    tipo: 'dist' | 'dist-pages' | 'desktop-app' | 'estatico';
     candidatos: string[];
+    compilar?: ComandoBuildDesktop[];
   }> = [
     {
       id: 'Mesa',
       pastaDestino: 'Mesa',
-      tipo: 'dist',
-      candidatos: [path.join(raizProjetos, 'Mesa', 'dist'), path.join(raizProjetos, 'Mesa')],
+      tipo: 'desktop-app',
+      candidatos: [path.join(raizProjetos, 'Mesa', SAIDA_BUILD_DESKTOP)],
+      compilar: [
+        { cwd: path.join(raizProjetos, 'Mesa'), comando: 'npx', args: ['vite', 'build', '--mode', 'desktop', '--outDir', 'dist-desktop-app'] },
+      ],
     },
     {
       id: 'Atlas',
       pastaDestino: 'Atlas',
-      tipo: 'dist',
-      candidatos: [path.join(raizProjetos, 'Atlas', 'dist'), path.join(raizProjetos, 'Atlas')],
+      tipo: 'desktop-app',
+      candidatos: [path.join(raizProjetos, 'Atlas', SAIDA_BUILD_DESKTOP)],
+      compilar: [
+        { cwd: path.join(raizProjetos, 'Atlas'), comando: 'npx', args: ['vite', 'build', '--mode', 'desktop', '--outDir', 'dist-desktop-app'] },
+      ],
     },
     {
       id: 'Dossie',
       pastaDestino: 'Dossie',
-      tipo: 'dist',
-      candidatos: [path.join(raizProjetos, 'Dossie', 'dist'), path.join(raizProjetos, 'Dossie')],
+      tipo: 'desktop-app',
+      candidatos: [path.join(raizProjetos, 'Dossie', SAIDA_BUILD_DESKTOP)],
+      compilar: [
+        { cwd: path.join(raizProjetos, 'Dossie'), comando: 'node', args: ['scripts/gen-default-sheets.js'] },
+        { cwd: path.join(raizProjetos, 'Dossie'), comando: 'npx', args: ['vite', 'build', '--mode', 'desktop', '--outDir', 'dist-desktop-app'] },
+      ],
     },
     {
       id: 'Atelie',
       pastaDestino: 'Atelie',
-      tipo: 'dist-pages',
-      candidatos: [
-        path.join(raizProjetos, 'Atelie', 'dist-pages'),
-        path.join(raizProjetos, 'Atelie', 'dist'),
-        path.join(raizProjetos, 'Atelie'),
+      tipo: 'desktop-app',
+      candidatos: [path.join(raizProjetos, 'Atelie', SAIDA_BUILD_DESKTOP)],
+      compilar: [
+        { cwd: path.join(raizProjetos, 'Atelie'), comando: 'npx', args: ['vite', 'build', '--mode', 'desktop', '--outDir', 'dist-desktop-app'] },
       ],
     },
     {
@@ -111,6 +133,7 @@ export function planejarMontagemDesktop(
       pastaDestino: c.pastaDestino,
       origemEscolhida: origem,
       tipo: c.tipo,
+      ...(c.compilar ? { compilar: c.compilar } : {}),
     };
   });
 
@@ -150,7 +173,8 @@ const JUKEBOX_ESSENCIAIS = [
  */
 export async function executarMontagemDesktop(
   plano: PlanoDeMontagemDesktop,
-  log: (msg: string) => void = console.log
+  log: (msg: string) => void = console.log,
+  rodar: (c: ComandoBuildDesktop) => number = c => spawnSync(c.comando, c.args, { cwd: c.cwd, stdio: 'inherit' }).status ?? 1
 ): Promise<{ copiados: string[]; indexCriado: boolean }> {
   fs.mkdirSync(plano.distDesktop, { recursive: true });
 
@@ -158,6 +182,11 @@ export async function executarMontagemDesktop(
 
   for (const app of plano.apps) {
     const destinoApp = path.join(plano.distDesktop, app.pastaDestino);
+    for (const c of app.compilar ?? []) {
+      log(`[build-desktop] ${app.id}: ${c.comando} ${c.args.join(' ')}`);
+      if (rodar(c) !== 0) throw new Error(`O build desktop de ${app.id} falhou (${c.comando} ${c.args.join(' ')}).`);
+    }
+    if (app.compilar) fs.rmSync(destinoApp, { recursive: true, force: true });
     fs.mkdirSync(destinoApp, { recursive: true });
 
     if (!fs.existsSync(app.origemEscolhida)) {
@@ -177,7 +206,7 @@ export async function executarMontagemDesktop(
       copiados.push(app.id);
       log(`[build-desktop] Copiado Jukebox (arquivos estáticos essenciais) -> ${destinoApp}`);
     } else {
-      // Para os demais apps (Mesa, Atlas, Dossie, Atelie), copia o diretório compilado
+      // Para os demais apps (Mesa, Atlas, Dossie, Atelie), copia a saída do build desktop (com a ponte)
       fs.cpSync(app.origemEscolhida, destinoApp, {
         recursive: true,
         filter: src => {

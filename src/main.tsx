@@ -29,5 +29,5 @@ if (import.meta.env.DEV || new URLSearchParams(location.search).has('diagnostico
   Object.defineProperty(window, '__mesa', { value: Object.freeze({ repositorio: () => repositorio.value, campanhas: () => campanhas.value, campanhaAtiva: () => campanhaAtiva.value, entidades: () => entidades.value }), configurable: true });
 }
 
-// Ponte do assistente: só em desenvolvimento (o build de produção não a contém; ver `npm run ponte:verificar` no Atlas).
-if (import.meta.env.DEV) void import('./app/ponte.ts');
+// Ponte do assistente: em desenvolvimento e no app de desktop (o build do Pages não a contém; ver `npm run ponte:verificar` no Atlas).
+if (import.meta.env.DEV || import.meta.env.VITE_PONTE === '1') void import('./app/ponte.ts');

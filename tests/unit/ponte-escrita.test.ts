@@ -8,8 +8,8 @@ import { MAXIMO_DO_ROTEIRO } from '../../src/dominio/roteiro.ts';
 function montar(comCampanha = true) {
   let lista: Sessao[] = [];
   const ctx: ContextoDeSessoes = {
-    campanha: () => (comCampanha ? { id: 'c1', nome: 'C' } : null),
-    sessoes: () => lista,
+    campanha: async () => (comCampanha ? { id: 'c1', nome: 'C' } : null),
+    sessoes: async () => lista,
     async planejar(nome, data) { const s: Sessao = { id: `s${lista.length + 1}`, campanhaId: 'c1', nome, data: data ?? 0, roteiro: [], registro: '', criadaEm: 0, atualizadaEm: 0 }; lista = [s, ...lista]; return s; },
     async alterar(id, m) { const a = lista.find(s => s.id === id); if (!a) return null; const n = { ...a, ...m }; lista = lista.map(s => (s.id === id ? n : s)); return n; },
   };
@@ -26,6 +26,23 @@ test('criar: planeja sem gravar, aceita data, e listar mostra', async () => {
   assert.equal(lista().length, 1);
   assert.equal((await texto(f.mesa_sessoes_listar!.executar({}))).length, 1);
   await assert.rejects(f.mesa_sessao_criar!.executar({ nome: 'x', data: 'ontem' }), /Data inválida/);
+});
+
+test('listar lê do banco, não do signal: signal vazio e sessão no banco', async () => {
+  const noBanco: Sessao = { id: 'sb', campanhaId: 'c1', nome: 'No banco', data: 0, roteiro: [], registro: '', criadaEm: 0, atualizadaEm: 0 };
+  let signal: Sessao[] = [], recargas = 0;
+  const ctx: ContextoDeSessoes = {
+    campanha: async () => ({ id: 'c1', nome: 'C' }),
+    sessoes: async () => [noBanco],
+    async planejar() { return null; },
+    async alterar(id, m) { signal = [{ ...noBanco, ...m }]; return signal[0]!; },   // escrever pela interface atualiza o signal
+    async recarregar() { recargas++; },
+  };
+  const f = Object.fromEntries(ferramentasDeSessao(ctx).map(t => [t.nome, t]));
+  assert.equal(signal.length, 0);
+  assert.deepEqual((await texto(f.mesa_sessoes_listar!.executar({}))).map((s: { id: string }) => s.id), ['sb']);
+  const r = await texto(f.mesa_sessao_editar!.executar({ id: 'sb', nome: 'Novo nome' }));
+  assert.equal(r.nome, 'Novo nome'); assert.equal(signal[0]!.nome, 'Novo nome'); assert.equal(recargas, 1);
 });
 
 test('sem campanha ativa: erro legível', async () => {
@@ -79,8 +96,8 @@ function montarEntidades(comCampanha = true) {
   const outra: Entidade = { id: 'x1', campanhaId: 'c1', tipo: 'personagem', nome: 'Ficha do Dossiê', refs: [], tags: [], notas: '', criadaPor: 'ficha', criadaEm: 0, atualizadaEm: 0 };
   lista.push(outra);
   const ctx: ContextoDeEntidades = {
-    campanha: () => (comCampanha ? { id: 'c1', nome: 'C' } : null),
-    entidades: () => lista,
+    campanha: async () => (comCampanha ? { id: 'c1', nome: 'C' } : null),
+    entidades: async () => lista,
     async criar(tipo, nome) { const e: Entidade = { id: `e${++n}`, campanhaId: 'c1', tipo, nome, refs: [], tags: [], notas: '', criadaPor: 'mesa', criadaEm: 0, atualizadaEm: 0 }; lista = [...lista, e]; return e; },
     async alterar(e, m) {
       const nova = { ...e, ...m }; lista = lista.map(x => (x.id === e.id ? nova : x));
@@ -151,7 +168,7 @@ function montarCenas() {
   };
   const abertos: string[] = [];
   const ctx: ContextoDeCenas = {
-    campanha: () => ({ id: 'c1', nome: 'C' }), entidades: () => ents, ligacoes: () => ligs,
+    campanha: async () => ({ id: 'c1', nome: 'C' }), entidades: async () => ents, ligacoes: async () => ligs,
     vincularMapa: (c, m) => lig(c, m, 'esta-em'), vincularTrilha: (c, t) => lig(c, t, 'toca-em'),
     vincularParticipante: (c, p) => lig(c, p, 'aparece-em', true), vincularPista: (c, p) => lig(c, p, 'revela'),
     alternarEncontro: async c => { ents = ents.map(e => (e.id === c.id ? { ...e, tags: e.tags.includes('encontro') ? [] : ['encontro'] } : e)); return true; },
