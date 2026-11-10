@@ -134,7 +134,7 @@ try:
     gi.require_version('WebKit2', '4.1')
 except ValueError:
     gi.require_version('WebKit2', '4.0')
-from gi.repository import Gtk, WebKit2, GLib, GdkPixbuf
+from gi.repository import Gtk, Gdk, WebKit2, GLib, GdkPixbuf, Pango
 
 GLib.set_prgname('mesa-vtt')
 GLib.set_application_name('Mesa VTT')
@@ -163,36 +163,159 @@ def configurar_webview(wv):
     s.set_enable_developer_extras(True)
     s.set_hardware_acceleration_policy(WebKit2.HardwareAccelerationPolicy.ALWAYS)
 
-def criar_janela(titulo, w, h, principal=False, relacionada=None):
-    win = Gtk.Window(title=titulo)
-    win.set_default_size(w, h)
+# Abas como num navegador: cada app aberto pela Mesa vira uma aba; a aba pode ser reordenada, arrastada para fora
+# (vira janela) e de volta (todas as janelas compartilham o grupo 'mesa-vtt'). Popups com tamanho e sem barras
+# (o projetor do Atlas) continuam em janela própria. A aba da Mesa fica sempre na janela principal.
+GRUPO = 'mesa-vtt'
+principal = {}
+
+def definir_icone(win):
     win.set_wmclass('mesa-vtt', 'Mesa VTT')
     if os.path.exists(icon_path):
         try:
             win.set_icon(GdkPixbuf.Pixbuf.new_from_file(icon_path))
         except Exception:
             pass
-    # Janela pedida pela página (window.open): o WebKit exige uma view relacionada à que pediu
-    # (mesmo processo e mesmo armazenamento) e carrega o endereço sozinho; sem isso ele aborta.
-    wv = WebKit2.WebView(related_view=relacionada) if relacionada else WebKit2.WebView.new_with_context(context)
+
+def caminho_do_app(uri):
+    # 'http://127.0.0.1:5100/Atlas/?x' -> '/Atlas/'; None se não der para saber.
+    try:
+        partes = GLib.Uri.parse(uri, GLib.UriFlags.NONE).get_path().split('/')
+        return '/' + partes[1] + '/' if len(partes) > 1 and partes[1] else None
+    except Exception:
+        return None
+
+def todas_as_abas():
+    for nb in list(cadernos):
+        for i in range(nb.get_n_pages()):
+            yield nb, nb.get_nth_page(i)
+
+def focar(nb, wv):
+    nb.set_current_page(nb.page_num(wv))
+    nb.get_toplevel().present()
+    wv.grab_focus()
+
+def rotulo_da_aba(wv, fechavel):
+    caixa = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+    texto = Gtk.Label(label='Carregando…')
+    texto.set_ellipsize(Pango.EllipsizeMode.END)
+    texto.set_max_width_chars(24)
+    caixa.pack_start(texto, True, True, 0)
+    if fechavel:
+        botao = Gtk.Button.new_from_icon_name('window-close-symbolic', Gtk.IconSize.MENU)
+        botao.set_relief(Gtk.ReliefStyle.NONE)
+        botao.set_focus_on_click(False)
+        botao.connect('clicked', lambda _b: fechar_aba(wv))
+        caixa.pack_start(botao, False, False, 0)
+    caixa.show_all()
+    wv.connect('notify::title', lambda v, _p: texto.set_text(v.get_title() or 'Sem título'))
+    return caixa
+
+def fechar_aba(wv):
+    if wv is principal.get('mesa'):
+        return
+    nb = wv.get_parent()
+    if isinstance(nb, Gtk.Notebook):
+        nb.remove_page(nb.page_num(wv))
+    wv.destroy()
+
+def atalhos(win, ev):
+    nb = win.get_child()
+    if not isinstance(nb, Gtk.Notebook) or not (ev.state & Gdk.ModifierType.CONTROL_MASK):
+        return False
+    n, atual, k = nb.get_n_pages(), nb.get_current_page(), ev.keyval
+    if k in (Gdk.KEY_Tab, Gdk.KEY_Page_Down) and n > 1:
+        nb.set_current_page((atual + 1) % n); return True
+    if k in (Gdk.KEY_ISO_Left_Tab, Gdk.KEY_Page_Up) and n > 1:
+        nb.set_current_page((atual - 1) % n); return True
+    if k in (Gdk.KEY_w, Gdk.KEY_W):
+        fechar_aba(nb.get_nth_page(atual)); return True
+    return False
+
+cadernos = []
+
+def nova_janela_com_abas(w, h, eh_principal=False):
+    win = Gtk.Window(title='Mesa VTT')
+    win.set_default_size(w, h)
+    definir_icone(win)
+    nb = Gtk.Notebook()
+    nb.set_scrollable(True)
+    nb.set_group_name(GRUPO)
+    cadernos.append(nb)
+    nb.connect('switch-page', lambda _n, pag, _i: win.set_title(pag.get_title() or 'Mesa VTT'))
+    nb.connect('create-window', ao_soltar_fora)
+    if not eh_principal:
+        def esvaziou(n, _pag, _i):
+            if n.get_n_pages() == 0:
+                GLib.idle_add(lambda: (win.destroy(), False)[1])
+        nb.connect('page-removed', esvaziou)
+    win.connect('destroy', lambda _w: cadernos.remove(nb) if nb in cadernos else None)
+    win.connect('key-press-event', atalhos)
+    win.add(nb)
+    return win, nb
+
+def ao_soltar_fora(_nb, _pag, x, y):
+    win, nb = nova_janela_com_abas(1280, 800)
+    win.move(x, y)
+    win.show_all()
+    return nb
+
+def acrescentar_aba(nb, wv, fechavel=True):
+    i = nb.append_page(wv, rotulo_da_aba(wv, fechavel))
+    nb.set_tab_reorderable(wv, True)
+    nb.set_tab_detachable(wv, fechavel)
+    wv.connect('notify::title', lambda v, _p: v.get_toplevel().set_title(v.get_title() or 'Mesa VTT') if isinstance(v.get_parent(), Gtk.Notebook) and v.get_parent().get_nth_page(v.get_parent().get_current_page()) is v else None)
+    wv.show()
+    nb.set_current_page(i)
+
+def preparar_view(wv):
     configurar_webview(wv)
-    # O título da janela acompanha o da página (Atlas, Dossiê, Ateliê…).
-    wv.connect('notify::title', lambda v, _p: win.set_title(v.get_title() or titulo))
+    wv.connect('create', ao_pedir_janela)
+    wv.connect('close', lambda v: fechar_aba(v) if isinstance(v.get_parent(), Gtk.Notebook) else v.get_toplevel().destroy())
 
-    def ao_criar_popup(webview, navigation_action):
-        filha_win, filha_wv = criar_janela('Mesa VTT', 1280, 800, False, webview)
-        filha_wv.connect('ready-to-show', lambda _v: filha_win.show_all())
-        return filha_wv
+def ao_pedir_janela(origem, acao):
+    req = acao.get_request()
+    uri = req.get_uri() if req else ''
+    # O app pedido já está aberto numa aba (mesma raiz, sem parâmetros): vai para ela em vez de abrir outra.
+    raiz = caminho_do_app(uri)
+    if raiz and uri.split('?')[0].split('#')[0].endswith(raiz) and '?' not in uri:
+        for nb, wv in todas_as_abas():
+            if caminho_do_app(wv.get_uri() or '') == raiz:
+                focar(nb, wv)
+                return None
+    # Popup com tamanho próprio (o projetor: window.open(url, 'atlas-projetor', 'popup,width=…')) fica em janela separada.
+    # Um '_blank' comum herda o tamanho da janela de origem: esse vira aba. (O WebKit não informa o nome nem as barras.)
+    largura_origem, altura_origem = origem.get_toplevel().get_size()
+    nova = WebKit2.WebView(related_view=origem)
+    preparar_view(nova)
 
-    wv.connect('create', ao_criar_popup)
-    wv.connect('close', lambda _v: win.destroy())
-    win.add(wv)
-    if principal:
-        win.connect('destroy', Gtk.main_quit)
-    return win, wv
+    def pronta(v):
+        geo = v.get_window_properties().get_geometry()
+        if geo.width > 0 and geo.height > 0 and (abs(geo.width - largura_origem) > 2 or abs(geo.height - altura_origem) > 2):
+            win = Gtk.Window(title='Mesa VTT')
+            definir_icone(win)
+            win.set_default_size(geo.width if geo.width > 0 else 1280, geo.height if geo.height > 0 else 720)
+            if geo.width > 0 and geo.height > 0:
+                win.move(geo.x, geo.y)
+            v.connect('notify::title', lambda vv, _p: win.set_title(vv.get_title() or 'Mesa VTT'))
+            win.add(v)
+            win.show_all()
+        else:
+            nb = origem.get_parent() if isinstance(origem.get_parent(), Gtk.Notebook) else principal['caderno']
+            acrescentar_aba(nb, v)
+            nb.get_toplevel().present()
+    nova.connect('ready-to-show', pronta)
+    return nova
 
-win, wv = criar_janela('Mesa — Plataforma integrada de RPG', 1440, 900, True)
-wv.load_uri(url)
+win, caderno = nova_janela_com_abas(1440, 900, True)
+principal['caderno'] = caderno
+win.set_title('Mesa — Plataforma integrada de RPG')
+win.connect('destroy', Gtk.main_quit)
+mesa = WebKit2.WebView.new_with_context(context)
+preparar_view(mesa)
+principal['mesa'] = mesa
+acrescentar_aba(caderno, mesa, False)
+mesa.load_uri(url)
 win.show_all()
 Gtk.main()
 `;
