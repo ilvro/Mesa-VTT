@@ -163,7 +163,7 @@ def configurar_webview(wv):
     s.set_enable_developer_extras(True)
     s.set_hardware_acceleration_policy(WebKit2.HardwareAccelerationPolicy.ALWAYS)
 
-def criar_janela(titulo, w, h, principal=False):
+def criar_janela(titulo, w, h, principal=False, relacionada=None):
     win = Gtk.Window(title=titulo)
     win.set_default_size(w, h)
     win.set_wmclass('mesa-vtt', 'Mesa VTT')
@@ -172,18 +172,20 @@ def criar_janela(titulo, w, h, principal=False):
             win.set_icon(GdkPixbuf.Pixbuf.new_from_file(icon_path))
         except Exception:
             pass
-    wv = WebKit2.WebView.new_with_context(context)
+    # Janela pedida pela página (window.open): o WebKit exige uma view relacionada à que pediu
+    # (mesmo processo e mesmo armazenamento) e carrega o endereço sozinho; sem isso ele aborta.
+    wv = WebKit2.WebView(related_view=relacionada) if relacionada else WebKit2.WebView.new_with_context(context)
     configurar_webview(wv)
+    # O título da janela acompanha o da página (Atlas, Dossiê, Ateliê…).
+    wv.connect('notify::title', lambda v, _p: win.set_title(v.get_title() or titulo))
 
     def ao_criar_popup(webview, navigation_action):
-        filha_win, filha_wv = criar_janela('Mesa VTT — Projetor', 1280, 800, False)
-        req = navigation_action.get_request()
-        if req and req.get_uri():
-            filha_wv.load_uri(req.get_uri())
-        filha_win.show_all()
+        filha_win, filha_wv = criar_janela('Mesa VTT', 1280, 800, False, webview)
+        filha_wv.connect('ready-to-show', lambda _v: filha_win.show_all())
         return filha_wv
 
     wv.connect('create', ao_criar_popup)
+    wv.connect('close', lambda _v: win.destroy())
     win.add(wv)
     if principal:
         win.connect('destroy', Gtk.main_quit)
