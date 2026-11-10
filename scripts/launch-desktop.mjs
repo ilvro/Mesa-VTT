@@ -154,6 +154,21 @@ cookie_manager.set_persistent_storage(
     WebKit2.CookiePersistentStorage.SQLITE
 )
 
+# Cada página avisa os parâmetros de window.open antes de abrir: com 'popup' ou tamanho (o projetor) vira janela,
+# sem eles vira aba. O WebKit não conta isso ao 'create', e o tamanho que ele informa não é confiável.
+pedidos = []
+conteudo = WebKit2.UserContentManager()
+def ao_pedido(_c, resultado):
+    try:
+        pedidos.append(resultado.get_js_value().to_string())
+    except Exception:
+        pedidos.append('')
+conteudo.connect('script-message-received::mesaJanela', ao_pedido)
+conteudo.register_script_message_handler('mesaJanela')
+conteudo.add_script(WebKit2.UserScript.new(
+    "(function(){var o=window.open;window.open=function(u,n,f){try{window.webkit.messageHandlers.mesaJanela.postMessage(String(f||''))}catch(e){}return o.apply(window,arguments)}})();",
+    WebKit2.UserContentInjectedFrames.TOP_FRAME, WebKit2.UserScriptInjectionTime.START, None, None))
+
 def configurar_webview(wv):
     s = wv.get_settings()
     s.set_enable_webgl(True)
@@ -199,6 +214,7 @@ def rotulo_da_aba(wv, fechavel):
     caixa = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
     texto = Gtk.Label(label='Carregando…')
     texto.set_ellipsize(Pango.EllipsizeMode.END)
+    texto.set_width_chars(10)
     texto.set_max_width_chars(24)
     caixa.pack_start(texto, True, True, 0)
     if fechavel:
@@ -247,7 +263,8 @@ def nova_janela_com_abas(w, h, eh_principal=False):
     if not eh_principal:
         def esvaziou(n, _pag, _i):
             if n.get_n_pages() == 0:
-                GLib.idle_add(lambda: (win.destroy(), False)[1])
+                # Só depois que o arrastar termina: destruir o caderno de onde a aba saiu, no meio do arrastar, derruba o GTK.
+                GLib.timeout_add(400, lambda: (win.destroy() if n.get_n_pages() == 0 else None, False)[1])
         nb.connect('page-removed', esvaziou)
     win.connect('destroy', lambda _w: cadernos.remove(nb) if nb in cadernos else None)
     win.connect('key-press-event', atalhos)
@@ -271,27 +288,56 @@ def acrescentar_aba(nb, wv, fechavel=True):
 def preparar_view(wv):
     configurar_webview(wv)
     wv.connect('create', ao_pedir_janela)
+    wv.connect('decide-policy', ao_decidir)
     wv.connect('close', lambda v: fechar_aba(v) if isinstance(v.get_parent(), Gtk.Notebook) else v.get_toplevel().destroy())
 
-def ao_pedir_janela(origem, acao):
-    req = acao.get_request()
-    uri = req.get_uri() if req else ''
-    # O app pedido já está aberto numa aba (mesma raiz, sem parâmetros): vai para ela em vez de abrir outra.
+def aba_existente(uri):
+    # O app pedido já está aberto numa aba (mesma raiz, sem parâmetros): devolve (caderno, view).
     raiz = caminho_do_app(uri)
-    if raiz and uri.split('?')[0].split('#')[0].endswith(raiz) and '?' not in uri:
+    if raiz and '?' not in uri and uri.split('#')[0].endswith(raiz):
         for nb, wv in todas_as_abas():
             if caminho_do_app(wv.get_uri() or '') == raiz:
-                focar(nb, wv)
-                return None
-    # Popup com tamanho próprio (o projetor: window.open(url, 'atlas-projetor', 'popup,width=…')) fica em janela separada.
-    # Um '_blank' comum herda o tamanho da janela de origem: esse vira aba. (O WebKit não informa o nome nem as barras.)
-    largura_origem, altura_origem = origem.get_toplevel().get_size()
-    nova = WebKit2.WebView(related_view=origem)
+                return nb, wv
+    return None
+
+def ao_decidir(origem, decisao, tipo):
+    # window.open com 'noopener' (e links target=_blank) não passam pelo 'create': chegam aqui. Viram aba nova.
+    if tipo != WebKit2.PolicyDecisionType.NEW_WINDOW_ACTION:
+        return False
+    pedidos.clear()
+    req = decisao.get_navigation_action().get_request()
+    uri = req.get_uri() if req else ''
+    decisao.ignore()
+    if not uri:
+        return True
+    achada = aba_existente(uri)
+    if achada:
+        focar(*achada)
+        return True
+    nova = WebKit2.WebView(web_context=context, user_content_manager=conteudo)
+    preparar_view(nova)
+    nb = origem.get_parent() if isinstance(origem.get_parent(), Gtk.Notebook) else principal['caderno']
+    acrescentar_aba(nb, nova)
+    nova.load_uri(uri)
+    nb.get_toplevel().present()
+    return True
+
+def ao_pedir_janela(origem, acao):
+    caracteristicas = pedidos[-1] if pedidos else ''
+    pedidos.clear()
+    req = acao.get_request()
+    uri = req.get_uri() if req else ''
+    achada = aba_existente(uri)
+    if achada:
+        focar(*achada)
+        return None
+    em_janela = 'popup' in caracteristicas or 'width' in caracteristicas
+    nova = WebKit2.WebView(related_view=origem, user_content_manager=conteudo)
     preparar_view(nova)
 
     def pronta(v):
         geo = v.get_window_properties().get_geometry()
-        if geo.width > 0 and geo.height > 0 and (abs(geo.width - largura_origem) > 2 or abs(geo.height - altura_origem) > 2):
+        if em_janela:
             win = Gtk.Window(title='Mesa VTT')
             definir_icone(win)
             win.set_default_size(geo.width if geo.width > 0 else 1280, geo.height if geo.height > 0 else 720)
@@ -311,7 +357,7 @@ win, caderno = nova_janela_com_abas(1440, 900, True)
 principal['caderno'] = caderno
 win.set_title('Mesa — Plataforma integrada de RPG')
 win.connect('destroy', Gtk.main_quit)
-mesa = WebKit2.WebView.new_with_context(context)
+mesa = WebKit2.WebView(web_context=context, user_content_manager=conteudo)
 preparar_view(mesa)
 principal['mesa'] = mesa
 acrescentar_aba(caderno, mesa, False)
@@ -320,8 +366,11 @@ win.show_all()
 Gtk.main()
 `;
 
+  // GTK 3 no Wayland derruba o processo ao arrastar uma aba para fora da janela (gtk_notebook_drag_end);
+  // pelo XWayland o arrastar de abas funciona.
   const py = spawn('python3', ['-c', pyScript, targetUrl, iconPath, dataDir], {
     stdio: 'inherit',
+    env: { ...process.env, GDK_BACKEND: 'x11' },
   });
 
   py.on('error', () => {
