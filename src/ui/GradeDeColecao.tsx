@@ -2,6 +2,7 @@ import { signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import type { Entidade, TipoEntidade } from '#mesa';
 import { filtroTipo, selecionadaId } from '../app/campanha.ts';
+import { entidadesDestacadas } from '../app/assistente-slot.ts';
 import { abrirEntidade } from '../app/rotas.ts';
 import { abrirNoApp } from '../app/barramento.ts';
 import { ativarCena } from '../app/sessao.ts';
@@ -161,6 +162,7 @@ function Miniatura({ e }: { e: Entidade }) {
 export function CartaoColecao({ e }: { e: Entidade }) {
   const encontro = ehEncontro(e);
   const selecionado = selecionadaId.value === e.id;
+  const destacado = entidadesDestacadas.value.has(e.id);
   const fora = e.refs.filter(r => !ehRefDeEntidadeDaMesa(r));
   const principalRef = fora[0];
 
@@ -168,7 +170,7 @@ export function CartaoColecao({ e }: { e: Entidade }) {
     <div
       role="button"
       tabIndex={0}
-      class={cx('cartao-colecao', selecionado && 'ativa', encontro && 'cartao-encontro')}
+      class={cx('cartao-colecao', selecionado && 'ativa', encontro && 'cartao-encontro', destacado && 'destacado-assistente')}
       data-testid={`entidade-${e.id}`}
       data-tipo={e.tipo}
       onClick={() => abrirEntidade(e.id)}
@@ -235,12 +237,13 @@ export function CartaoColecao({ e }: { e: Entidade }) {
 
 function ItemListaColecao({ e }: { e: Entidade }) {
   const encontro = ehEncontro(e);
+  const destacado = entidadesDestacadas.value.has(e.id);
   const fora = e.refs.filter(r => !ehRefDeEntidadeDaMesa(r));
 
   return (
     <button
       type="button"
-      class={cx('item', selecionadaId.value === e.id && 'ativa')}
+      class={cx('item', selecionadaId.value === e.id && 'ativa', destacado && 'destacado-assistente')}
       data-testid={`entidade-${e.id}`}
       data-tipo={e.tipo}
       onClick={() => abrirEntidade(e.id)}

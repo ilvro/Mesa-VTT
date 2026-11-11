@@ -263,7 +263,7 @@ export interface Chamada { id: string; ferramenta: string; quando: number; resum
 
 **Commit:** `undo for assistant changes in mesa`
 
-### A2 — Painel de atividade  ⬜
+### A2 — Painel de atividade  ✅
 **Arquivos:** criar `src/ui/PainelDoAssistente.tsx`; mudar `src/ui/SeloDoAssistente.tsx` (o clique no selo abre o painel).
 
 **Como:**
