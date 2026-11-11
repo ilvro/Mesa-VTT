@@ -19,7 +19,7 @@ const LARGURA_DO_DIVISOR = 8;
 
 /** O app não está ao lado da Mesa: o painel avisa em vez de mostrar um quadro de erro. */
 function foraDoAr(app: 'atlas' | 'ficha' | 'jukebox'): boolean { return inventario.value.find(i => i.app === app)?.estado === 'fora-do-ar'; }
-const SemApp = ({ nome }: { nome: string }) => <div class="painel-vazio" data-testid="painel-fora-do-ar"><p>{nome} não está ao lado da Mesa.</p><p class="meta">Suba tudo com “npm run mesa-dev”, na pasta do Atlas.</p></div>;
+const SemApp = ({ nome }: { nome: string }) => <div class="painel-vazio" data-testid="painel-fora-do-ar"><p>{nome} não está ao lado da Mesa.</p><p class="meta">Abra a Mesa pelo atalho do app de desktop, ou rode “npm run mesa-dev” na pasta do Atlas.</p></div>;
 
 /**
  * Desenha o aplicativo numa largura lógica mínima e reduz a escala para caber no painel (ver `LARGURA_LOGICA_MINIMA`). O navegador cuida dos

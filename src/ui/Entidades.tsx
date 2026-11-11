@@ -5,8 +5,11 @@ import {
   avancarSelecao,
   busca,
   campanhaAtiva,
+  campanhas,
+  criarCampanha,
   criarEntidade,
   entidades,
+  escolherCampanha,
   filtroTipo,
   ligacoes,
   ordem,
@@ -56,6 +59,13 @@ const tipoNovo = signal<TipoEntidade>('personagem');
 const nomeNovo = signal('');
 const confirmando = signal<string | null>(null);
 const buscaTagLocal = signal('');
+const nomeCampanhaNova = signal('');
+
+async function criarCampanhaPeloSemCampanha(e: Event) {
+  e.preventDefault();
+  const c = await criarCampanha(nomeCampanhaNova.value);
+  if (c) { nomeCampanhaNova.value = ''; }
+}
 
 async function criar(e: Event) {
   e.preventDefault();
@@ -459,7 +469,49 @@ function Visao({ nome }: { nome: string }) {
 
 export function Entidades() {
   const c = campanhaAtiva.value;
-  if (!c) return <section class="pagina"><div class="vazio"><h2>Escolha uma campanha</h2><p>Use o seletor no topo ou crie uma na aba “Campanhas”.</p></div></section>;
+  if (!c) {
+    return (
+      <section class="pagina">
+        <div class="vazio" data-testid="sem-campanha">
+          <h2>Escolha ou crie uma campanha</h2>
+          {campanhas.value.length > 0 && (
+            <div class="barra-campanha" style={{ justifyContent: 'center' }}>
+              {campanhas.value.map(camp => (
+                <button
+                  key={camp.id}
+                  type="button"
+                  class="botao-pilula"
+                  data-testid={`escolher-campanha-${camp.id}`}
+                  onClick={() => void escolherCampanha(camp.id)}
+                >
+                  {camp.nome}
+                </button>
+              ))}
+            </div>
+          )}
+          <form class="barra-campanha" onSubmit={criarCampanhaPeloSemCampanha} style={{ justifyContent: 'center' }}>
+            <input
+              type="text"
+              class="campo-inline"
+              data-testid="nova-campanha-nome"
+              placeholder="Nome da nova campanha"
+              maxLength={200}
+              value={nomeCampanhaNova.value}
+              onInput={e => { nomeCampanhaNova.value = e.currentTarget.value; }}
+            />
+            <button
+              type="submit"
+              class="botao-pilula destaque"
+              data-testid="criar-campanha"
+              disabled={!nomeCampanhaNova.value.trim()}
+            >
+              Criar
+            </button>
+          </form>
+        </div>
+      </section>
+    );
+  }
   const lista = visiveis.value, sel = selecionada.value;
 
   return (

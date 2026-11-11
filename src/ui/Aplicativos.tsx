@@ -23,7 +23,7 @@ function Cartao({ i }: { i: ItemDoInventario }) {
               <dt>Atende</dt><dd>{m.atende.length ? m.atende.map(o => <span key={o} class="chip pequeno">{o}</span>) : <span class="meta">nenhum pedido</span>}</dd>
               <dt>Avisa</dt><dd>{m.emite.length ? m.emite.map(o => <span key={o} class="chip pequeno">{o}</span>) : <span class="meta">nenhum fato</span>}</dd>
             </dl>
-          : <p class="dica" data-testid="app-detalhe">{i.detalhe ?? ''}{i.estado === 'fora-do-ar' ? ' Suba tudo com “npm run mesa-dev”, na pasta do Atlas.' : ''}</p>}
+          : <p class="dica" data-testid="app-detalhe">{i.detalhe ?? ''}{i.estado === 'fora-do-ar' ? ' Abra a Mesa pelo atalho do app de desktop, ou rode “npm run mesa-dev” na pasta do Atlas.' : ''}</p>}
         <div class="cartao-rodape">
           {i.estado === 'fora-do-ar' ? <span class="meta">sem endereço para abrir</span> : eu ? <span class="meta">este aplicativo</span> : <a class="botao-pilula" href={i.base} target="_blank" rel="noopener" data-testid="app-abrir">Abrir</a>}
         </div>
