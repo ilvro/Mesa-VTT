@@ -67,12 +67,14 @@ export function ferramentasDeSessao(ctx: ContextoDeSessoes): FerramentaDaPonte[]
       nome: 'mesa_sessoes_listar',
       descricao: 'Lista as sessões da campanha ativa (mais recente primeiro): id, nome, data, roteiro com notas e se já tem registro.',
       esquema: { type: 'object', properties: {}, required: [], additionalProperties: false },
+      anotacoes: { leitura: true },
       async executar() { await exigirCampanha(); return [json((await ctx.sessoes()).map(resumo))]; },
     },
     {
       nome: 'mesa_sessao_criar',
       descricao: 'Planeja uma sessão da campanha ativa para a próxima mesa. NÃO abre nem começa a gravar o registro; ela aparece no Diário da Mesa. Devolve o id para usar em mesa_sessao_editar.',
       esquema: { type: 'object', properties: { nome: { type: 'string', description: 'Ex.: "Sessão 12".' }, data: { type: 'string', description: 'Data prevista, "AAAA-MM-DD". Omitida, vale hoje.' } }, required: ['nome'], additionalProperties: false },
+      anotacoes: { destrutiva: false },
       async executar(args) {
         await exigirCampanha();
         if (typeof args.nome !== 'string' || !args.nome.trim()) throw new Error('"nome" é obrigatório.');
@@ -95,6 +97,7 @@ export function ferramentasDeSessao(ctx: ContextoDeSessoes): FerramentaDaPonte[]
           notas: { type: 'array', description: 'Nota por item do roteiro.', items: { type: 'object', required: ['ref', 'texto'], properties: { ref: refEsquema, texto: { type: 'string' } } } },
         },
       },
+      anotacoes: { destrutiva: true },
       async executar(args) {
         await exigirCampanha();
         const id = String(args.id ?? '');
@@ -172,6 +175,7 @@ export function ferramentasDeEntidade(ctx: ContextoDeEntidades): FerramentaDaPon
           notas: { type: 'string', description: 'Texto livre; [[Nome]] liga a outra entidade.' },
         },
       },
+      anotacoes: { destrutiva: false },
       async executar(args) {
         await exigirCampanha();
         const tipo = String(args.tipo ?? '');
@@ -201,6 +205,7 @@ export function ferramentasDeEntidade(ctx: ContextoDeEntidades): FerramentaDaPon
           acrescentarNotas: { type: 'string', description: 'Texto somado ao fim das notas.' },
         },
       },
+      anotacoes: { destrutiva: true },
       async executar(args) {
         await exigirCampanha();
         const id = String(args.id ?? '').replace(/^mesa:mesa\/entidade\//, '');
@@ -226,6 +231,7 @@ export function ferramentasDeEntidade(ctx: ContextoDeEntidades): FerramentaDaPon
       nome: 'mesa_ligar',
       descricao: `Liga duas coisas da campanha (ex.: um NPC a um lugar). "de" e "para" são referências: objeto {app, tipo, id} ou texto "mesa:app/tipo/id". ${REF_DA_MESA} Tipos de ligação: ${TIPOS_LIGACAO.join(', ')}. Ex.: personagem "esta-em" lugar; pista "revela" personagem.`,
       esquema: { type: 'object', required: ['de', 'para', 'tipo'], additionalProperties: false, properties: { de: refEsquema, para: refEsquema, tipo: { type: 'string', enum: [...TIPOS_LIGACAO] } } },
+      anotacoes: { destrutiva: false },
       async executar(args) {
         await exigirCampanha();
         const tipo = String(args.tipo ?? '');
@@ -314,6 +320,7 @@ export function ferramentasDeCena(ctx: ContextoDeCenas): FerramentaDaPonte[] {
           encontro: { type: 'boolean', description: 'true marca a cena como encontro de combate (etiqueta "encontro"); false desmarca.' },
         },
       },
+      anotacoes: { destrutiva: false },
       async executar(args) {
         await exigirCampanha();
         const todas = await ctx.entidades();
@@ -344,12 +351,14 @@ export function ferramentasDeCena(ctx: ContextoDeCenas): FerramentaDaPonte[] {
       nome: 'mesa_cena_ler',
       descricao: 'Lê o que está montado numa cena: mapa, trilha, participantes (personagens e ameaças), pistas, momento de abertura e se é encontro, com os nomes.',
       esquema: { type: 'object', required: ['cenaId'], additionalProperties: false, properties: { cenaId: { type: 'string', description: 'Id da entidade cena.' } } },
+      anotacoes: { leitura: true },
       async executar(args) { await exigirCampanha(); const todas = await ctx.entidades(); return [json(pacote(cenaDe(args.cenaId, todas), todas, await ctx.ligacoes()))]; },
     },
     {
       nome: 'mesa_abrir_apps',
       descricao: 'Abre outros aplicativos da plataforma em abas novas (pelo manifesto de cada um, ao lado da Mesa). O navegador pode bloquear a aba quando o mestre não clicou; nesse caso a Mesa mostra um aviso com o botão "Abrir" e a resposta diz que ficou pendente do clique do mestre.',
       esquema: { type: 'object', required: ['apps'], additionalProperties: false, properties: { apps: { type: 'array', items: { type: 'string', enum: [...APPS_ABRIVEIS] } } } },
+      anotacoes: { destrutiva: false, idempotente: true },
       async executar(args) {
         if (!Array.isArray(args.apps) || !args.apps.length) throw new Error(`"apps" deve ser uma lista com ${APPS_ABRIVEIS.join(', ')}.`);
         const invalidos = args.apps.filter(a => !(APPS_ABRIVEIS as readonly unknown[]).includes(a));
@@ -469,6 +478,7 @@ export function ferramentasDeElenco(ctx: ContextoDeElenco): FerramentaDaPonte[] 
           },
         },
       },
+      anotacoes: { destrutiva: true },
       async executar(args) {
         const c = await exigirCampanha();
         const antes: Campanha = { sistema: 'padrao', tema: null, capa: null, criadaEm: 0, atualizadaEm: 0, ...c };
@@ -504,6 +514,7 @@ export function ferramentasDeElenco(ctx: ContextoDeElenco): FerramentaDaPonte[] 
       nome: 'mesa_elenco_ler',
       descricao: 'Lê o elenco da campanha ativa (quem aparece no painel Personagens do Atlas) e lista os personagens que estão de fora.',
       esquema: { type: 'object', properties: {}, required: [], additionalProperties: false },
+      anotacoes: { leitura: true },
       async executar() {
         const c = await exigirCampanha();
         const todas = await ctx.entidades();
