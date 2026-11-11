@@ -149,6 +149,30 @@ export async function exportarAparelho(): Promise<Blob> {
   return new Blob([zipBytes], { type: 'application/x-mesa' });
 }
 
+/**
+ * Dispara o download no navegador do arquivo mesa-<AAAA-MM-DD>.mesa.
+ */
+export async function baixarExportacaoAparelho(): Promise<void> {
+  const blob = await exportarAparelho();
+  if (typeof document === 'undefined') return;
+  const hoje = new Date().toISOString().slice(0, 10);
+  const nome = `mesa-${hoje}.mesa`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nome;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => {
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      // ignora
+    }
+  }, 1000);
+}
+
 function criarLojasEIndices(db: IDBDatabase, lojas: DescricaoDaLoja[]): void {
   for (const loja of lojas) {
     let store: IDBObjectStore;

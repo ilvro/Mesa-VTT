@@ -181,6 +181,29 @@ cookie_manager.set_persistent_storage(
     WebKit2.CookiePersistentStorage.SQLITE
 )
 
+def ao_decidir_destino(download, nome_sugerido):
+    pasta_downloads = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD) or os.path.expanduser('~/Downloads')
+    os.makedirs(pasta_downloads, exist_ok=True)
+    caminho = os.path.join(pasta_downloads, nome_sugerido)
+    if os.path.exists(caminho):
+        raiz, ext = os.path.splitext(nome_sugerido)
+        contador = 2
+        while True:
+            novo_nome = '%s (%d)%s' % (raiz, contador, ext)
+            caminho_teste = os.path.join(pasta_downloads, novo_nome)
+            if not os.path.exists(caminho_teste):
+                caminho = caminho_teste
+                break
+            contador += 1
+    uri_destino = GLib.filename_to_uri(os.path.abspath(caminho))
+    download.set_destination(uri_destino)
+    return True
+
+def ao_iniciar_download(_ctx, download):
+    download.connect('decide-destination', ao_decidir_destino)
+
+context.connect('download-started', ao_iniciar_download)
+
 # Cada página avisa os parâmetros de window.open antes de abrir: com 'popup' ou tamanho (o projetor) vira janela,
 # sem eles vira aba. O WebKit não conta isso ao 'create', e o tamanho que ele informa não é confiável.
 pedidos = []

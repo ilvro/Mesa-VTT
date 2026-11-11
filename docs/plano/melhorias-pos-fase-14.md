@@ -128,7 +128,7 @@ export interface DescricaoDoBanco { nome: string; versao: number; lojas: Descric
 
 **Commit:** `export and import everything on this device`
 
-### T3 — Interface e o app de desktop  ⬜
+### T3 — Interface e o app de desktop  ✅
 **Arquivos:** `src/ui/Campanhas.tsx` (perto do botão "↑ Importar Cofre", linha ~155) e `Mesa/scripts/launch-desktop.mjs`.
 
 **Interface:**
@@ -143,6 +143,7 @@ export interface DescricaoDoBanco { nome: string; versao: number; lojas: Descric
 - **Cuidado com a template string:** o Python está dentro de uma template string do JS. Não use crases nem `${`, e lembre que barras invertidas são interpretadas.
 - **Upload:** o `input type=file` comum já funciona, porque o `run-file-chooser` só intercepta pedidos de pasta.
 
+**Nota:** Tratamento de download WebKitGTK integrado ao script Python do launch-desktop.mjs salvando em ~/Downloads com resolução de colisões; aviso pós-importação persistido em sessionStorage para ser exibido após reload.
 **Verificação manual** (descreva o resultado na Nota): exportar no Firefox (`npm run mesa-dev`), importar no app de desktop e conferir que a campanha, os mapas do Atlas, as fichas do Dossiê e os documentos do Ateliê aparecem.
 
 **Commit:** `device transfer in the campaigns screen`

@@ -1,4 +1,6 @@
+import { useEffect } from 'preact/hooks';
 import { repositorio } from '../app/campanha.ts';
+import { avisar } from '../app/toasts.ts';
 import { tela } from '../app/rotas.ts';
 import { Aplicativos } from './Aplicativos.tsx';
 import { Avisos } from './Avisos.tsx';
@@ -9,6 +11,17 @@ import { ModoSessao } from './ModoSessao.tsx';
 
 export function App() {
   const r = repositorio.value;
+
+  useEffect(() => {
+    if (typeof sessionStorage !== 'undefined') {
+      const pendente = sessionStorage.getItem('mesa:aviso-pos-importacao');
+      if (pendente) {
+        sessionStorage.removeItem('mesa:aviso-pos-importacao');
+        avisar(pendente);
+      }
+    }
+  }, []);
+
   return (
     <>
       <Cabecalho />
