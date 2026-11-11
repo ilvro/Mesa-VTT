@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   escolherMonitorParaProjetor,
   urlDoProjetor,
@@ -13,7 +16,10 @@ import {
 import {
   planejarMontagemDesktop,
   gerarIndexRedirecionador,
+  filtroCopiaJukebox,
 } from '../../scripts/build-desktop.ts';
+// @ts-expect-error módulo mjs sem tipagem
+import { iniciarServidorEstatico } from '../../scripts/launch-desktop.mjs';
 
 test('escolherMonitorParaProjetor: lista vazia retorna null; 1 monitor retorna o próprio', () => {
   assert.equal(escolherMonitorParaProjetor([]), null);
@@ -191,4 +197,48 @@ test('abrirProjetorNoSegundoMonitor: cai em popup padrão se sem multi-screen ne
   assert.equal(janelasAbertas.length, 1);
   assert.equal(janelasAbertas[0]?.url, 'http://127.0.0.1:5100/Atlas/#/projetor');
   assert.equal(janelasAbertas[0]?.features, 'popup,width=1280,height=720');
+});
+
+test('filtroCopiaJukebox: copia ponte.js, arquivos estáticos e sample, mas exclui testes, git, node_modules e *.md', () => {
+  assert.equal(filtroCopiaJukebox('/workspace/Jukebox/ponte.js'), true);
+  assert.equal(filtroCopiaJukebox('/workspace/Jukebox/index.html'), true);
+  assert.equal(filtroCopiaJukebox('/workspace/Jukebox/mesa.json'), true);
+  assert.equal(filtroCopiaJukebox('/workspace/Jukebox/sample'), true);
+  assert.equal(filtroCopiaJukebox('/workspace/Jukebox/vendor'), true);
+
+  assert.equal(filtroCopiaJukebox('/workspace/Jukebox/tests'), false);
+  assert.equal(filtroCopiaJukebox('/workspace/Jukebox/.git'), false);
+  assert.equal(filtroCopiaJukebox('/workspace/Jukebox/node_modules'), false);
+  assert.equal(filtroCopiaJukebox('/workspace/Jukebox/.vscode'), false);
+  assert.equal(filtroCopiaJukebox('/workspace/Jukebox/README.md'), false);
+  assert.equal(filtroCopiaJukebox('/workspace/Jukebox/LEIAME.md'), false);
+});
+
+test('servidor estático desktop: 404 para arquivos inexistentes com extensão e fallback SPA para rotas sem extensão', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mesa-srv-test-'));
+  const mesaDir = path.join(dir, 'Mesa');
+  const jukeboxDir = path.join(dir, 'Jukebox');
+  fs.mkdirSync(mesaDir, { recursive: true });
+  fs.mkdirSync(jukeboxDir, { recursive: true });
+  fs.writeFileSync(path.join(mesaDir, 'index.html'), '<!doctype html><html>Mesa SPA</html>', 'utf8');
+  fs.writeFileSync(path.join(jukeboxDir, 'index.html'), '<!doctype html><html>Jukebox SPA</html>', 'utf8');
+
+  const server = await iniciarServidorEstatico(dir, 0, '127.0.0.1');
+  const port = (server.address() as { port: number }).port;
+
+  try {
+    // 404 para arquivo com extensão que não existe
+    const resInexistente = await fetch(`http://127.0.0.1:${port}/Jukebox/naoexiste.js`);
+    assert.equal(resInexistente.status, 404);
+
+    // Fallback SPA para rota sem extensão em /Mesa/rota
+    const resRota = await fetch(`http://127.0.0.1:${port}/Mesa/rota`);
+    assert.equal(resRota.status, 200);
+    const html = await resRota.text();
+    assert.match(html, /Mesa SPA/);
+  } finally {
+    server.close();
+    server.closeAllConnections?.();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

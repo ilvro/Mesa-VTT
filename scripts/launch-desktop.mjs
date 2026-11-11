@@ -87,7 +87,13 @@ export function iniciarServidorEstatico(rootDir, port, host) {
           filePath = path.join(filePath, 'index.html');
         }
         if (!fs.existsSync(filePath)) {
-          // Fallback SPA para sub-aplicativos (/Mesa/*, /Atlas/*, etc.)
+          // Fallback SPA só vale para rotas sem extensão (ex.: /Mesa/campanha/1, /Atlas/mapa/xyz)
+          // Arquivos com extensão (.js, .css, .json, .png, etc.) inexistentes devem falhar alto com 404.
+          if (path.extname(pathname)) {
+            res.writeHead(404);
+            res.end('Not Found');
+            return;
+          }
           const seg = pathname.split('/').filter(Boolean)[0];
           const spaIndex = seg ? path.join(rootDir, seg, 'index.html') : path.join(rootDir, 'index.html');
           if (fs.existsSync(spaIndex)) {

@@ -148,25 +148,13 @@ export function planejarMontagemDesktop(
   };
 }
 
-const JUKEBOX_ESSENCIAIS = [
-  'index.html',
-  'mesa.json',
-  'mesa.js',
-  'player.js',
-  'scenes.js',
-  'style.css',
-  'styles.css',
-  'settings.js',
-  'filters.js',
-  'default-scenes.js',
-  'upload-song.js',
-  'background-timer.js',
-  'song-state.mjs',
-  'vendor',
-  'images',
-  'mixing',
-  'sample',
-];
+/** Filtro de cópia do Jukebox: a pasta inteira menos tests, .git, node_modules, .vscode e *.md (sample é mantido para o preset sample). */
+export function filtroCopiaJukebox(src: string): boolean {
+  const nome = path.basename(src);
+  if (nome === 'tests' || nome === '.git' || nome === 'node_modules' || nome === '.vscode') return false;
+  if (nome.endsWith('.md')) return false;
+  return true;
+}
 
 /**
  * Executa a montagem no sistema de arquivos a partir do plano calculado.
@@ -195,16 +183,13 @@ export async function executarMontagemDesktop(
     }
 
     if (app.id === 'Jukebox') {
-      // Para o Jukebox, copia arquivos e diretórios estáticos essenciais
-      for (const item of JUKEBOX_ESSENCIAIS) {
-        const origemItem = path.join(app.origemEscolhida, item);
-        const destinoItem = path.join(destinoApp, item);
-        if (fs.existsSync(origemItem)) {
-          fs.cpSync(origemItem, destinoItem, { recursive: true });
-        }
-      }
+      // Para o Jukebox, copia a pasta inteira com o filtro (incluindo ponte.js)
+      fs.cpSync(app.origemEscolhida, destinoApp, {
+        recursive: true,
+        filter: filtroCopiaJukebox,
+      });
       copiados.push(app.id);
-      log(`[build-desktop] Copiado Jukebox (arquivos estáticos essenciais) -> ${destinoApp}`);
+      log(`[build-desktop] Copiado Jukebox (pasta inteira filtrada) -> ${destinoApp}`);
     } else {
       // Para os demais apps (Mesa, Atlas, Dossie, Atelie), copia a saída do build desktop (com a ponte)
       fs.cpSync(app.origemEscolhida, destinoApp, {
