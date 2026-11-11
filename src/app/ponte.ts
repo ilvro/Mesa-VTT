@@ -126,7 +126,7 @@ const ferramentas = [
   },
   {
     nome: 'mesa_o_que_vejo',
-    descricao: 'O que o mestre tem na tela da Mesa agora: a campanha, a tela atual (coleção, sessão, campanhas, aplicativos) e o item aberto (a entidade selecionada). Use para entender "esta sessão", "este personagem".',
+    descricao: 'O que o mestre tem na tela da Mesa: campanha, tela atual e item aberto. Use para entender "esta sessão", "este personagem".',
     esquema: { type: 'object', properties: {}, required: [], additionalProperties: false },
     anotacoes: { leitura: true },
     async executar() { return [json(oQueVejo())]; },

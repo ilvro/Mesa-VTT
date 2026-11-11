@@ -18,7 +18,7 @@ export interface ContextoDeSessoes {
 }
 
 const SEM_CAMPANHA = 'Nenhuma campanha selecionada na Mesa. Peça ao mestre para abrir uma campanha no hub e tente de novo.';
-const refEsquema = { description: 'Referência: objeto {app, tipo, id} ou texto "mesa:app/tipo/id" (ex.: "mesa:atlas/mapa/abc123").', anyOf: [{ type: 'string' }, { type: 'object', properties: { app: { type: 'string' }, tipo: { type: 'string' }, id: { type: 'string' } }, required: ['app', 'tipo', 'id'] }] };
+const refEsquema = { description: 'Ref: {app, tipo, id} ou "mesa:app/tipo/id".', anyOf: [{ type: 'string' }, { type: 'object', properties: { app: { type: 'string' }, tipo: { type: 'string' }, id: { type: 'string' } }, required: ['app', 'tipo', 'id'] }] };
 const listaDeRefs = (descricao: string) => ({ type: 'array', description: descricao, items: refEsquema });
 
 /** Aceita `{app,tipo,id}` ou `mesa:app/tipo/id`; lança com mensagem legível. */
@@ -72,8 +72,8 @@ export function ferramentasDeSessao(ctx: ContextoDeSessoes): FerramentaDaPonte[]
     },
     {
       nome: 'mesa_sessao_criar',
-      descricao: 'Planeja uma sessão da campanha ativa para a próxima mesa. NÃO abre nem começa a gravar o registro; ela aparece no Diário da Mesa. Devolve o id para usar em mesa_sessao_editar.',
-      esquema: { type: 'object', properties: { nome: { type: 'string', description: 'Ex.: "Sessão 12".' }, data: { type: 'string', description: 'Data prevista, "AAAA-MM-DD". Omitida, vale hoje.' } }, required: ['nome'], additionalProperties: false },
+      descricao: 'Planeja uma sessão da campanha ativa (não abre nem grava registro). Devolve o id para mesa_sessao_editar. Detalhes: plataforma_guia ferramentas-mesa.',
+      esquema: { type: 'object', properties: { nome: { type: 'string' }, data: { type: 'string', description: '"AAAA-MM-DD"; padrão hoje.' } }, required: ['nome'], additionalProperties: false },
       anotacoes: { destrutiva: false },
       async executar(args) {
         await exigirCampanha();
@@ -87,13 +87,13 @@ export function ferramentasDeSessao(ctx: ContextoDeSessoes): FerramentaDaPonte[]
     },
     {
       nome: 'mesa_sessao_editar',
-      descricao: `Edita uma sessão (qualquer uma, aberta ou não): renomeia, monta o roteiro e anota itens. Ordem de aplicação: remover, acrescentar, ordem, notas. O roteiro tem no máximo ${MAXIMO_DO_ROTEIRO} itens e não repete; o que não coube vem em "ignorados". Nota de item que não está no roteiro é ignorada; texto vazio apaga a nota.`,
+      descricao: `Edita uma sessão: renomeia, monta o roteiro (máx. ${MAXIMO_DO_ROTEIRO} itens) e anota itens. Aplica remover, acrescentar, ordem, notas. Detalhes: plataforma_guia ferramentas-mesa.`,
       esquema: {
         type: 'object', required: ['id'], additionalProperties: false,
         properties: {
-          id: { type: 'string', description: 'Id da sessão (de mesa_sessoes_listar ou mesa_sessao_criar).' },
+          id: { type: 'string', description: 'De mesa_sessoes_listar.' },
           nome: { type: 'string' },
-          roteiro: { type: 'object', additionalProperties: false, properties: { acrescentar: listaDeRefs('Itens a pôr no fim do roteiro (mapas, cenas sonoras, documentos, fichas).'), remover: listaDeRefs('Itens a tirar (a nota deles sai junto).'), ordem: listaDeRefs('Nova ordem: estes itens vão para o começo, nesta ordem; os demais ficam depois.') } },
+          roteiro: { type: 'object', additionalProperties: false, properties: { acrescentar: listaDeRefs('Itens a pôr no fim.'), remover: listaDeRefs('Itens a tirar.'), ordem: listaDeRefs('Estes vão para o começo, nesta ordem.') } },
           notas: { type: 'array', description: 'Nota por item do roteiro.', items: { type: 'object', required: ['ref', 'texto'], properties: { ref: refEsquema, texto: { type: 'string' } } } },
         },
       },
@@ -165,14 +165,14 @@ export function ferramentasDeEntidade(ctx: ContextoDeEntidades): FerramentaDaPon
   return [
     {
       nome: 'mesa_entidade_criar',
-      descricao: `Cria uma entidade na campanha ativa (aparece na coleção da Mesa, sem mudar o que o mestre está vendo). Tipos: ${TIPOS_DO_ASSISTENTE.join(', ')}. As notas aceitam [[Nome]] para citar outra entidade (cria a ligação "menciona"; o nome tem de existir). ${REF_DA_MESA}`,
+      descricao: `Cria uma entidade na campanha ativa. Tipos: ${TIPOS_DO_ASSISTENTE.join(', ')}. Notas aceitam [[Nome]]. Detalhes: plataforma_guia ferramentas-mesa.`,
       esquema: {
         type: 'object', required: ['tipo', 'nome'], additionalProperties: false,
         properties: {
           tipo: { type: 'string', enum: [...TIPOS_DO_ASSISTENTE] },
           nome: { type: 'string' },
-          tags: { type: 'array', items: { type: 'string' }, description: 'Etiquetas sem "#" (ex.: ["ferreiro"]). Use "encontro" em cenas de combate.' },
-          notas: { type: 'string', description: 'Texto livre; [[Nome]] liga a outra entidade.' },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Sem "#".' },
+          notas: { type: 'string', description: '[[Nome]] liga a outra entidade.' },
         },
       },
       anotacoes: { destrutiva: false },
@@ -194,15 +194,15 @@ export function ferramentasDeEntidade(ctx: ContextoDeEntidades): FerramentaDaPon
     },
     {
       nome: 'mesa_entidade_editar',
-      descricao: `Edita uma entidade criada pela Mesa (nome, tags, notas). As de outros aplicativos (ex.: fichas do Dossiê) são recusadas. "notas" troca o texto; "acrescentarNotas" soma ao fim (se os dois vierem, troca e depois soma). As [[ligações]] das notas são refeitas. Não remove entidades. ${REF_DA_MESA}`,
+      descricao: `Edita uma entidade criada pela Mesa (nome, tags, notas); as de outros apps são recusadas. Não remove. Detalhes: plataforma_guia ferramentas-mesa.`,
       esquema: {
         type: 'object', required: ['id'], additionalProperties: false,
         properties: {
-          id: { type: 'string', description: 'Id da entidade (sem o prefixo "mesa:mesa/entidade/").' },
+          id: { type: 'string', description: 'Sem o prefixo "mesa:mesa/entidade/".' },
           nome: { type: 'string' },
-          tags: { type: 'array', items: { type: 'string' }, description: 'Troca todas as etiquetas.' },
-          notas: { type: 'string', description: 'Troca o texto das notas.' },
-          acrescentarNotas: { type: 'string', description: 'Texto somado ao fim das notas.' },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Troca todas.' },
+          notas: { type: 'string', description: 'Troca o texto.' },
+          acrescentarNotas: { type: 'string', description: 'Soma ao fim.' },
         },
       },
       anotacoes: { destrutiva: true },
@@ -229,7 +229,7 @@ export function ferramentasDeEntidade(ctx: ContextoDeEntidades): FerramentaDaPon
     },
     {
       nome: 'mesa_ligar',
-      descricao: `Liga duas coisas da campanha (ex.: um NPC a um lugar). "de" e "para" são referências: objeto {app, tipo, id} ou texto "mesa:app/tipo/id". ${REF_DA_MESA} Tipos de ligação: ${TIPOS_LIGACAO.join(', ')}. Ex.: personagem "esta-em" lugar; pista "revela" personagem.`,
+      descricao: `Liga duas referências da campanha (de, para, tipo: ${TIPOS_LIGACAO.join(', ')}). Detalhes: plataforma_guia ferramentas-mesa.`,
       esquema: { type: 'object', required: ['de', 'para', 'tipo'], additionalProperties: false, properties: { de: refEsquema, para: refEsquema, tipo: { type: 'string', enum: [...TIPOS_LIGACAO] } } },
       anotacoes: { destrutiva: false },
       async executar(args) {
@@ -276,7 +276,7 @@ export function pacoteComNomes(p: PacoteDeCena, cena: Entidade) {
   };
 }
 
-const MOMENTO = 'Nome (ou id) de um momento do mapa da cena, criado no Atlas (atlas_momento). Vira a etiqueta "momento:<texto>"; ao ativar a cena a Mesa pede ao Atlas que toque esse momento NO MAPA vinculado (o Atlas procura por id ou nome, sem diferenciar maiúsculas). Só funciona com mapa vinculado. Texto vazio remove o momento.';
+const MOMENTO = 'Nome ou id de momento do mapa; vazio remove.';
 
 export function ferramentasDeCena(ctx: ContextoDeCenas): FerramentaDaPonte[] {
   const exigirCampanha = async () => { const c = await ctx.campanha(); if (!c) throw new Error(SEM_CAMPANHA); return c; };
@@ -307,17 +307,17 @@ export function ferramentasDeCena(ctx: ContextoDeCenas): FerramentaDaPonte[] {
   return [
     {
       nome: 'mesa_cena_montar',
-      descricao: `Monta uma cena da campanha (entidade do tipo "cena"): mapa, trilha sonora, participantes, pistas, momento de abertura e marca de encontro. Todos os ids são de ENTIDADES da campanha (campanha_ler lista as entidades; mapas e cômodos do Atlas aparecem como "lugar", cenas sonoras do Jukebox como cena/efeito do Jukebox, fichas como personagem/ameaça, documentos do Ateliê como pista). "mapa" e "trilha" trocam o anterior; participantes e pistas acrescentam. Tudo é conferido antes de gravar. Devolve o pacote resultante com nomes. O ativar da cena (Modo Sessão) usa esse pacote.`,
+      descricao: `Monta uma cena: mapa, trilha, participantes, pistas, momento e encontro, tudo por ids de ENTIDADES (de campanha_ler). Detalhes: plataforma_guia ferramentas-mesa.`,
       esquema: {
         type: 'object', required: ['cenaId'], additionalProperties: false,
         properties: {
-          cenaId: { type: 'string', description: 'Id da entidade cena.' },
-          mapa: { type: 'string', description: 'Id da entidade lugar (mapa ou cômodo do Atlas).' },
-          trilha: { type: 'string', description: 'Id da entidade da cena sonora/efeito do Jukebox.' },
-          participantes: { type: 'array', items: { type: 'string' }, description: 'Ids de personagens e ameaças.' },
-          pistas: { type: 'array', items: { type: 'string' }, description: 'Ids de pistas (documentos do Ateliê).' },
+          cenaId: { type: 'string', description: 'Entidade cena.' },
+          mapa: { type: 'string', description: 'Entidade lugar.' },
+          trilha: { type: 'string', description: 'Entidade do Jukebox.' },
+          participantes: { type: 'array', items: { type: 'string' }, description: 'Ids de entidades.' },
+          pistas: { type: 'array', items: { type: 'string' }, description: 'Ids de entidades.' },
           momento: { type: 'string', description: MOMENTO },
-          encontro: { type: 'boolean', description: 'true marca a cena como encontro de combate (etiqueta "encontro"); false desmarca.' },
+          encontro: { type: 'boolean', description: 'true marca como encontro.' },
         },
       },
       anotacoes: { destrutiva: false },
@@ -349,14 +349,14 @@ export function ferramentasDeCena(ctx: ContextoDeCenas): FerramentaDaPonte[] {
     },
     {
       nome: 'mesa_cena_ler',
-      descricao: 'Lê o que está montado numa cena: mapa, trilha, participantes (personagens e ameaças), pistas, momento de abertura e se é encontro, com os nomes.',
-      esquema: { type: 'object', required: ['cenaId'], additionalProperties: false, properties: { cenaId: { type: 'string', description: 'Id da entidade cena.' } } },
+      descricao: 'Lê o que está montado numa cena (mapa, trilha, participantes, pistas, momento, encontro), com nomes.',
+      esquema: { type: 'object', required: ['cenaId'], additionalProperties: false, properties: { cenaId: { type: 'string', description: 'Entidade cena.' } } },
       anotacoes: { leitura: true },
       async executar(args) { await exigirCampanha(); const todas = await ctx.entidades(); return [json(pacote(cenaDe(args.cenaId, todas), todas, await ctx.ligacoes()))]; },
     },
     {
       nome: 'mesa_abrir_apps',
-      descricao: 'Abre outros aplicativos da plataforma em abas novas (pelo manifesto de cada um, ao lado da Mesa). O navegador pode bloquear a aba quando o mestre não clicou; nesse caso a Mesa mostra um aviso com o botão "Abrir" e a resposta diz que ficou pendente do clique do mestre.',
+      descricao: 'Abre outros apps da plataforma em abas novas; o navegador pode bloquear e ficar pendente do clique do mestre. Detalhes: plataforma_guia ferramentas-mesa.',
       esquema: { type: 'object', required: ['apps'], additionalProperties: false, properties: { apps: { type: 'array', items: { type: 'string', enum: [...APPS_ABRIVEIS] } } } },
       anotacoes: { destrutiva: false, idempotente: true },
       async executar(args) {
@@ -460,7 +460,7 @@ export function ferramentasDeElenco(ctx: ContextoDeElenco): FerramentaDaPonte[] 
   return [
     {
       nome: 'mesa_elenco',
-      descricao: 'Escolhe quem faz parte do elenco recorrente da campanha (os PJs e NPCs que aparecem no painel Personagens do Atlas). Aceita IDs de entidades da Mesa, Refs (ex.: "mesa:ficha/ficha/...") ou nomes de personagens. Se ambos acrescentar e remover forem omitidos, define o elenco vazio []. Devolve o elenco com nomes e quem ficou de fora.',
+      descricao: 'Define o elenco recorrente da campanha (painel Personagens do Atlas), por ids, Refs ou nomes. Detalhes: plataforma_guia ferramentas-mesa.',
       esquema: {
         type: 'object',
         required: [],
@@ -469,12 +469,12 @@ export function ferramentasDeElenco(ctx: ContextoDeElenco): FerramentaDaPonte[] 
           acrescentar: {
             type: 'array',
             items: { type: 'string' },
-            description: 'IDs de entidades, Refs ou nomes de personagens a incluir no elenco (na ordem informada).',
+            description: 'Ids, Refs ou nomes a incluir.',
           },
           remover: {
             type: 'array',
             items: { type: 'string' },
-            description: 'IDs de entidades, Refs ou nomes de personagens a tirar do elenco.',
+            description: 'Ids, Refs ou nomes a tirar.',
           },
         },
       },

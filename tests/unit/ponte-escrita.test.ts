@@ -268,3 +268,9 @@ test('elenco: mesa_elenco por nome, id e ref; poda órfãos; mesa_elenco_ler lis
   await assert.rejects(f.mesa_elenco!.executar({ acrescentar: ['Cais'] }), /não personagem/);
   await assert.rejects(f.mesa_elenco!.executar({ acrescentar: ['Inexistente'] }), /não encontrado/);
 });
+
+test('orçamento: descrições até 400 caracteres e campos até 80', () => {
+  const nada = new Proxy(function () {}, { get: () => nada, apply: () => nada }) as never;
+  const varrer = (o: unknown): string[] => !o || typeof o !== 'object' ? [] : [...(typeof (o as { description?: unknown }).description === 'string' && (o as { description: string }).description.length > 80 ? [(o as { description: string }).description] : []), ...Object.values(o).flatMap(varrer)];
+  for (const t of [...ferramentasDeSessao(nada), ...ferramentasDeEntidade(nada), ...ferramentasDeCena(nada), ...ferramentasDeElenco(nada)]) { assert.ok(t.descricao.length <= 400, t.nome); assert.deepEqual(varrer(t.esquema), [], t.nome); }
+});
