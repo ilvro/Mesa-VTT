@@ -62,7 +62,7 @@ Plano técnico, em etapas, para execução por um agente de código. Foi escrito
 
 A transferência é **genérica**: copia todos os bancos IndexedDB e todo o `localStorage` da origem, sem conhecer o formato de cada app. Funciona porque os nomes dos bancos são iguais nos dois lados, já que a origem e os caminhos são os mesmos.
 
-### T1 — Formato e funções puras  ⬜
+### T1 — Formato e funções puras  ✅
 **Arquivos:** criar `src/dominio/transferencia.ts` e `tests/unit/transferencia.test.ts`.
 
 **Formato:** um arquivo `.mesa`, que é um zip feito com **fflate**. Acrescente `"fflate": "0.8.3"` às `dependencies` da Mesa, com versão exata (é a mesma do Ateliê), e rode `npm install`. O zip contém:
@@ -91,6 +91,7 @@ export interface DescricaoDoBanco { nome: string; versao: number; lojas: Descric
 - `bancosParaExportar(nomes: string[]): string[]` exclui os bancos internos do navegador ou do Vite, se houver, e nada mais. A lista de exclusão começa vazia e fica documentada.
 - `chavesDoLocalStorage(chaves: string[]): string[]` exporta todas, exceto `mesa:ponte-armazenamento`. Essa chave identifica o armazenamento para a ponte e **não pode** ser copiada.
 
+**Nota:** Escolhida a alternativa de `serializar` assíncrona, que consome `Blob.arrayBuffer()` diretamente e de forma segura.
 **Testes:**
 - ida e volta de um valor com `Blob`, `Date`, `Map`, arrays aninhados e `Uint8Array`;
 - os filtros excluem `mesa:ponte-armazenamento`;
