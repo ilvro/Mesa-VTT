@@ -278,7 +278,7 @@ export interface Chamada { id: string; ferramenta: string; quando: number; resum
 
 ## Etapa 5: busca rápida
 
-### B1 — Ctrl+K  ⬜
+### B1 — Ctrl+K  ✅
 **Arquivos:** criar `src/dominio/busca.ts`, `src/ui/BuscaRapida.tsx`, `tests/unit/busca.test.ts`; mudar `src/ui/App.tsx` (montar o componente e o atalho).
 
 **Domínio:**

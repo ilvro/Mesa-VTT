@@ -8,6 +8,7 @@ import { Cabecalho } from './Cabecalho.tsx';
 import { Campanhas } from './Campanhas.tsx';
 import { Entidades } from './Entidades.tsx';
 import { ModoSessao } from './ModoSessao.tsx';
+import { BuscaRapida, buscaRapidaAberta } from './BuscaRapida.tsx';
 
 export function App() {
   const r = repositorio.value;
@@ -22,6 +23,17 @@ export function App() {
     }
   }, []);
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        buscaRapidaAberta.value = !buscaRapidaAberta.value;
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   return (
     <>
       <Cabecalho />
@@ -31,6 +43,7 @@ export function App() {
           ? <section class="pagina"><div class="aviso">Este navegador não deixa a Mesa guardar a campanha (IndexedDB indisponível). Abra em uma janela normal, fora do modo privado.</div></section>
           : tela.value === 'campanhas' ? <Campanhas /> : tela.value === 'aplicativos' ? <Aplicativos /> : tela.value === 'sessao' ? <ModoSessao /> : <Entidades />}
       <Avisos />
+      <BuscaRapida />
     </>
   );
 }

@@ -447,3 +447,133 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .botao-ativar-cena { font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 6px; }
 .cartao-ativar-atalho { position: absolute; right: 38px; top: 8px; z-index: 2; border: 1px solid var(--linha-forte); background: var(--superficie); color: var(--texto); border-radius: 4px; padding: 2px 6px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 .cartao-ativar-atalho:hover { background: var(--acento); color: #0b0c10; border-color: var(--acento); }
+
+/* ---- Busca Rápida (Ctrl+K) ---- */
+.busca-rapida-fundo {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: min(15vh, 120px);
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+.busca-rapida-dialogo {
+  width: 100%;
+  max-width: 580px;
+  background: var(--superficie);
+  border: 1px solid var(--linha-forte);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.busca-rapida-campo-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--linha);
+  background: var(--fundo);
+}
+.busca-rapida-icone {
+  color: var(--apagado);
+  font-size: 14px;
+}
+.busca-rapida-campo {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--texto);
+  font-size: 14px;
+  outline: none;
+}
+.busca-rapida-atalho-dica {
+  font-size: 11px;
+  color: var(--apagado);
+  border: 1px solid var(--linha);
+  border-radius: 4px;
+  padding: 2px 6px;
+  background: var(--superficie);
+}
+.busca-rapida-lista {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  max-height: 380px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.busca-rapida-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--texto);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.busca-rapida-item:hover,
+.busca-rapida-item.selecionado {
+  background: var(--acento-suave);
+  border-color: var(--acento-media);
+}
+.busca-rapida-item-tipo {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--superficie-2);
+  color: var(--apagado);
+  flex-shrink: 0;
+}
+.busca-rapida-item-nome {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.busca-rapida-item-tag {
+  font-size: 11px;
+  color: var(--apagado);
+  flex-shrink: 0;
+}
+.busca-rapida-item-app {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--linha);
+  color: var(--texto);
+  flex-shrink: 0;
+}
+.busca-rapida-vazio {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--apagado);
+  font-size: 13px;
+}
+.busca-rapida-rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-top: 1px solid var(--linha);
+  background: var(--fundo);
+  font-size: 11px;
+  color: var(--apagado);
+}
+
