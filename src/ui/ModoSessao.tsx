@@ -1,19 +1,26 @@
 import { Fragment } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
+import { mesmaRef } from '#mesa';
 import { ativarCena, carregarEscolhas, escolhas, fichaDaAba, fichasEmAbas, layout, mapaAtual, mapas, mudarEscolhas, mudarLayout, personagens, alternarFicha, restaurarLayoutPadrao } from '../app/sessao.ts';
 import { baseDoApp, inventario, sondarAplicativos } from '../app/inventario.ts';
-import { campanhaAtiva, entidades } from '../app/campanha.ts';
+import { campanhaAtiva, entidades, ligacoes } from '../app/campanha.ts';
 import { enderecoDe } from '../app/aplicativos.ts';
 import { ehEncontro } from '../dominio/entidades.ts';
 import { alternarPainel, escalaDoPainel, LARGURA_LOGICA_MINIMA, presetDe, PRESETS, redimensionar, ROTULO_DO_PAINEL, ROTULO_DO_PRESET, visiveis, type Layout, type PainelId, type PresetId } from '../dominio/layout.ts';
 import { enderecoDaFicha, enderecoDoAtlas, filtrarPersonagensSessao } from '../dominio/sessao.ts';
 import { cx } from './cx.ts';
 import { Diario } from './Diario.tsx';
-import { carregarSessoes } from '../app/registro.ts';
+import { carregarSessoes, sessaoAtiva } from '../app/registro.ts';
 import { abrirProjetorNoSegundoMonitor } from '../app/desktop.ts';
+import { extrairPacoteDeCena, type PacoteDeCena } from '../dominio/cenas.ts';
+import { carregarFatos } from '../app/prontidao.ts';
+import { pendenciasDaSessao } from '../dominio/prontidao.ts';
+import { DialogoChecagemSessao } from './DialogoChecagemSessao.tsx';
 
 export const buscaPersonagemSessao = signal('');
+const checandoProntidaoSessao = signal(false);
+const pendenciasAtivasCount = signal<number | null>(null);
 
 const LARGURA_DO_DIVISOR = 8;
 
@@ -144,6 +151,33 @@ export function ModoSessao() {
     ev.preventDefault(); const caixa = area.current; if (!caixa) return;
     mudarLayout(redimensionar(layout.value, indice, (ev.key === 'ArrowRight' ? 1 : -1) * 32, caixa.clientWidth - (v.length - 1) * LARGURA_DO_DIVISOR));
   };
+  useEffect(() => {
+    const c = campanhaAtiva.value;
+    const s = sessaoAtiva.value;
+    if (!c || !s) {
+      pendenciasAtivasCount.value = null;
+      return;
+    }
+    let cancelado = false;
+    void (async () => {
+      const ents = entidades.value;
+      const ligs = ligacoes.value;
+      const pacotes: PacoteDeCena[] = [];
+      for (const item of s.roteiro) {
+        const ent = ents.find(e => (item.app === 'mesa' && item.tipo === 'entidade' ? e.id === item.id : e.refs.some(r => mesmaRef(r, item))));
+        if (ent && ent.tipo === 'cena') {
+          pacotes.push(extrairPacoteDeCena(ent, ents, ligs));
+        }
+      }
+      const fatos = await carregarFatos(c, pacotes);
+      if (!cancelado) {
+        const pends = pendenciasDaSessao(pacotes, fatos);
+        pendenciasAtivasCount.value = pends.length;
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [sessaoAtiva.value?.id, sessaoAtiva.value?.roteiro, entidades.value, ligacoes.value]);
+
   const telaCheia = (id: PainelId) => { const el = area.current?.querySelector<HTMLElement>(`[data-painel="${id}"]`); void el?.requestFullscreen?.().catch(() => undefined); };
 
   return (
@@ -182,6 +216,22 @@ export function ModoSessao() {
           {l.map(p => <button key={p.id} type="button" class={cx('chip', p.visivel && 'ativa')} aria-pressed={p.visivel} data-testid={`painel-${p.id}`} onClick={() => mudarLayout(alternarPainel(layout.value, p.id))}>{ROTULO_DO_PAINEL[p.id]}</button>)}
         </div>
         <span class="espaco" />
+        {sessaoAtiva.value && (
+          <button
+            type="button"
+            class="selo"
+            style={{ cursor: 'pointer', border: '1px solid var(--linha)' }}
+            data-testid="selo-prontidao-sessao"
+            title="Checagem de prontidão da sessão"
+            onClick={() => { checandoProntidaoSessao.value = true; }}
+          >
+            {pendenciasAtivasCount.value === null
+              ? 'Prontidão'
+              : pendenciasAtivasCount.value === 0
+              ? '✓ Pronta'
+              : `⚠️ ${pendenciasAtivasCount.value} ${pendenciasAtivasCount.value === 1 ? 'pendência' : 'pendências'}`}
+          </button>
+        )}
         <button
           type="button"
           class="botao-pilula"
@@ -207,6 +257,9 @@ export function ModoSessao() {
           );
         })}
       </div>
+      {checandoProntidaoSessao.value && (
+        <DialogoChecagemSessao aoFechar={() => { checandoProntidaoSessao.value = false; }} />
+      )}
     </section>
   );
 }

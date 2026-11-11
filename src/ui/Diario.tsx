@@ -1,17 +1,34 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { signal } from '@preact/signals';
 import { chaveDaRef, type Ref } from '#mesa';
 import { entidades } from '../app/campanha.ts';
 import { adicionarAoRoteiro, anotar, baixarMarkdown, continuarSessao, definirNotaDoItem, encerrarSessao, fecharSessao, gravando, iniciarSessao, linhas, moverNoRoteiro, notasDoRoteiro, removerDoRoteiro, retomarGravacao, roteiroDaSessao, sessaoAtiva, sessoes, abrirItemDoRoteiro } from '../app/registro.ts';
 import { garantirPainelPara } from '../app/sessao.ts';
 import { candidatos, nomeDoRef, ondeEstaORef } from '../dominio/roteiro.ts';
+import { DialogoChecagemSessao } from './DialogoChecagemSessao.tsx';
 import { cx } from './cx.ts';
+
+const checandoProntidao = signal(false);
 
 function Roteiro() {
   const roteiro = roteiroDaSessao.value, opcoes = candidatos(entidades.value).filter(c => !roteiro.some(r => chaveDaRef(r) === chaveDaRef(c.ref)));
   const abrir = (r: Ref) => { garantirPainelPara(r); void abrirItemDoRoteiro(r); };
   return (
     <section class="diario-secao" data-testid="roteiro">
-      <h4 class="faixa pequena">Roteiro</h4>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>
+        <h4 class="faixa pequena" style={{ margin: 0 }}>Roteiro</h4>
+        <button
+          type="button"
+          class="botao-pilula"
+          data-testid="checar-sessao"
+          onClick={() => { checandoProntidao.value = true; }}
+        >
+          Pronto para jogar?
+        </button>
+      </div>
+      {checandoProntidao.value && (
+        <DialogoChecagemSessao aoFechar={() => { checandoProntidao.value = false; }} />
+      )}
       {roteiro.length === 0 && <p class="dica">Nada no roteiro ainda. Acrescente mapas, cenas sonoras, documentos e fichas na ordem em que devem acontecer.</p>}
       <ol class="roteiro">
         {roteiro.map((r, i) => (

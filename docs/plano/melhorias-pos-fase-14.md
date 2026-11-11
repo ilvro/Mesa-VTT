@@ -154,7 +154,7 @@ export interface DescricaoDoBanco { nome: string; versao: number; lojas: Descric
 
 **Objetivo:** antes de jogar, a Mesa mostra, cena por cena da sessão planejada, o que está faltando, com um botão para resolver cada pendência.
 
-### P1 — Jukebox responde se uma cena sonora está pronta  ⬜
+### P1 — Jukebox responde se uma cena sonora está pronta  ✅
 **Arquivos:** `Jukebox/mesa.js`, `Jukebox/scenes.js`, `Jukebox/mesa.json` e um teste em `Jukebox/tests/` (rodado com `node --test` na pasta da Jukebox).
 
 **Como:**
@@ -163,9 +163,10 @@ export interface DescricaoDoBanco { nome: string; versao: number; lojas: Descric
 - Acrescente `jukebox.prontidao` à lista "atende" do `mesa.json` da Jukebox.
 - Descreva o pedido em `Atlas/docs/PLATAFORMA.md`, na tabela de eventos e pedidos.
 
+**Nota:** Nenhuma divergência.
 **Commit (Jukebox):** `answer jukebox.prontidao for scene readiness`
 
-### P2 — Checagem na Mesa  ⬜
+### P2 — Checagem na Mesa  ✅
 **Arquivos:** criar `src/dominio/prontidao.ts`, `src/app/prontidao.ts`, `tests/unit/prontidao.test.ts`; mudar `src/ui/Diario.tsx` ou a tela da sessão planejada (ache onde o roteiro da sessão é mostrado) e `src/ui/ModoSessao.tsx`.
 
 **Domínio (puro):**
@@ -211,6 +212,7 @@ Use `PacoteDeCena` de `src/dominio/cenas.ts`.
 
 - No Modo Sessão, um selo discreto no cabeçalho com o número de pendências da sessão ativa, que abre a mesma lista.
 
+**Nota:** Nenhuma divergência.
 **Testes:** cada tipo de pendência; cena sem nada não gera erro; ameaça não gera "fora do elenco"; com elenco `undefined`, nada de "fora do elenco".
 
 **Commit:** `session readiness check`
