@@ -99,7 +99,7 @@ export interface DescricaoDoBanco { nome: string; versao: number; lojas: Descric
 
 **Commit:** `device transfer format`
 
-### T2 — Exportar e importar (IndexedDB e localStorage)  ⬜
+### T2 — Exportar e importar (IndexedDB e localStorage)  ✅
 **Arquivos:** criar `src/app/transferencia.ts` e `tests/unit/transferencia-app.test.ts`, com `fake-indexeddb`.
 
 **Exportar** (`exportarAparelho(): Promise<Blob>`):
@@ -120,6 +120,7 @@ export interface DescricaoDoBanco { nome: string; versao: number; lojas: Descric
 4. Devolva o relatório: `{ bancos: { nome, registros }[], chaves: number, avisos: string[] }`.
 5. **Sem `substituir`** (mesclar): grave por cima só os registros com a mesma chave, sem apagar os outros. Isso é o padrão, para nunca perder dados. Bancos que não existem são criados com o esquema do arquivo.
 
+**Nota:** Nenhuma divergência. Leitura de cursor síncrona dentro da transação para proteger contra fechamento prematuro de transações IndexedDB antes da serialização.
 **Testes** (`fake-indexeddb`):
 - criar dois bancos com lojas, um índice e um blob → exportar → apagar → importar → conferir esquema, versão, registros e blob;
 - o modo mesclar não apaga o registro que só existe no destino;
