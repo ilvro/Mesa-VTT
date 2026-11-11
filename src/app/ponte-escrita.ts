@@ -1,6 +1,7 @@
 // Só em desenvolvimento (entra pela ponte). Ferramentas de escrita da Mesa; o contexto é injetável para testar sem DOM.
 import { chaveDaRef, formatarRef, lerRef, TIPOS_LIGACAO, type Campanha, type Entidade, type Ligacao, type Ref, type Sessao, type TipoEntidade, type TipoLigacao } from '#mesa';
 import { json, type FerramentaDaPonte } from '#mesa/ponte';
+import type { Efeito } from '../dominio/efeitos.ts';
 import { NOME_DO_APP, TIPOS_CRIAVEIS, ehEncontro, podarElenco, podeEditar, semAcento, temFichaDePersonagem } from '../dominio/entidades.ts';
 import { candidatosDeTrilha, entidadePorRef, extrairPacoteDeCena, type PacoteDeCena } from '../dominio/cenas.ts';
 import { adicionar, MAXIMO_DO_ROTEIRO, podarNotas, removerItem } from '../dominio/roteiro.ts';
@@ -13,6 +14,7 @@ export interface ContextoDeSessoes {
   alterar(id: string, mudancas: Partial<Pick<Sessao, 'roteiro' | 'roteiroNotas' | 'nome' | 'data'>>): Promise<Sessao | null>;
   /** Depois de escrever: a tela recarrega os signals (se a campanha da chamada é a dela). */
   recarregar?(): Promise<void>;
+  registrar?: (e: Efeito) => void;
 }
 
 const SEM_CAMPANHA = 'Nenhuma campanha selecionada na Mesa. Peça ao mestre para abrir uma campanha no hub e tente de novo.';
@@ -77,6 +79,7 @@ export function ferramentasDeSessao(ctx: ContextoDeSessoes): FerramentaDaPonte[]
         const s = await ctx.planejar(args.nome, args.data === undefined ? undefined : lerData(args.data));
         await ctx.recarregar?.();
         if (!s) throw new Error('Não consegui criar a sessão (veja o aviso na Mesa).');
+        ctx.registrar?.({ tipo: 'criou-sessao', id: s.id });
         return [json(resumo(s))];
       },
     },
@@ -97,6 +100,7 @@ export function ferramentasDeSessao(ctx: ContextoDeSessoes): FerramentaDaPonte[]
         const id = String(args.id ?? '');
         const sessao = (await ctx.sessoes()).find(s => s.id === id);
         if (!sessao) throw new Error(`Não há sessão com id "${id}" nesta campanha. Use mesa_sessoes_listar.`);
+        const antes = { ...sessao };
         const rot = (args.roteiro ?? {}) as Record<string, unknown>;
         const acrescentar = lerRefs(rot.acrescentar, 'roteiro.acrescentar'), remover = lerRefs(rot.remover, 'roteiro.remover'), ordem = lerRefs(rot.ordem, 'roteiro.ordem');
         const notasPedidas = (args.notas === undefined ? [] : Array.isArray(args.notas) ? args.notas : (() => { throw new Error('"notas" deve ser uma lista de {ref, texto}.'); })())
@@ -121,6 +125,7 @@ export function ferramentasDeSessao(ctx: ContextoDeSessoes): FerramentaDaPonte[]
         const nova = await ctx.alterar(id, { roteiro, roteiroNotas: notas, ...(typeof args.nome === 'string' ? { nome: args.nome.trim() } : {}) });
         await ctx.recarregar?.();
         if (!nova) throw new Error('Não consegui gravar a sessão (veja o aviso na Mesa).');
+        ctx.registrar?.({ tipo: 'alterou-sessao', antes });
         return [json({ ...resumo(nova), ignorados })];
       },
     },
@@ -135,6 +140,7 @@ export interface ContextoDeEntidades {
   /** Grava (e sincroniza as `[[ligações]]` quando há notas). */
   alterar(e: Entidade, mudancas: Partial<Pick<Entidade, 'nome' | 'tags' | 'notas'>>): Promise<boolean>;
   ligar(de: Ref, para: Ref, tipo: TipoLigacao): Promise<Ligacao>;
+  registrar?: (e: Efeito) => void;
 }
 
 export const TIPOS_DO_ASSISTENTE: readonly TipoEntidade[] = [...TIPOS_CRIAVEIS, 'cena', 'ameaca'];
@@ -175,6 +181,7 @@ export function ferramentasDeEntidade(ctx: ContextoDeEntidades): FerramentaDaPon
         const notas = textoOpcional(args.notas, 'notas');
         const criada = await ctx.criar(tipo as TipoEntidade, args.nome);
         if (!criada) throw new Error('Não consegui criar a entidade (veja o aviso na Mesa).');
+        ctx.registrar?.({ tipo: 'criou-entidade', id: criada.id });
         if ((tags && tags.length) || notas) {
           if (!(await ctx.alterar(criada, { ...(tags?.length ? { tags } : {}), ...(notas ? { notas } : {}) }))) throw new Error(`A entidade "${criada.nome}" foi criada (id ${criada.id}), mas não consegui gravar tags/notas (veja o aviso na Mesa). Use mesa_entidade_editar.`);
         }
@@ -200,6 +207,7 @@ export function ferramentasDeEntidade(ctx: ContextoDeEntidades): FerramentaDaPon
         const e = (await ctx.entidades()).find(x => x.id === id);
         if (!e) throw new Error(`Não há entidade com id "${id}" nesta campanha. Use campanha_ler para ver as entidades, ou mesa_entidade_criar.`);
         if (!podeEditar(e)) throw new Error(`"${e.nome}" é do ${NOME_DO_APP[e.criadaPor] ?? e.criadaPor} (criada por ele); a Mesa só edita o que criou. Peça ao mestre para alterar no ${NOME_DO_APP[e.criadaPor] ?? e.criadaPor}.`);
+        const antes = { ...e };
         const mudancas: Partial<Pick<Entidade, 'nome' | 'tags' | 'notas'>> = {};
         if (args.nome !== undefined) { if (typeof args.nome !== 'string' || !args.nome.trim()) throw new Error('"nome" não pode ser vazio.'); mudancas.nome = args.nome.trim(); }
         if (args.tags !== undefined) mudancas.tags = lerTagsDoClaude(args.tags);
@@ -210,6 +218,7 @@ export function ferramentasDeEntidade(ctx: ContextoDeEntidades): FerramentaDaPon
         }
         if (!Object.keys(mudancas).length) throw new Error('Nada a mudar: informe nome, tags, notas ou acrescentarNotas.');
         if (!(await ctx.alterar(e, mudancas))) throw new Error('Não consegui gravar (veja o aviso na Mesa).');
+        ctx.registrar?.({ tipo: 'alterou-entidade', antes });
         return [json(resumoDaEntidade((await ctx.entidades()).find(x => x.id === id) ?? { ...e, ...mudancas }))];
       },
     },
@@ -223,6 +232,7 @@ export function ferramentasDeEntidade(ctx: ContextoDeEntidades): FerramentaDaPon
         if (!(TIPOS_LIGACAO as readonly string[]).includes(tipo)) throw new Error(`Tipo de ligação inválido: "${tipo}". Tipos aceitos: ${TIPOS_LIGACAO.join(', ')}.`);
         const de = lerRefDoClaude(args.de), para = lerRefDoClaude(args.para);
         const l = await ctx.ligar(de, para, tipo as TipoLigacao);
+        ctx.registrar?.({ tipo: 'criou-ligacao', id: l.id });
         return [json({ id: l.id, de: formatarRef(l.de), para: formatarRef(l.para), tipo: l.tipo })];
       },
     },
@@ -242,6 +252,7 @@ export interface ContextoDeCenas {
   definirMomento(cena: Entidade, momento: string | null): Promise<boolean>;
   /** Abre o app pelo manifesto. `bloqueado`: o navegador recusou a janela e a Mesa já mostrou o aviso com o botão "Abrir". */
   abrirApp(app: AppAbrivel): Promise<EstadoDeAbrirApp>;
+  registrar?: (e: Efeito) => void;
 }
 
 export const APPS_ABRIVEIS = ['atlas', 'ficha', 'atelie', 'jukebox'] as const;
@@ -307,6 +318,7 @@ export function ferramentasDeCena(ctx: ContextoDeCenas): FerramentaDaPonte[] {
         await exigirCampanha();
         const todas = await ctx.entidades();
         const cena = cenaDe(args.cenaId, todas);
+        const antes = { ...cena };
         const um = (v: unknown, campo: string, ok: (e: Entidade) => boolean, esperado: string) => (v === undefined ? null : (e => exigir(e, campo, ok(e), esperado))(achar(v, campo, todas)));
         const mapa = um(args.mapa, 'mapa', e => e.tipo === 'lugar' || e.refs.some(r => r.app === 'atlas'), 'um lugar do Atlas (mapa ou cômodo)');
         const trilha = um(args.trilha, 'trilha', e => candidatosDeTrilha([e]).length > 0, 'uma cena sonora ou efeito do Jukebox');
@@ -324,6 +336,7 @@ export function ferramentasDeCena(ctx: ContextoDeCenas): FerramentaDaPonte[] {
         if (typeof args.encontro === 'boolean' && ehEncontro(await atual(cena.id)) !== args.encontro && !(await ctx.alternarEncontro(await atual(cena.id)))) throw falha('mudar a marca de encontro');
         if (momento !== undefined && !(await ctx.definirMomento(await atual(cena.id), momento || null))) throw falha('definir o momento');
         const final = await atual(cena.id);
+        ctx.registrar?.({ tipo: 'alterou-entidade', antes });
         return [json(pacote(final, await ctx.entidades(), await ctx.ligacoes()))];
       },
     },
@@ -355,9 +368,10 @@ export function ferramentasDeCena(ctx: ContextoDeCenas): FerramentaDaPonte[] {
 }
 
 export interface ContextoDeElenco {
-  campanha(): Promise<Pick<Campanha, 'id' | 'nome' | 'elenco'> | null>;
+  campanha(): Promise<Pick<Campanha, 'id' | 'nome' | 'elenco'> & Partial<Campanha> | null>;
   entidades(): Promise<Entidade[]>;
   salvarElenco(elenco: string[]): Promise<boolean>;
+  registrar?: (e: Efeito) => void;
 }
 
 const resumoPersonagemElenco = (e: Entidade) => {
@@ -457,6 +471,7 @@ export function ferramentasDeElenco(ctx: ContextoDeElenco): FerramentaDaPonte[] 
       },
       async executar(args) {
         const c = await exigirCampanha();
+        const antes: Campanha = { sistema: 'padrao', tema: null, capa: null, criadaEm: 0, atualizadaEm: 0, ...c };
         const todas = await ctx.entidades();
         const aAcrescentar = lerLista(args.acrescentar, 'acrescentar').map(v => resolverPersonagem(v, 'acrescentar', todas).id);
         const aRemover = new Set(
@@ -480,6 +495,7 @@ export function ferramentasDeElenco(ctx: ContextoDeElenco): FerramentaDaPonte[] 
         if (!(await ctx.salvarElenco(proximo))) {
           throw new Error('Não consegui salvar o elenco da campanha (veja o aviso na Mesa).');
         }
+        ctx.registrar?.({ tipo: 'alterou-campanha', antes });
         const atualizada = await ctx.campanha();
         return [json(montarRetornoDeElenco(atualizada?.elenco ?? proximo, await ctx.entidades()))];
       },

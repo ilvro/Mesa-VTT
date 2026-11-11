@@ -223,7 +223,7 @@ Use `PacoteDeCena` de `src/dominio/cenas.ts`.
 
 **Objetivo:** como no Atlas (`Atlas/src/app/atividade-do-assistente.ts` e `Atlas/src/ui/PainelDoAssistente.tsx`, leia os dois), a Mesa mostra o que o assistente fez e permite desfazer cada chamada.
 
-### A1 — Registro de efeitos e desfazer  ⬜
+### A1 — Registro de efeitos e desfazer  ✅
 **Arquivos:** criar `src/dominio/efeitos.ts`, `src/app/atividade-do-assistente.ts`, `tests/unit/atividade-do-assistente.test.ts`; mudar `src/app/ponte-escrita.ts` e `src/app/ponte.ts`.
 
 **Modelo:**
