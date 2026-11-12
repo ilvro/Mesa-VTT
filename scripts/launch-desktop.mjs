@@ -249,7 +249,9 @@ def ao_escolher_arquivo(wv, pedido):
         pastas[:] = [d for d in pastas if not d.startswith('.')]
         arquivos += [os.path.join(atual, n) for n in nomes if not n.startswith('.')]
     if arquivos:
-        pedido.select_files(sorted(arquivos))
+        # O WebKitGTK trata cada caminho como URI e decodifica os escapes: um arquivo chamado 'T%C3%ADtulo%20x.mp3' (os da Jukebox
+        # são todos assim) viraria 'Título x.mp3', que não existe, e chegaria vazio à página. Escapar o '%' preserva o nome.
+        pedido.select_files([a.replace('%', '%25') for a in sorted(arquivos)])
     else:
         pedido.cancel()
     return True
