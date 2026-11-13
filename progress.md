@@ -22,3 +22,10 @@ Implementações de refinamento do hub da Mesa, transferência entre aparelhos, 
 - `cd /home/ilvro/Documents/Projects/Atlas && npm run typecheck && npm test && npm run ponte:verificar` — limpo, 788 testes passando, builds desktop e produção verificados sem vazamento de ponte.
 - `cd /home/ilvro/Documents/Projects/Jukebox && node --test` — limpo, 9 testes passando.
 - `cd /home/ilvro/Documents/Projects/Mesa && npm run desktop:prep` — concluído com sucesso, todos os 6 aplicativos empacotados e redirecionador gerado em `dist-desktop/`.
+
+## Fase 4 — Quadro
+
+- **Q1a (Modelo do quadro e operações com desfazer):** criados `src/dominio/quadro.ts` (tipos, validação com caminho e remoção de nós/marcas desconhecidos, fábricas e helpers de `DocRico`) e `src/dominio/quadro-operacoes.ts` (`aplicar`, `inverter`, `Historico` com limite 200 e agrupamento, z-order e `duplicar`), com testes em `tests/unit/quadro.test.ts` e `tests/unit/quadro-operacoes.test.ts`.
+- **Q1b (Banco dos quadros e camada `app`):** criados `src/app/banco-quadros.ts` (`mesa-quadros-v1`, deduplicação de imagens por SHA-256, remoção em cascata por quadro e campanha) e `src/app/quadros.ts` (signals, gravação adiada de 400 ms, descarga em `pagehide`/`visibilitychange`, reação à troca de campanha), integração em `src/app/campanha.ts`, e testes em `tests/unit/banco-quadros.test.ts`.
+- **Q1c (Tela Quadros, rota e manifesto):** adicionada aba `Quadros`, rotas `#/quadros`, `#/quadro/{id}` e `#/quadro/{id}/item/{itemId}` em `src/app/rotas.ts`, entradas `quadro` e `item` em `public/mesa.json`, telas `src/ui/quadro/Quadros.tsx` e `src/ui/quadro/Quadro.tsx`, e teste e2e `tests/e2e/quadro.test.ts`.
+- **Q1d (Câmera, fundo e grade):** criado `src/dominio/camera.ts` (`telaParaMundo`, `mundoParaTela`, `zoomEm`, `enquadrar`, `caixaVisivel`, `itensVisiveis`) com testes em `tests/unit/camera.test.ts`, `src/ui/quadro/Mundo.tsx`, `src/ui/quadro/PainelDoFundo.tsx` e navegação/atalhos/grade em `src/ui/quadro/Quadro.tsx`.
