@@ -1,10 +1,10 @@
 // Só em desenvolvimento: importado por `main.tsx` dentro de `if (import.meta.env.DEV)`; o Vite elimina o chunk do build.
-import { conectarPonte, ferramentasDaCampanha, json, type FerramentaDaPonte } from '#mesa/ponte';
+import { conectarPonte, type FerramentaDaPonte } from '#mesa/ponte';
 import { SeloDoAssistente, estadoDaPonte } from '../ui/SeloDoAssistente.tsx';
 import { seloDoAssistente } from './assistente-slot.ts';
 import { abrirAplicativo } from './aplicativos.ts';
 import { alternarEncontroDaCena, alterarEntidade, atualizar, campanhaAtiva, campanhas, criarCampanha, criarEntidade, definirMomentoDaCena, ligarRefs, obterRepositorio, salvarElencoDaCampanha, vincularMapaNaCena, vincularParticipanteNaCena, vincularPistaNaCena, vincularTrilhaNaCena } from './campanha.ts';
-import { ferramentasDeCampanhas, ferramentasDeCena, ferramentasDeElenco, ferramentasDeEntidade, ferramentasDeSessao } from './ponte-escrita.ts';
+import { ferramentasDaMesa } from './ponte-ferramentas.ts';
 import { momentosDoMapaDoAtlas } from './momentos-do-atlas.ts';
 import { oQueVejo } from './o-que-vejo.ts';
 import { alterarSessaoPorId, carregarSessoes, planejarSessao } from './registro.ts';
@@ -81,31 +81,31 @@ function embrulharFerramenta(f: FerramentaDaPonte): FerramentaDaPonte {
   };
 }
 
-const ferramentas = [
-  ...ferramentasDaCampanha(async () => obterRepositorio()),
-  ...ferramentasDeSessao({
+const ferramentas = ferramentasDaMesa({
+  repositorio: async () => obterRepositorio(),
+  sessoes: {
     campanha: campanhaDaChamada,
     sessoes: async () => { const c = await campanhaDaChamada(); return c ? obterRepositorio().listarSessoes(c.id) : []; },
     planejar: planejarSessao,
     alterar: async (id, mudancas) => { await carregarSessoes(); return alterarSessaoPorId(id, mudancas); },
     recarregar: carregarSessoes,
     registrar,
-  }),
-  ...ferramentasDeEntidade({
+  },
+  entidades: {
     campanha: campanhaDaChamada,
     entidades: entidadesDoBanco,
     criar: (t, n) => criarEntidade(t, n, false),
     alterar: alterarEntidade,
     ligar: ligarRefs,
     registrar,
-  }),
-  ...ferramentasDeCampanhas({
+  },
+  campanhas: {
     campanhas: async () => { await atualizar(); return campanhas.value; },
     ativaId: () => campanhaAtiva.value?.id ?? null,
     criar: criarCampanha,
     registrar,
-  }),
-  ...ferramentasDeCena({
+  },
+  cenas: {
     campanha: campanhaDaChamada,
     entidades: entidadesDoBanco,
     ligacoes: ligacoesDoBanco,
@@ -118,31 +118,16 @@ const ferramentas = [
     momentosDoMapa: momentosDoMapaDoAtlas,
     abrirApp: app => abrirAplicativo(app),
     registrar,
-  }),
-  ...ferramentasDeElenco({
+  },
+  elenco: {
     campanha: async () => { const c = await campanhaDaChamada(); return c ? (await obterRepositorio().obterCampanha(c.id)) ?? null : null; },
     entidades: entidadesDoBanco,
     salvarElenco: salvarElencoDaCampanha,
     registrar,
-  }),
-  {
-    nome: 'mesa_campanha_atual',
-    descricao: 'A campanha selecionada no hub da Mesa (id, nome e sistema), ou "nenhuma".',
-    esquema: { type: 'object', properties: {}, required: [], additionalProperties: false },
-    anotacoes: { leitura: true },
-    async executar() {
-      const c = campanhaAtiva.value;
-      return [json(c ? { id: c.id, nome: c.nome, sistema: c.sistema } : 'nenhuma')];
-    },
   },
-  {
-    nome: 'mesa_o_que_vejo',
-    descricao: 'O que o mestre tem na tela da Mesa: campanha, tela atual e item aberto. Use para entender "esta sessão", "este personagem".',
-    esquema: { type: 'object', properties: {}, required: [], additionalProperties: false },
-    anotacoes: { leitura: true },
-    async executar() { return [json(oQueVejo())]; },
-  },
-].map(embrulharFerramenta);
+  campanhaAtual: () => campanhaAtiva.value,
+  oQueVejo,
+}).map(embrulharFerramenta);
 
 const cliente = conectarPonte({
   app: 'mesa',
