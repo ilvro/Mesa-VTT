@@ -3,7 +3,7 @@ import { campanhaAtiva, selecionada } from './campanha.ts';
 import { tela, type Tela } from './rotas.ts';
 import { mapaAtual } from './sessao.ts';
 
-const ROTULO: Record<Tela, string> = { entidades: 'Campanha (coleção)', sessao: 'Sessão (modo sessão)', campanhas: 'Campanhas', aplicativos: 'Aplicativos' };
+const ROTULO: Record<Tela, string> = { entidades: 'Campanha (coleção)', sessao: 'Sessão (modo sessão)', campanhas: 'Campanhas', aplicativos: 'Aplicativos', quadros: 'Quadros' };
 
 export function oQueVejo(): Record<string, unknown> {
   const c = campanhaAtiva.value, e = selecionada.value, t = tela.value, m = mapaAtual.value;

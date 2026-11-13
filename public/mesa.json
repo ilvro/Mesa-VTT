@@ -4,9 +4,11 @@
   "contrato": 1,
   "icone": "./icone.svg",
   "rotas": {
-    "entidade": "./#/entidade/{id}"
+    "entidade": "./#/entidade/{id}",
+    "quadro": "./#/quadro/{id}",
+    "item": "./#/quadro/{pai}/item/{filho}"
   },
-  "oferece": ["entidade"],
+  "oferece": ["entidade", "quadro", "item"],
   "emite": [],
   "atende": []
 }
