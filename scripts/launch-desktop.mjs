@@ -223,7 +223,7 @@ conteudo.connect('script-message-received::mesaJanela', ao_pedido)
 conteudo.register_script_message_handler('mesaJanela')
 conteudo.add_script(WebKit2.UserScript.new(
     "(function(){var o=window.open;window.open=function(u,n,f){try{window.webkit.messageHandlers.mesaJanela.postMessage(String(f||''))}catch(e){}return o.apply(window,arguments)}})();",
-    WebKit2.UserContentInjectedFrames.TOP_FRAME, WebKit2.UserScriptInjectionTime.START, None, None))
+    WebKit2.UserContentInjectedFrames.ALL_FRAMES, WebKit2.UserScriptInjectionTime.START, None, None))
 
 # Escolha de pasta (input webkitdirectory, usado pela Jukebox para carregar presets): o WebKitGTK não a implementa e
 # entrega a pasta como se fosse um arquivo. A página avisa antes de abrir o seletor; o atalho mostra um seletor de
@@ -381,9 +381,9 @@ def preparar_view(wv):
     wv.connect('close', lambda v: fechar_aba(v) if isinstance(v.get_parent(), Gtk.Notebook) else v.get_toplevel().destroy())
 
 def aba_existente(uri):
-    # O app pedido já está aberto numa aba (mesma raiz, sem parâmetros): devolve (caderno, view).
+    # O app pedido já está aberto numa aba (mesma raiz, sem parâmetros nem rota): devolve (caderno, view).
     raiz = caminho_do_app(uri)
-    if raiz and '?' not in uri and uri.split('#')[0].endswith(raiz):
+    if raiz and '?' not in uri and '#' not in uri and uri.endswith(raiz):
         for nb, wv in todas_as_abas():
             if caminho_do_app(wv.get_uri() or '') == raiz:
                 return nb, wv
@@ -416,11 +416,12 @@ def ao_pedir_janela(origem, acao):
     pedidos.clear()
     req = acao.get_request()
     uri = req.get_uri() if req else ''
-    achada = aba_existente(uri)
-    if achada:
-        focar(*achada)
-        return None
     em_janela = 'popup' in caracteristicas or 'width' in caracteristicas
+    if not em_janela:
+        achada = aba_existente(uri)
+        if achada:
+            focar(*achada)
+            return None
     nova = WebKit2.WebView(related_view=origem, user_content_manager=conteudo)
     preparar_view(nova)
 
