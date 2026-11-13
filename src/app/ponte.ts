@@ -5,6 +5,7 @@ import { seloDoAssistente } from './assistente-slot.ts';
 import { abrirAplicativo } from './aplicativos.ts';
 import { alternarEncontroDaCena, alterarEntidade, atualizar, campanhaAtiva, criarEntidade, definirMomentoDaCena, ligarRefs, obterRepositorio, salvarElencoDaCampanha, vincularMapaNaCena, vincularParticipanteNaCena, vincularPistaNaCena, vincularTrilhaNaCena } from './campanha.ts';
 import { ferramentasDeCena, ferramentasDeElenco, ferramentasDeEntidade, ferramentasDeSessao } from './ponte-escrita.ts';
+import { momentosDoMapaDoAtlas } from './momentos-do-atlas.ts';
 import { oQueVejo } from './o-que-vejo.ts';
 import { alterarSessaoPorId, carregarSessoes, planejarSessao } from './registro.ts';
 import type { Efeito } from '../dominio/efeitos.ts';
@@ -105,6 +106,7 @@ const ferramentas = [
     vincularPista: vincularPistaNaCena,
     alternarEncontro: alternarEncontroDaCena,
     definirMomento: definirMomentoDaCena,
+    momentosDoMapa: momentosDoMapaDoAtlas,
     abrirApp: app => abrirAplicativo(app),
     registrar,
   }),

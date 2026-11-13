@@ -151,7 +151,7 @@ test('entidade: sem campanha ativa, erro legível', async () => {
 
 import { ferramentasDeCena, ferramentasDeElenco, type ContextoDeCenas, type ContextoDeElenco } from '../../src/app/ponte-escrita.ts';
 
-function montarCenas() {
+function montarCenas(momentosDoMapa?: ContextoDeCenas['momentosDoMapa']) {
   const mk = (id: string, tipo: Entidade['tipo'], nome: string, criadaPor: Entidade['criadaPor'], refs: Ref[] = [], tags: string[] = []): Entidade =>
     ({ id, campanhaId: 'c1', tipo, nome, tags, notas: '', refs, criadaPor, criadaEm: 0, atualizadaEm: 0 } as Entidade);
   let ents: Entidade[] = [
@@ -173,6 +173,7 @@ function montarCenas() {
     vincularParticipante: (c, p) => lig(c, p, 'aparece-em', true), vincularPista: (c, p) => lig(c, p, 'revela'),
     alternarEncontro: async c => { ents = ents.map(e => (e.id === c.id ? { ...e, tags: e.tags.includes('encontro') ? [] : ['encontro'] } : e)); return true; },
     definirMomento: async (c, m) => { ents = ents.map(e => (e.id === c.id ? { ...e, tags: [...e.tags.filter(t => !t.startsWith("momento:")), ...(m ? [`momento:${m}`] : [])] } : e)); return true; },
+    ...(momentosDoMapa ? { momentosDoMapa } : {}),
     abrirApp: async app => { abertos.push(app); return app === 'jukebox' ? 'bloqueado' : app === 'atelie' ? 'indisponivel' : 'aberto'; },
   };
   return { f: Object.fromEntries(ferramentasDeCena(ctx).map(t => [t.nome, t])), ligs, abertos };
@@ -186,6 +187,50 @@ test('cena: montar com mapa, trilha, dois participantes, pista, encontro e momen
   assert.equal(r.pistas[0].nome, 'Carta'); assert.equal(r.encontro, true); assert.equal(r.momento, 'Chegada');
   const l = await texto(f.mesa_cena_ler!.executar({ cenaId: 'cena1' }));
   assert.deepEqual(l, r);
+});
+
+const MOMENTOS = [{ id: 'mo1', nome: 'O Porão Acorda' }, { id: 'mo2', nome: 'Chuva' }, { id: 'mo3', nome: 'chuva ' }];
+
+test('cena: momento por nome (sem maiúsculas, acentos e espaços nas pontas) grava o id', async () => {
+  const pedidos: Ref[] = [];
+  const { f } = montarCenas(async m => { pedidos.push(m); return MOMENTOS; });
+  const r = await texto(f.mesa_cena_montar!.executar({ cenaId: 'cena1', mapa: 'ravina', momento: '  o porao ACORDA ' }));
+  assert.equal(r.momento, 'mo1');
+  assert.deepEqual(pedidos, [mapa('rav')]);
+});
+
+test('cena: momento por id grava o id; vazio remove', async () => {
+  const { f } = montarCenas(async () => MOMENTOS);
+  assert.equal((await texto(f.mesa_cena_montar!.executar({ cenaId: 'cena1', mapa: 'ravina', momento: 'mo2' }))).momento, 'mo2');
+  assert.equal((await texto(f.mesa_cena_montar!.executar({ cenaId: 'cena1', momento: '' }))).momento, null);
+});
+
+test('cena: momento usa o mapa já ligado quando "mapa" não vem', async () => {
+  const { f } = montarCenas(async () => MOMENTOS);
+  await f.mesa_cena_montar!.executar({ cenaId: 'cena1', mapa: 'ravina' });
+  assert.equal((await texto(f.mesa_cena_montar!.executar({ cenaId: 'cena1', momento: 'O Porão Acorda' }))).momento, 'mo1');
+});
+
+test('cena: momento ambíguo lista os ids e nada é gravado', async () => {
+  const { f, ligs } = montarCenas(async () => MOMENTOS);
+  await assert.rejects(f.mesa_cena_montar!.executar({ cenaId: 'cena1', mapa: 'ravina', momento: 'Chuva' }), /2 momentos chamados "Chuva".*mo2.*mo3/);
+  assert.equal(ligs.length, 0);
+});
+
+test('cena: momento inexistente lista os nomes do mapa', async () => {
+  const { f } = montarCenas(async () => MOMENTOS);
+  await assert.rejects(f.mesa_cena_montar!.executar({ cenaId: 'cena1', mapa: 'ravina', momento: 'Nada' }), /não tem momento "Nada".*"O Porão Acorda".*"Chuva"/);
+});
+
+test('cena: momento numa cena sem mapa dá erro claro', async () => {
+  const { f } = montarCenas(async () => MOMENTOS);
+  await assert.rejects(f.mesa_cena_montar!.executar({ cenaId: 'cena1', momento: 'Chuva' }), /cena não tem mapa do Atlas/);
+});
+
+test('cena: sem como ler o mapa, o texto vai como veio, salvo se for longo demais para a etiqueta', async () => {
+  const { f } = montarCenas(async () => null);
+  assert.equal((await texto(f.mesa_cena_montar!.executar({ cenaId: 'cena1', mapa: 'ravina', momento: 'mo9' }))).momento, 'mo9');
+  await assert.rejects(f.mesa_cena_montar!.executar({ cenaId: 'cena1', momento: 'x'.repeat(40) }), /longo demais/);
 });
 
 test('cena: erros legíveis (não é cena, entidade inexistente, tipo errado) sem gravar nada', async () => {

@@ -222,3 +222,25 @@ export function planejarAtivacaoDeCena(
     fichasIds,
   };
 }
+
+export interface MomentoDoMapa {
+  id: string;
+  nome: string;
+}
+
+/**
+ * Resolve o que o assistente escreveu (id ou nome) para o id de um momento do mapa.
+ * O id exato vence; o nome compara sem diferenciar maiúsculas, acentos e espaços nas pontas.
+ * Lança com mensagem legível se houver mais de um momento com o nome ou se não existir.
+ */
+export function resolverMomento(termo: string, momentos: readonly MomentoDoMapa[]): string {
+  const bruto = termo.trim();
+  const porId = momentos.find(m => m.id === bruto);
+  if (porId) return porId.id;
+  const chave = semAcento(bruto);
+  const porNome = momentos.filter(m => semAcento(m.nome.trim()) === chave || semAcento(m.id) === chave);
+  if (porNome.length === 1) return porNome[0]!.id;
+  if (porNome.length > 1) throw new Error(`"momento": há ${porNome.length} momentos chamados "${bruto}" no mapa da cena. Use o id: ${porNome.map(m => `${m.id} (${m.nome})`).join(', ')}.`);
+  const nomes = momentos.map(m => `"${m.nome}"`).join(', ');
+  throw new Error(`"momento": o mapa da cena não tem momento "${bruto}". ${momentos.length ? `Momentos disponíveis: ${nomes}.` : 'O mapa não tem nenhum momento.'}`);
+}

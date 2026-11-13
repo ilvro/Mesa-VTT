@@ -3,7 +3,7 @@ import { chaveDaRef, formatarRef, lerRef, TIPOS_LIGACAO, type Campanha, type Ent
 import { json, type FerramentaDaPonte } from '#mesa/ponte';
 import type { Efeito } from '../dominio/efeitos.ts';
 import { NOME_DO_APP, TIPOS_CRIAVEIS, ehEncontro, podarElenco, podeEditar, semAcento, temFichaDePersonagem } from '../dominio/entidades.ts';
-import { candidatosDeTrilha, entidadePorRef, extrairPacoteDeCena, type PacoteDeCena } from '../dominio/cenas.ts';
+import { candidatosDeTrilha, entidadePorRef, extrairPacoteDeCena, resolverMomento, type MomentoDoMapa, type PacoteDeCena } from '../dominio/cenas.ts';
 import { adicionar, MAXIMO_DO_ROTEIRO, podarNotas, removerItem } from '../dominio/roteiro.ts';
 
 export interface ContextoDeSessoes {
@@ -256,6 +256,8 @@ export interface ContextoDeCenas {
   vincularPista(cena: Entidade, pista: Entidade): Promise<boolean>;
   alternarEncontro(cena: Entidade): Promise<boolean>;
   definirMomento(cena: Entidade, momento: string | null): Promise<boolean>;
+  /** Momentos (id e nome) do mapa do Atlas; `null` se a Mesa não consegue ler o mapa. Sem isto, o texto vai como veio. */
+  momentosDoMapa?(mapa: Ref): Promise<MomentoDoMapa[] | null>;
   /** Abre o app pelo manifesto. `bloqueado`: o navegador recusou a janela e a Mesa já mostrou o aviso com o botão "Abrir". */
   abrirApp(app: AppAbrivel): Promise<EstadoDeAbrirApp>;
   registrar?: (e: Efeito) => void;
@@ -334,6 +336,15 @@ export function ferramentasDeCena(ctx: ContextoDeCenas): FerramentaDaPonte[] {
         if (args.momento !== undefined && typeof args.momento !== 'string') throw new Error('"momento" deve ser texto (nome ou id do momento).');
         if (args.encontro !== undefined && typeof args.encontro !== 'boolean') throw new Error('"encontro" deve ser verdadeiro ou falso.');
         const momento = typeof args.momento === 'string' ? args.momento.trim().replace(/^momento:/i, '').trim() : undefined;
+        // Resolve o momento (nome ou id) para o id do momento ANTES de gravar qualquer coisa.
+        let momentoId = momento;
+        if (momento) {
+          const refMapa = mapa ? mapa.refs.find(r => r.app === 'atlas') : extrairPacoteDeCena(cena, todas, await ctx.ligacoes()).mapa?.ref;
+          if (!refMapa) throw new Error('"momento": a cena não tem mapa do Atlas. Vincule o mapa (campo "mapa") antes de definir o momento.');
+          const momentos = (await ctx.momentosDoMapa?.(refMapa)) ?? null;
+          if (momentos) momentoId = resolverMomento(momento, momentos);
+          else if (`momento:${momento}`.length > 40) throw new Error(`"momento": não consegui ler os momentos do mapa e "${momento}" é longo demais para guardar; informe o id do momento (atlas_mapa_ler).`);
+        }
         if (!(mapa || trilha || parts.length || pistas.length || momento !== undefined || args.encontro !== undefined)) throw new Error('Nada a montar: informe mapa, trilha, participantes, pistas, momento ou encontro.');
 
         if (mapa && !(await ctx.vincularMapa(await atual(cena.id), mapa))) throw falha(`vincular o mapa "${mapa.nome}"`);
@@ -341,7 +352,7 @@ export function ferramentasDeCena(ctx: ContextoDeCenas): FerramentaDaPonte[] {
         for (const p of parts) if (!(await ctx.vincularParticipante(await atual(cena.id), p))) throw falha(`pôr "${p.nome}" na cena`);
         for (const p of pistas) if (!(await ctx.vincularPista(await atual(cena.id), p))) throw falha(`vincular a pista "${p.nome}"`);
         if (typeof args.encontro === 'boolean' && ehEncontro(await atual(cena.id)) !== args.encontro && !(await ctx.alternarEncontro(await atual(cena.id)))) throw falha('mudar a marca de encontro');
-        if (momento !== undefined && !(await ctx.definirMomento(await atual(cena.id), momento || null))) throw falha('definir o momento');
+        if (momento !== undefined && !(await ctx.definirMomento(await atual(cena.id), momentoId || null))) throw falha('definir o momento');
         const final = await atual(cena.id);
         ctx.registrar?.({ tipo: 'alterou-entidade', antes });
         return [json(pacote(final, await ctx.entidades(), await ctx.ligacoes()))];
