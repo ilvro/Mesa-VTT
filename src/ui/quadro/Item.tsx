@@ -1,3 +1,4 @@
+import type { Editor } from '@tiptap/core';
 import { memo } from 'preact/compat';
 import { docParaHtml } from '../../dominio/doc-rico.ts';
 import type { DocRico, Item as ItemModelo } from '../../dominio/quadro.ts';
@@ -7,6 +8,7 @@ interface ItemProps {
   item: ItemModelo;
   editando: boolean;
   onSairEdicao: (novoDoc?: DocRico, novaAltura?: number) => void;
+  onEditorPronto?: (editor: Editor | null) => void;
 }
 
 const ALINHAMENTO_CSS = {
@@ -57,7 +59,7 @@ function estiloCaixaCss(item: Extract<ItemModelo, { tipo: 'texto' }>) {
   };
 }
 
-function ItemBase({ item, editando, onSairEdicao }: ItemProps) {
+function ItemBase({ item, editando, onSairEdicao, onEditorPronto }: ItemProps) {
   const estiloPosicao = {
     left: `${item.x}px`,
     top: `${item.y}px`,
@@ -82,6 +84,7 @@ function ItemBase({ item, editando, onSairEdicao }: ItemProps) {
             alturaAuto={item.alturaAuto}
             padding={item.caixa.padding}
             onSair={(novoDoc, novaAltura) => onSairEdicao(novoDoc, novaAltura)}
+            onEditorPronto={onEditorPronto}
           />
         ) : (
           <div

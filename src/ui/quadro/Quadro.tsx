@@ -1,5 +1,6 @@
+import type { Editor } from '@tiptap/core';
 import { useSignal } from '@preact/signals';
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useMemo, useRef } from 'preact/hooks';
 import {
   caixaEnvolventeDeItem,
   caixaEnvolventeTotal,
@@ -43,6 +44,7 @@ import {
 import { navegarParaQuadro } from '../../app/rotas.ts';
 import { cx } from '../cx.ts';
 import { BarraDeFerramentas, type FerramentaQuadro } from './BarraDeFerramentas.tsx';
+import { BarraDeFormatacao } from './BarraDeFormatacao.tsx';
 import { Mundo } from './Mundo.tsx';
 import { PainelDoFundo, type ModoRoda } from './PainelDoFundo.tsx';
 
@@ -194,8 +196,33 @@ export function Quadro() {
   const espacoPressionado = useSignal(false);
   const modoRoda = useSignal<ModoRoda>(lerModoRoda());
   const editandoId = useSignal<string | null>(null);
+  const editorAtivo = useSignal<Editor | null>(null);
+  const tickEditor = useSignal(0);
   const retanguloSelecao = useSignal<Caixa | null>(null);
   const gestoRef = useRef<Gesto | null>(null);
+
+  const selecionados = useMemo(() => {
+    const lista: Item[] = [];
+    for (const id of selecao.value) {
+      const it = itens.value.get(id);
+      if (it) lista.push(it);
+    }
+    return lista;
+  }, [selecao.value, itens.value]);
+
+  useEffect(() => {
+    const ed = editorAtivo.value;
+    if (!ed) return;
+    const atualizar = () => {
+      tickEditor.value++;
+    };
+    ed.on('selectionUpdate', atualizar);
+    ed.on('transaction', atualizar);
+    return () => {
+      ed.off('selectionUpdate', atualizar);
+      ed.off('transaction', atualizar);
+    };
+  }, [editorAtivo.value]);
 
   useEffect(() => {
     camera.value = lerCameraSalva(q.id);
@@ -872,9 +899,25 @@ export function Quadro() {
           editandoId={editandoId.value}
           retanguloSelecao={retanguloSelecao.value}
           onSairEdicao={aoSairEdicao}
+          onEditorPronto={(ed) => {
+            editorAtivo.value = ed;
+          }}
           onIniciarRedimensionar={iniciarRedimensionar}
           onIniciarGirar={iniciarGirar}
         />
+
+        {(() => {
+          void tickEditor.value;
+          return (
+            <BarraDeFormatacao
+              selecionados={selecionados}
+              camera={camera.value}
+              tamanhoTela={tamanhoTela.value}
+              editorAtivo={editorAtivo.value}
+              novoId={novoIdItem}
+            />
+          );
+        })()}
 
         <div
           onPointerDown={(e) => e.stopPropagation()}

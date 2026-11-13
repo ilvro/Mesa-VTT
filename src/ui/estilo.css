@@ -847,3 +847,122 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   user-select: text;
   cursor: text;
 }
+.barra-formatacao {
+  position: absolute;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  background: var(--painel);
+  border: 1px solid var(--linha);
+  border-radius: 10px;
+  z-index: 25;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+}
+.fmt-select {
+  padding: 4px 6px;
+  font-size: 12px;
+  height: 28px;
+}
+.fmt-select-pequeno {
+  width: 64px;
+}
+.fmt-input-num {
+  width: 52px;
+  padding: 4px 6px;
+  font-size: 12px;
+  height: 28px;
+  background: var(--superficie-2);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+}
+.fmt-btn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 6px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 13px;
+  color: var(--texto);
+}
+.fmt-btn:hover {
+  background: var(--superficie-2);
+}
+.fmt-btn.ativa {
+  background: var(--acento-suave);
+  color: var(--acento);
+  border: 1px solid var(--acento);
+}
+.fmt-btn-perigo:hover {
+  color: var(--perigo);
+}
+.fmt-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--linha);
+  margin: 0 2px;
+}
+.fmt-amostra-atual {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid var(--linha-forte);
+  display: block;
+}
+.seletor-cor-wrap {
+  position: relative;
+}
+.seletor-cor-popover {
+  position: absolute;
+  top: 34px;
+  left: 0;
+  width: 224px;
+  padding: 10px;
+  background: var(--painel);
+  border: 1px solid var(--linha);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 30;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+}
+.seletor-cor-grade {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.seletor-cor-recentes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.seletor-cor-acoes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.seletor-cor-hex {
+  width: 82px;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+.fmt-popover-caixa {
+  position: absolute;
+  top: 38px;
+  right: 0;
+  width: 210px;
+  padding: 10px;
+  background: var(--painel);
+  border: 1px solid var(--linha);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 30;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+}

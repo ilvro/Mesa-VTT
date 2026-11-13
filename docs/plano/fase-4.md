@@ -283,7 +283,8 @@ Testes: `docParaHtml` escapa `<script>` e atributos `on*`; cor inválida, fonte 
 Pronto quando: editar uma nota com negrito e itálico, sair, recarregar e ver igual.
 Commit: `added rich text editing with a pure static renderer`
 
-### Q2c — Barra de formatação contextual  ⬜
+### Q2c — Barra de formatação contextual  ✅
+Nota: `EditorRico`, `Item`, `Mundo` e `Quadro` propagam `editorAtivo` para a barra controlar a seleção do TipTap em tempo real.
 Objetivo: a personalização de texto e caixa do Miro, numa barra flutuante sobre a seleção.
 Depende de: Q2b.
 Arquivos: criar `src/ui/quadro/BarraDeFormatacao.tsx` e `src/ui/quadro/SeletorDeCor.tsx`; mudar `EditorRico.tsx`, `Quadro.tsx` e `estilo.css`.

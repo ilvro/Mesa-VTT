@@ -216,3 +216,80 @@ test('Q2b: editar uma nota com negrito e itálico, sair, recarregar e ver igual'
     await ctx.close();
   }
 });
+
+test('Q2c: barra de formatação muda fundo de 2 notas com desfazer e destaca palavra em edição', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1280, height: 800 } });
+  try {
+    const page = await ctx.newPage();
+    const erros: string[] = [];
+    page.on('console', (m) => {
+      if (m.type() === 'error') erros.push(m.text());
+    });
+    page.on('pageerror', (e) => erros.push(`pageerror: ${e.message}`));
+
+    await page.goto(`${amb.origem}/Mesa/`);
+    await page.waitForSelector('[data-testid="campanha-select"]');
+    await page.click('[data-testid="aba-campanhas"]');
+    await page.fill('[data-testid="nova-campanha-nome"]', 'Campanha Q2c');
+    await page.click('[data-testid="criar-campanha"]');
+    await page.waitForSelector('[data-testid="tela-entidades"]');
+
+    await page.click('[data-testid="aba-quadros"]');
+    await page.fill('[data-testid="novo-quadro-nome"]', 'Quadro Q2c');
+    await page.click('[data-testid="criar-quadro"]');
+    await page.waitForSelector('[data-testid="area-quadro"]');
+
+    const area = await page.locator('[data-testid="area-quadro"]').boundingBox();
+    assert.ok(area);
+
+    // Criar 2 notas
+    await page.click('[data-testid="ferramenta-nota"]');
+    await page.mouse.click(area.x + 250, area.y + 200);
+    await page.waitForSelector('[data-testid="editor-rico"]');
+    await page.keyboard.type('Primeira nota');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-testid="editor-rico"]', { state: 'detached' });
+
+    await page.click('[data-testid="ferramenta-nota"]');
+    await page.mouse.click(area.x + 550, area.y + 200);
+    await page.waitForSelector('[data-testid="editor-rico"]');
+    await page.keyboard.type('Segunda');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-testid="editor-rico"]', { state: 'detached' });
+
+    // Selecionar todas (Ctrl+A) e mudar fundo das duas para azul (#7aa7f0)
+    await page.keyboard.press('Control+a');
+    await page.waitForSelector('[data-testid="barra-formatacao"]');
+    await page.click('[data-testid="fmt-fundo-abrir"]');
+    await page.click('[data-testid="fmt-fundo-cor-7aa7f0"]');
+
+    const coresDepois = await page.locator('[data-testid^="item-"]').evaluateAll((els) =>
+      els.map((el) => (el as HTMLElement).style.backgroundColor),
+    );
+    assert.deepEqual(coresDepois, ['rgb(122, 167, 240)', 'rgb(122, 167, 240)']);
+
+    // Desfazer volta as duas para amarelo (#f7e48c)
+    await page.keyboard.press('Control+z');
+    const coresDesfeitas = await page.locator('[data-testid^="item-"]').evaluateAll((els) =>
+      els.map((el) => (el as HTMLElement).style.backgroundColor),
+    );
+    assert.deepEqual(coresDesfeitas, ['rgb(247, 228, 140)', 'rgb(247, 228, 140)']);
+
+    // Editar primeira nota, selecionar palavra e aplicar fundo de texto amarelo
+    await page.keyboard.press('Escape');
+    await page.mouse.dblclick(area.x + 300, area.y + 250);
+    await page.waitForSelector('[data-testid="editor-rico"]');
+    await page.keyboard.press('Shift+Control+ArrowLeft');
+    await page.click('[data-testid="fmt-cor-destaque-abrir"]');
+    await page.click('[data-testid="fmt-cor-destaque-cor-f7e48c"]');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-testid="editor-rico"]', { state: 'detached' });
+
+    const html = await page.locator('[data-testid^="item-"] .doc-rico-html').first().innerHTML();
+    assert.match(html, /background-color/i);
+
+    assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
+  } finally {
+    await ctx.close();
+  }
+});

@@ -1,3 +1,4 @@
+import type { Editor } from '@tiptap/core';
 import { useMemo } from 'preact/hooks';
 import {
   caixaVisivel,
@@ -19,6 +20,7 @@ interface MundoProps {
   editandoId: string | null;
   retanguloSelecao: Caixa | null;
   onSairEdicao: (id: string, novoDoc?: DocRico, novaAltura?: number) => void;
+  onEditorPronto?: (editor: Editor | null) => void;
   onIniciarRedimensionar: (alca: Alca, e: PointerEvent) => void;
   onIniciarGirar: (e: PointerEvent) => void;
 }
@@ -31,6 +33,7 @@ export function Mundo({
   editandoId,
   retanguloSelecao,
   onSairEdicao,
+  onEditorPronto,
   onIniciarRedimensionar,
   onIniciarGirar,
 }: MundoProps) {
@@ -66,6 +69,7 @@ export function Mundo({
           item={item}
           editando={editandoId === item.id}
           onSairEdicao={(novoDoc, novaAltura) => onSairEdicao(item.id, novoDoc, novaAltura)}
+          onEditorPronto={onEditorPronto}
         />
       ))}
       <Selecao
