@@ -21,7 +21,16 @@ import {
   levarParaTras,
   trazerParaFrente,
 } from '../../dominio/quadro-operacoes.ts';
-import { executar, itens, selecao } from '../../app/quadros.ts';
+import {
+  agruparSelecao,
+  alinharSelecao,
+  desagruparSelecao,
+  distribuirSelecao,
+  executar,
+  itens,
+  selecao,
+} from '../../app/quadros.ts';
+import type { ModoAlinhamento } from '../../dominio/alinhamento.ts';
 import { SeletorDeCor } from './SeletorDeCor.tsx';
 
 const ROTULO_FONTE: Record<IdFonte, string> = {
@@ -796,6 +805,75 @@ export function BarraDeFormatacao({
               alterarTracos('Espessura do traço', () => ({ espessura }));
             }}
           />
+        </>
+      ) : null}
+
+      {selecionados.length >= 2 ? (
+        <>
+          <span class="fmt-sep" />
+          <button
+            type="button"
+            class="fmt-btn"
+            data-testid="fmt-agrupar"
+            title="Agrupar (Ctrl+G)"
+            onClick={() => agruparSelecao(novoId())}
+          >
+            ⊞
+          </button>
+          {selecionados.some((i) => i.grupoId !== null) ? (
+            <button
+              type="button"
+              class="fmt-btn"
+              data-testid="fmt-desagrupar"
+              title="Desagrupar (Ctrl+Shift+G)"
+              onClick={() => desagruparSelecao()}
+            >
+              ⊟
+            </button>
+          ) : null}
+          {(
+            [
+              ['esquerda', '⇤'],
+              ['centro-h', '⇔'],
+              ['direita', '⇥'],
+              ['topo', '⤒'],
+              ['centro-v', '⇕'],
+              ['base', '⤓'],
+            ] as [ModoAlinhamento, string][]
+          ).map(([modo, icone]) => (
+            <button
+              key={modo}
+              type="button"
+              class="fmt-btn"
+              data-testid={`fmt-alinhar-${modo}`}
+              title={`Alinhar: ${modo}`}
+              onClick={() => alinharSelecao(modo)}
+            >
+              {icone}
+            </button>
+          ))}
+          {selecionados.length >= 3 ? (
+            <>
+              <button
+                type="button"
+                class="fmt-btn"
+                data-testid="fmt-distribuir-h"
+                title="Distribuir horizontalmente"
+                onClick={() => distribuirSelecao('h')}
+              >
+                |||
+              </button>
+              <button
+                type="button"
+                class="fmt-btn"
+                data-testid="fmt-distribuir-v"
+                title="Distribuir verticalmente"
+                onClick={() => distribuirSelecao('v')}
+              >
+                ☰
+              </button>
+            </>
+          ) : null}
         </>
       ) : null}
 

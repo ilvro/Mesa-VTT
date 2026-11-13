@@ -13,6 +13,14 @@ import {
   type Tamanho,
 } from '../../dominio/camera.ts';
 import {
+  guias,
+  type LinhaGuia,
+} from '../../dominio/alinhamento.ts';
+import {
+  colar as colarArea,
+  copiar as copiarArea,
+} from '../../dominio/area-de-transferencia.ts';
+import {
   caixaDe,
   contemPonto,
   encaixarNaGrade,
@@ -22,6 +30,7 @@ import {
   type Alca,
 } from '../../dominio/geometria.ts';
 import {
+  docDeTexto,
   novaForma,
   novaImagem,
   novaMoldura,
@@ -53,7 +62,9 @@ import {
 import { duplicar } from '../../dominio/quadro-operacoes.ts';
 import { FORMATOS_IMAGEM_ACEITOS, importarArquivoImagem } from '../../app/imagens-quadro.ts';
 import {
+  agruparSelecao,
   atualizarMolduras,
+  desagruparSelecao,
   desfazer,
   executar,
   fecharQuadro,
@@ -75,6 +86,7 @@ import {
 } from './BarraDeFerramentas.tsx';
 import { BarraDeFormatacao } from './BarraDeFormatacao.tsx';
 import { Mundo, type TracoPreview } from './Mundo.tsx';
+import { MenuDoItem } from './MenuDoItem.tsx';
 import { Navegador } from './Navegador.tsx';
 import { PainelDoFundo, type ModoRoda } from './PainelDoFundo.tsx';
 
@@ -282,6 +294,10 @@ export function Quadro() {
   const formaAtiva = useSignal<Forma>('retangulo');
   const configTracos = useSignal<ConfigTracos>(lerConfigTracos());
   const tracoEmDesenho = useSignal<TracoPreview | null>(null);
+  const linhasGuia = useSignal<LinhaGuia[]>([]);
+  const grupoAberto = useSignal<string | null>(null);
+  const menuContexto = useSignal<{ x: number; y: number; pontoMundo: Ponto } | null>(null);
+  const ultimoTextoCopiadoRef = useRef<string | null>(null);
   const espacoPressionado = useSignal(false);
   const modoRoda = useSignal<ModoRoda>(lerModoRoda());
   const editandoId = useSignal<string | null>(null);
@@ -290,6 +306,57 @@ export function Quadro() {
   const retanguloSelecao = useSignal<Caixa | null>(null);
   const gestoRef = useRef<Gesto | null>(null);
   const inputImagemRef = useRef<HTMLInputElement | null>(null);
+
+  const copiarSelecao = () => {
+    const sel = [...selecao.value]
+      .map((id) => itens.value.get(id))
+      .filter((i): i is Item => Boolean(i));
+    if (sel.length === 0) return;
+    const texto = copiarArea(sel);
+    ultimoTextoCopiadoRef.current = texto;
+    try {
+      void navigator.clipboard?.writeText(texto);
+    } catch {
+      /* ignora */
+    }
+  };
+
+  const colarTextoNoQuadro = (texto: string, pontoMundo?: Ponto) => {
+    const limpo = texto.trim();
+    if (!limpo) return;
+    const centro =
+      pontoMundo ??
+      telaParaMundo(camera.value, {
+        x: tamanhoTela.value.largura / 2,
+        y: tamanhoTela.value.altura / 2,
+      });
+    const colados = colarArea(
+      limpo,
+      novoIdItem,
+      { quadroId: q.id, centro, deslocamento: 24 },
+      Date.now(),
+    );
+    if (colados && colados.length > 0) {
+      executar({ rotulo: 'Colar', ops: [{ criar: colados }] });
+      selecao.value = new Set(colados.map((i) => i.id));
+      return;
+    }
+    // Texto comum ou Ref mesa:... (Q3c converte para item ref)
+    const maxZ = Math.max(0, ...[...itens.value.values()].map((i) => i.z));
+    const novo = novoTexto(
+      {
+        quadroId: q.id,
+        x: centro.x - 100,
+        y: centro.y - 24,
+        doc: docDeTexto(limpo),
+        z: maxZ + 1,
+      },
+      Date.now(),
+      novoIdItem(),
+    );
+    executar({ rotulo: 'Colar texto', ops: [{ criar: [novo] }] });
+    selecao.value = new Set([novo.id]);
+  };
 
   useEffect(() => {
     const aoColar = (e: ClipboardEvent) => {
@@ -317,9 +384,16 @@ export function Quadro() {
           }
         }
       }
-      if (arquivos.length === 0) return;
-      e.preventDefault();
-      void inserirImagens(arquivos);
+      if (arquivos.length > 0) {
+        e.preventDefault();
+        void inserirImagens(arquivos);
+        return;
+      }
+      const texto = e.clipboardData?.getData('text/plain') || ultimoTextoCopiadoRef.current;
+      if (texto) {
+        e.preventDefault();
+        colarTextoNoQuadro(texto);
+      }
     };
     window.addEventListener('paste', aoColar);
     return () => window.removeEventListener('paste', aoColar);
@@ -463,6 +537,26 @@ export function Quadro() {
         } else if (k === 'a') {
           e.preventDefault();
           selecao.value = new Set(itens.value.keys());
+        } else if (k === 'g' && !e.shiftKey) {
+          e.preventDefault();
+          agruparSelecao(novoIdItem());
+        } else if (k === 'g' && e.shiftKey) {
+          e.preventDefault();
+          desagruparSelecao();
+        } else if (k === 'c') {
+          e.preventDefault();
+          copiarSelecao();
+        } else if (k === 'x') {
+          e.preventDefault();
+          copiarSelecao();
+          const remover = [...selecao.value]
+            .map((id) => itens.value.get(id))
+            .filter((i): i is Item => Boolean(i))
+            .filter((i) => !i.travado);
+          if (remover.length > 0) {
+            executar({ rotulo: 'Recortar', ops: [{ remover }] });
+            selecao.value = new Set();
+          }
         } else if (k === 'd') {
           e.preventDefault();
           const sel = [...selecao.value]
@@ -892,7 +986,14 @@ export function Quadro() {
           return;
         }
         if (!selecao.value.has(alvo.id)) {
-          selecao.value = new Set([alvo.id]);
+          if (alvo.grupoId && grupoAberto.value !== alvo.grupoId) {
+            const idsGrupo = [...itens.value.values()]
+              .filter((i) => i.grupoId === alvo.grupoId)
+              .map((i) => i.id);
+            selecao.value = new Set(idsGrupo);
+          } else {
+            selecao.value = new Set([alvo.id]);
+          }
         }
         const moviveis = [...selecao.value]
           .map((id) => itens.value.get(id))
@@ -923,6 +1024,7 @@ export function Quadro() {
           originais,
         };
       } else {
+        grupoAberto.value = null;
         if (!e.shiftKey) {
           selecao.value = new Set();
         }
@@ -1039,6 +1141,38 @@ export function Quadro() {
       if (e.shiftKey) {
         if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
         else dx = 0;
+      }
+      if (!e.altKey && !q.fundo.encaixar) {
+        let minX = Infinity,
+          minY = Infinity,
+          maxX = -Infinity,
+          maxY = -Infinity;
+        for (const [id, orig] of g.originais) {
+          const it = itens.value.get(id);
+          if (!it) continue;
+          if (orig.x + dx < minX) minX = orig.x + dx;
+          if (orig.y + dy < minY) minY = orig.y + dy;
+          if (orig.x + dx + it.largura > maxX) maxX = orig.x + dx + it.largura;
+          if (orig.y + dy + it.altura > maxY) maxY = orig.y + dy + it.altura;
+        }
+        if (Number.isFinite(minX)) {
+          const outros: Caixa[] = [];
+          for (const it of itens.value.values()) {
+            if (!g.originais.has(it.id) && it.tipo !== 'seta') {
+              outros.push({ x: it.x, y: it.y, largura: it.largura, altura: it.altura });
+            }
+          }
+          const res = guias(
+            { x: minX, y: minY, largura: maxX - minX, altura: maxY - minY },
+            outros,
+            6 / Math.max(0.05, camera.value.zoom),
+          );
+          dx += res.dx;
+          dy += res.dy;
+          linhasGuia.value = res.linhas;
+        }
+      } else {
+        linhasGuia.value = [];
       }
       const agora = Date.now();
       const alterar: { id: string; antes: Partial<Item>; depois: Partial<Item> }[] = [];
@@ -1251,6 +1385,7 @@ export function Quadro() {
   };
 
   const aoSoltar = (e: PointerEvent) => {
+    linhasGuia.value = [];
     const g = gestoRef.current;
     if (!g) return;
     gestoRef.current = null;
@@ -1310,6 +1445,11 @@ export function Quadro() {
       ?.getAttribute('data-item-id');
     const alvoDom = idAlvoDom ? (itens.value.get(idAlvoDom) ?? null) : null;
     const alvo = alvoDom ?? itemNoPonto(itens.value, p, true);
+    if (alvo && alvo.grupoId && grupoAberto.value !== alvo.grupoId) {
+      grupoAberto.value = alvo.grupoId;
+      selecao.value = new Set([alvo.id]);
+      return;
+    }
     if (
       alvo &&
       (alvo.tipo === 'texto' ||
@@ -1481,11 +1621,34 @@ export function Quadro() {
         )}
         data-testid="area-quadro"
         style={estiloGrade(q.fundo, camera.value)}
-        onPointerDown={aoPressionar}
+        onPointerDown={(e) => {
+          menuContexto.value = null;
+          aoPressionar(e);
+        }}
         onPointerMove={aoMover}
         onPointerUp={aoSoltar}
         onPointerCancel={aoSoltar}
         onDblClick={aoDuploClique}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          const el = areaRef.current;
+          if (!el) return;
+          const rect = el.getBoundingClientRect();
+          const p = pontoMundoDe(e);
+          const idAlvoDom = (e.target as HTMLElement | null)
+            ?.closest?.('[data-item-id]')
+            ?.getAttribute('data-item-id');
+          const alvoDom = idAlvoDom ? (itens.value.get(idAlvoDom) ?? null) : null;
+          const alvo = alvoDom ?? itemNoPonto(itens.value, p, true);
+          if (alvo && !selecao.value.has(alvo.id)) {
+            selecao.value = new Set([alvo.id]);
+          }
+          menuContexto.value = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top,
+            pontoMundo: p,
+          };
+        }}
         onDragOver={(e) => {
           if (e.dataTransfer?.types.includes('Files')) {
             e.preventDefault();
@@ -1520,6 +1683,7 @@ export function Quadro() {
           editandoId={editandoId.value}
           retanguloSelecao={retanguloSelecao.value}
           tracoEmDesenho={tracoEmDesenho.value}
+          linhasGuia={linhasGuia.value}
           onSairEdicao={aoSairEdicao}
           onSairRotulo={aoSairRotulo}
           onSairTitulo={aoSairTitulo}
@@ -1587,6 +1751,33 @@ export function Quadro() {
             }}
           />
         </div>
+
+        {menuContexto.value ? (
+          <MenuDoItem
+            x={menuContexto.value.x}
+            y={menuContexto.value.y}
+            quadroId={q.id}
+            selecionados={selecionados}
+            novoId={novoIdItem}
+            onCopiar={copiarSelecao}
+            onColar={() => {
+              const pm = menuContexto.value?.pontoMundo;
+              void (async () => {
+                let texto = ultimoTextoCopiadoRef.current ?? '';
+                try {
+                  const clip = await navigator.clipboard?.readText();
+                  if (clip) texto = clip;
+                } catch {
+                  /* ignora */
+                }
+                if (texto) colarTextoNoQuadro(texto, pm);
+              })();
+            }}
+            onFechar={() => {
+              menuContexto.value = null;
+            }}
+          />
+        ) : null}
 
         {navegadorAberto.value ? (
           <div

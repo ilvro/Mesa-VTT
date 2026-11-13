@@ -944,6 +944,51 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .navegador-item-btn:hover {
   background: var(--superficie-2);
 }
+.menu-contexto-quadro {
+  position: absolute;
+  min-width: 190px;
+  background: var(--superficie-1);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: var(--sombra-flutuante);
+  z-index: 40;
+}
+.menu-contexto-btn {
+  text-align: left;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--texto);
+  cursor: pointer;
+  font-size: 13px;
+}
+.menu-contexto-btn:hover {
+  background: var(--superficie-2);
+}
+.menu-contexto-btn.perigo {
+  color: var(--perigo, #c45b43);
+}
+.menu-contexto-sep {
+  border: none;
+  border-top: 1px solid var(--borda);
+  margin: 4px 0;
+}
+.menu-contexto-alinhar {
+  padding: 4px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.menu-contexto-alinhar-grade {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
 .item-texto-conteudo {
   width: 100%;
 }
@@ -1382,4 +1427,49 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 }
 .navegador-item-btn:hover {
   background: var(--superficie-2);
+}
+.menu-contexto-quadro {
+  position: absolute;
+  min-width: 190px;
+  background: var(--superficie-1);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: var(--sombra-flutuante);
+  z-index: 40;
+}
+.menu-contexto-btn {
+  text-align: left;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--texto);
+  cursor: pointer;
+  font-size: 13px;
+}
+.menu-contexto-btn:hover {
+  background: var(--superficie-2);
+}
+.menu-contexto-btn.perigo {
+  color: var(--perigo, #c45b43);
+}
+.menu-contexto-sep {
+  border: none;
+  border-top: 1px solid var(--borda);
+  margin: 4px 0;
+}
+.menu-contexto-alinhar {
+  padding: 4px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.menu-contexto-alinhar-grade {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
 }

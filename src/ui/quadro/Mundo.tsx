@@ -7,6 +7,7 @@ import {
   type Camera,
   type Tamanho,
 } from '../../dominio/camera.ts';
+import type { LinhaGuia } from '../../dominio/alinhamento.ts';
 import type { Alca } from '../../dominio/geometria.ts';
 import type { DocRico, Item as ItemModelo } from '../../dominio/quadro.ts';
 import type { LadoResolvido } from '../../dominio/setas.ts';
@@ -30,6 +31,7 @@ interface MundoProps {
   editandoId: string | null;
   retanguloSelecao: Caixa | null;
   tracoEmDesenho?: TracoPreview | null;
+  linhasGuia?: readonly LinhaGuia[];
   onSairEdicao: (id: string, novoDoc?: DocRico, novaAltura?: number) => void;
   onSairRotulo: (id: string, novoRotulo: string) => void;
   onSairTitulo: (id: string, novoTitulo: string) => void;
@@ -48,6 +50,7 @@ export function Mundo({
   editandoId,
   retanguloSelecao,
   tracoEmDesenho,
+  linhasGuia,
   onSairEdicao,
   onSairRotulo,
   onSairTitulo,
@@ -126,6 +129,46 @@ export function Mundo({
         onIniciarConector={onIniciarConector}
         onIniciarPontaSeta={onIniciarPontaSeta}
       />
+      {linhasGuia && linhasGuia.length > 0 ? (
+        <svg
+          class="linhas-guia"
+          style={{
+            position: 'absolute',
+            left: '0px',
+            top: '0px',
+            width: '1px',
+            height: '1px',
+            overflow: 'visible',
+            pointerEvents: 'none',
+          }}
+        >
+          {linhasGuia.map((l, idx) =>
+            l.eixo === 'x' ? (
+              <line
+                key={idx}
+                x1={l.pos}
+                y1={l.de}
+                x2={l.pos}
+                y2={l.ate}
+                stroke="var(--acento)"
+                strokeWidth={1 / Math.max(0.05, camera.zoom)}
+                strokeDasharray={`${4 / Math.max(0.05, camera.zoom)} ${4 / Math.max(0.05, camera.zoom)}`}
+              />
+            ) : (
+              <line
+                key={idx}
+                x1={l.de}
+                y1={l.pos}
+                x2={l.ate}
+                y2={l.pos}
+                stroke="var(--acento)"
+                strokeWidth={1 / Math.max(0.05, camera.zoom)}
+                strokeDasharray={`${4 / Math.max(0.05, camera.zoom)} ${4 / Math.max(0.05, camera.zoom)}`}
+              />
+            ),
+          )}
+        </svg>
+      ) : null}
     </div>
   );
 }

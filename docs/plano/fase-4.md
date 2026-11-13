@@ -406,7 +406,8 @@ Testes: `molduraQueContem` com molduras aninhadas; `ordemDeLeitura`.
 Pronto quando: criar 3 molduras com itens, mover uma e os filhos irem junto, pular entre elas pelo navegador.
 Commit: `added frames and a frame navigator to boards`
 
-### Q2j — Organização: alinhar, agrupar, guias, área de transferência e menu  ⬜
+### Q2j — Organização: alinhar, agrupar, guias, área de transferência e menu  ✅
+Nota: `src/ui/quadro/Mundo.tsx` e `src/ui/estilo.css` também receberam renderização de linhas guia e estilos do menu de contexto.
 Objetivo: o acabamento de organização que faz o quadro parecer o Miro.
 Depende de: Q2g, Q2i.
 Arquivos: criar `src/dominio/alinhamento.ts`, `tests/unit/alinhamento.test.ts`, `src/dominio/area-de-transferencia.ts`, `tests/unit/area-de-transferencia.test.ts` e `src/ui/quadro/MenuDoItem.tsx`; mudar `Quadro.tsx`, `src/app/quadros.ts` e `BarraDeFormatacao.tsx`.

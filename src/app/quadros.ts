@@ -16,6 +16,11 @@ import {
   setasLigadasA,
 } from '../dominio/setas.ts';
 import { molduraQueContem, type ItemMoldura } from '../dominio/molduras.ts';
+import {
+  alinhar,
+  distribuir,
+  type ModoAlinhamento,
+} from '../dominio/alinhamento.ts';
 import { campanhaAtiva } from './campanha.ts';
 import { revogarImagensDoQuadro } from './imagens-quadro.ts';
 import {
@@ -392,6 +397,94 @@ export function atualizarMolduras(idsAlvo?: ReadonlySet<string>): void {
   }
   if (alterar.length > 0) {
     executar({ rotulo: 'Atualizar moldura', ops: [{ alterar }] });
+  }
+}
+
+export function agruparSelecao(grupoId: string): void {
+  const lista = [...selecao.value]
+    .map((id) => itens.value.get(id))
+    .filter((i): i is Item => Boolean(i))
+    .filter((i) => !i.travado);
+  if (lista.length < 2) return;
+  const agora = Date.now();
+  executar({
+    rotulo: 'Agrupar',
+    ops: [
+      {
+        alterar: lista.map((it) => ({
+          id: it.id,
+          antes: { grupoId: it.grupoId, atualizadoEm: it.atualizadoEm },
+          depois: { grupoId, atualizadoEm: agora },
+        })),
+      },
+    ],
+  });
+}
+
+export function desagruparSelecao(): void {
+  const lista = [...selecao.value]
+    .map((id) => itens.value.get(id))
+    .filter((i): i is Item => Boolean(i))
+    .filter((i) => !i.travado && i.grupoId !== null);
+  if (lista.length === 0) return;
+  const agora = Date.now();
+  executar({
+    rotulo: 'Desagrupar',
+    ops: [
+      {
+        alterar: lista.map((it) => ({
+          id: it.id,
+          antes: { grupoId: it.grupoId, atualizadoEm: it.atualizadoEm },
+          depois: { grupoId: null, atualizadoEm: agora },
+        })),
+      },
+    ],
+  });
+}
+
+export function alinharSelecao(modo: ModoAlinhamento): void {
+  const lista = [...selecao.value]
+    .map((id) => itens.value.get(id))
+    .filter((i): i is Item => Boolean(i))
+    .filter((i) => !i.travado);
+  const posicoes = alinhar(lista, modo);
+  if (posicoes.size === 0) return;
+  const agora = Date.now();
+  const alterar: Extract<Operacao, { alterar: unknown }>['alterar'] = [];
+  for (const it of lista) {
+    const pos = posicoes.get(it.id);
+    if (!pos || (pos.x === it.x && pos.y === it.y)) continue;
+    alterar.push({
+      id: it.id,
+      antes: { x: it.x, y: it.y, atualizadoEm: it.atualizadoEm },
+      depois: { x: pos.x, y: pos.y, atualizadoEm: agora },
+    });
+  }
+  if (alterar.length > 0) {
+    executar({ rotulo: 'Alinhar', ops: [{ alterar }] });
+  }
+}
+
+export function distribuirSelecao(eixo: 'h' | 'v'): void {
+  const lista = [...selecao.value]
+    .map((id) => itens.value.get(id))
+    .filter((i): i is Item => Boolean(i))
+    .filter((i) => !i.travado);
+  const posicoes = distribuir(lista, eixo);
+  if (posicoes.size === 0) return;
+  const agora = Date.now();
+  const alterar: Extract<Operacao, { alterar: unknown }>['alterar'] = [];
+  for (const it of lista) {
+    const pos = posicoes.get(it.id);
+    if (!pos || (pos.x === it.x && pos.y === it.y)) continue;
+    alterar.push({
+      id: it.id,
+      antes: { x: it.x, y: it.y, atualizadoEm: it.atualizadoEm },
+      depois: { x: pos.x, y: pos.y, atualizadoEm: agora },
+    });
+  }
+  if (alterar.length > 0) {
+    executar({ rotulo: 'Distribuir', ops: [{ alterar }] });
   }
 }
 
