@@ -7,6 +7,7 @@ import { EditorRico } from './EditorRico.tsx';
 import { ItemForma } from './ItemForma.tsx';
 import { ItemImagem } from './ItemImagem.tsx';
 import { ItemSeta } from './ItemSeta.tsx';
+import { ItemTraco } from './ItemTraco.tsx';
 
 interface ItemProps {
   item: ItemModelo;
@@ -133,6 +134,10 @@ function ItemBase({
         onSairRotulo={(r) => onSairRotulo?.(r)}
       />
     );
+  }
+
+  if (item.tipo === 'traco') {
+    return <ItemTraco item={item} />;
   }
 
   return (

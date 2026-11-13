@@ -330,6 +330,33 @@ export function BarraDeFormatacao({
     (i): i is Extract<Item, { tipo: 'seta' }> => i.tipo === 'seta',
   );
   const todasSetas = setas.length === selecionados.length;
+  const tracos = selecionados.filter(
+    (i): i is Extract<Item, { tipo: 'traco' }> => i.tipo === 'traco',
+  );
+  const todosTracos = tracos.length === selecionados.length;
+
+  const alterarTracos = (
+    rotulo: string,
+    fn: (t: Extract<Item, { tipo: 'traco' }>) => Partial<Extract<Item, { tipo: 'traco' }>>,
+  ) => {
+    const agora = Date.now();
+    executar({
+      rotulo,
+      ops: [
+        {
+          alterar: tracos.map((t) => ({
+            id: t.id,
+            antes: {
+              cor: t.cor,
+              espessura: t.espessura,
+              atualizadoEm: t.atualizadoEm,
+            },
+            depois: { ...fn(t), atualizadoEm: agora },
+          })),
+        },
+      ],
+    });
+  };
 
   const alterarSetas = (
     rotulo: string,
@@ -743,6 +770,32 @@ export function BarraDeFormatacao({
           >
             ⇄
           </button>
+        </>
+      ) : null}
+
+      {todosTracos ? (
+        <>
+          <SeletorDeCor
+            valor={valorComum(tracos.map((t) => t.cor))}
+            rotulo="Cor do traço"
+            testIdPrefix="fmt-traco-cor"
+            onEscolher={(cor) => {
+              if (cor) alterarTracos('Cor do traço', () => ({ cor }));
+            }}
+          />
+          <input
+            type="number"
+            class="fmt-input-num"
+            data-testid="fmt-traco-espessura"
+            title="Espessura (1–48)"
+            min={1}
+            max={48}
+            value={valorComum(tracos.map((t) => t.espessura)) ?? 4}
+            onChange={(e) => {
+              const espessura = Math.max(1, Math.min(48, Number(e.currentTarget.value) || 4));
+              alterarTracos('Espessura do traço', () => ({ espessura }));
+            }}
+          />
         </>
       ) : null}
 

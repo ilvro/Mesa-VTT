@@ -371,7 +371,8 @@ Testes: as três rotas; `lado: 'auto'` escolhe o lado certo; mover um item atual
 Pronto quando: ligar dois cartões, mover um e a seta acompanhar; desfazer volta tudo.
 Commit: `added connectors that follow linked items`
 
-### Q2h — Desenho livre: caneta, marca-texto e borracha  ⬜
+### Q2h — Desenho livre: caneta, marca-texto e borracha  ✅
+Nota: `src/ui/quadro/Item.tsx`, `src/ui/quadro/Mundo.tsx`, `src/ui/quadro/BarraDeFormatacao.tsx` e `src/ui/estilo.css` também receberam suporte à renderização, prévia e edição de traços.
 Objetivo: rabiscar no quadro como no Miro.
 Depende de: Q2a.
 Arquivos: `package.json` (`perfect-freehand`, versão exata); criar `src/dominio/tracos.ts`, `tests/unit/tracos.test.ts` e `src/ui/quadro/ItemTraco.tsx`; mudar `BarraDeFerramentas.tsx` (ferramentas com um mini-painel de cor e espessura, guardado no localStorage) e `Quadro.tsx`.

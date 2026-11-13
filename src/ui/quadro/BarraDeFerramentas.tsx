@@ -31,9 +31,9 @@ const FERRAMENTAS: readonly DefinicaoFerramenta[] = [
   { id: 'nota', rotulo: 'Nota adesiva', atalho: 'N', icone: '❏', habilitada: true },
   { id: 'forma', rotulo: 'Forma', atalho: 'S', icone: '▢', habilitada: true },
   { id: 'seta', rotulo: 'Seta', atalho: 'L', icone: '↗', habilitada: true },
-  { id: 'caneta', rotulo: 'Caneta', atalho: 'P', icone: '✎', habilitada: false },
-  { id: 'marca-texto', rotulo: 'Marca-texto', icone: '🖍', habilitada: false },
-  { id: 'borracha', rotulo: 'Borracha', atalho: 'E', icone: '⌫', habilitada: false },
+  { id: 'caneta', rotulo: 'Caneta', atalho: 'P', icone: '✎', habilitada: true },
+  { id: 'marca-texto', rotulo: 'Marca-texto', icone: '🖍', habilitada: true },
+  { id: 'borracha', rotulo: 'Borracha', atalho: 'E', icone: '⌫', habilitada: true },
   { id: 'imagem', rotulo: 'Imagem', icone: '🖼', habilitada: true },
   { id: 'moldura', rotulo: 'Moldura', atalho: 'F', icone: '#', habilitada: false },
   { id: 'entidade', rotulo: 'Entidade', icone: '◆', habilitada: false },
@@ -51,18 +51,31 @@ const ROTULO_FORMA: Record<Forma, string> = {
   nuvem: 'Nuvem',
 };
 
+export interface ConfigTraco {
+  cor: string;
+  espessura: number;
+}
+
+const CORES_TRACO = ['#e8efe9', '#f7e48c', '#c45b43', '#7aa7f0', '#8bd197', '#b894eb'];
+
 interface BarraDeFerramentasProps {
   ativa: FerramentaQuadro;
   formaAtiva?: Forma;
+  configCaneta?: ConfigTraco;
+  configMarcaTexto?: ConfigTraco;
   onEscolher: (ferramenta: FerramentaQuadro) => void;
   onEscolherForma?: (forma: Forma) => void;
+  onMudarConfigTraco?: (tipo: 'caneta' | 'marca-texto', cfg: ConfigTraco) => void;
 }
 
 export function BarraDeFerramentas({
   ativa,
   formaAtiva = 'retangulo',
+  configCaneta = { cor: '#e8efe9', espessura: 4 },
+  configMarcaTexto = { cor: '#f7e48c', espessura: 18 },
   onEscolher,
   onEscolherForma,
+  onMudarConfigTraco,
 }: BarraDeFerramentasProps) {
   const formasAbertas = useSignal(false);
 
@@ -116,6 +129,46 @@ export function BarraDeFerramentas({
                   {ROTULO_FORMA[forma]}
                 </button>
               ))}
+            </div>
+          ) : null}
+
+          {(f.id === 'caneta' || f.id === 'marca-texto') && ativa === f.id ? (
+            <div class="submenu-traco" data-testid={`submenu-${f.id}`}>
+              <div class="submenu-traco-cores">
+                {CORES_TRACO.map((cor) => {
+                  const atual = f.id === 'caneta' ? configCaneta : configMarcaTexto;
+                  return (
+                    <button
+                      key={cor}
+                      type="button"
+                      class={cx('traco-cor-btn', atual.cor === cor && 'ativa')}
+                      style={{ backgroundColor: cor }}
+                      aria-label={`Cor ${cor}`}
+                      onClick={() => onMudarConfigTraco?.(f.id as 'caneta' | 'marca-texto', { ...atual, cor })}
+                    />
+                  );
+                })}
+              </div>
+              <div class="submenu-traco-espessuras">
+                {(f.id === 'caneta' ? [2, 4, 8, 12] : [12, 18, 28]).map((esp) => {
+                  const atual = f.id === 'caneta' ? configCaneta : configMarcaTexto;
+                  return (
+                    <button
+                      key={esp}
+                      type="button"
+                      class={cx('submenu-forma-btn', atual.espessura === esp && 'ativa')}
+                      onClick={() =>
+                        onMudarConfigTraco?.(f.id as 'caneta' | 'marca-texto', {
+                          ...atual,
+                          espessura: esp,
+                        })
+                      }
+                    >
+                      {esp}px
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           ) : null}
         </div>

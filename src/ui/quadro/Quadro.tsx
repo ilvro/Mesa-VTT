@@ -27,6 +27,7 @@ import {
   novaNotaAdesiva,
   novaSeta,
   novoTexto,
+  novoTraco,
   type DocRico,
   type Forma,
   type Item,
@@ -36,6 +37,13 @@ import {
   caixaDaSeta,
   type LadoResolvido,
 } from '../../dominio/setas.ts';
+import {
+  escalarPontosTraco,
+  normalizarTraco,
+  simplificar,
+  tracoToca,
+  type PontoTraco,
+} from '../../dominio/tracos.ts';
 import { duplicar } from '../../dominio/quadro-operacoes.ts';
 import { FORMATOS_IMAGEM_ACEITOS, importarArquivoImagem } from '../../app/imagens-quadro.ts';
 import {
@@ -53,14 +61,51 @@ import {
 } from '../../app/quadros.ts';
 import { navegarParaQuadro } from '../../app/rotas.ts';
 import { cx } from '../cx.ts';
-import { BarraDeFerramentas, type FerramentaQuadro } from './BarraDeFerramentas.tsx';
+import {
+  BarraDeFerramentas,
+  type ConfigTraco,
+  type FerramentaQuadro,
+} from './BarraDeFerramentas.tsx';
 import { BarraDeFormatacao } from './BarraDeFormatacao.tsx';
-import { Mundo } from './Mundo.tsx';
+import { Mundo, type TracoPreview } from './Mundo.tsx';
 import { PainelDoFundo, type ModoRoda } from './PainelDoFundo.tsx';
 
 const CHAVE_RODA = 'mesa:quadro:roda';
+const CHAVE_TRACO = 'mesa:quadro:traco';
 const CHAVE_CAMERA = (id: string) => `mesa:quadro-camera:${id}`;
 const CAMERA_PADRAO: Camera = { x: -200, y: -150, zoom: 1 };
+
+interface ConfigTracos {
+  caneta: ConfigTraco;
+  'marca-texto': ConfigTraco;
+}
+
+const CONFIG_TRACOS_PADRAO: ConfigTracos = {
+  caneta: { cor: '#e8efe9', espessura: 4 },
+  'marca-texto': { cor: '#f7e48c', espessura: 18 },
+};
+
+function lerConfigTracos(): ConfigTracos {
+  try {
+    const raw = localStorage.getItem(CHAVE_TRACO);
+    if (!raw) return CONFIG_TRACOS_PADRAO;
+    const parsed = JSON.parse(raw) as Partial<ConfigTracos>;
+    return {
+      caneta: parsed.caneta ?? CONFIG_TRACOS_PADRAO.caneta,
+      'marca-texto': parsed['marca-texto'] ?? CONFIG_TRACOS_PADRAO['marca-texto'],
+    };
+  } catch {
+    return CONFIG_TRACOS_PADRAO;
+  }
+}
+
+function gravarConfigTracos(cfg: ConfigTracos): void {
+  try {
+    localStorage.setItem(CHAVE_TRACO, JSON.stringify(cfg));
+  } catch {
+    /* ignora */
+  }
+}
 
 function novoIdItem(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -180,6 +225,15 @@ type Gesto =
   | { tipo: 'criar-seta'; id: string; chave: string; origemItemId?: string }
   | { tipo: 'ponta-seta'; id: string; chave: string; ponta: 'de' | 'para' }
   | {
+      tipo: 'desenhar';
+      ferramenta: 'caneta' | 'marca-texto';
+      cor: string;
+      espessura: number;
+      opacidade: number;
+      pontos: PontoTraco[];
+    }
+  | { tipo: 'borracha'; chave: string }
+  | {
       tipo: 'mover';
       chave: string;
       inicioMundo: Ponto;
@@ -191,7 +245,10 @@ type Gesto =
       alca: Alca;
       inicioMundo: Ponto;
       caixaInicial: Caixa;
-      originais: Map<string, { x: number; y: number; largura: number; altura: number }>;
+      originais: Map<
+        string,
+        { x: number; y: number; largura: number; altura: number; pontos?: PontoTraco[] }
+      >;
     }
   | {
       tipo: 'girar';
@@ -212,6 +269,8 @@ export function Quadro() {
   const painelFundoAberto = useSignal(false);
   const ferramenta = useSignal<FerramentaQuadro>('selecionar');
   const formaAtiva = useSignal<Forma>('retangulo');
+  const configTracos = useSignal<ConfigTracos>(lerConfigTracos());
+  const tracoEmDesenho = useSignal<TracoPreview | null>(null);
   const espacoPressionado = useSignal(false);
   const modoRoda = useSignal<ModoRoda>(lerModoRoda());
   const editandoId = useSignal<string | null>(null);
@@ -490,6 +549,8 @@ export function Quadro() {
         else if (k === 'n') ferramenta.value = 'nota';
         else if (k === 's') ferramenta.value = 'forma';
         else if (k === 'l') ferramenta.value = 'seta';
+        else if (k === 'p') ferramenta.value = 'caneta';
+        else if (k === 'e') ferramenta.value = 'borracha';
       }
     };
 
@@ -526,7 +587,7 @@ export function Quadro() {
       maxY = -Infinity;
     const originais = new Map<
       string,
-      { x: number; y: number; largura: number; altura: number }
+      { x: number; y: number; largura: number; altura: number; pontos?: PontoTraco[] }
     >();
     for (const it of moviveis) {
       originais.set(it.id, {
@@ -534,6 +595,7 @@ export function Quadro() {
         y: it.y,
         largura: it.largura,
         altura: it.altura,
+        pontos: it.tipo === 'traco' ? it.pontos : undefined,
       });
       const c = moviveis.length === 1 ? it : caixaDe(it);
       if (c.x < minX) minX = c.x;
@@ -685,6 +747,53 @@ export function Quadro() {
       return;
     }
 
+    const apagarTracosNoPonto = (pt: Ponto, chave: string) => {
+      const raio = 12 / Math.max(0.05, camera.value.zoom);
+      const removidos: Item[] = [];
+      for (const it of itens.value.values()) {
+        if (it.tipo === 'traco' && !it.travado && tracoToca(it, pt, raio)) {
+          removidos.push(it);
+        }
+      }
+      if (removidos.length > 0) {
+        executar({ rotulo: 'Apagar traço', ops: [{ remover: removidos }] }, chave);
+      }
+    };
+
+    if (ferramenta.value === 'caneta' || ferramenta.value === 'marca-texto') {
+      const tipo = ferramenta.value;
+      const cfg = configTracos.value[tipo];
+      const opacidade = tipo === 'marca-texto' ? 0.35 : 1;
+      const pressao = e.pressure > 0 ? e.pressure : 0.5;
+      const pontos: PontoTraco[] = [[p.x, p.y, pressao]];
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      gestoRef.current = {
+        tipo: 'desenhar',
+        ferramenta: tipo,
+        cor: cfg.cor,
+        espessura: cfg.espessura,
+        opacidade,
+        pontos,
+      };
+      tracoEmDesenho.value = {
+        ferramenta: tipo,
+        pontos: [...pontos],
+        cor: cfg.cor,
+        espessura: cfg.espessura,
+        opacidade,
+      };
+      return;
+    }
+
+    if (ferramenta.value === 'borracha') {
+      const chave = `borracha-${Date.now()}-${Math.random()}`;
+      historico.agrupar(chave);
+      apagarTracosNoPonto(p, chave);
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      gestoRef.current = { tipo: 'borracha', chave };
+      return;
+    }
+
     if (ferramenta.value === 'seta') {
       const agora = Date.now();
       const maxZ = Math.max(0, ...[...itens.value.values()].map((i) => i.z));
@@ -817,6 +926,33 @@ export function Quadro() {
       return;
     }
 
+    if (g.tipo === 'desenhar') {
+      const pressao = e.pressure > 0 ? e.pressure : 0.5;
+      g.pontos.push([p.x, p.y, pressao]);
+      tracoEmDesenho.value = {
+        ferramenta: g.ferramenta,
+        pontos: [...g.pontos],
+        cor: g.cor,
+        espessura: g.espessura,
+        opacidade: g.opacidade,
+      };
+      return;
+    }
+
+    if (g.tipo === 'borracha') {
+      const raio = 12 / Math.max(0.05, camera.value.zoom);
+      const removidos: Item[] = [];
+      for (const it of itens.value.values()) {
+        if (it.tipo === 'traco' && !it.travado && tracoToca(it, p, raio)) {
+          removidos.push(it);
+        }
+      }
+      if (removidos.length > 0) {
+        executar({ rotulo: 'Apagar traço', ops: [{ remover: removidos }] }, g.chave);
+      }
+      return;
+    }
+
     if (g.tipo === 'marque') {
       const ret: Caixa = {
         x: g.inicio.x,
@@ -902,23 +1038,31 @@ export function Quadro() {
         const ny = novaCaixa.y + (orig.y - g.caixaInicial.y) * escalaY;
         const nl = Math.max(20, orig.largura * escalaX);
         const na = Math.max(20, orig.altura * escalaY);
-        alterar.push({
-          id,
-          antes: {
-            x: atual.x,
-            y: atual.y,
-            largura: atual.largura,
-            altura: atual.altura,
-            atualizadoEm: atual.atualizadoEm,
-          },
-          depois: {
-            x: nx,
-            y: ny,
-            largura: nl,
-            altura: na,
-            atualizadoEm: agora,
-          },
-        });
+        const sxItem = nl / Math.max(1, orig.largura);
+        const syItem = na / Math.max(1, orig.altura);
+        const antes: Partial<Item> = {
+          x: atual.x,
+          y: atual.y,
+          largura: atual.largura,
+          altura: atual.altura,
+          atualizadoEm: atual.atualizadoEm,
+        };
+        const depois: Partial<Item> = {
+          x: nx,
+          y: ny,
+          largura: nl,
+          altura: na,
+          atualizadoEm: agora,
+        };
+        if (atual.tipo === 'traco' && orig.pontos) {
+          (antes as Partial<Extract<Item, { tipo: 'traco' }>>).pontos = atual.pontos;
+          (depois as Partial<Extract<Item, { tipo: 'traco' }>>).pontos = escalarPontosTraco(
+            orig.pontos,
+            sxItem,
+            syItem,
+          );
+        }
+        alterar.push({ id, antes, depois });
       }
       if (alterar.length > 0) {
         executar({ rotulo: 'Redimensionar', ops: [{ alterar }] }, g.chave);
@@ -1047,7 +1191,30 @@ export function Quadro() {
     const g = gestoRef.current;
     if (!g) return;
     gestoRef.current = null;
-    if (g.tipo === 'marque') {
+    if (g.tipo === 'desenhar') {
+      tracoEmDesenho.value = null;
+      const simplificados = simplificar(g.pontos, 1.2);
+      const norm = normalizarTraco(simplificados);
+      const maxZ = Math.max(0, ...[...itens.value.values()].map((i) => i.z));
+      const novo = novoTraco(
+        {
+          quadroId: q.id,
+          x: norm.x,
+          y: norm.y,
+          largura: norm.largura,
+          altura: norm.altura,
+          pontos: norm.pontos,
+          ferramenta: g.ferramenta,
+          cor: g.cor,
+          espessura: g.espessura,
+          opacidade: g.opacidade,
+          z: maxZ + 1,
+        },
+        Date.now(),
+        novoIdItem(),
+      );
+      executar({ rotulo: 'Desenhar traço', ops: [{ criar: [novo] }] });
+    } else if (g.tipo === 'marque') {
       retanguloSelecao.value = null;
     } else if (g.tipo === 'criar-forma' || g.tipo === 'criar-seta') {
       historico.agrupar(null);
@@ -1056,7 +1223,8 @@ export function Quadro() {
       g.tipo === 'mover' ||
       g.tipo === 'redimensionar' ||
       g.tipo === 'girar' ||
-      g.tipo === 'ponta-seta'
+      g.tipo === 'ponta-seta' ||
+      g.tipo === 'borracha'
     ) {
       historico.agrupar(null);
     }
@@ -1247,6 +1415,7 @@ export function Quadro() {
           selecao={selecao.value}
           editandoId={editandoId.value}
           retanguloSelecao={retanguloSelecao.value}
+          tracoEmDesenho={tracoEmDesenho.value}
           onSairEdicao={aoSairEdicao}
           onSairRotulo={aoSairRotulo}
           onEditorPronto={(ed) => {
@@ -1294,6 +1463,8 @@ export function Quadro() {
           <BarraDeFerramentas
             ativa={ferramenta.value}
             formaAtiva={formaAtiva.value}
+            configCaneta={configTracos.value.caneta}
+            configMarcaTexto={configTracos.value['marca-texto']}
             onEscolher={(f) => {
               if (f === 'imagem') {
                 inputImagemRef.current?.click();
@@ -1303,6 +1474,11 @@ export function Quadro() {
             }}
             onEscolherForma={(forma) => {
               formaAtiva.value = forma;
+            }}
+            onMudarConfigTraco={(tipo, cfg) => {
+              const prox = { ...configTracos.value, [tipo]: cfg };
+              configTracos.value = prox;
+              gravarConfigTracos(prox);
             }}
           />
         </div>

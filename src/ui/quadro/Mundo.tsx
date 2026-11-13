@@ -10,8 +10,17 @@ import {
 import type { Alca } from '../../dominio/geometria.ts';
 import type { DocRico, Item as ItemModelo } from '../../dominio/quadro.ts';
 import type { LadoResolvido } from '../../dominio/setas.ts';
+import { caminhoDoTraco, type PontoTraco } from '../../dominio/tracos.ts';
 import { Item } from './Item.tsx';
 import { Selecao } from './Selecao.tsx';
+
+export interface TracoPreview {
+  ferramenta: 'caneta' | 'marca-texto';
+  pontos: PontoTraco[];
+  cor: string;
+  espessura: number;
+  opacidade: number;
+}
 
 interface MundoProps {
   camera: Camera;
@@ -20,6 +29,7 @@ interface MundoProps {
   selecao: ReadonlySet<string>;
   editandoId: string | null;
   retanguloSelecao: Caixa | null;
+  tracoEmDesenho?: TracoPreview | null;
   onSairEdicao: (id: string, novoDoc?: DocRico, novaAltura?: number) => void;
   onSairRotulo: (id: string, novoRotulo: string) => void;
   onEditorPronto?: (editor: Editor | null) => void;
@@ -36,6 +46,7 @@ export function Mundo({
   selecao,
   editandoId,
   retanguloSelecao,
+  tracoEmDesenho,
   onSairEdicao,
   onSairRotulo,
   onEditorPronto,
@@ -81,6 +92,23 @@ export function Mundo({
           onEditorPronto={onEditorPronto}
         />
       ))}
+      {tracoEmDesenho && tracoEmDesenho.pontos.length > 0 ? (
+        <svg
+          class="traco-preview"
+          style={{
+            position: 'absolute',
+            left: '0px',
+            top: '0px',
+            width: '1px',
+            height: '1px',
+            overflow: 'visible',
+            pointerEvents: 'none',
+            opacity: tracoEmDesenho.opacidade,
+          }}
+        >
+          <path d={caminhoDoTraco(tracoEmDesenho)} fill={tracoEmDesenho.cor} />
+        </svg>
+      ) : null}
       <Selecao
         selecionados={selecionados}
         todosItens={itens}
