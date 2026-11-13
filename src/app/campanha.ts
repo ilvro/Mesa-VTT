@@ -4,6 +4,7 @@ import { APP_DA_MESA, ehEncontro, filtrarEntidades, podarElenco, podeEditar, sem
 import { refDaEntidade, refsMencionados } from '../dominio/notas.ts';
 import { casaCena, refParaLigacao } from '../dominio/cenas.ts';
 import { agendarSincronizacaoCofre } from './cofre.ts';
+import { removerQuadrosDaCampanha } from './banco-quadros.ts';
 import { trocarTema } from './tema.ts';
 import { avisar, mensagemDe } from './toasts.ts';
 
@@ -183,6 +184,7 @@ export async function salvarElencoDaCampanha(elenco: readonly string[]): Promise
 export async function removerCampanha(c: Campanha): Promise<void> {
   try {
     await repo().removerCampanha(c.id);
+    await removerQuadrosDaCampanha(c.id);
     if (campanhaAtiva.value?.id === c.id) await escolherCampanha(null); else await atualizar();
     avisar(`Campanha “${c.nome}” apagada.`);
   } catch (erro) { avisar(mensagemDe(erro), true); }
