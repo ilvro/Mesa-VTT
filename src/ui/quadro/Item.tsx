@@ -5,6 +5,7 @@ import { familiaCss } from '../../dominio/fontes.ts';
 import type { DocRico, Item as ItemModelo } from '../../dominio/quadro.ts';
 import { EditorRico } from './EditorRico.tsx';
 import { ItemForma } from './ItemForma.tsx';
+import { ItemImagem } from './ItemImagem.tsx';
 
 interface ItemProps {
   item: ItemModelo;
@@ -107,6 +108,10 @@ function ItemBase({ item, editando, onSairEdicao, onEditorPronto }: ItemProps) {
         onEditorPronto={onEditorPronto}
       />
     );
+  }
+
+  if (item.tipo === 'imagem') {
+    return <ItemImagem item={item} />;
   }
 
   return (

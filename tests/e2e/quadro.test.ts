@@ -293,3 +293,65 @@ test('Q2c: barra de formatação muda fundo de 2 notas com desfazer e destaca pa
     await ctx.close();
   }
 });
+
+test('Q2f: colar uma imagem aparece no quadro e persiste ao recarregar', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1280, height: 800 } });
+  try {
+    const page = await ctx.newPage();
+    const erros: string[] = [];
+    page.on('console', (m) => {
+      if (m.type() === 'error') erros.push(m.text());
+    });
+    page.on('pageerror', (e) => erros.push(`pageerror: ${e.message}`));
+
+    await page.goto(`${amb.origem}/Mesa/`);
+    await page.waitForSelector('[data-testid="campanha-select"]');
+    await page.click('[data-testid="aba-campanhas"]');
+    await page.fill('[data-testid="nova-campanha-nome"]', 'Campanha Q2f');
+    await page.click('[data-testid="criar-campanha"]');
+    await page.waitForSelector('[data-testid="tela-entidades"]');
+
+    await page.click('[data-testid="aba-quadros"]');
+    await page.fill('[data-testid="novo-quadro-nome"]', 'Quadro Q2f');
+    await page.click('[data-testid="criar-quadro"]');
+    await page.waitForSelector('[data-testid="area-quadro"]');
+
+    await page.evaluate(async () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 120;
+      canvas.height = 80;
+      const c2d = canvas.getContext('2d')!;
+      c2d.fillStyle = '#c45b43';
+      c2d.fillRect(0, 0, 120, 80);
+      const blob = await new Promise<Blob>((resolve) =>
+        canvas.toBlob((b) => resolve(b!), 'image/png'),
+      );
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], 'teste.png', { type: 'image/png' }));
+      const ev = new ClipboardEvent('paste', {
+        clipboardData: dt,
+        bubbles: true,
+        cancelable: true,
+      });
+      window.dispatchEvent(ev);
+    });
+
+    await page.waitForSelector('[data-testid^="item-"] img');
+    const naturalWidth = await page
+      .locator('[data-testid^="item-"] img')
+      .evaluate((el: HTMLImageElement) => el.naturalWidth);
+    assert.equal(naturalWidth, 120);
+
+    await page.waitForTimeout(600);
+    await page.reload();
+    await page.waitForSelector('[data-testid^="item-"] img');
+    const naturalWidthDepois = await page
+      .locator('[data-testid^="item-"] img')
+      .evaluate((el: HTMLImageElement) => el.naturalWidth);
+    assert.equal(naturalWidthDepois, 120);
+
+    assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
+  } finally {
+    await ctx.close();
+  }
+});

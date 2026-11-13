@@ -336,7 +336,8 @@ Testes: `caminhoDaForma` de cada forma começa com `M` e fecha com `Z`; `areaUti
 Pronto quando: as 9 formas aparecem, com texto e estilos.
 Commit: `added shapes with text to boards`
 
-### Q2f — Imagens  ⬜
+### Q2f — Imagens  ✅
+Nota: `src/app/quadros.ts`, `src/ui/estilo.css` e `tests/e2e/quadro.test.ts` também receberam suporte à revogação de URLs ao fechar o quadro, estilos de `.item-imagem` e teste e2e de colagem.
 Objetivo: colar e arrastar imagens para o quadro, como no Miro.
 Depende de: Q2a, Q1b.
 Arquivos: criar `src/app/imagens-quadro.ts` e `src/ui/quadro/ItemImagem.tsx`; mudar `Quadro.tsx`, `Item.tsx` e `BarraDeFerramentas.tsx` (Imagem abre o seletor de arquivo).

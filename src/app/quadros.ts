@@ -10,6 +10,7 @@ import {
   type Passo,
 } from '../dominio/quadro-operacoes.ts';
 import { campanhaAtiva } from './campanha.ts';
+import { revogarImagensDoQuadro } from './imagens-quadro.ts';
 import {
   gravarItens,
   listarItens,
@@ -141,6 +142,7 @@ export async function carregarQuadros(): Promise<void> {
 
 export async function fecharQuadro(): Promise<void> {
   await descarregarPendentes();
+  revogarImagensDoQuadro();
   quadroAberto.value = null;
   itens.value = new Map();
   selecao.value = new Set();

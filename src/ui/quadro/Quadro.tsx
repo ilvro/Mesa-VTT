@@ -23,6 +23,7 @@ import {
 } from '../../dominio/geometria.ts';
 import {
   novaForma,
+  novaImagem,
   novaNotaAdesiva,
   novoTexto,
   type DocRico,
@@ -30,6 +31,7 @@ import {
   type Item,
 } from '../../dominio/quadro.ts';
 import { duplicar } from '../../dominio/quadro-operacoes.ts';
+import { FORMATOS_IMAGEM_ACEITOS, importarArquivoImagem } from '../../app/imagens-quadro.ts';
 import {
   desfazer,
   executar,
@@ -204,6 +206,41 @@ export function Quadro() {
   const tickEditor = useSignal(0);
   const retanguloSelecao = useSignal<Caixa | null>(null);
   const gestoRef = useRef<Gesto | null>(null);
+  const inputImagemRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const aoColar = (e: ClipboardEvent) => {
+      if (editandoId.value) return;
+      const alvo = e.target as HTMLElement | null;
+      if (alvo && (alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA' || alvo.isContentEditable)) {
+        return;
+      }
+      const arquivos: Blob[] = [];
+      const itensColados = e.clipboardData?.items;
+      if (itensColados) {
+        for (let i = 0; i < itensColados.length; i++) {
+          const item = itensColados[i];
+          if (item && item.kind === 'file' && FORMATOS_IMAGEM_ACEITOS.has(item.type)) {
+            const arq = item.getAsFile();
+            if (arq) arquivos.push(arq);
+          }
+        }
+      }
+      if (arquivos.length === 0 && e.clipboardData?.files) {
+        for (let i = 0; i < e.clipboardData.files.length; i++) {
+          const arq = e.clipboardData.files[i];
+          if (arq && FORMATOS_IMAGEM_ACEITOS.has(arq.type)) {
+            arquivos.push(arq);
+          }
+        }
+      }
+      if (arquivos.length === 0) return;
+      e.preventDefault();
+      void inserirImagens(arquivos);
+    };
+    window.addEventListener('paste', aoColar);
+    return () => window.removeEventListener('paste', aoColar);
+  }, [q.id]);
 
   const selecionados = useMemo(() => {
     const lista: Item[] = [];
@@ -748,8 +785,12 @@ export function Quadro() {
 
     if (g.tipo === 'redimensionar') {
       const delta = { x: p.x - g.inicioMundo.x, y: p.y - g.inicioMundo.y };
+      const unicoId = g.originais.size === 1 ? [...g.originais.keys()][0] : undefined;
+      const unicoItem = unicoId ? itens.value.get(unicoId) : undefined;
+      const manterProporcao =
+        unicoItem?.tipo === 'imagem' ? !e.shiftKey : e.shiftKey;
       const novaCaixa = redimensionar(g.caixaInicial, g.alca, delta, {
-        manterProporcao: e.shiftKey,
+        manterProporcao,
         doCentro: e.altKey,
         minTamanho: 20,
       });
@@ -831,6 +872,50 @@ export function Quadro() {
         );
       }
     }
+  };
+
+  const inserirImagens = async (arquivos: readonly Blob[], pontoMundo?: Ponto) => {
+    const centro =
+      pontoMundo ??
+      telaParaMundo(camera.value, {
+        x: tamanhoTela.value.largura / 2,
+        y: tamanhoTela.value.altura / 2,
+      });
+    const criar: Item[] = [];
+    const agora = Date.now();
+    let z = [...itens.value.values()].reduce((m, i) => Math.max(m, i.z), 0) + 1;
+    let deslocamento = 0;
+
+    for (const arq of arquivos) {
+      if (!FORMATOS_IMAGEM_ACEITOS.has(arq.type)) continue;
+      const importada = await importarArquivoImagem(arq);
+      if (!importada) continue;
+      const x = centro.x - importada.largura / 2 + deslocamento;
+      const y = centro.y - importada.altura / 2 + deslocamento;
+      criar.push(
+        novaImagem(
+          {
+            quadroId: q.id,
+            x: q.fundo.encaixar ? encaixarNaGrade(x, q.fundo.passo) : x,
+            y: q.fundo.encaixar ? encaixarNaGrade(y, q.fundo.passo) : y,
+            imagemId: importada.imagemId,
+            larguraOriginal: importada.larguraOriginal,
+            alturaOriginal: importada.alturaOriginal,
+            largura: importada.largura,
+            altura: importada.altura,
+            z: z++,
+          },
+          agora,
+          novoIdItem(),
+        ),
+      );
+      deslocamento += 24;
+    }
+
+    if (criar.length === 0) return;
+    executar({ rotulo: criar.length === 1 ? 'Inserir imagem' : 'Inserir imagens', ops: [{ criar }] });
+    selecao.value = new Set(criar.map((i) => i.id));
+    ferramenta.value = 'selecionar';
   };
 
   const aoSoltar = (e: PointerEvent) => {
@@ -968,6 +1053,31 @@ export function Quadro() {
         onPointerUp={aoSoltar}
         onPointerCancel={aoSoltar}
         onDblClick={aoDuploClique}
+        onDragOver={(e) => {
+          if (e.dataTransfer?.types.includes('Files')) {
+            e.preventDefault();
+          }
+        }}
+        onDrop={(e) => {
+          const files = e.dataTransfer?.files;
+          if (!files || files.length === 0) return;
+          const imagens: File[] = [];
+          for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            if (f && FORMATOS_IMAGEM_ACEITOS.has(f.type)) imagens.push(f);
+          }
+          if (imagens.length === 0) return;
+          e.preventDefault();
+          const el = areaRef.current;
+          const rect = el?.getBoundingClientRect();
+          const ponto = rect
+            ? telaParaMundo(camera.value, {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top,
+              })
+            : undefined;
+          void inserirImagens(imagens, ponto);
+        }}
       >
         <Mundo
           camera={camera.value}
@@ -997,6 +1107,22 @@ export function Quadro() {
           );
         })()}
 
+        <input
+          ref={inputImagemRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          multiple
+          style={{ display: 'none' }}
+          data-testid="input-imagem"
+          onChange={(e) => {
+            const files = e.currentTarget.files;
+            if (files && files.length > 0) {
+              void inserirImagens(Array.from(files));
+            }
+            e.currentTarget.value = '';
+          }}
+        />
+
         <div
           onPointerDown={(e) => e.stopPropagation()}
           onDblClick={(e) => e.stopPropagation()}
@@ -1005,6 +1131,10 @@ export function Quadro() {
             ativa={ferramenta.value}
             formaAtiva={formaAtiva.value}
             onEscolher={(f) => {
+              if (f === 'imagem') {
+                inputImagemRef.current?.click();
+                return;
+              }
               ferramenta.value = f;
             }}
             onEscolherForma={(forma) => {

@@ -34,7 +34,7 @@ const FERRAMENTAS: readonly DefinicaoFerramenta[] = [
   { id: 'caneta', rotulo: 'Caneta', atalho: 'P', icone: '✎', habilitada: false },
   { id: 'marca-texto', rotulo: 'Marca-texto', icone: '🖍', habilitada: false },
   { id: 'borracha', rotulo: 'Borracha', atalho: 'E', icone: '⌫', habilitada: false },
-  { id: 'imagem', rotulo: 'Imagem', icone: '🖼', habilitada: false },
+  { id: 'imagem', rotulo: 'Imagem', icone: '🖼', habilitada: true },
   { id: 'moldura', rotulo: 'Moldura', atalho: 'F', icone: '#', habilitada: false },
   { id: 'entidade', rotulo: 'Entidade', icone: '◆', habilitada: false },
 ];
