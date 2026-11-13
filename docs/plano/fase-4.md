@@ -323,7 +323,8 @@ Testes: unitário: todo `IdFonte` tem entrada em `FONTES`.
 Pronto quando: o app de desktop sem internet mostra as seis fontes.
 Commit: `added offline fonts for boards`
 
-### Q2e — Formas  ⬜
+### Q2e — Formas  ✅
+Nota: `Quadro.tsx` e `estilo.css` também receberam suporte à criação por arrasto/clique e edição de texto dentro de formas.
 Objetivo: formas com texto dentro, como no Miro.
 Depende de: Q2c.
 Arquivos: criar `src/dominio/formas.ts`, `tests/unit/formas.test.ts` e `src/ui/quadro/ItemForma.tsx`; mudar `Item.tsx` e `BarraDeFerramentas.tsx` (habilitar Forma, com submenu das formas).

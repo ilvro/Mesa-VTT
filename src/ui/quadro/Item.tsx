@@ -4,6 +4,7 @@ import { docParaHtml } from '../../dominio/doc-rico.ts';
 import { familiaCss } from '../../dominio/fontes.ts';
 import type { DocRico, Item as ItemModelo } from '../../dominio/quadro.ts';
 import { EditorRico } from './EditorRico.tsx';
+import { ItemForma } from './ItemForma.tsx';
 
 interface ItemProps {
   item: ItemModelo;
@@ -94,6 +95,17 @@ function ItemBase({ item, editando, onSairEdicao, onEditorPronto }: ItemProps) {
           />
         )}
       </div>
+    );
+  }
+
+  if (item.tipo === 'forma') {
+    return (
+      <ItemForma
+        item={item}
+        editando={editando}
+        onSairEdicao={onSairEdicao}
+        onEditorPronto={onEditorPronto}
+      />
     );
   }
 

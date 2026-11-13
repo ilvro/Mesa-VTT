@@ -22,9 +22,11 @@ import {
   type Alca,
 } from '../../dominio/geometria.ts';
 import {
+  novaForma,
   novaNotaAdesiva,
   novoTexto,
   type DocRico,
+  type Forma,
   type Item,
 } from '../../dominio/quadro.ts';
 import { duplicar } from '../../dominio/quadro-operacoes.ts';
@@ -161,6 +163,7 @@ function itemNoPonto(mapa: ReadonlyMap<string, Item>, ponto: Ponto): Item | null
 type Gesto =
   | { tipo: 'pan'; x: number; y: number; camX: number; camY: number }
   | { tipo: 'marque'; inicio: Ponto }
+  | { tipo: 'criar-forma'; inicio: Ponto; id: string }
   | {
       tipo: 'mover';
       chave: string;
@@ -193,6 +196,7 @@ export function Quadro() {
   const tamanhoTela = useSignal<Tamanho>({ largura: 1280, altura: 720 });
   const painelFundoAberto = useSignal(false);
   const ferramenta = useSignal<FerramentaQuadro>('selecionar');
+  const formaAtiva = useSignal<Forma>('retangulo');
   const espacoPressionado = useSignal(false);
   const modoRoda = useSignal<ModoRoda>(lerModoRoda());
   const editandoId = useSignal<string | null>(null);
@@ -360,7 +364,7 @@ export function Quadro() {
       if (e.key === 'Enter' && selecao.value.size === 1 && !editandoId.value) {
         const id = [...selecao.value][0]!;
         const alvo = itens.value.get(id);
-        if (alvo && alvo.tipo === 'texto' && !alvo.travado) {
+        if (alvo && (alvo.tipo === 'texto' || alvo.tipo === 'forma') && !alvo.travado) {
           e.preventDefault();
           editandoId.value = id;
         }
@@ -434,6 +438,7 @@ export function Quadro() {
         else if (k === 'h') ferramenta.value = ferramenta.value === 'mao' ? 'selecionar' : 'mao';
         else if (k === 't') ferramenta.value = 'texto';
         else if (k === 'n') ferramenta.value = 'nota';
+        else if (k === 's') ferramenta.value = 'forma';
       }
     };
 
@@ -566,6 +571,33 @@ export function Quadro() {
       return;
     }
 
+    if (ferramenta.value === 'forma') {
+      const agora = Date.now();
+      const maxZ = Math.max(0, ...[...itens.value.values()].map((i) => i.z));
+      const x = encaixar ? encaixarNaGrade(p.x, passoGrade) : Math.round(p.x);
+      const y = encaixar ? encaixarNaGrade(p.y, passoGrade) : Math.round(p.y);
+      const novo = novaForma(
+        {
+          quadroId: q.id,
+          x,
+          y,
+          forma: formaAtiva.value,
+          largura: 160,
+          altura: 100,
+          z: maxZ + 1,
+        },
+        agora,
+        novoIdItem(),
+      );
+      const chave = `criar-forma-${novo.id}`;
+      historico.agrupar(chave);
+      executar({ rotulo: 'Criar forma', ops: [{ criar: [novo] }] }, chave);
+      selecao.value = new Set([novo.id]);
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      gestoRef.current = { tipo: 'criar-forma', inicio: { x, y }, id: novo.id };
+      return;
+    }
+
     if (ferramenta.value === 'selecionar') {
       const alvo = itemNoPonto(itens.value, p);
       if (alvo) {
@@ -624,6 +656,46 @@ export function Quadro() {
     }
 
     const p = pontoMundoDe(e);
+
+    if (g.tipo === 'criar-forma') {
+      const nx = Math.min(g.inicio.x, p.x);
+      const ny = Math.min(g.inicio.y, p.y);
+      const nl = Math.max(24, Math.abs(p.x - g.inicio.x));
+      const na = Math.max(24, Math.abs(p.y - g.inicio.y));
+      const atual = itens.value.get(g.id);
+      if (atual && (Math.abs(p.x - g.inicio.x) > 8 || Math.abs(p.y - g.inicio.y) > 8)) {
+        executar(
+          {
+            rotulo: 'Criar forma',
+            ops: [
+              {
+                alterar: [
+                  {
+                    id: g.id,
+                    antes: {
+                      x: atual.x,
+                      y: atual.y,
+                      largura: atual.largura,
+                      altura: atual.altura,
+                      atualizadoEm: atual.atualizadoEm,
+                    },
+                    depois: {
+                      x: q.fundo.encaixar ? encaixarNaGrade(nx, q.fundo.passo) : nx,
+                      y: q.fundo.encaixar ? encaixarNaGrade(ny, q.fundo.passo) : ny,
+                      largura: nl,
+                      altura: na,
+                      atualizadoEm: Date.now(),
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          `criar-forma-${g.id}`,
+        );
+      }
+      return;
+    }
 
     if (g.tipo === 'marque') {
       const ret: Caixa = {
@@ -767,6 +839,9 @@ export function Quadro() {
     gestoRef.current = null;
     if (g.tipo === 'marque') {
       retanguloSelecao.value = null;
+    } else if (g.tipo === 'criar-forma') {
+      historico.agrupar(null);
+      ferramenta.value = 'selecionar';
     } else if (g.tipo === 'mover' || g.tipo === 'redimensionar' || g.tipo === 'girar') {
       historico.agrupar(null);
     }
@@ -781,7 +856,7 @@ export function Quadro() {
     if (ferramenta.value !== 'selecionar') return;
     const p = pontoMundoDe(e);
     const alvo = itemNoPonto(itens.value, p);
-    if (alvo && alvo.tipo === 'texto' && !alvo.travado) {
+    if (alvo && (alvo.tipo === 'texto' || alvo.tipo === 'forma') && !alvo.travado) {
       selecao.value = new Set([alvo.id]);
       editandoId.value = alvo.id;
     }
@@ -793,10 +868,13 @@ export function Quadro() {
     }
     if (!novoDoc) return;
     const atual = itens.value.get(id);
-    if (!atual || atual.tipo !== 'texto') return;
+    if (!atual || (atual.tipo !== 'texto' && atual.tipo !== 'forma')) return;
     const docMudou = JSON.stringify(atual.doc) !== JSON.stringify(novoDoc);
     const alturaMudou =
-      atual.alturaAuto && novaAltura !== undefined && novaAltura !== atual.altura;
+      atual.tipo === 'texto' &&
+      atual.alturaAuto &&
+      novaAltura !== undefined &&
+      novaAltura !== atual.altura;
     if (!docMudou && !alturaMudou) return;
 
     const antes: Partial<Item> = { atualizadoEm: atual.atualizadoEm };
@@ -925,8 +1003,12 @@ export function Quadro() {
         >
           <BarraDeFerramentas
             ativa={ferramenta.value}
+            formaAtiva={formaAtiva.value}
             onEscolher={(f) => {
               ferramenta.value = f;
+            }}
+            onEscolherForma={(forma) => {
+              formaAtiva.value = forma;
             }}
           />
         </div>
