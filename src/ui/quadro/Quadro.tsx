@@ -25,11 +25,17 @@ import {
   novaForma,
   novaImagem,
   novaNotaAdesiva,
+  novaSeta,
   novoTexto,
   type DocRico,
   type Forma,
   type Item,
+  type Ponta,
 } from '../../dominio/quadro.ts';
+import {
+  caixaDaSeta,
+  type LadoResolvido,
+} from '../../dominio/setas.ts';
 import { duplicar } from '../../dominio/quadro-operacoes.ts';
 import { FORMATOS_IMAGEM_ACEITOS, importarArquivoImagem } from '../../app/imagens-quadro.ts';
 import {
@@ -152,11 +158,16 @@ function emCampoDeTexto(alvo: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || alvo.isContentEditable;
 }
 
-function itemNoPonto(mapa: ReadonlyMap<string, Item>, ponto: Ponto): Item | null {
+function itemNoPonto(
+  mapa: ReadonlyMap<string, Item>,
+  ponto: Ponto,
+  ignorarSetas = false,
+): Item | null {
   const ordenados = [...mapa.values()].sort(
     (a, b) => b.z - a.z || b.id.localeCompare(a.id),
   );
   for (const item of ordenados) {
+    if (ignorarSetas && item.tipo === 'seta') continue;
     if (contemPonto(item, ponto)) return item;
   }
   return null;
@@ -166,6 +177,8 @@ type Gesto =
   | { tipo: 'pan'; x: number; y: number; camX: number; camY: number }
   | { tipo: 'marque'; inicio: Ponto }
   | { tipo: 'criar-forma'; inicio: Ponto; id: string }
+  | { tipo: 'criar-seta'; id: string; chave: string; origemItemId?: string }
+  | { tipo: 'ponta-seta'; id: string; chave: string; ponta: 'de' | 'para' }
   | {
       tipo: 'mover';
       chave: string;
@@ -476,6 +489,7 @@ export function Quadro() {
         else if (k === 't') ferramenta.value = 'texto';
         else if (k === 'n') ferramenta.value = 'nota';
         else if (k === 's') ferramenta.value = 'forma';
+        else if (k === 'l') ferramenta.value = 'seta';
       }
     };
 
@@ -565,6 +579,42 @@ export function Quadro() {
     };
   };
 
+  const iniciarConector = (itemId: string, lado: LadoResolvido, e: PointerEvent) => {
+    const el = areaRef.current;
+    if (!el) return;
+    el.setPointerCapture(e.pointerId);
+    const p = pontoMundoDe(e);
+    const agora = Date.now();
+    const maxZ = Math.max(0, ...[...itens.value.values()].map((i) => i.z));
+    const id = novoIdItem();
+    const base = novaSeta(
+      {
+        quadroId: q.id,
+        de: { itemId, lado },
+        para: { ponto: [p.x, p.y] },
+        z: maxZ + 1,
+      },
+      agora,
+      id,
+    );
+    const caixa = caixaDaSeta(base, itens.value);
+    const nova = { ...base, ...caixa };
+    const chave = `criar-seta-${id}`;
+    historico.agrupar(chave);
+    executar({ rotulo: 'Criar seta', ops: [{ criar: [nova] }] }, chave);
+    selecao.value = new Set([id]);
+    gestoRef.current = { tipo: 'criar-seta', id, chave, origemItemId: itemId };
+  };
+
+  const iniciarPontaSeta = (setaId: string, ponta: 'de' | 'para', e: PointerEvent) => {
+    const el = areaRef.current;
+    if (!el) return;
+    el.setPointerCapture(e.pointerId);
+    const chave = `ponta-seta-${setaId}-${Date.now()}`;
+    historico.agrupar(chave);
+    gestoRef.current = { tipo: 'ponta-seta', id: setaId, chave, ponta };
+  };
+
   const aoPressionar = (e: PointerEvent) => {
     const ehBotaoMeio = e.button === 1;
     const ehPanEsquerdo = e.button === 0 && modoPanAtivo;
@@ -635,8 +685,41 @@ export function Quadro() {
       return;
     }
 
+    if (ferramenta.value === 'seta') {
+      const agora = Date.now();
+      const maxZ = Math.max(0, ...[...itens.value.values()].map((i) => i.z));
+      const origem = itemNoPonto(itens.value, p, true);
+      const de: Ponta = origem
+        ? { itemId: origem.id, lado: 'auto' }
+        : { ponto: [p.x, p.y] };
+      const id = novoIdItem();
+      const base = novaSeta(
+        {
+          quadroId: q.id,
+          de,
+          para: { ponto: [p.x, p.y] },
+          z: maxZ + 1,
+        },
+        agora,
+        id,
+      );
+      const caixa = caixaDaSeta(base, itens.value);
+      const nova = { ...base, ...caixa };
+      const chave = `criar-seta-${id}`;
+      historico.agrupar(chave);
+      executar({ rotulo: 'Criar seta', ops: [{ criar: [nova] }] }, chave);
+      selecao.value = new Set([id]);
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      gestoRef.current = { tipo: 'criar-seta', id, chave, origemItemId: origem?.id };
+      return;
+    }
+
     if (ferramenta.value === 'selecionar') {
-      const alvo = itemNoPonto(itens.value, p);
+      const idAlvoDom = (e.target as HTMLElement | null)
+        ?.closest?.('[data-item-id]')
+        ?.getAttribute('data-item-id');
+      const alvoDom = idAlvoDom ? (itens.value.get(idAlvoDom) ?? null) : null;
+      const alvo = alvoDom ?? itemNoPonto(itens.value, p, true);
       if (alvo) {
         if (e.shiftKey) {
           const prox = new Set(selecao.value);
@@ -871,6 +954,48 @@ export function Quadro() {
           g.chave,
         );
       }
+      return;
+    }
+
+    if (g.tipo === 'criar-seta' || g.tipo === 'ponta-seta') {
+      const atual = itens.value.get(g.id);
+      if (!atual || atual.tipo !== 'seta') return;
+      const campo = g.tipo === 'criar-seta' ? 'para' : g.ponta;
+      const sob = itemNoPonto(itens.value, p, true);
+      const novaPonta: Ponta =
+        sob && (g.tipo !== 'criar-seta' || sob.id !== g.origemItemId)
+          ? { itemId: sob.id, lado: 'auto' }
+          : { ponto: [p.x, p.y] };
+      const setaAtualizada = { ...atual, [campo]: novaPonta };
+      const novaCaixa = caixaDaSeta(setaAtualizada, itens.value);
+      executar(
+        {
+          rotulo: g.tipo === 'criar-seta' ? 'Criar seta' : 'Religar seta',
+          ops: [
+            {
+              alterar: [
+                {
+                  id: atual.id,
+                  antes: {
+                    [campo]: atual[campo],
+                    x: atual.x,
+                    y: atual.y,
+                    largura: atual.largura,
+                    altura: atual.altura,
+                    atualizadoEm: atual.atualizadoEm,
+                  },
+                  depois: {
+                    [campo]: novaPonta,
+                    ...novaCaixa,
+                    atualizadoEm: Date.now(),
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        g.chave,
+      );
     }
   };
 
@@ -924,10 +1049,15 @@ export function Quadro() {
     gestoRef.current = null;
     if (g.tipo === 'marque') {
       retanguloSelecao.value = null;
-    } else if (g.tipo === 'criar-forma') {
+    } else if (g.tipo === 'criar-forma' || g.tipo === 'criar-seta') {
       historico.agrupar(null);
       ferramenta.value = 'selecionar';
-    } else if (g.tipo === 'mover' || g.tipo === 'redimensionar' || g.tipo === 'girar') {
+    } else if (
+      g.tipo === 'mover' ||
+      g.tipo === 'redimensionar' ||
+      g.tipo === 'girar' ||
+      g.tipo === 'ponta-seta'
+    ) {
       historico.agrupar(null);
     }
     try {
@@ -940,11 +1070,42 @@ export function Quadro() {
   const aoDuploClique = (e: MouseEvent) => {
     if (ferramenta.value !== 'selecionar') return;
     const p = pontoMundoDe(e);
-    const alvo = itemNoPonto(itens.value, p);
-    if (alvo && (alvo.tipo === 'texto' || alvo.tipo === 'forma') && !alvo.travado) {
+    const idAlvoDom = (e.target as HTMLElement | null)
+      ?.closest?.('[data-item-id]')
+      ?.getAttribute('data-item-id');
+    const alvoDom = idAlvoDom ? (itens.value.get(idAlvoDom) ?? null) : null;
+    const alvo = alvoDom ?? itemNoPonto(itens.value, p, true);
+    if (
+      alvo &&
+      (alvo.tipo === 'texto' || alvo.tipo === 'forma' || alvo.tipo === 'seta') &&
+      !alvo.travado
+    ) {
       selecao.value = new Set([alvo.id]);
       editandoId.value = alvo.id;
     }
+  };
+
+  const aoSairRotulo = (id: string, novoRotulo: string) => {
+    if (editandoId.value === id) {
+      editandoId.value = null;
+    }
+    const atual = itens.value.get(id);
+    if (!atual || atual.tipo !== 'seta') return;
+    if (atual.rotulo === novoRotulo) return;
+    executar({
+      rotulo: 'Editar rótulo da seta',
+      ops: [
+        {
+          alterar: [
+            {
+              id,
+              antes: { rotulo: atual.rotulo, atualizadoEm: atual.atualizadoEm },
+              depois: { rotulo: novoRotulo, atualizadoEm: Date.now() },
+            },
+          ],
+        },
+      ],
+    });
   };
 
   const aoSairEdicao = (id: string, novoDoc?: DocRico, novaAltura?: number) => {
@@ -1087,11 +1248,14 @@ export function Quadro() {
           editandoId={editandoId.value}
           retanguloSelecao={retanguloSelecao.value}
           onSairEdicao={aoSairEdicao}
+          onSairRotulo={aoSairRotulo}
           onEditorPronto={(ed) => {
             editorAtivo.value = ed;
           }}
           onIniciarRedimensionar={iniciarRedimensionar}
           onIniciarGirar={iniciarGirar}
+          onIniciarConector={iniciarConector}
+          onIniciarPontaSeta={iniciarPontaSeta}
         />
 
         {(() => {

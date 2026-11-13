@@ -350,7 +350,8 @@ Testes: e2e: colar uma imagem (pela área de transferência do Playwright) → a
 Pronto quando: os testes passam.
 Commit: `added pasted and dropped images on boards`
 
-### Q2g — Setas e conectores  ⬜
+### Q2g — Setas e conectores  ✅
+Nota: `src/ui/quadro/Mundo.tsx`, `src/ui/quadro/Selecao.tsx`, `src/ui/quadro/Quadro.tsx` e `src/ui/estilo.css` também receberam suporte a conectores, pontas arrastáveis e edição de rótulo.
 Objetivo: setas ligadas a itens, que acompanham quando os itens se movem, com o estilo do Miro.
 Depende de: Q2e.
 Arquivos: criar `src/dominio/setas.ts`, `tests/unit/setas.test.ts` e `src/ui/quadro/ItemSeta.tsx`; mudar `Item.tsx`, `BarraDeFerramentas.tsx`, `BarraDeFormatacao.tsx` e `src/app/quadros.ts` (ao mover itens, recalcular as setas ligadas no mesmo passo).

@@ -4,7 +4,11 @@ import { caixaDe } from '../../dominio/geometria.ts';
 import { familiaCss, FONTES } from '../../dominio/fontes.ts';
 import { mundoParaTela, type Camera, type Tamanho } from '../../dominio/camera.ts';
 import {
+  CABECAS_SETA,
   IDS_FONTE,
+  ROTAS_SETA,
+  TRACEJADOS,
+  type Cabeca,
   type DocRico,
   type EstiloDeCaixa,
   type EstiloDeTexto,
@@ -322,6 +326,39 @@ export function BarraDeFormatacao({
       'caixa' in i,
   );
   const todosComCaixa = comCaixa.length === selecionados.length;
+  const setas = selecionados.filter(
+    (i): i is Extract<Item, { tipo: 'seta' }> => i.tipo === 'seta',
+  );
+  const todasSetas = setas.length === selecionados.length;
+
+  const alterarSetas = (
+    rotulo: string,
+    fn: (s: Extract<Item, { tipo: 'seta' }>) => Partial<Extract<Item, { tipo: 'seta' }>>,
+  ) => {
+    const agora = Date.now();
+    executar({
+      rotulo,
+      ops: [
+        {
+          alterar: setas.map((s) => ({
+            id: s.id,
+            antes: {
+              cor: s.cor,
+              espessura: s.espessura,
+              tracejado: s.tracejado,
+              rota: s.rota,
+              inicio: s.inicio,
+              fim: s.fim,
+              de: s.de,
+              para: s.para,
+              atualizadoEm: s.atualizadoEm,
+            },
+            depois: { ...fn(s), atualizadoEm: agora },
+          })),
+        },
+      ],
+    });
+  };
 
   const alterarTextuais = (
     rotulo: string,
@@ -600,6 +637,112 @@ export function BarraDeFormatacao({
               </label>
             </div>
           ) : null}
+        </>
+      ) : null}
+
+      {todasSetas ? (
+        <>
+          <SeletorDeCor
+            valor={valorComum(setas.map((s) => s.cor))}
+            rotulo="Cor da seta"
+            testIdPrefix="fmt-seta-cor"
+            onEscolher={(cor) => {
+              if (cor) alterarSetas('Cor da seta', () => ({ cor }));
+            }}
+          />
+          <input
+            type="number"
+            class="fmt-input-num"
+            data-testid="fmt-seta-espessura"
+            title="Espessura (1–12)"
+            min={1}
+            max={12}
+            value={valorComum(setas.map((s) => s.espessura)) ?? 2}
+            onChange={(e) => {
+              const espessura = Math.max(1, Math.min(12, Number(e.currentTarget.value) || 2));
+              alterarSetas('Espessura da seta', () => ({ espessura }));
+            }}
+          />
+          <select
+            class="fmt-select"
+            data-testid="fmt-seta-tracejado"
+            aria-label="Tracejado da seta"
+            value={valorComum(setas.map((s) => s.tracejado)) ?? ''}
+            onChange={(e) => {
+              const v = e.currentTarget.value as (typeof TRACEJADOS)[number];
+              if (v) alterarSetas('Tracejado da seta', () => ({ tracejado: v }));
+            }}
+          >
+            {TRACEJADOS.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          <select
+            class="fmt-select"
+            data-testid="fmt-seta-rota"
+            aria-label="Rota da seta"
+            value={valorComum(setas.map((s) => s.rota)) ?? ''}
+            onChange={(e) => {
+              const v = e.currentTarget.value as (typeof ROTAS_SETA)[number];
+              if (v) alterarSetas('Rota da seta', () => ({ rota: v }));
+            }}
+          >
+            {ROTAS_SETA.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+          <select
+            class="fmt-select"
+            data-testid="fmt-seta-inicio"
+            aria-label="Ponta inicial"
+            value={valorComum(setas.map((s) => s.inicio)) ?? ''}
+            onChange={(e) => {
+              const v = e.currentTarget.value as Cabeca;
+              if (v) alterarSetas('Ponta inicial', () => ({ inicio: v }));
+            }}
+          >
+            {CABECAS_SETA.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <select
+            class="fmt-select"
+            data-testid="fmt-seta-fim"
+            aria-label="Ponta final"
+            value={valorComum(setas.map((s) => s.fim)) ?? ''}
+            onChange={(e) => {
+              const v = e.currentTarget.value as Cabeca;
+              if (v) alterarSetas('Ponta final', () => ({ fim: v }));
+            }}
+          >
+            {CABECAS_SETA.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            class="fmt-btn"
+            data-testid="fmt-seta-inverter"
+            title="Inverter sentido"
+            onClick={() => {
+              alterarSetas('Inverter seta', (s) => ({
+                de: s.para,
+                para: s.de,
+                inicio: s.fim,
+                fim: s.inicio,
+              }));
+            }}
+          >
+            ⇄
+          </button>
         </>
       ) : null}
 

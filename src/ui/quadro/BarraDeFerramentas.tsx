@@ -30,7 +30,7 @@ const FERRAMENTAS: readonly DefinicaoFerramenta[] = [
   { id: 'texto', rotulo: 'Texto', atalho: 'T', icone: 'T', habilitada: true },
   { id: 'nota', rotulo: 'Nota adesiva', atalho: 'N', icone: '❏', habilitada: true },
   { id: 'forma', rotulo: 'Forma', atalho: 'S', icone: '▢', habilitada: true },
-  { id: 'seta', rotulo: 'Seta', atalho: 'L', icone: '↗', habilitada: false },
+  { id: 'seta', rotulo: 'Seta', atalho: 'L', icone: '↗', habilitada: true },
   { id: 'caneta', rotulo: 'Caneta', atalho: 'P', icone: '✎', habilitada: false },
   { id: 'marca-texto', rotulo: 'Marca-texto', icone: '🖍', habilitada: false },
   { id: 'borracha', rotulo: 'Borracha', atalho: 'E', icone: '⌫', habilitada: false },

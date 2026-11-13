@@ -7,8 +7,14 @@ import {
 import {
   aplicar,
   Historico,
+  type Operacao,
   type Passo,
 } from '../dominio/quadro-operacoes.ts';
+import {
+  caixaDaSeta,
+  pontoDaPonta,
+  setasLigadasA,
+} from '../dominio/setas.ts';
 import { campanhaAtiva } from './campanha.ts';
 import { revogarImagensDoQuadro } from './imagens-quadro.ts';
 import {
@@ -255,13 +261,111 @@ export async function mudarFundo(parcial: Partial<Quadro['fundo']>): Promise<voi
   }
 }
 
+function enriquecerPassoComSetas(
+  itensAntes: ReadonlyMap<string, Item>,
+  passo: Passo,
+  itensDepois: Map<string, Item>,
+): { passo: Passo; proximo: Map<string, Item> } {
+  const removidos = new Set<string>();
+  const alterados = new Set<string>();
+  const jaTratados = new Set<string>();
+
+  for (const op of passo.ops) {
+    if ('remover' in op) {
+      for (const it of op.remover) removidos.add(it.id);
+    } else if ('alterar' in op) {
+      for (const a of op.alterar) {
+        const item = itensDepois.get(a.id);
+        if (item?.tipo === 'seta') {
+          jaTratados.add(a.id);
+        } else {
+          alterados.add(a.id);
+        }
+      }
+    }
+  }
+
+  if (removidos.size === 0 && alterados.size === 0) {
+    return { passo, proximo: itensDepois };
+  }
+
+  const tocados = new Set<string>([...removidos, ...alterados]);
+  const setas = setasLigadasA(tocados, itensDepois);
+  if (setas.length === 0) {
+    return { passo, proximo: itensDepois };
+  }
+
+  const alterarSetas: Extract<Operacao, { alterar: unknown }>['alterar'] = [];
+
+  for (const seta of setas) {
+    if (jaTratados.has(seta.id)) continue;
+
+    let novoDe = seta.de;
+    let novoPara = seta.para;
+    let mudouPonta = false;
+
+    if ('itemId' in seta.de && removidos.has(seta.de.itemId)) {
+      const { ponto } = pontoDaPonta(seta.de, itensAntes, seta.para);
+      novoDe = { ponto: [ponto.x, ponto.y] };
+      mudouPonta = true;
+    }
+    if ('itemId' in seta.para && removidos.has(seta.para.itemId)) {
+      const { ponto } = pontoDaPonta(seta.para, itensAntes, seta.de);
+      novoPara = { ponto: [ponto.x, ponto.y] };
+      mudouPonta = true;
+    }
+
+    const setaAtualizada = mudouPonta
+      ? { ...seta, de: novoDe, para: novoPara }
+      : seta;
+    const novaCaixa = caixaDaSeta(setaAtualizada, itensDepois);
+
+    const mudouCaixa =
+      Math.abs(novaCaixa.x - seta.x) > 0.01 ||
+      Math.abs(novaCaixa.y - seta.y) > 0.01 ||
+      Math.abs(novaCaixa.largura - seta.largura) > 0.01 ||
+      Math.abs(novaCaixa.altura - seta.altura) > 0.01;
+
+    if (!mudouPonta && !mudouCaixa) continue;
+
+    const antes: Partial<Item> = {
+      x: seta.x,
+      y: seta.y,
+      largura: seta.largura,
+      altura: seta.altura,
+      ...(mudouPonta ? { de: seta.de, para: seta.para } : {}),
+    };
+    const depois: Partial<Item> = {
+      x: novaCaixa.x,
+      y: novaCaixa.y,
+      largura: novaCaixa.largura,
+      altura: novaCaixa.altura,
+      ...(mudouPonta ? { de: novoDe, para: novoPara } : {}),
+    };
+    alterarSetas.push({ id: seta.id, antes, depois });
+  }
+
+  if (alterarSetas.length === 0) {
+    return { passo, proximo: itensDepois };
+  }
+
+  const passoComSetas: Passo = {
+    ...passo,
+    ops: [...passo.ops, { alterar: alterarSetas }],
+  };
+  const proximoFinal = aplicar(itensDepois, { rotulo: passo.rotulo, ops: [{ alterar: alterarSetas }] });
+  return { passo: passoComSetas, proximo: proximoFinal };
+}
+
 export function executar(passo: Passo, chaveAgrupamento?: string): void {
   if (passo.ops.length === 0) return;
-  const proximo = aplicar(itens.value, passo);
+  const antes = itens.value;
+  const proximoInicial = aplicar(antes, passo);
+  const { passo: passoFinal, proximo } = enriquecerPassoComSetas(antes, passo, proximoInicial);
   itens.value = proximo;
-  historico.registrar(passo, chaveAgrupamento);
+  historico.registrar(passoFinal, chaveAgrupamento);
   versaoHistorico.value++;
-  marcarSujosDoPasso(passo, proximo);
+  marcarSujosDoPasso(passoFinal, proximo);
   agendarGravacao();
 }
 

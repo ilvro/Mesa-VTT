@@ -775,6 +775,51 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   display: block;
   pointer-events: none;
 }
+.alca-conector {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--superficie-1);
+  border: 1.5px solid var(--acento);
+  cursor: crosshair;
+  pointer-events: auto;
+  opacity: 0.7;
+  transition: opacity 0.12s;
+}
+.alca-conector:hover {
+  opacity: 1;
+  background: var(--acento);
+}
+.alca-ponta-seta {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--superficie-1);
+  border: 2px solid var(--acento);
+  cursor: move;
+  pointer-events: auto;
+}
+.item-seta-rotulo,
+.item-seta-rotulo-input {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: var(--fundo);
+  color: var(--texto);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.item-seta-rotulo {
+  pointer-events: auto;
+  user-select: none;
+}
+.item-seta-rotulo-input {
+  border: 1px solid var(--acento);
+  outline: none;
+  min-width: 100px;
+  text-align: center;
+}
 .item-texto-conteudo {
   width: 100%;
 }
@@ -1044,4 +1089,49 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   object-fit: fill;
   display: block;
   pointer-events: none;
+}
+.alca-conector {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--superficie-1);
+  border: 1.5px solid var(--acento);
+  cursor: crosshair;
+  pointer-events: auto;
+  opacity: 0.7;
+  transition: opacity 0.12s;
+}
+.alca-conector:hover {
+  opacity: 1;
+  background: var(--acento);
+}
+.alca-ponta-seta {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--superficie-1);
+  border: 2px solid var(--acento);
+  cursor: move;
+  pointer-events: auto;
+}
+.item-seta-rotulo,
+.item-seta-rotulo-input {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: var(--fundo);
+  color: var(--texto);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.item-seta-rotulo {
+  pointer-events: auto;
+  user-select: none;
+}
+.item-seta-rotulo-input {
+  border: 1px solid var(--acento);
+  outline: none;
+  min-width: 100px;
+  text-align: center;
 }

@@ -9,6 +9,7 @@ import {
 } from '../../dominio/camera.ts';
 import type { Alca } from '../../dominio/geometria.ts';
 import type { DocRico, Item as ItemModelo } from '../../dominio/quadro.ts';
+import type { LadoResolvido } from '../../dominio/setas.ts';
 import { Item } from './Item.tsx';
 import { Selecao } from './Selecao.tsx';
 
@@ -20,9 +21,12 @@ interface MundoProps {
   editandoId: string | null;
   retanguloSelecao: Caixa | null;
   onSairEdicao: (id: string, novoDoc?: DocRico, novaAltura?: number) => void;
+  onSairRotulo: (id: string, novoRotulo: string) => void;
   onEditorPronto?: (editor: Editor | null) => void;
   onIniciarRedimensionar: (alca: Alca, e: PointerEvent) => void;
   onIniciarGirar: (e: PointerEvent) => void;
+  onIniciarConector: (itemId: string, lado: LadoResolvido, e: PointerEvent) => void;
+  onIniciarPontaSeta: (setaId: string, ponta: 'de' | 'para', e: PointerEvent) => void;
 }
 
 export function Mundo({
@@ -33,9 +37,12 @@ export function Mundo({
   editandoId,
   retanguloSelecao,
   onSairEdicao,
+  onSairRotulo,
   onEditorPronto,
   onIniciarRedimensionar,
   onIniciarGirar,
+  onIniciarConector,
+  onIniciarPontaSeta,
 }: MundoProps) {
   const visiveis = useMemo(() => {
     const caixa = caixaVisivel(camera, tamanhoTela);
@@ -67,17 +74,22 @@ export function Mundo({
         <Item
           key={item.id}
           item={item}
+          todosItens={itens}
           editando={editandoId === item.id}
           onSairEdicao={(novoDoc, novaAltura) => onSairEdicao(item.id, novoDoc, novaAltura)}
+          onSairRotulo={(novoRotulo) => onSairRotulo(item.id, novoRotulo)}
           onEditorPronto={onEditorPronto}
         />
       ))}
       <Selecao
         selecionados={selecionados}
+        todosItens={itens}
         zoom={camera.zoom}
         retanguloSelecao={retanguloSelecao}
         onIniciarRedimensionar={onIniciarRedimensionar}
         onIniciarGirar={onIniciarGirar}
+        onIniciarConector={onIniciarConector}
+        onIniciarPontaSeta={onIniciarPontaSeta}
       />
     </div>
   );

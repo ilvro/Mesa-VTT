@@ -6,11 +6,14 @@ import type { DocRico, Item as ItemModelo } from '../../dominio/quadro.ts';
 import { EditorRico } from './EditorRico.tsx';
 import { ItemForma } from './ItemForma.tsx';
 import { ItemImagem } from './ItemImagem.tsx';
+import { ItemSeta } from './ItemSeta.tsx';
 
 interface ItemProps {
   item: ItemModelo;
+  todosItens?: ReadonlyMap<string, ItemModelo>;
   editando: boolean;
   onSairEdicao: (novoDoc?: DocRico, novaAltura?: number) => void;
+  onSairRotulo?: (novoRotulo: string) => void;
   onEditorPronto?: (editor: Editor | null) => void;
 }
 
@@ -62,7 +65,14 @@ function estiloCaixaCss(item: Extract<ItemModelo, { tipo: 'texto' }>) {
   };
 }
 
-function ItemBase({ item, editando, onSairEdicao, onEditorPronto }: ItemProps) {
+function ItemBase({
+  item,
+  todosItens,
+  editando,
+  onSairEdicao,
+  onSairRotulo,
+  onEditorPronto,
+}: ItemProps) {
   const estiloPosicao = {
     left: `${item.x}px`,
     top: `${item.y}px`,
@@ -114,6 +124,17 @@ function ItemBase({ item, editando, onSairEdicao, onEditorPronto }: ItemProps) {
     return <ItemImagem item={item} />;
   }
 
+  if (item.tipo === 'seta') {
+    return (
+      <ItemSeta
+        item={item}
+        itens={todosItens ?? new Map()}
+        editando={editando}
+        onSairRotulo={(r) => onSairRotulo?.(r)}
+      />
+    );
+  }
+
   return (
     <div
       class="item-quadro item-provisorio"
@@ -128,5 +149,8 @@ function ItemBase({ item, editando, onSairEdicao, onEditorPronto }: ItemProps) {
 
 export const Item = memo(
   ItemBase,
-  (prev, next) => prev.item === next.item && prev.editando === next.editando,
+  (prev, next) =>
+    prev.item === next.item &&
+    prev.editando === next.editando &&
+    (next.item.tipo !== 'seta' || prev.todosItens === next.todosItens),
 );
