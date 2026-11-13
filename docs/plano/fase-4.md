@@ -389,7 +389,8 @@ Testes: `normalizarTraco` (caixa e relativos), `simplificar` reduz pontos e mant
 Pronto quando: desenhar uma trilha à mão, apagar parte com a borracha, desfazer.
 Commit: `added freehand pen, highlighter and eraser to boards`
 
-### Q2i — Molduras (seções) e navegador  ⬜
+### Q2i — Molduras (seções) e navegador  ✅
+Nota: `src/ui/quadro/Item.tsx`, `src/ui/quadro/Mundo.tsx` e `src/ui/estilo.css` também receberam suporte à ordenação de molduras no fundo e edição de título.
 Objetivo: seções nomeadas que agrupam itens, como os frames do Miro, e um painel para pular entre elas.
 Depende de: Q2a.
 Arquivos: criar `src/dominio/molduras.ts`, `tests/unit/molduras.test.ts`, `src/ui/quadro/ItemMoldura.tsx` e `src/ui/quadro/Navegador.tsx`; mudar `src/app/quadros.ts` (calcular `molduraId` ao soltar; mover a moldura move os filhos), `BarraDeFerramentas.tsx` e `Quadro.tsx`.

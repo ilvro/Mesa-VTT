@@ -6,15 +6,18 @@ import type { DocRico, Item as ItemModelo } from '../../dominio/quadro.ts';
 import { EditorRico } from './EditorRico.tsx';
 import { ItemForma } from './ItemForma.tsx';
 import { ItemImagem } from './ItemImagem.tsx';
+import { ItemMoldura } from './ItemMoldura.tsx';
 import { ItemSeta } from './ItemSeta.tsx';
 import { ItemTraco } from './ItemTraco.tsx';
 
 interface ItemProps {
   item: ItemModelo;
   todosItens?: ReadonlyMap<string, ItemModelo>;
+  zoom?: number;
   editando: boolean;
   onSairEdicao: (novoDoc?: DocRico, novaAltura?: number) => void;
   onSairRotulo?: (novoRotulo: string) => void;
+  onSairTitulo?: (novoTitulo: string) => void;
   onEditorPronto?: (editor: Editor | null) => void;
 }
 
@@ -69,9 +72,11 @@ function estiloCaixaCss(item: Extract<ItemModelo, { tipo: 'texto' }>) {
 function ItemBase({
   item,
   todosItens,
+  zoom = 1,
   editando,
   onSairEdicao,
   onSairRotulo,
+  onSairTitulo,
   onEditorPronto,
 }: ItemProps) {
   const estiloPosicao = {
@@ -140,6 +145,17 @@ function ItemBase({
     return <ItemTraco item={item} />;
   }
 
+  if (item.tipo === 'moldura') {
+    return (
+      <ItemMoldura
+        item={item}
+        zoom={zoom}
+        editando={editando}
+        onSairTitulo={(t) => onSairTitulo?.(t)}
+      />
+    );
+  }
+
   return (
     <div
       class="item-quadro item-provisorio"
@@ -157,5 +173,6 @@ export const Item = memo(
   (prev, next) =>
     prev.item === next.item &&
     prev.editando === next.editando &&
-    (next.item.tipo !== 'seta' || prev.todosItens === next.todosItens),
+    (next.item.tipo !== 'seta' || prev.todosItens === next.todosItens) &&
+    (next.item.tipo !== 'moldura' || prev.zoom === next.zoom),
 );

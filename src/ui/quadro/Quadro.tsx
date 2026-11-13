@@ -24,6 +24,7 @@ import {
 import {
   novaForma,
   novaImagem,
+  novaMoldura,
   novaNotaAdesiva,
   novaSeta,
   novoTexto,
@@ -33,6 +34,11 @@ import {
   type Item,
   type Ponta,
 } from '../../dominio/quadro.ts';
+import {
+  filhos,
+  ordemDeLeitura,
+  type ItemMoldura,
+} from '../../dominio/molduras.ts';
 import {
   caixaDaSeta,
   type LadoResolvido,
@@ -47,6 +53,7 @@ import {
 import { duplicar } from '../../dominio/quadro-operacoes.ts';
 import { FORMATOS_IMAGEM_ACEITOS, importarArquivoImagem } from '../../app/imagens-quadro.ts';
 import {
+  atualizarMolduras,
   desfazer,
   executar,
   fecharQuadro,
@@ -68,6 +75,7 @@ import {
 } from './BarraDeFerramentas.tsx';
 import { BarraDeFormatacao } from './BarraDeFormatacao.tsx';
 import { Mundo, type TracoPreview } from './Mundo.tsx';
+import { Navegador } from './Navegador.tsx';
 import { PainelDoFundo, type ModoRoda } from './PainelDoFundo.tsx';
 
 const CHAVE_RODA = 'mesa:quadro:roda';
@@ -222,6 +230,7 @@ type Gesto =
   | { tipo: 'pan'; x: number; y: number; camX: number; camY: number }
   | { tipo: 'marque'; inicio: Ponto }
   | { tipo: 'criar-forma'; inicio: Ponto; id: string }
+  | { tipo: 'criar-moldura'; inicio: Ponto; id: string }
   | { tipo: 'criar-seta'; id: string; chave: string; origemItemId?: string }
   | { tipo: 'ponta-seta'; id: string; chave: string; ponta: 'de' | 'para' }
   | {
@@ -267,6 +276,8 @@ export function Quadro() {
   const camera = useSignal<Camera>(lerCameraSalva(q.id));
   const tamanhoTela = useSignal<Tamanho>({ largura: 1280, altura: 720 });
   const painelFundoAberto = useSignal(false);
+  const navegadorAberto = useSignal(false);
+  const indiceMoldura = useSignal(0);
   const ferramenta = useSignal<FerramentaQuadro>('selecionar');
   const formaAtiva = useSignal<Forma>('retangulo');
   const configTracos = useSignal<ConfigTracos>(lerConfigTracos());
@@ -551,6 +562,24 @@ export function Quadro() {
         else if (k === 'l') ferramenta.value = 'seta';
         else if (k === 'p') ferramenta.value = 'caneta';
         else if (k === 'e') ferramenta.value = 'borracha';
+        else if (k === 'f') ferramenta.value = 'moldura';
+      }
+      if ((e.key === 'PageDown' || e.key === 'PageUp') && !editandoId.value) {
+        const todas: ItemMoldura[] = [];
+        for (const it of itens.value.values()) {
+          if (it.tipo === 'moldura') todas.push(it);
+        }
+        const ordenadas = ordemDeLeitura(todas);
+        if (ordenadas.length > 0) {
+          e.preventDefault();
+          const delta = e.key === 'PageDown' ? 1 : -1;
+          const proxIdx =
+            (indiceMoldura.value + delta + ordenadas.length) % ordenadas.length;
+          indiceMoldura.value = proxIdx;
+          const m = ordenadas[proxIdx]!;
+          camera.value = enquadrar(m, tamanhoTela.value, 60);
+          selecao.value = new Set([m.id]);
+        }
       }
     };
 
@@ -760,6 +789,31 @@ export function Quadro() {
       }
     };
 
+    if (ferramenta.value === 'moldura') {
+      const agora = Date.now();
+      const x = encaixar ? encaixarNaGrade(p.x, passoGrade) : Math.round(p.x);
+      const y = encaixar ? encaixarNaGrade(p.y, passoGrade) : Math.round(p.y);
+      const novo = novaMoldura(
+        {
+          quadroId: q.id,
+          x,
+          y,
+          largura: 640,
+          altura: 420,
+          z: 0,
+        },
+        agora,
+        novoIdItem(),
+      );
+      const chave = `criar-moldura-${novo.id}`;
+      historico.agrupar(chave);
+      executar({ rotulo: 'Criar moldura', ops: [{ criar: [novo] }] }, chave);
+      selecao.value = new Set([novo.id]);
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      gestoRef.current = { tipo: 'criar-moldura', inicio: { x, y }, id: novo.id };
+      return;
+    }
+
     if (ferramenta.value === 'caneta' || ferramenta.value === 'marca-texto') {
       const tipo = ferramenta.value;
       const cfg = configTracos.value[tipo];
@@ -848,8 +902,17 @@ export function Quadro() {
 
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         const originais = new Map<string, { x: number; y: number }>();
+        const adicionarComFilhos = (item: Item) => {
+          if (originais.has(item.id) || item.travado) return;
+          originais.set(item.id, { x: item.x, y: item.y });
+          if (item.tipo === 'moldura') {
+            for (const f of filhos(item.id, itens.value)) {
+              adicionarComFilhos(f);
+            }
+          }
+        };
         for (const it of moviveis) {
-          originais.set(it.id, { x: it.x, y: it.y });
+          adicionarComFilhos(it);
         }
         const chave = `mover-${Date.now()}-${Math.random()}`;
         historico.agrupar(chave);
@@ -886,7 +949,7 @@ export function Quadro() {
 
     const p = pontoMundoDe(e);
 
-    if (g.tipo === 'criar-forma') {
+    if (g.tipo === 'criar-forma' || g.tipo === 'criar-moldura') {
       const nx = Math.min(g.inicio.x, p.x);
       const ny = Math.min(g.inicio.y, p.y);
       const nl = Math.max(24, Math.abs(p.x - g.inicio.x));
@@ -895,7 +958,7 @@ export function Quadro() {
       if (atual && (Math.abs(p.x - g.inicio.x) > 8 || Math.abs(p.y - g.inicio.y) > 8)) {
         executar(
           {
-            rotulo: 'Criar forma',
+            rotulo: g.tipo === 'criar-moldura' ? 'Criar moldura' : 'Criar forma',
             ops: [
               {
                 alterar: [
@@ -920,7 +983,7 @@ export function Quadro() {
               },
             ],
           },
-          `criar-forma-${g.id}`,
+          `${g.tipo}-${g.id}`,
         );
       }
       return;
@@ -1216,9 +1279,10 @@ export function Quadro() {
       executar({ rotulo: 'Desenhar traço', ops: [{ criar: [novo] }] });
     } else if (g.tipo === 'marque') {
       retanguloSelecao.value = null;
-    } else if (g.tipo === 'criar-forma' || g.tipo === 'criar-seta') {
+    } else if (g.tipo === 'criar-forma' || g.tipo === 'criar-seta' || g.tipo === 'criar-moldura') {
       historico.agrupar(null);
       ferramenta.value = 'selecionar';
+      if (g.tipo === 'criar-moldura') atualizarMolduras();
     } else if (
       g.tipo === 'mover' ||
       g.tipo === 'redimensionar' ||
@@ -1227,6 +1291,9 @@ export function Quadro() {
       g.tipo === 'borracha'
     ) {
       historico.agrupar(null);
+      if (g.tipo === 'mover') {
+        atualizarMolduras(new Set(g.originais.keys()));
+      }
     }
     try {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
@@ -1245,12 +1312,38 @@ export function Quadro() {
     const alvo = alvoDom ?? itemNoPonto(itens.value, p, true);
     if (
       alvo &&
-      (alvo.tipo === 'texto' || alvo.tipo === 'forma' || alvo.tipo === 'seta') &&
+      (alvo.tipo === 'texto' ||
+        alvo.tipo === 'forma' ||
+        alvo.tipo === 'seta' ||
+        alvo.tipo === 'moldura') &&
       !alvo.travado
     ) {
       selecao.value = new Set([alvo.id]);
       editandoId.value = alvo.id;
     }
+  };
+
+  const aoSairTitulo = (id: string, novoTitulo: string) => {
+    if (editandoId.value === id) {
+      editandoId.value = null;
+    }
+    const atual = itens.value.get(id);
+    if (!atual || atual.tipo !== 'moldura') return;
+    if (atual.titulo === novoTitulo) return;
+    executar({
+      rotulo: 'Renomear moldura',
+      ops: [
+        {
+          alterar: [
+            {
+              id,
+              antes: { titulo: atual.titulo, atualizadoEm: atual.atualizadoEm },
+              depois: { titulo: novoTitulo, atualizadoEm: Date.now() },
+            },
+          ],
+        },
+      ],
+    });
   };
 
   const aoSairRotulo = (id: string, novoRotulo: string) => {
@@ -1342,6 +1435,17 @@ export function Quadro() {
         <button
           type="button"
           class="botao-pilula"
+          aria-pressed={navegadorAberto.value}
+          data-testid="botao-navegador"
+          onClick={() => {
+            navegadorAberto.value = !navegadorAberto.value;
+          }}
+        >
+          Molduras
+        </button>
+        <button
+          type="button"
+          class="botao-pilula"
           aria-pressed={painelFundoAberto.value}
           data-testid="botao-fundo"
           onClick={() => {
@@ -1418,6 +1522,7 @@ export function Quadro() {
           tracoEmDesenho={tracoEmDesenho.value}
           onSairEdicao={aoSairEdicao}
           onSairRotulo={aoSairRotulo}
+          onSairTitulo={aoSairTitulo}
           onEditorPronto={(ed) => {
             editorAtivo.value = ed;
           }}
@@ -1482,6 +1587,25 @@ export function Quadro() {
             }}
           />
         </div>
+
+        {navegadorAberto.value ? (
+          <div
+            onPointerDown={(e) => e.stopPropagation()}
+            onDblClick={(e) => e.stopPropagation()}
+          >
+            <Navegador
+              quadroId={q.id}
+              itens={itens.value}
+              onFocarMoldura={(m) => {
+                camera.value = enquadrar(m, tamanhoTela.value, 60);
+                selecao.value = new Set([m.id]);
+              }}
+              onFechar={() => {
+                navegadorAberto.value = false;
+              }}
+            />
+          </div>
+        ) : null}
 
         {painelFundoAberto.value ? (
           <div

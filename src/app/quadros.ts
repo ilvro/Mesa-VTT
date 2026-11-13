@@ -15,6 +15,7 @@ import {
   pontoDaPonta,
   setasLigadasA,
 } from '../dominio/setas.ts';
+import { molduraQueContem, type ItemMoldura } from '../dominio/molduras.ts';
 import { campanhaAtiva } from './campanha.ts';
 import { revogarImagensDoQuadro } from './imagens-quadro.ts';
 import {
@@ -367,6 +368,31 @@ export function executar(passo: Passo, chaveAgrupamento?: string): void {
   versaoHistorico.value++;
   marcarSujosDoPasso(passoFinal, proximo);
   agendarGravacao();
+}
+
+export function atualizarMolduras(idsAlvo?: ReadonlySet<string>): void {
+  const mapa = itens.value;
+  const molduras: ItemMoldura[] = [];
+  for (const it of mapa.values()) {
+    if (it.tipo === 'moldura') molduras.push(it);
+  }
+  const alterar: Extract<Operacao, { alterar: unknown }>['alterar'] = [];
+  const agora = Date.now();
+  for (const it of mapa.values()) {
+    if (it.tipo === 'moldura' || it.tipo === 'seta') continue;
+    if (idsAlvo && !idsAlvo.has(it.id)) continue;
+    const nova = molduraQueContem(it, molduras)?.id ?? null;
+    if (nova !== it.molduraId) {
+      alterar.push({
+        id: it.id,
+        antes: { molduraId: it.molduraId, atualizadoEm: it.atualizadoEm },
+        depois: { molduraId: nova, atualizadoEm: agora },
+      });
+    }
+  }
+  if (alterar.length > 0) {
+    executar({ rotulo: 'Atualizar moldura', ops: [{ alterar }] });
+  }
 }
 
 export function desfazer(): Passo | null {

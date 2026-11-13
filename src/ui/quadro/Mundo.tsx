@@ -32,6 +32,7 @@ interface MundoProps {
   tracoEmDesenho?: TracoPreview | null;
   onSairEdicao: (id: string, novoDoc?: DocRico, novaAltura?: number) => void;
   onSairRotulo: (id: string, novoRotulo: string) => void;
+  onSairTitulo: (id: string, novoTitulo: string) => void;
   onEditorPronto?: (editor: Editor | null) => void;
   onIniciarRedimensionar: (alca: Alca, e: PointerEvent) => void;
   onIniciarGirar: (e: PointerEvent) => void;
@@ -49,6 +50,7 @@ export function Mundo({
   tracoEmDesenho,
   onSairEdicao,
   onSairRotulo,
+  onSairTitulo,
   onEditorPronto,
   onIniciarRedimensionar,
   onIniciarGirar,
@@ -59,7 +61,10 @@ export function Mundo({
     const caixa = caixaVisivel(camera, tamanhoTela);
     const margem = 120 / Math.max(0.02, camera.zoom);
     return itensVisiveis(itens.values(), caixa, margem).sort(
-      (a, b) => a.z - b.z || a.id.localeCompare(b.id),
+      (a, b) =>
+        (a.tipo === 'moldura' ? 0 : 1) - (b.tipo === 'moldura' ? 0 : 1) ||
+        a.z - b.z ||
+        a.id.localeCompare(b.id),
     );
   }, [camera, tamanhoTela, itens]);
 
@@ -86,9 +91,11 @@ export function Mundo({
           key={item.id}
           item={item}
           todosItens={itens}
+          zoom={camera.zoom}
           editando={editandoId === item.id}
           onSairEdicao={(novoDoc, novaAltura) => onSairEdicao(item.id, novoDoc, novaAltura)}
           onSairRotulo={(novoRotulo) => onSairRotulo(item.id, novoRotulo)}
+          onSairTitulo={(novoTitulo) => onSairTitulo(item.id, novoTitulo)}
           onEditorPronto={onEditorPronto}
         />
       ))}
