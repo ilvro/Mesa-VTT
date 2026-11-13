@@ -21,10 +21,9 @@ import {
   type Alca,
 } from '../../dominio/geometria.ts';
 import {
-  docDeTexto,
   novaNotaAdesiva,
   novoTexto,
-  textoPuro,
+  type DocRico,
   type Item,
 } from '../../dominio/quadro.ts';
 import { duplicar } from '../../dominio/quadro-operacoes.ts';
@@ -327,6 +326,16 @@ export function Quadro() {
           executar(passo);
           const criados = (passo.ops[0] as { criar: Item[] } | undefined)?.criar ?? [];
           selecao.value = new Set(criados.map((i) => i.id));
+        }
+        return;
+      }
+
+      if (e.key === 'Enter' && selecao.value.size === 1 && !editandoId.value) {
+        const id = [...selecao.value][0]!;
+        const alvo = itens.value.get(id);
+        if (alvo && alvo.tipo === 'texto' && !alvo.travado) {
+          e.preventDefault();
+          editandoId.value = id;
         }
         return;
       }
@@ -751,27 +760,31 @@ export function Quadro() {
     }
   };
 
-  const aoSairEdicao = (id: string, novoTexto?: string) => {
+  const aoSairEdicao = (id: string, novoDoc?: DocRico, novaAltura?: number) => {
     if (editandoId.value === id) {
       editandoId.value = null;
     }
-    if (novoTexto === undefined) return;
+    if (!novoDoc) return;
     const atual = itens.value.get(id);
     if (!atual || atual.tipo !== 'texto') return;
-    if (textoPuro(atual.doc) === novoTexto) return;
+    const docMudou = JSON.stringify(atual.doc) !== JSON.stringify(novoDoc);
+    const alturaMudou =
+      atual.alturaAuto && novaAltura !== undefined && novaAltura !== atual.altura;
+    if (!docMudou && !alturaMudou) return;
+
+    const antes: Partial<Item> = { atualizadoEm: atual.atualizadoEm };
+    const depois: Partial<Item> = { atualizadoEm: Date.now() };
+    if (docMudou) {
+      (antes as Partial<Extract<Item, { tipo: 'texto' }>>).doc = atual.doc;
+      (depois as Partial<Extract<Item, { tipo: 'texto' }>>).doc = novoDoc;
+    }
+    if (alturaMudou && novaAltura !== undefined) {
+      antes.altura = atual.altura;
+      depois.altura = novaAltura;
+    }
     executar({
       rotulo: 'Editar texto',
-      ops: [
-        {
-          alterar: [
-            {
-              id,
-              antes: { doc: atual.doc, atualizadoEm: atual.atualizadoEm },
-              depois: { doc: docDeTexto(novoTexto), atualizadoEm: Date.now() },
-            },
-          ],
-        },
-      ],
+      ops: [{ alterar: [{ id, antes, depois }] }],
     });
   };
 

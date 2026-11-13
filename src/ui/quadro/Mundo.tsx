@@ -7,7 +7,7 @@ import {
   type Tamanho,
 } from '../../dominio/camera.ts';
 import type { Alca } from '../../dominio/geometria.ts';
-import type { Item as ItemModelo } from '../../dominio/quadro.ts';
+import type { DocRico, Item as ItemModelo } from '../../dominio/quadro.ts';
 import { Item } from './Item.tsx';
 import { Selecao } from './Selecao.tsx';
 
@@ -18,7 +18,7 @@ interface MundoProps {
   selecao: ReadonlySet<string>;
   editandoId: string | null;
   retanguloSelecao: Caixa | null;
-  onSairEdicao: (id: string, novoTexto?: string) => void;
+  onSairEdicao: (id: string, novoDoc?: DocRico, novaAltura?: number) => void;
   onIniciarRedimensionar: (alca: Alca, e: PointerEvent) => void;
   onIniciarGirar: (e: PointerEvent) => void;
 }
@@ -65,7 +65,7 @@ export function Mundo({
           key={item.id}
           item={item}
           editando={editandoId === item.id}
-          onSairEdicao={(novoTexto) => onSairEdicao(item.id, novoTexto)}
+          onSairEdicao={(novoDoc, novaAltura) => onSairEdicao(item.id, novoDoc, novaAltura)}
         />
       ))}
       <Selecao

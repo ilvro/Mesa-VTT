@@ -88,14 +88,18 @@ test('Q2a: criar 2 notas, selecionar com retângulo, mover, desfazer, refazer e 
     // Nota 1
     await page.click('[data-testid="ferramenta-nota"]');
     await page.mouse.click(area.x + 250, area.y + 200);
-    await page.locator('[data-testid^="editor-texto-"]').fill('Nota 1');
+    await page.waitForSelector('[data-testid="editor-rico"]');
+    await page.keyboard.type('Nota 1');
     await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-testid="editor-rico"]', { state: 'detached' });
 
     // Nota 2
     await page.click('[data-testid="ferramenta-nota"]');
     await page.mouse.click(area.x + 550, area.y + 200);
-    await page.locator('[data-testid^="editor-texto-"]').fill('Nota 2');
+    await page.waitForSelector('[data-testid="editor-rico"]');
+    await page.keyboard.type('Nota 2');
     await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-testid="editor-rico"]', { state: 'detached' });
 
     const itens = page.locator('[data-testid^="item-"]');
     assert.equal(await itens.count(), 2);
@@ -152,6 +156,60 @@ test('Q2a: criar 2 notas, selecionar com retângulo, mover, desfazer, refazer e 
       els.map((el) => parseFloat((el as HTMLElement).style.left)),
     );
     assert.deepEqual(posRecarregado.sort((a, b) => a - b), [posDepois[0]!.left, posDepois[1]!.left].sort((a, b) => a - b));
+
+    assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('Q2b: editar uma nota com negrito e itálico, sair, recarregar e ver igual', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1280, height: 800 } });
+  try {
+    const page = await ctx.newPage();
+    const erros: string[] = [];
+    page.on('console', (m) => {
+      if (m.type() === 'error') erros.push(m.text());
+    });
+    page.on('pageerror', (e) => erros.push(`pageerror: ${e.message}`));
+
+    await page.goto(`${amb.origem}/Mesa/`);
+    await page.waitForSelector('[data-testid="campanha-select"]');
+
+    await page.click('[data-testid="aba-campanhas"]');
+    await page.fill('[data-testid="nova-campanha-nome"]', 'Campanha Q2b');
+    await page.click('[data-testid="criar-campanha"]');
+    await page.waitForSelector('[data-testid="tela-entidades"]');
+
+    await page.click('[data-testid="aba-quadros"]');
+    await page.fill('[data-testid="novo-quadro-nome"]', 'Quadro Q2b');
+    await page.click('[data-testid="criar-quadro"]');
+    await page.waitForSelector('[data-testid="area-quadro"]');
+
+    const area = await page.locator('[data-testid="area-quadro"]').boundingBox();
+    assert.ok(area);
+
+    await page.click('[data-testid="ferramenta-nota"]');
+    await page.mouse.click(area.x + 300, area.y + 220);
+    await page.waitForSelector('[data-testid="editor-rico"]');
+
+    await page.keyboard.press('Control+b');
+    await page.keyboard.type('Negrito');
+    await page.keyboard.press('Control+b');
+    await page.keyboard.type(' e ');
+    await page.keyboard.press('Control+i');
+    await page.keyboard.type('Italico');
+    await page.keyboard.press('Escape');
+
+    await page.waitForSelector('[data-testid^="item-"] strong');
+    assert.equal(await page.locator('[data-testid^="item-"] strong').textContent(), 'Negrito');
+    assert.equal(await page.locator('[data-testid^="item-"] em').textContent(), 'Italico');
+
+    await page.waitForTimeout(600);
+    await page.reload();
+    await page.waitForSelector('[data-testid^="item-"] strong');
+    assert.equal(await page.locator('[data-testid^="item-"] strong').textContent(), 'Negrito');
+    assert.equal(await page.locator('[data-testid^="item-"] em').textContent(), 'Italico');
 
     assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
   } finally {

@@ -264,7 +264,8 @@ Testes: unitários de geometria (redimensionar em cada alça, proporção, rota�
 Pronto quando: os testes passam.
 Commit: `added selection, move, resize and rotate on boards`
 
-### Q2b — Texto rico com TipTap e renderizador puro  ⬜
+### Q2b — Texto rico com TipTap e renderizador puro  ✅
+Nota: o modelo `Quadro`/`Item` também recebeu atualização em `Mundo.tsx` e `Quadro.tsx` para o novo retorno `(novoDoc, novaAltura)` do `EditorRico`.
 Objetivo: editar texto com formatação dentro de textos e notas, e desenhar o texto parado sem editor.
 Depende de: Q2a.
 Ler: a documentação da versão instalada do TipTap v3 (`@tiptap/core`, `@tiptap/pm`, `@tiptap/starter-kit`, `@tiptap/extension-text-style`, que inclui `Color`, `BackgroundColor`, `FontFamily` e `FontSize`, e `@tiptap/extension-text-align`).
