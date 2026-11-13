@@ -232,7 +232,7 @@ Commit: `added board camera with zoom, background and grid`
 
 ## Etapa B — Itens e edição
 
-### Q2a — Seleção, mover, redimensionar e girar  ⬜
+### Q2a — Seleção, mover, redimensionar e girar  ✅
 Objetivo: a manipulação básica de qualquer item, com desfazer.
 Depende de: Q1d.
 Ler: `src/dominio/quadro-operacoes.ts`, `src/app/quadros.ts`.

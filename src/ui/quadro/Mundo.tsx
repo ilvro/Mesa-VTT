@@ -2,18 +2,38 @@ import { useMemo } from 'preact/hooks';
 import {
   caixaVisivel,
   itensVisiveis,
+  type Caixa,
   type Camera,
   type Tamanho,
 } from '../../dominio/camera.ts';
-import type { Item } from '../../dominio/quadro.ts';
+import type { Alca } from '../../dominio/geometria.ts';
+import type { Item as ItemModelo } from '../../dominio/quadro.ts';
+import { Item } from './Item.tsx';
+import { Selecao } from './Selecao.tsx';
 
 interface MundoProps {
   camera: Camera;
   tamanhoTela: Tamanho;
-  itens: ReadonlyMap<string, Item>;
+  itens: ReadonlyMap<string, ItemModelo>;
+  selecao: ReadonlySet<string>;
+  editandoId: string | null;
+  retanguloSelecao: Caixa | null;
+  onSairEdicao: (id: string, novoTexto?: string) => void;
+  onIniciarRedimensionar: (alca: Alca, e: PointerEvent) => void;
+  onIniciarGirar: (e: PointerEvent) => void;
 }
 
-export function Mundo({ camera, tamanhoTela, itens }: MundoProps) {
+export function Mundo({
+  camera,
+  tamanhoTela,
+  itens,
+  selecao,
+  editandoId,
+  retanguloSelecao,
+  onSairEdicao,
+  onIniciarRedimensionar,
+  onIniciarGirar,
+}: MundoProps) {
   const visiveis = useMemo(() => {
     const caixa = caixaVisivel(camera, tamanhoTela);
     const margem = 120 / Math.max(0.02, camera.zoom);
@@ -21,6 +41,15 @@ export function Mundo({ camera, tamanhoTela, itens }: MundoProps) {
       (a, b) => a.z - b.z || a.id.localeCompare(b.id),
     );
   }, [camera, tamanhoTela, itens]);
+
+  const selecionados = useMemo(() => {
+    const lista: ItemModelo[] = [];
+    for (const id of selecao) {
+      const it = itens.get(id);
+      if (it) lista.push(it);
+    }
+    return lista;
+  }, [selecao, itens]);
 
   return (
     <div
@@ -32,20 +61,20 @@ export function Mundo({ camera, tamanhoTela, itens }: MundoProps) {
       }}
     >
       {visiveis.map((item) => (
-        <div
+        <Item
           key={item.id}
-          class="item-teste"
-          data-testid={`item-${item.id}`}
-          style={{
-            left: `${item.x}px`,
-            top: `${item.y}px`,
-            width: `${item.largura}px`,
-            height: `${item.altura}px`,
-            zIndex: item.z,
-            transform: item.rotacao ? `rotate(${item.rotacao}deg)` : undefined,
-          }}
+          item={item}
+          editando={editandoId === item.id}
+          onSairEdicao={(novoTexto) => onSairEdicao(item.id, novoTexto)}
         />
       ))}
+      <Selecao
+        selecionados={selecionados}
+        zoom={camera.zoom}
+        retanguloSelecao={retanguloSelecao}
+        onIniciarRedimensionar={onIniciarRedimensionar}
+        onIniciarGirar={onIniciarGirar}
+      />
     </div>
   );
 }
