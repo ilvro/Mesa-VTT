@@ -245,6 +245,62 @@ export function ferramentasDeEntidade(ctx: ContextoDeEntidades): FerramentaDaPon
   ];
 }
 
+export interface ContextoDeCampanhas {
+  /** Lê do banco (atualiza antes de devolver). */
+  campanhas(): Promise<readonly Campanha[]>;
+  ativaId(): string | null;
+  /** Mesmo caminho do botão de nova campanha do hub; devolve null se falhar (o aviso já foi mostrado). */
+  criar(nome: string, opcoes: { sistema: string; selecionar: boolean }): Promise<Campanha | null>;
+  registrar?: (e: Efeito) => void;
+}
+
+export const SISTEMA_PADRAO_DA_CAMPANHA = 'ordem-paranormal';
+const MAXIMO_NOME_DE_CAMPANHA = 80;
+
+export function ferramentasDeCampanhas(ctx: ContextoDeCampanhas): FerramentaDaPonte[] {
+  return [
+    {
+      nome: 'mesa_campanhas_listar',
+      descricao: 'Lista as campanhas da Mesa (id, nome, sistema) e qual está ativa no hub. Detalhes: plataforma_guia ferramentas-mesa.',
+      esquema: { type: 'object', properties: {}, required: [], additionalProperties: false },
+      anotacoes: { leitura: true },
+      async executar() {
+        const ativa = ctx.ativaId();
+        return [json((await ctx.campanhas()).map(c => ({ id: c.id, nome: c.nome, sistema: c.sistema, ativa: c.id === ativa })))];
+      },
+    },
+    {
+      nome: 'mesa_campanha_criar',
+      descricao: 'Cria uma campanha como o botão do hub e, por padrão, a torna a ativa (as outras ferramentas passam a valer nela). Detalhes: plataforma_guia ferramentas-mesa.',
+      esquema: {
+        type: 'object', required: ['nome'], additionalProperties: false,
+        properties: {
+          nome: { type: 'string', description: '1 a 80 caracteres; sem repetir nome existente.' },
+          sistema: { type: 'string', description: `Sistema de regras, até 80 caracteres (padrão ${SISTEMA_PADRAO_DA_CAMPANHA}).` },
+          selecionar: { type: 'boolean', description: 'Torna a campanha a ativa do hub (padrão true).' },
+        },
+      },
+      anotacoes: { destrutiva: false },
+      async executar(args) {
+        if (typeof args.nome !== 'string' || !args.nome.trim()) throw new Error('"nome" é obrigatório (1 a 80 caracteres).');
+        const nome = args.nome.trim();
+        if (nome.length > MAXIMO_NOME_DE_CAMPANHA) throw new Error(`"nome" tem ${nome.length} caracteres; o máximo é ${MAXIMO_NOME_DE_CAMPANHA}.`);
+        if (args.sistema !== undefined && typeof args.sistema !== 'string') throw new Error('"sistema" deve ser texto.');
+        const sistema = typeof args.sistema === 'string' && args.sistema.trim() ? args.sistema.trim() : SISTEMA_PADRAO_DA_CAMPANHA;
+        if (sistema.length > 80) throw new Error(`"sistema" tem ${sistema.length} caracteres; o máximo é 80.`);
+        if (args.selecionar !== undefined && typeof args.selecionar !== 'boolean') throw new Error('"selecionar" deve ser verdadeiro ou falso.');
+        const selecionar = args.selecionar !== false;
+        const repetida = (await ctx.campanhas()).find(c => semAcento(c.nome.trim()) === semAcento(nome));
+        if (repetida) throw new Error(`Já existe a campanha "${repetida.nome}" (id ${repetida.id}). Escolha outro nome.`);
+        const c = await ctx.criar(nome, { sistema, selecionar });
+        if (!c) throw new Error('Não consegui criar a campanha (veja o aviso na Mesa).');
+        ctx.registrar?.({ tipo: 'criou-campanha', id: c.id });
+        return [json({ id: c.id, nome: c.nome, sistema: c.sistema, selecionada: selecionar })];
+      },
+    },
+  ];
+}
+
 export type EstadoDeAbrirApp = 'aberto' | 'bloqueado' | 'indisponivel';
 export interface ContextoDeCenas {
   campanha(): Promise<{ id: string; nome: string } | null>;

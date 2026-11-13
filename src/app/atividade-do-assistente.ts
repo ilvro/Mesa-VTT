@@ -145,6 +145,21 @@ export async function desfazerChamada(
         break;
       }
 
+      case 'criou-campanha': {
+        const atual = await repo.obterCampanha(efeito.id);
+        if (!atual) {
+          desfeitos.push(`Campanha "${efeito.id}" já não existe`);
+          break;
+        }
+        if (atual.atualizadaEm > chamada.quando || (await repo.listarEntidades(efeito.id)).length > 0) {
+          conflitos.push(`não desfeito: ${atual.nome} já tem conteúdo`);
+          break;
+        }
+        await repo.removerCampanha(efeito.id);
+        desfeitos.push(`removeu campanha "${atual.nome}"`);
+        break;
+      }
+
       case 'alterou-campanha': {
         const atual = await repo.obterCampanha(cId);
         if (!atual) {

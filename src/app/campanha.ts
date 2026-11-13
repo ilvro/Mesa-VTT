@@ -136,10 +136,13 @@ export async function escolherCampanha(id: string | null): Promise<void> {
   if (c?.tema) trocarTema({ id: c.tema });
 }
 
-export async function criarCampanha(nome: string): Promise<Campanha | null> {
+export const SISTEMA_PADRAO = 'ordem-paranormal';
+
+/** O caminho do botão "Criar campanha" do hub. `selecionar: false` cria sem trocar a campanha ativa. */
+export async function criarCampanha(nome: string, opcoes: { sistema?: string; selecionar?: boolean } = {}): Promise<Campanha | null> {
   try {
-    const c = await repo().criarCampanha({ nome: nome.trim(), sistema: 'ordem-paranormal', tema: null });
-    await escolherCampanha(c.id);
+    const c = await repo().criarCampanha({ nome: nome.trim(), sistema: opcoes.sistema ?? SISTEMA_PADRAO, tema: null });
+    if (opcoes.selecionar === false) await atualizar(); else await escolherCampanha(c.id);
     avisar(`Campanha “${c.nome}” criada.`);
     return c;
   } catch (erro) { avisar(mensagemDe(erro), true); return null; }

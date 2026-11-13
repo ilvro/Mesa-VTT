@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TIPOS_LIGACAO, type Entidade, type Ligacao, type Ref, type Sessao } from '#mesa';
+import { TIPOS_LIGACAO, type Campanha, type Entidade, type Ligacao, type Ref, type Sessao } from '#mesa';
 import { ferramentasDeEntidade, ferramentasDeSessao, type ContextoDeEntidades, type ContextoDeSessoes } from '../../src/app/ponte-escrita.ts';
 import { refDaEntidade, refsMencionados } from '../../src/dominio/notas.ts';
 import { MAXIMO_DO_ROTEIRO } from '../../src/dominio/roteiro.ts';
@@ -149,7 +149,7 @@ test('entidade: sem campanha ativa, erro legível', async () => {
   await assert.rejects(f.mesa_entidade_criar!.executar({ tipo: 'lugar', nome: 'a' }), /Nenhuma campanha/);
 });
 
-import { ferramentasDeCena, ferramentasDeElenco, type ContextoDeCenas, type ContextoDeElenco } from '../../src/app/ponte-escrita.ts';
+import { ferramentasDeCampanhas, ferramentasDeCena, ferramentasDeElenco, type ContextoDeCampanhas, type ContextoDeCenas, type ContextoDeElenco } from '../../src/app/ponte-escrita.ts';
 
 function montarCenas(momentosDoMapa?: ContextoDeCenas['momentosDoMapa']) {
   const mk = (id: string, tipo: Entidade['tipo'], nome: string, criadaPor: Entidade['criadaPor'], refs: Ref[] = [], tags: string[] = []): Entidade =>
@@ -318,4 +318,53 @@ test('orçamento: descrições até 400 caracteres e campos até 80', () => {
   const nada = new Proxy(function () {}, { get: () => nada, apply: () => nada }) as never;
   const varrer = (o: unknown): string[] => !o || typeof o !== 'object' ? [] : [...(typeof (o as { description?: unknown }).description === 'string' && (o as { description: string }).description.length > 80 ? [(o as { description: string }).description] : []), ...Object.values(o).flatMap(varrer)];
   for (const t of [...ferramentasDeSessao(nada), ...ferramentasDeEntidade(nada), ...ferramentasDeCena(nada), ...ferramentasDeElenco(nada)]) { assert.ok(t.descricao.length <= 400, t.nome); assert.deepEqual(varrer(t.esquema), [], t.nome); }
+});
+
+function montarCampanhas() {
+  let lista: Campanha[] = [{ id: 'k1', nome: 'Ordem Zero', sistema: 'ordem-paranormal', tema: null, capa: null, criadaEm: 0, atualizadaEm: 0 }];
+  let ativa: string | null = 'k1';
+  const efeitos: unknown[] = [];
+  const pedidos: { nome: string; sistema: string; selecionar: boolean }[] = [];
+  const ctx: ContextoDeCampanhas = {
+    campanhas: async () => lista, ativaId: () => ativa,
+    async criar(nome, o) { pedidos.push({ nome, ...o }); const c: Campanha = { id: `k${lista.length + 1}`, nome, sistema: o.sistema, tema: null, capa: null, criadaEm: 0, atualizadaEm: 0 }; lista = [...lista, c]; if (o.selecionar) ativa = c.id; return c; },
+    registrar: e => efeitos.push(e),
+  };
+  return { f: Object.fromEntries(ferramentasDeCampanhas(ctx).map(t => [t.nome, t])), pedidos, efeitos, ativa: () => ativa };
+}
+
+test('campanhas: listar mostra a ativa; criar seleciona por padrão e registra o efeito', async () => {
+  const { f, pedidos, efeitos, ativa } = montarCampanhas();
+  assert.deepEqual(await texto(f.mesa_campanhas_listar!.executar({})), [{ id: 'k1', nome: 'Ordem Zero', sistema: 'ordem-paranormal', ativa: true }]);
+  const r = await texto(f.mesa_campanha_criar!.executar({ nome: '  Pântano  ' }));
+  assert.deepEqual(r, { id: 'k2', nome: 'Pântano', sistema: 'ordem-paranormal', selecionada: true });
+  assert.deepEqual(pedidos, [{ nome: 'Pântano', sistema: 'ordem-paranormal', selecionar: true }]);
+  assert.equal(ativa(), 'k2'); assert.deepEqual(efeitos, [{ tipo: 'criou-campanha', id: 'k2' }]);
+  assert.equal((await texto(f.mesa_campanhas_listar!.executar({}))).find((c: { ativa: boolean }) => c.ativa).id, 'k2');
+});
+
+test('campanhas: criar sem selecionar e com sistema próprio', async () => {
+  const { f, ativa } = montarCampanhas();
+  const r = await texto(f.mesa_campanha_criar!.executar({ nome: 'Outra', sistema: 'dnd5e', selecionar: false }));
+  assert.deepEqual(r, { id: 'k2', nome: 'Outra', sistema: 'dnd5e', selecionada: false });
+  assert.equal(ativa(), 'k1');
+});
+
+test('campanhas: valida nome (vazio, longo, repetido sem acento/caixa) e sistema', async () => {
+  const { f, pedidos } = montarCampanhas();
+  await assert.rejects(f.mesa_campanha_criar!.executar({ nome: '   ' }), /obrigatório/);
+  await assert.rejects(f.mesa_campanha_criar!.executar({}), /obrigatório/);
+  await assert.rejects(f.mesa_campanha_criar!.executar({ nome: 'x'.repeat(81) }), /máximo é 80/);
+  await f.mesa_campanha_criar!.executar({ nome: 'x'.repeat(80) });
+  await assert.rejects(f.mesa_campanha_criar!.executar({ nome: 'ORDEM zéro' }), /Já existe a campanha "Ordem Zero" \(id k1\)/);
+  await assert.rejects(f.mesa_campanha_criar!.executar({ nome: 'Nova', sistema: 's'.repeat(81) }), /"sistema"/);
+  await assert.rejects(f.mesa_campanha_criar!.executar({ nome: 'Nova', selecionar: 'sim' }), /"selecionar"/);
+  assert.equal(pedidos.length, 1);
+});
+
+test('campanhas: falha ao criar vira erro legível e não registra efeito', async () => {
+  const efeitos: unknown[] = [];
+  const f = ferramentasDeCampanhas({ campanhas: async () => [], ativaId: () => null, criar: async () => null, registrar: e => efeitos.push(e) });
+  await assert.rejects(f[1]!.executar({ nome: 'A' }), /Não consegui criar/);
+  assert.equal(efeitos.length, 0);
 });

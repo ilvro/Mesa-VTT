@@ -3,8 +3,8 @@ import { conectarPonte, ferramentasDaCampanha, json, type FerramentaDaPonte } fr
 import { SeloDoAssistente, estadoDaPonte } from '../ui/SeloDoAssistente.tsx';
 import { seloDoAssistente } from './assistente-slot.ts';
 import { abrirAplicativo } from './aplicativos.ts';
-import { alternarEncontroDaCena, alterarEntidade, atualizar, campanhaAtiva, criarEntidade, definirMomentoDaCena, ligarRefs, obterRepositorio, salvarElencoDaCampanha, vincularMapaNaCena, vincularParticipanteNaCena, vincularPistaNaCena, vincularTrilhaNaCena } from './campanha.ts';
-import { ferramentasDeCena, ferramentasDeElenco, ferramentasDeEntidade, ferramentasDeSessao } from './ponte-escrita.ts';
+import { alternarEncontroDaCena, alterarEntidade, atualizar, campanhaAtiva, campanhas, criarCampanha, criarEntidade, definirMomentoDaCena, ligarRefs, obterRepositorio, salvarElencoDaCampanha, vincularMapaNaCena, vincularParticipanteNaCena, vincularPistaNaCena, vincularTrilhaNaCena } from './campanha.ts';
+import { ferramentasDeCampanhas, ferramentasDeCena, ferramentasDeElenco, ferramentasDeEntidade, ferramentasDeSessao } from './ponte-escrita.ts';
 import { momentosDoMapaDoAtlas } from './momentos-do-atlas.ts';
 import { oQueVejo } from './o-que-vejo.ts';
 import { alterarSessaoPorId, carregarSessoes, planejarSessao } from './registro.ts';
@@ -28,6 +28,7 @@ const FERRAMENTAS_DE_ESCRITA = new Set([
   'mesa_ligar',
   'mesa_cena_montar',
   'mesa_elenco',
+  'mesa_campanha_criar',
 ]);
 
 let efeitosAtuais: Efeito[] = [];
@@ -51,6 +52,8 @@ function resumirChamada(ferramenta: string, args: Record<string, unknown>): stri
       return `Montou cena "${args.cenaId ?? ''}"`;
     case 'mesa_elenco':
       return 'Alterou elenco';
+    case 'mesa_campanha_criar':
+      return `Criou campanha "${args.nome ?? ''}"`;
     default:
       return ferramenta;
   }
@@ -94,6 +97,12 @@ const ferramentas = [
     criar: (t, n) => criarEntidade(t, n, false),
     alterar: alterarEntidade,
     ligar: ligarRefs,
+    registrar,
+  }),
+  ...ferramentasDeCampanhas({
+    campanhas: async () => { await atualizar(); return campanhas.value; },
+    ativaId: () => campanhaAtiva.value?.id ?? null,
+    criar: criarCampanha,
     registrar,
   }),
   ...ferramentasDeCena({

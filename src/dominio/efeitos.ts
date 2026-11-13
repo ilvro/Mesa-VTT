@@ -6,6 +6,7 @@ export type Efeito =
   | { tipo: 'criou-ligacao'; id: string }
   | { tipo: 'criou-sessao'; id: string }
   | { tipo: 'alterou-sessao'; antes: Sessao }
+  | { tipo: 'criou-campanha'; id: string }
   | { tipo: 'alterou-campanha'; antes: Campanha }; // p.ex. o elenco
 
 export interface Chamada {
