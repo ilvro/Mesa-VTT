@@ -1,6 +1,7 @@
 import type { Editor } from '@tiptap/core';
 import { useSignal } from '@preact/signals';
 import { caixaDe } from '../../dominio/geometria.ts';
+import { familiaCss, FONTES } from '../../dominio/fontes.ts';
 import { mundoParaTela, type Camera, type Tamanho } from '../../dominio/camera.ts';
 import {
   IDS_FONTE,
@@ -135,8 +136,8 @@ export function BarraDeFormatacao({
         >
           <option value="">Fonte…</option>
           {IDS_FONTE.map((id) => (
-            <option key={id} value={id}>
-              {ROTULO_FONTE[id]}
+            <option key={id} value={id} style={{ fontFamily: familiaCss(id) }}>
+              {FONTES[id].nome}
             </option>
           ))}
         </select>

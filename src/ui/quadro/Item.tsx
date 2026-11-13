@@ -1,6 +1,7 @@
 import type { Editor } from '@tiptap/core';
 import { memo } from 'preact/compat';
 import { docParaHtml } from '../../dominio/doc-rico.ts';
+import { familiaCss } from '../../dominio/fontes.ts';
 import type { DocRico, Item as ItemModelo } from '../../dominio/quadro.ts';
 import { EditorRico } from './EditorRico.tsx';
 
@@ -52,7 +53,7 @@ function estiloCaixaCss(item: Extract<ItemModelo, { tipo: 'texto' }>) {
     boxShadow: c.sombra ? '0 8px 20px rgba(0, 0, 0, 0.35)' : undefined,
     padding: `${c.padding}px`,
     color: item.texto.cor,
-    fontFamily: FAMILIA_FONTE[item.texto.fonte],
+    fontFamily: familiaCss(item.texto.fonte),
     fontSize: `${item.texto.tamanho}px`,
     textAlign: ALINHAMENTO_CSS[item.texto.alinhamento],
     justifyContent: VERTICAL_CSS[item.texto.vertical],

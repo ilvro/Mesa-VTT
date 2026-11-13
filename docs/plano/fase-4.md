@@ -310,7 +310,8 @@ Testes: e2e: selecionar 2 notas → mudar o fundo das duas → desfazer volta as
 Pronto quando: os testes passam.
 Commit: `added contextual formatting toolbar for boards`
 
-### Q2d — Fontes locais  ⬜
+### Q2d — Fontes locais  ✅
+Nota: `Item.tsx` também passou a usar `familiaCss` de `src/dominio/fontes.ts`.
 Objetivo: seis fontes disponíveis offline, com nome legível no seletor.
 Depende de: Q2c.
 Arquivos: `package.json` (`@fontsource/open-sans`, `@fontsource/pt-serif`, `@fontsource/caveat` e `@fontsource/jetbrains-mono`, versão exata; Hanken e Cinzel já existem); criar `src/dominio/fontes.ts`; mudar `src/main.tsx` (imports dos pesos 400 e 700, mais o itálico onde existir) e `BarraDeFormatacao.tsx`.
