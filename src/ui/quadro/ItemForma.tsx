@@ -2,7 +2,9 @@ import type { Editor } from '@tiptap/core';
 import { docParaHtml } from '../../dominio/doc-rico.ts';
 import { familiaCss } from '../../dominio/fontes.ts';
 import { areaUtil, caminhoDaForma } from '../../dominio/formas.ts';
+import { corDoTexto, decorarMarcadores, fundoEfetivo } from '../../dominio/paleta.ts';
 import type { DocRico, Item } from '../../dominio/quadro.ts';
+import { paletaDaCampanha } from '../../app/quadros.ts';
 import { EditorRico } from './EditorRico.tsx';
 
 interface ItemFormaProps {
@@ -34,6 +36,9 @@ export function ItemForma({
   onEditorPronto,
 }: ItemFormaProps) {
   const c = item.caixa;
+  const paleta = paletaDaCampanha.value;
+  const fundo = fundoEfetivo(item, paleta);
+  const corTexto = item.semantica && !c.fundo && fundo ? corDoTexto(fundo) : item.texto.cor;
   const d = caminhoDaForma(item.forma, item.largura, item.altura, c.raio);
   const util = areaUtil(item.forma, {
     x: 0,
@@ -54,6 +59,7 @@ export function ItemForma({
       class="item-quadro item-forma"
       data-testid={`item-${item.id}`}
       data-item-id={item.id}
+      data-semantica={item.semantica ?? undefined}
       style={{
         left: `${item.x}px`,
         top: `${item.y}px`,
@@ -72,8 +78,8 @@ export function ItemForma({
       >
         <path
           d={d}
-          fill={c.fundo ?? 'transparent'}
-          fill-opacity={c.fundo ? c.opacidade : 0}
+          fill={fundo ?? 'transparent'}
+          fill-opacity={fundo ? c.opacidade : 0}
           stroke={c.borda ?? 'none'}
           stroke-width={c.espessuraBorda}
           stroke-dasharray={dashArray}
@@ -88,7 +94,7 @@ export function ItemForma({
           width: `${util.largura}px`,
           height: `${util.altura}px`,
           padding: `${c.padding}px`,
-          color: item.texto.cor,
+          color: corTexto,
           fontFamily: familiaCss(item.texto.fonte),
           fontSize: `${item.texto.tamanho}px`,
           textAlign: ALINHAMENTO_CSS[item.texto.alinhamento],
@@ -111,7 +117,9 @@ export function ItemForma({
         ) : (
           <div
             class="item-texto-conteudo doc-rico-html"
-            dangerouslySetInnerHTML={{ __html: docParaHtml(item.doc) }}
+            dangerouslySetInnerHTML={{
+              __html: docParaHtml(item.doc, { decorar: decorarMarcadores }),
+            }}
           />
         )}
       </div>

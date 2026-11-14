@@ -4,6 +4,7 @@ import {
   validarQuadro,
   type Item,
   type Quadro,
+  type TipoSemantico,
 } from '../dominio/quadro.ts';
 
 export const NOME_BANCO_QUADROS = 'mesa-quadros-v1';
@@ -204,6 +205,32 @@ export async function guardarImagem(
   });
 
   return { id, largura, altura };
+}
+
+export interface AjustesQuadro {
+  campanhaId: string;
+  paleta?: Partial<Record<TipoSemantico, string>>;
+}
+
+export async function lerAjustesQuadro(
+  campanhaId: string,
+  db?: IDBDatabase,
+): Promise<AjustesQuadro | null> {
+  const banco = await obterBanco(db);
+  return transacao(banco, ['ajustes'], 'readonly', async (tx) => {
+    const res = await promessa(tx.objectStore('ajustes').get(campanhaId));
+    return (res as AjustesQuadro | undefined) ?? null;
+  });
+}
+
+export async function salvarAjustesQuadro(
+  ajustes: AjustesQuadro,
+  db?: IDBDatabase,
+): Promise<void> {
+  const banco = await obterBanco(db);
+  await transacao(banco, ['ajustes'], 'readwrite', async (tx) => {
+    await promessa(tx.objectStore('ajustes').put(ajustes));
+  });
 }
 
 export async function lerImagem(

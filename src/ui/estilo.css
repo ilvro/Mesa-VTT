@@ -1560,3 +1560,59 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   background: var(--superficie-2);
   cursor: crosshair;
 }
+
+.painel-paleta-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.painel-paleta-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.painel-paleta-amostra {
+  flex: 1;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.painel-paleta-rodape {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+.chip-marcador {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.86em;
+  font-weight: 600;
+  background: rgba(16, 20, 18, 0.16);
+  border: 1px solid rgba(16, 20, 18, 0.25);
+  vertical-align: baseline;
+}
+.chip-marcador .chip-dt {
+  font-weight: 800;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.15);
+}
+.chip-marcador .chip-condicao {
+  font-style: italic;
+  font-weight: 400;
+  opacity: 0.85;
+}
+.chip-teste { background: rgba(122, 167, 240, 0.28); border-color: rgba(122, 167, 240, 0.55); }
+.chip-segredo { background: rgba(242, 167, 184, 0.28); border-color: rgba(242, 167, 184, 0.55); }
+.chip-loot,
+.chip-evento,
+.chip-tarefa { background: rgba(240, 163, 94, 0.28); border-color: rgba(240, 163, 94, 0.55); }
+.chip-fala { background: rgba(143, 227, 176, 0.28); border-color: rgba(143, 227, 176, 0.55); }
+.chip-rever { background: rgba(255, 216, 77, 0.32); border-color: rgba(255, 216, 77, 0.6); }
+.chip-musica { background: rgba(168, 130, 255, 0.24); border-color: rgba(168, 130, 255, 0.5); }
+.chip-data { background: rgba(148, 163, 184, 0.24); border-color: rgba(148, 163, 184, 0.5); }

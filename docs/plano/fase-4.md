@@ -471,7 +471,7 @@ Testes: uma tabela com **todos os exemplos acima**, tirados dos quadros reais do
 Pronto quando: os testes passam.
 Commit: `added marker parser for board text`
 
-### Q3b — Tipos semânticos, paleta e chips  ⬜
+### Q3b — Tipos semânticos, paleta e chips  ✅
 Objetivo: padronizar cores. Cada tipo tem uma cor da campanha, e os marcadores aparecem como chips.
 Depende de: Q3a, Q2c.
 Arquivos: criar `src/dominio/paleta.ts`, `tests/unit/paleta.test.ts` e `src/ui/quadro/PainelDaPaleta.tsx`; mudar `src/app/banco-quadros.ts` (store `ajustes`), `src/app/quadros.ts`, `src/dominio/doc-rico.ts` (gancho `decorar`), `Item.tsx`, `BarraDeFormatacao.tsx` e `estilo.css`.

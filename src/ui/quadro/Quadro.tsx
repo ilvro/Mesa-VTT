@@ -63,6 +63,7 @@ import { duplicar } from '../../dominio/quadro-operacoes.ts';
 import { FORMATOS_IMAGEM_ACEITOS, importarArquivoImagem } from '../../app/imagens-quadro.ts';
 import {
   agruparSelecao,
+  atualizarCorDaPaleta,
   atualizarMolduras,
   desagruparSelecao,
   desfazer,
@@ -72,9 +73,11 @@ import {
   itemPendente,
   itens,
   mudarFundo,
+  paletaDaCampanha,
   quadroAberto,
   refazer,
   renomearQuadro,
+  restaurarPaletaPadrao,
   selecao,
 } from '../../app/quadros.ts';
 import { navegarParaQuadro } from '../../app/rotas.ts';
@@ -89,6 +92,7 @@ import { Mundo, type TracoPreview } from './Mundo.tsx';
 import { MenuDoItem } from './MenuDoItem.tsx';
 import { Minimapa } from './Minimapa.tsx';
 import { Navegador } from './Navegador.tsx';
+import { PainelDaPaleta } from './PainelDaPaleta.tsx';
 import { PainelDoFundo, type ModoRoda } from './PainelDoFundo.tsx';
 
 const CHAVE_RODA = 'mesa:quadro:roda';
@@ -289,6 +293,7 @@ export function Quadro() {
   const camera = useSignal<Camera>(lerCameraSalva(q.id));
   const tamanhoTela = useSignal<Tamanho>({ largura: 1280, altura: 720 });
   const painelFundoAberto = useSignal(false);
+  const painelPaletaAberto = useSignal(false);
   const navegadorAberto = useSignal(false);
   const indiceMoldura = useSignal(0);
   const ferramenta = useSignal<FerramentaQuadro>('selecionar');
@@ -1629,10 +1634,23 @@ export function Quadro() {
         <button
           type="button"
           class="botao-pilula"
+          aria-pressed={painelPaletaAberto.value}
+          data-testid="botao-paleta"
+          onClick={() => {
+            painelPaletaAberto.value = !painelPaletaAberto.value;
+            if (painelPaletaAberto.value) painelFundoAberto.value = false;
+          }}
+        >
+          Paleta
+        </button>
+        <button
+          type="button"
+          class="botao-pilula"
           aria-pressed={painelFundoAberto.value}
           data-testid="botao-fundo"
           onClick={() => {
             painelFundoAberto.value = !painelFundoAberto.value;
+            if (painelFundoAberto.value) painelPaletaAberto.value = false;
           }}
         >
           Fundo e grade
@@ -1845,6 +1863,26 @@ export function Quadro() {
               }}
               onFechar={() => {
                 navegadorAberto.value = false;
+              }}
+            />
+          </div>
+        ) : null}
+
+        {painelPaletaAberto.value ? (
+          <div
+            onPointerDown={(e) => e.stopPropagation()}
+            onDblClick={(e) => e.stopPropagation()}
+          >
+            <PainelDaPaleta
+              paleta={paletaDaCampanha.value}
+              onMudarCor={(tipo, cor) => {
+                void atualizarCorDaPaleta(tipo, cor);
+              }}
+              onRestaurar={() => {
+                void restaurarPaletaPadrao();
+              }}
+              onFechar={() => {
+                painelPaletaAberto.value = false;
               }}
             />
           </div>

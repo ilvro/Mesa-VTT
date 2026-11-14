@@ -7,6 +7,7 @@ import {
   CABECAS_SETA,
   IDS_FONTE,
   ROTAS_SETA,
+  TIPOS_SEMANTICOS,
   TRACEJADOS,
   type Cabeca,
   type DocRico,
@@ -15,7 +16,9 @@ import {
   type IdFonte,
   type Item,
   type NoRico,
+  type TipoSemantico,
 } from '../../dominio/quadro.ts';
+import { NOMES_SEMANTICOS } from '../../dominio/paleta.ts';
 import {
   duplicar,
   levarParaTras,
@@ -28,6 +31,7 @@ import {
   distribuirSelecao,
   executar,
   itens,
+  paletaDaCampanha,
   selecao,
 } from '../../app/quadros.ts';
 import type { ModoAlinhamento } from '../../dominio/alinhamento.ts';
@@ -438,9 +442,11 @@ export function BarraDeFormatacao({
   };
 
   const fonteComum = valorComum(textuais.map((i) => i.texto.fonte)) ?? '';
+  const semanticaComum = valorComum(textuais.map((i) => i.semantica ?? ''));
   const tamanhoComum = valorComum(textuais.map((i) => i.texto.tamanho));
   const corTextoComum = valorComum(textuais.map((i) => i.texto.cor));
   const fundoComum = valorComum(comCaixa.map((i) => i.caixa.fundo));
+  const coresPaleta = Object.values(paletaDaCampanha.value);
   const todosTravados = selecionados.every((i) => i.travado);
   const todosSoMestre = selecionados.every((i) => i.soMestre);
 
@@ -454,6 +460,27 @@ export function BarraDeFormatacao({
     >
       {todosTextuais ? (
         <>
+          <select
+            class="fmt-select"
+            aria-label="Tipo semântico"
+            data-testid="fmt-semantica"
+            value={semanticaComum ?? ''}
+            onChange={(e) => {
+              const v = e.currentTarget.value as TipoSemantico | '';
+              alterarTextuais('Tipo semântico', (it) => ({
+                semantica: v ? v : null,
+                caixa: { ...it.caixa, fundo: null },
+              }));
+            }}
+          >
+            <option value="">Sem tipo</option>
+            {TIPOS_SEMANTICOS.map((t) => (
+              <option key={t} value={t}>
+                {NOMES_SEMANTICOS[t]}
+              </option>
+            ))}
+          </select>
+
           <select
             class="fmt-select"
             aria-label="Fonte"
@@ -579,6 +606,7 @@ export function BarraDeFormatacao({
           <SeletorDeCor
             valor={fundoComum}
             permiteNula
+            coresSemanticas={coresPaleta}
             rotulo="Cor de fundo"
             testIdPrefix="fmt-fundo"
             onEscolher={(fundo) => {

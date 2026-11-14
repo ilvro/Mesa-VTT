@@ -3,7 +3,13 @@ import {
   novoQuadro,
   type Item,
   type Quadro,
+  type TipoSemantico,
 } from '../dominio/quadro.ts';
+import {
+  PALETA_PADRAO,
+  resolverPaleta,
+  type PaletaDaCampanha,
+} from '../dominio/paleta.ts';
 import {
   aplicar,
   Historico,
@@ -25,10 +31,12 @@ import { campanhaAtiva } from './campanha.ts';
 import { revogarImagensDoQuadro } from './imagens-quadro.ts';
 import {
   gravarItens,
+  lerAjustesQuadro,
   listarItens,
   listarQuadros,
   obterQuadro,
   removerQuadro,
+  salvarAjustesQuadro,
   salvarQuadro,
 } from './banco-quadros.ts';
 import { avisar, mensagemDe } from './toasts.ts';
@@ -38,6 +46,7 @@ export const quadroAberto = signal<Quadro | null>(null);
 export const itens = signal<ReadonlyMap<string, Item>>(new Map());
 export const selecao = signal<ReadonlySet<string>>(new Set());
 export const itemPendente = signal<string | null>(null);
+export const paletaDaCampanha = signal<PaletaDaCampanha>({ ...PALETA_PADRAO });
 export const historico = new Historico();
 
 const versaoHistorico = signal(0);
@@ -142,13 +151,54 @@ export async function carregarQuadros(): Promise<void> {
   const c = campanhaAtiva.value;
   if (!c) {
     quadros.value = [];
+    paletaDaCampanha.value = { ...PALETA_PADRAO };
     return;
   }
   try {
-    quadros.value = await listarQuadros(c.id);
+    const [lista, ajustes] = await Promise.all([
+      listarQuadros(c.id),
+      lerAjustesQuadro(c.id),
+    ]);
+    quadros.value = lista;
+    paletaDaCampanha.value = resolverPaleta(ajustes?.paleta);
   } catch (erro) {
     console.warn('Mesa: erro ao listar quadros', erro);
     quadros.value = [];
+    paletaDaCampanha.value = { ...PALETA_PADRAO };
+  }
+}
+
+export async function atualizarCorDaPaleta(tipo: TipoSemantico, cor: string): Promise<void> {
+  const proxima = resolverPaleta({ ...paletaDaCampanha.value, [tipo]: cor });
+  paletaDaCampanha.value = proxima;
+  const c = campanhaAtiva.value;
+  if (!c) return;
+  try {
+    const existente = await lerAjustesQuadro(c.id);
+    await salvarAjustesQuadro({
+      ...(existente ?? { campanhaId: c.id }),
+      campanhaId: c.id,
+      paleta: proxima,
+    });
+  } catch (erro) {
+    avisar(mensagemDe(erro), true);
+  }
+}
+
+export async function restaurarPaletaPadrao(): Promise<void> {
+  const padrao = { ...PALETA_PADRAO };
+  paletaDaCampanha.value = padrao;
+  const c = campanhaAtiva.value;
+  if (!c) return;
+  try {
+    const existente = await lerAjustesQuadro(c.id);
+    await salvarAjustesQuadro({
+      ...(existente ?? { campanhaId: c.id }),
+      campanhaId: c.id,
+      paleta: padrao,
+    });
+  } catch (erro) {
+    avisar(mensagemDe(erro), true);
   }
 }
 

@@ -9,7 +9,9 @@ import {
 } from '../../dominio/camera.ts';
 import type { LinhaGuia } from '../../dominio/alinhamento.ts';
 import type { Alca } from '../../dominio/geometria.ts';
+import { fundoEfetivo } from '../../dominio/paleta.ts';
 import type { DocRico, Item as ItemModelo } from '../../dominio/quadro.ts';
+import { paletaDaCampanha } from '../../app/quadros.ts';
 import { pontoDaPonta, type LadoResolvido } from '../../dominio/setas.ts';
 import { caminhoDoTraco, type PontoTraco } from '../../dominio/tracos.ts';
 import { Item } from './Item.tsx';
@@ -114,7 +116,7 @@ export function Mundo({
         continue;
       }
       if ('caixa' in it) {
-        ctx.fillStyle = it.caixa.fundo ?? '#202b24';
+        ctx.fillStyle = fundoEfetivo(it, paletaDaCampanha.value) ?? '#202b24';
         ctx.fillRect(it.x, it.y, it.largura, it.altura);
         if (it.caixa.espessuraBorda > 0 && it.caixa.borda) {
           ctx.strokeStyle = it.caixa.borda;

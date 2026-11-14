@@ -6,7 +6,9 @@ import {
   type Camera,
   type Tamanho,
 } from '../../dominio/camera.ts';
+import { fundoEfetivo } from '../../dominio/paleta.ts';
 import type { Item } from '../../dominio/quadro.ts';
+import { paletaDaCampanha } from '../../app/quadros.ts';
 
 interface MinimapaProps {
   itens: ReadonlyMap<string, Item>;
@@ -74,9 +76,10 @@ export function Minimapa({
         );
         continue;
       }
+      const fundo = 'caixa' in it ? fundoEfetivo(it, paletaDaCampanha.value) : null;
       ctx.fillStyle =
-        'caixa' in it && it.caixa.fundo
-          ? it.caixa.fundo
+        fundo
+          ? fundo
           : it.tipo === 'seta' || it.tipo === 'traco'
             ? it.cor
             : '#8fa396';
