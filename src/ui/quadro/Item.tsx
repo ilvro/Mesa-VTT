@@ -3,6 +3,7 @@ import { memo } from 'preact/compat';
 import { docParaHtml } from '../../dominio/doc-rico.ts';
 import { familiaCss } from '../../dominio/fontes.ts';
 import {
+  PALETA_PADRAO,
   corDoTexto,
   decorarMarcadores,
   fundoEfetivo,
@@ -132,7 +133,8 @@ function ItemBase({
   };
 
   if (item.tipo === 'texto') {
-    const paleta = paletaDaCampanha.value;
+    const paleta =
+      item.semantica && !item.caixa.fundo ? paletaDaCampanha.value : PALETA_PADRAO;
     return (
       <div
         class="item-quadro item-texto"

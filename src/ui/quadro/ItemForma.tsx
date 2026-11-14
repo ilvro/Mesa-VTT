@@ -2,7 +2,12 @@ import type { Editor } from '@tiptap/core';
 import { docParaHtml } from '../../dominio/doc-rico.ts';
 import { familiaCss } from '../../dominio/fontes.ts';
 import { areaUtil, caminhoDaForma } from '../../dominio/formas.ts';
-import { corDoTexto, decorarMarcadores, fundoEfetivo } from '../../dominio/paleta.ts';
+import {
+  PALETA_PADRAO,
+  corDoTexto,
+  decorarMarcadores,
+  fundoEfetivo,
+} from '../../dominio/paleta.ts';
 import type { DocRico, Item } from '../../dominio/quadro.ts';
 import { abrirNoApp } from '../../app/barramento.ts';
 import { entidades } from '../../app/campanha.ts';
@@ -39,7 +44,7 @@ export function ItemForma({
   onEditorPronto,
 }: ItemFormaProps) {
   const c = item.caixa;
-  const paleta = paletaDaCampanha.value;
+  const paleta = item.semantica && !c.fundo ? paletaDaCampanha.value : PALETA_PADRAO;
   const fundo = fundoEfetivo(item, paleta);
   const corTexto = item.semantica && !c.fundo && fundo ? corDoTexto(fundo) : item.texto.cor;
   const d = caminhoDaForma(item.forma, item.largura, item.altura, c.raio);

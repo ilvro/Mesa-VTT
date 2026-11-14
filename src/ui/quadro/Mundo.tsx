@@ -107,10 +107,15 @@ export function Mundo({
     ctx.translate(-camera.x * camera.zoom, -camera.y * camera.zoom);
     ctx.scale(camera.zoom, camera.zoom);
 
+    const paleta = paletaDaCampanha.value;
+    const temFiltro = Boolean(tiposFiltro && tiposFiltro.size > 0);
+
     for (const it of visiveis) {
       if (esconderSegredos && itemEhSecreto(it)) continue;
       if (it.tipo === 'moldura' || selecao.has(it.id) || editandoId === it.id) continue;
-      ctx.globalAlpha = tiposFiltro && !itemPassaNoFiltro(it, tiposFiltro) ? 0.15 : 1;
+      if (temFiltro && tiposFiltro) {
+        ctx.globalAlpha = itemPassaNoFiltro(it, tiposFiltro) ? 1 : 0.15;
+      }
       if (it.tipo === 'seta') {
         const p1 = pontoDaPonta(it.de, itens, it.para).ponto;
         const p2 = pontoDaPonta(it.para, itens, it.de).ponto;
@@ -123,7 +128,7 @@ export function Mundo({
         continue;
       }
       if ('caixa' in it) {
-        ctx.fillStyle = fundoEfetivo(it, paletaDaCampanha.value) ?? '#202b24';
+        ctx.fillStyle = fundoEfetivo(it, paleta) ?? '#202b24';
         ctx.fillRect(it.x, it.y, it.largura, it.altura);
         if (it.caixa.espessuraBorda > 0 && it.caixa.borda) {
           ctx.strokeStyle = it.caixa.borda;

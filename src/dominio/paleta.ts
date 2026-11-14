@@ -173,6 +173,9 @@ export function decorarMarcadores(
   texto: string,
   entidades: readonly Entidade[] = [],
 ): string {
+  if (!texto.includes('[') && !texto.includes('Tarefa:')) {
+    return escaparHtml(texto);
+  }
   const trechos = analisarMarcadores(texto);
   let html = '';
   for (const t of trechos) {
