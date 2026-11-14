@@ -54,5 +54,7 @@ Implementações de refinamento do hub da Mesa, transferência entre aparelhos, 
 - **Q4a (Script de download do Miro):** criados `scripts/miro-baixar.mjs`, `scripts/miro-baixar.d.mts` e `docs/miro.md`, adicionados script `miro:baixar` em `package.json`, regra `*.miro.zip` no `.gitignore` e testes de extração de ID em `tests/unit/miro.test.ts`.
 - **Q4b (Conversor Miro → Quadro puro):** criados `src/dominio/html-miro.ts` (tokenizador/parser HTML puro sem DOMParser) e `src/dominio/miro.ts` (`CORES_DE_NOTA_DO_MIRO`, `converterMiro`, `sugerirRevisaoMiro`), fixture `tests/unit/fixtures/miro/aventura-exemplo.json` e testes em `tests/unit/miro.test.ts`.
 - **Q4c (Importar na Mesa e fila de revisão):** criados `src/app/importar-miro.ts` (descompactação `.miro.zip`, imagens e criação do quadro importado) e `src/ui/quadro/FilaDeRevisao.tsx` (painel agrupado por moldura com aceitar, escolher outro tipo, sem tipo, ligar a entidade, pular e aceitar moldura inteira via `executar`), contorno tracejado em `Item.tsx`/`ItemForma.tsx`/`estilo.css`, botão de importação em `Quadros.tsx` e teste e2e em `tests/e2e/quadro.test.ts`.
+- **Q5a (Eventos novos no contrato `mesa-core`):** adicionados `'atlas.inspecionado'` e `'mesa.focar'` em `Atlas/mesa-core/src/eventos.ts` com testes em `Atlas/mesa-core/tests/eventos.test.ts`, documentação em `Atlas/docs/PLATAFORMA.md` e atualização de `vendor/mesa-core/` na Mesa.
+
 
 

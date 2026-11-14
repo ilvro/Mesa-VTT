@@ -24,6 +24,7 @@ export const CATALOGO = {
     'atlas.cena-aberta': { natureza: 'fato', dono: 'atlas', validar: ref('mapa') },
     'atlas.regiao-entrou': { natureza: 'fato', dono: 'atlas', validar: todos(ref('mapa'), ref('regiao')) },
     'atlas.revelado': { natureza: 'fato', dono: 'atlas', validar: todos(ref('mapa'), ref('alvo')) },
+    'atlas.inspecionado': { natureza: 'fato', dono: 'atlas', validar: todos(ref('mapa'), ref('alvo')) },
     'atelie.documento-salvo': { natureza: 'fato', dono: 'atelie', validar: ref('documento') },
     'jukebox.tocando': { natureza: 'fato', dono: 'jukebox', validar: refOuNulo('cena') },
     'jukebox.tocar': { natureza: 'pedido', dono: 'jukebox', validar: ref('ref') },
@@ -40,6 +41,7 @@ export const CATALOGO = {
     'ficha.abrir': { natureza: 'pedido', dono: 'ficha', validar: ref('ref') },
     'ficha.ajustar-recursos': { natureza: 'pedido', dono: 'ficha', validar: todos(ref('ficha'), num('deltaPv', true), num('deltaPd', true), num('pv', true), num('pd', true)) },
     'atelie.abrir': { natureza: 'pedido', dono: 'atelie', validar: ref('ref') },
+    'mesa.focar': { natureza: 'pedido', dono: 'mesa', validar: ref('ref') },
 };
 /** Confere um envelope recebido. Nunca lança: o canal é compartilhado e qualquer aba pode mandar lixo. */
 export function validarEvento(valor) {

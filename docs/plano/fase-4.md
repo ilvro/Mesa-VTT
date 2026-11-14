@@ -601,7 +601,7 @@ Commit: `added miro import with a review queue`
 
 > As fichas Q5a e Q5b mudam o **mesa-core** e o **Atlas**. O mestre autorizou essas mudanças ao aprovar este plano. Faça cada uma no seu projeto, uma por vez.
 
-### Q5a — Eventos novos no contrato (`mesa-core`)  ⬜
+### Q5a — Eventos novos no contrato (`mesa-core`)  ✅
 Objetivo: o Atlas pode avisar "o mestre está olhando este objeto" e pedir à Mesa "mostre isto no quadro".
 Depende de: —.
 Ler: `Atlas/mesa-core/src/eventos.ts`, `Atlas/mesa-core/tests/eventos.test.ts`, `Atlas/docs/PLATAFORMA.md` §5, §9 e §10.
