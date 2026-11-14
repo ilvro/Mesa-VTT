@@ -8,6 +8,7 @@ import {
   trazerParaFrente,
 } from '../../dominio/quadro-operacoes.ts';
 import { entidades } from '../../app/campanha.ts';
+import { adicionarAoRoteiro, sessaoAtiva } from '../../app/registro.ts';
 import {
   agruparSelecao,
   alinharSelecao,
@@ -403,6 +404,23 @@ export function MenuDoItem({
                 </button>
               </div>
             </div>
+          ) : null}
+          {selecionados.length === 1 && primeiro?.tipo === 'moldura' && sessaoAtiva.value ? (
+            <button
+              type="button"
+              class="menu-contexto-btn"
+              data-testid="menu-adicionar-roteiro"
+              onClick={() => {
+                adicionarAoRoteiro({
+                  app: 'mesa',
+                  tipo: 'item',
+                  id: `${quadroId}/${primeiro.id}`,
+                });
+                onFechar();
+              }}
+            >
+              Adicionar ao roteiro
+            </button>
           ) : null}
           {primeiro ? (
             <button

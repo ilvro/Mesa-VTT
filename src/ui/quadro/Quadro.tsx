@@ -110,6 +110,7 @@ import {
 } from './BarraDeFerramentas.tsx';
 import { BarraDeFormatacao } from './BarraDeFormatacao.tsx';
 import { BuscaNoQuadro } from './BuscaNoQuadro.tsx';
+import { LinhaDoTempo } from './LinhaDoTempo.tsx';
 import { Mundo, type TracoPreview } from './Mundo.tsx';
 import { MenuDoItem } from './MenuDoItem.tsx';
 import { Minimapa } from './Minimapa.tsx';
@@ -320,6 +321,7 @@ export function Quadro() {
   const painelPaletaAberto = useSignal(false);
   const painelEstadoAberto = useSignal(false);
   const painelSegredosAberto = useSignal(false);
+  const painelLinhaDoTempoAberto = useSignal(false);
   const buscaAberta = useSignal(false);
   const termoBusca = useSignal('');
   const indiceBusca = useSignal(0);
@@ -1726,6 +1728,23 @@ export function Quadro() {
         >
           Segredos
         </button>
+        <button
+          type="button"
+          class="botao-pilula"
+          aria-pressed={painelLinhaDoTempoAberto.value}
+          data-testid="botao-linha-do-tempo"
+          onClick={() => {
+            painelLinhaDoTempoAberto.value = !painelLinhaDoTempoAberto.value;
+            if (painelLinhaDoTempoAberto.value) {
+              painelSegredosAberto.value = false;
+              painelEstadoAberto.value = false;
+              painelPaletaAberto.value = false;
+              painelFundoAberto.value = false;
+            }
+          }}
+        >
+          Linha do tempo
+        </button>
         <label class="molduras-agem-wrap" title="Comportamento ao focar uma moldura na sessão">
           <span>Molduras agem</span>
           <select
@@ -2141,6 +2160,26 @@ export function Quadro() {
             onAlternarFeito={(alvo) => marcarFeito([alvo.id])}
             onFechar={() => {
               painelSegredosAberto.value = false;
+            }}
+          />
+        ) : null}
+
+        {painelLinhaDoTempoAberto.value ? (
+          <LinhaDoTempo
+            onAbrirItem={(quadroId, itemId) => {
+              if (quadroId === q.id) {
+                const alvo = itens.value.get(itemId);
+                if (alvo) {
+                  selecao.value = new Set([alvo.id]);
+                  camera.value = enquadrar(caixaDe(alvo), tamanhoTela.value, 80);
+                }
+              } else {
+                navegarParaQuadro(quadroId);
+              }
+              painelLinhaDoTempoAberto.value = false;
+            }}
+            onFechar={() => {
+              painelLinhaDoTempoAberto.value = false;
             }}
           />
         ) : null}

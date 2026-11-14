@@ -730,7 +730,7 @@ Testes: `deveDisparar`.
 Pronto quando: os testes passam.
 Commit: `added frame actions for music and world state`
 
-### Q6d — Checagem antes da sessão e linha do tempo  ⬜
+### Q6d — Checagem antes da sessão e linha do tempo  ✅
 Objetivo: a Mesa avisa o que falta preparar no quadro e organiza as datas do lore.
 Depende de: Q6a.
 Ler: `src/dominio/prontidao.ts`, `src/app/prontidao.ts` e `src/ui/DialogoChecagemSessao.tsx`.

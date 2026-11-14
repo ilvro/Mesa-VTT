@@ -4,9 +4,11 @@ import type { Entidade } from '#mesa';
 import {
   pendenciasDaCena,
   pendenciasDaSessao,
+  pendenciasDoQuadro,
   type FatosDaCampanha,
   type Pendencia,
 } from '../../src/dominio/prontidao.ts';
+import { docDeTexto, type Item } from '../../src/dominio/quadro.ts';
 import type { PacoteDeCena } from '../../src/dominio/cenas.ts';
 
 function entidadeTeste(parcial: Partial<Entidade> & { id: string; tipo: Entidade['tipo']; nome: string }): Entidade {
@@ -227,6 +229,102 @@ describe('prontidao (domínio)', () => {
     assert.equal(pendencias.length, 2);
     assert.equal(pendencias[0]?.tipo, 'sem-mapa');
     assert.equal(pendencias[1]?.tipo, 'fora-do-elenco');
+  });
+
+  it('detecta todas as pendencias do quadro (REVER, revisao, ligacao, fala, loot HANDOUT)', () => {
+    const baseItem = {
+      quadroId: 'q1',
+      x: 10,
+      y: 10,
+      largura: 200,
+      altura: 80,
+      rotacao: 0,
+      z: 0,
+      grupoId: null,
+      molduraId: 'm1',
+      travado: false,
+      soMestre: false,
+      criadoEm: 1,
+      atualizadoEm: 1,
+    };
+    const textoEstilo = { fonte: 'sans', tamanho: 14, cor: '#fff', alinhamento: 'esquerda' };
+    const caixaEstilo = {
+      fundo: null,
+      borda: null,
+      espessuraBorda: 0,
+      tracejado: 'solido',
+      raio: 4,
+      sombra: false,
+      padding: 8,
+      opacidade: 1,
+    };
+
+    const itens = [
+      {
+        ...baseItem,
+        id: 't-rever',
+        tipo: 'texto',
+        doc: docDeTexto('[REVER] ajustar pista'),
+        texto: textoEstilo,
+        caixa: caixaEstilo,
+        alturaAuto: true,
+        semantica: null,
+      },
+      {
+        ...baseItem,
+        id: 't-rev',
+        tipo: 'texto',
+        doc: docDeTexto('Rascunho'),
+        texto: textoEstilo,
+        caixa: caixaEstilo,
+        alturaAuto: true,
+        semantica: null,
+        revisao: { por: 'assistente', estado: 'pendente', em: 10 },
+      },
+      {
+        ...baseItem,
+        id: 't-lig',
+        tipo: 'texto',
+        doc: docDeTexto('Ir para [[Torre Fantasma]]'),
+        texto: textoEstilo,
+        caixa: caixaEstilo,
+        alturaAuto: true,
+        semantica: null,
+      },
+      {
+        ...baseItem,
+        id: 't-fala',
+        tipo: 'texto',
+        doc: docDeTexto('Desconhecido: entrem logo!'),
+        texto: textoEstilo,
+        caixa: caixaEstilo,
+        alturaAuto: true,
+        semantica: 'fala',
+      },
+      {
+        ...baseItem,
+        id: 't-loot',
+        tipo: 'texto',
+        doc: docDeTexto('Carta antiga — HANDOUT 07'),
+        texto: textoEstilo,
+        caixa: caixaEstilo,
+        alturaAuto: true,
+        semantica: 'loot',
+      },
+    ] as unknown as Item[];
+
+    const ents = [entidadeTeste({ id: 'e1', tipo: 'personagem', nome: 'Teodor' })];
+    const pends = pendenciasDoQuadro(itens, ents, { molduraId: 'm1' });
+    assert.deepEqual(
+      pends.map((p) => p.tipo).sort(),
+      [
+        'fala-sem-entidade',
+        'item-em-revisao',
+        'ligacao-sem-destino',
+        'loot-sem-atelie',
+        'rever-em-aberto',
+      ],
+    );
   });
 });
 

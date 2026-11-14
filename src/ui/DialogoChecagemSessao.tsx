@@ -3,15 +3,31 @@ import { mesmaRef, type Entidade, type Ref } from '#mesa';
 import { campanhaAtiva, entidades, ligacoes, alternarPersonagemNoElenco } from '../app/campanha.ts';
 import { sessaoAtiva } from '../app/registro.ts';
 import { abrirNoApp } from '../app/barramento.ts';
-import { abrirEntidade, tela } from '../app/rotas.ts';
+import { listarItens, listarQuadros } from '../app/banco-quadros.ts';
+import { abrirEntidade, navegarParaQuadro, tela } from '../app/rotas.ts';
 import { extrairPacoteDeCena, type PacoteDeCena } from '../dominio/cenas.ts';
 import { carregarFatos } from '../app/prontidao.ts';
-import { pendenciasDaCena, type Pendencia } from '../dominio/prontidao.ts';
+import {
+  pendenciasDaCena,
+  pendenciasDoQuadro,
+  type Pendencia,
+  type PendenciaDoQuadro,
+} from '../dominio/prontidao.ts';
+
+interface PendenciasDeQuadroAgrupadas {
+  chave: string;
+  titulo: string;
+  quadroId: string;
+  pendencias: PendenciaDoQuadro[];
+}
 
 export function DialogoChecagemSessao({ aoFechar }: { aoFechar: () => void }) {
   const [carregando, setCarregando] = useState(true);
   const [itensPorCena, setItensPorCena] = useState<
     { cena: Entidade; pacote: PacoteDeCena; pendencias: Pendencia[] }[]
+  >([]);
+  const [itensPorQuadro, setItensPorQuadro] = useState<
+    PendenciasDeQuadroAgrupadas[]
   >([]);
 
   const atualizar = async () => {
@@ -49,6 +65,43 @@ export function DialogoChecagemSessao({ aoFechar }: { aoFechar: () => void }) {
     });
 
     setItensPorCena(agrupados);
+
+    const refsQuadro = s.roteiro.filter(
+      (r) => r.app === 'mesa' && (r.tipo === 'quadro' || r.tipo === 'item'),
+    );
+    if (refsQuadro.length > 0) {
+      const quadros = await listarQuadros(c.id);
+      const porId = new Map(quadros.map((q) => [q.id, q]));
+      const gruposQuadro: PendenciasDeQuadroAgrupadas[] = [];
+      for (const r of refsQuadro) {
+        const [qId, mId] = r.tipo === 'item' ? r.id.split('/') : [r.id, undefined];
+        if (!qId) continue;
+        const quadro = porId.get(qId);
+        if (!quadro) continue;
+        const itens = await listarItens(qId);
+        const moldura = mId
+          ? itens.find((i) => i.id === mId && i.tipo === 'moldura')
+          : undefined;
+        const pends = pendenciasDoQuadro(itens, ents, {
+          molduraId: moldura?.id ?? null,
+        });
+        if (pends.length > 0) {
+          gruposQuadro.push({
+            chave: `${qId}:${mId ?? ''}`,
+            titulo:
+              moldura && moldura.tipo === 'moldura'
+                ? `${quadro.nome} › ${moldura.titulo}`
+                : quadro.nome,
+            quadroId: qId,
+            pendencias: pends,
+          });
+        }
+      }
+      setItensPorQuadro(gruposQuadro);
+    } else {
+      setItensPorQuadro([]);
+    }
+
     setCarregando(false);
   };
 
@@ -56,7 +109,9 @@ export function DialogoChecagemSessao({ aoFechar }: { aoFechar: () => void }) {
     void atualizar();
   }, []);
 
-  const totalPendencias = itensPorCena.reduce((acc, curr) => acc + curr.pendencias.length, 0);
+  const totalPendencias =
+    itensPorCena.reduce((acc, curr) => acc + curr.pendencias.length, 0) +
+    itensPorQuadro.reduce((acc, curr) => acc + curr.pendencias.length, 0);
 
   const executarAcao = async (
     pend: Pendencia,
@@ -196,6 +251,71 @@ export function DialogoChecagemSessao({ aoFechar }: { aoFechar: () => void }) {
                     </ul>
                   </div>
                 ))}
+              {itensPorQuadro.map((grupo) => (
+                <div
+                  key={grupo.chave}
+                  style={{
+                    border: '1px solid var(--linha)',
+                    borderRadius: '6px',
+                    padding: '12px',
+                    background: 'var(--superficie-2)',
+                  }}
+                  data-testid={`pendencias-quadro-${grupo.quadroId}`}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '10px',
+                    }}
+                  >
+                    <h4 style={{ margin: 0, fontSize: '15px' }}>
+                      🗺 {grupo.titulo}
+                    </h4>
+                    <button
+                      type="button"
+                      class="botao-pilula"
+                      style={{ fontSize: '12px' }}
+                      onClick={() => {
+                        navegarParaQuadro(grupo.quadroId);
+                        aoFechar();
+                      }}
+                    >
+                      Abrir quadro
+                    </button>
+                  </div>
+                  <ul
+                    style={{
+                      margin: 0,
+                      padding: 0,
+                      listStyle: 'none',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                    }}
+                  >
+                    {grupo.pendencias.map((p, idx) => (
+                      <li
+                        key={idx}
+                        style={{ fontSize: '13px' }}
+                        data-testid={`pendencia-${p.tipo}`}
+                      >
+                        {p.tipo === 'rever-em-aberto' &&
+                          `[REVER] em aberto: ${p.trecho}`}
+                        {p.tipo === 'item-em-revisao' &&
+                          `Item em revisão: ${p.trecho}`}
+                        {p.tipo === 'ligacao-sem-destino' &&
+                          `Ligação [[${p.destino}]] sem destino`}
+                        {p.tipo === 'fala-sem-entidade' &&
+                          `Fala de "${p.nome}" sem entidade correspondente`}
+                        {p.tipo === 'loot-sem-atelie' &&
+                          `Loot com HANDOUT sem ref do Ateliê na moldura: ${p.trecho}`}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </div>
           )}
         </div>

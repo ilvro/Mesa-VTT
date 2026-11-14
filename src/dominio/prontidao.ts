@@ -1,4 +1,7 @@
+import type { Entidade } from '#mesa';
 import type { PacoteDeCena } from './cenas.ts';
+import { molduraQueContem, type ItemMoldura } from './molduras.ts';
+import { textoPuro, type Item } from './quadro.ts';
 
 export type Pendencia =
   | { tipo: 'sem-mapa'; cenaId: string }
@@ -88,4 +91,117 @@ export function pendenciasDaSessao(pacotes: PacoteDeCena[], fatos: FatosDaCampan
     todas.push(...pendenciasDaCena(pacote, fatos));
   }
   return todas;
+}
+
+export type PendenciaDoQuadro =
+  | { tipo: 'rever-em-aberto'; quadroId: string; itemId: string; trecho: string }
+  | { tipo: 'item-em-revisao'; quadroId: string; itemId: string; trecho: string }
+  | { tipo: 'ligacao-sem-destino'; quadroId: string; itemId: string; destino: string }
+  | { tipo: 'fala-sem-entidade'; quadroId: string; itemId: string; nome: string }
+  | { tipo: 'loot-sem-atelie'; quadroId: string; itemId: string; trecho: string };
+
+function normalizarNome(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function textoDoItemDoQuadro(item: Item): string {
+  if (item.tipo === 'texto' || item.tipo === 'forma') return textoPuro(item.doc);
+  if (item.tipo === 'moldura') return item.titulo;
+  if (item.tipo === 'seta') return item.rotulo;
+  return '';
+}
+
+export function pendenciasDoQuadro(
+  itens: readonly Item[],
+  entidades: readonly Entidade[],
+  opts?: { molduraId?: string | null },
+): PendenciaDoQuadro[] {
+  const pendencias: PendenciaDoQuadro[] = [];
+  const molduras = itens.filter((i): i is ItemMoldura => i.tipo === 'moldura');
+  const nomesEntidades = new Set(entidades.map((e) => normalizarNome(e.nome)));
+  const filtroMoldura = opts?.molduraId ?? null;
+
+  const molduraDoItem = (it: Item): string | null => {
+    if (it.tipo === 'moldura') return it.id;
+    return it.molduraId ?? molduraQueContem(it, molduras)?.id ?? null;
+  };
+
+  for (const item of itens) {
+    const mId = molduraDoItem(item);
+    if (filtroMoldura && item.id !== filtroMoldura && mId !== filtroMoldura) {
+      continue;
+    }
+
+    const texto = textoDoItemDoQuadro(item);
+    const trecho = texto.replace(/\s+/g, ' ').trim().slice(0, 80) || item.id;
+
+    if (!item.feito && /\[REVER\]/i.test(texto)) {
+      pendencias.push({
+        tipo: 'rever-em-aberto',
+        quadroId: item.quadroId,
+        itemId: item.id,
+        trecho,
+      });
+    }
+
+    if (item.revisao !== undefined) {
+      pendencias.push({
+        tipo: 'item-em-revisao',
+        quadroId: item.quadroId,
+        itemId: item.id,
+        trecho,
+      });
+    }
+
+    const regexLig = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
+    let mLig: RegExpExecArray | null;
+    while ((mLig = regexLig.exec(texto)) !== null) {
+      const destino = (mLig[1] ?? '').trim();
+      if (destino && !nomesEntidades.has(normalizarNome(destino))) {
+        pendencias.push({
+          tipo: 'ligacao-sem-destino',
+          quadroId: item.quadroId,
+          itemId: item.id,
+          destino,
+        });
+      }
+    }
+
+    const semantica = 'semantica' in item ? item.semantica : null;
+    if (semantica === 'fala') {
+      const mFala = /^([^:\n]{1,50}):/.exec(texto.trim());
+      const nome = mFala?.[1]?.trim() ?? '';
+      if (nome && !nomesEntidades.has(normalizarNome(nome))) {
+        pendencias.push({
+          tipo: 'fala-sem-entidade',
+          quadroId: item.quadroId,
+          itemId: item.id,
+          nome,
+        });
+      }
+    }
+
+    if ((semantica === 'loot' || /\[LOOT\]/i.test(texto)) && /\bHANDOUT\b/i.test(texto)) {
+      const temAtelie = itens.some(
+        (outro) =>
+          outro.tipo === 'ref' &&
+          outro.ref.app === 'atelie' &&
+          molduraDoItem(outro) === mId,
+      );
+      if (!temAtelie) {
+        pendencias.push({
+          tipo: 'loot-sem-atelie',
+          quadroId: item.quadroId,
+          itemId: item.id,
+          trecho,
+        });
+      }
+    }
+  }
+
+  return pendencias;
 }
