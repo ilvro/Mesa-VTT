@@ -93,16 +93,12 @@ test('9.1a: a Mesa cria a campanha, o Atlas a vê, e o lugar criado pelo Atlas a
     await mesa.waitForFunction(() => (document.querySelector('[data-testid="campo-nome"]') as HTMLInputElement).value === 'Muirenn');
     assert.equal((await mesa.evaluate(() => (window as unknown as { __mesa: { entidades(): { nome: string; tipo: string }[] } }).__mesa.entidades())).filter(e => e.tipo === 'personagem')[0]?.nome, 'Muirenn', 'o banco manteve o nome');
 
-    // 8. O tema vale para a mesa inteira: trocar na Mesa troca no Atlas (evento `storage`).
-    await mesa.click('[data-testid="tema-vigilia"]');
-    await atlas.waitForFunction(() => document.documentElement.dataset.tema === 'vigilia');
-
     assert.deepEqual(errosDaMesa, [], 'sem erros no console da Mesa');
     assert.deepEqual(errosDoAtlas.filter(e => !/favicon/.test(e)), [], 'sem erros no console do Atlas');
   } finally { await ctx.close(); }
 });
 
-test('9.1a: renomear, trocar o sistema e o tema da campanha; apagar pede confirmação', async () => {
+test('9.1a: renomear, trocar o sistema da campanha; apagar pede confirmação', async () => {
   const ctx = await amb.navegador.newContext({ viewport: { width: 1200, height: 800 } });
   try {
     const p = await ctx.newPage();
@@ -115,9 +111,7 @@ test('9.1a: renomear, trocar o sistema e o tema da campanha; apagar pede confirm
     await p.fill('[data-testid="campanha-nome"]', 'Segunda');
     await p.fill('[data-testid="campanha-sistema"]', 'vampiro');
     await p.locator('[data-testid="campanha-sistema"]').blur();
-    await p.selectOption('[data-testid="campanha-tema"]', 'neutro');
-    await p.waitForFunction(() => document.documentElement.dataset.tema === 'neutro');
-    await p.waitForFunction(() => { const c = (window as unknown as { __mesa: { campanhas(): { nome: string; sistema: string; tema: string | null }[] } }).__mesa.campanhas()[0]; return c?.nome === 'Segunda' && c.sistema === 'vampiro' && c.tema === 'neutro'; });
+    await p.waitForFunction(() => { const c = (window as unknown as { __mesa: { campanhas(): { nome: string; sistema: string }[] } }).__mesa.campanhas()[0]; return c?.nome === 'Segunda' && c.sistema === 'vampiro'; });
     await p.click('[data-testid="apagar-campanha"]');
     assert.equal(await p.evaluate(() => (window as unknown as { __mesa: { campanhas(): unknown[] } }).__mesa.campanhas().length), 1, 'ainda não apagou');
     await p.click('[data-testid="confirmar-apagar"]');

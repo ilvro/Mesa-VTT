@@ -47,10 +47,6 @@ code { font: 12px ui-monospace, 'SFMono-Regular', Menlo, monospace; }
 .faixa.grande::before { width: 10px; height: 10px; }
 .faixa.pequena { font-size: 10.5px; margin: 18px 0 8px; gap: 9px; color: var(--apagado); }
 .faixa.pequena::before { width: 5px; height: 5px; }
-[data-tema='ordem'] .faixa { display: inline-block; padding: 5px 16px 5px 12px; font-weight: 700; font-size: 13px; letter-spacing: 0.08em; background: var(--acento); color: var(--acento-texto); clip-path: polygon(2% 10%, 94% 0, 100% 22%, 97% 55%, 100% 90%, 6% 100%, 0 72%, 3% 40%); }
-[data-tema='ordem'] .faixa::before, [data-tema='ordem'] .faixa::after { content: none; }
-[data-tema='ordem'] .faixa.grande { font-size: 22px; padding: 8px 26px 8px 18px; }
-[data-tema='ordem'] .faixa.pequena { font-size: 11px; padding: 3px 12px 3px 9px; color: var(--acento-texto); }
 
 /* Cabeçalho */
 .cabecalho { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 6px 14px; flex-wrap: wrap; background: var(--vidro); border-bottom: 1px solid var(--linha); flex: none; }
@@ -66,8 +62,6 @@ code { font: 12px ui-monospace, 'SFMono-Regular', Menlo, monospace; }
 .ficha:last-child { border-radius: 0 var(--raio) var(--raio) 0; }
 .ficha:hover { color: var(--texto); background: var(--superficie-2); }
 .ficha.ativa { position: relative; background: var(--acento-suave); border-color: var(--acento); color: var(--acento); z-index: 1; }
-[data-tema='ordem'] .ficha { clip-path: polygon(0 6%, 100% 0, 97% 94%, 3% 100%); border-radius: 0 !important; background: #181926; }
-[data-tema='ordem'] .ficha.ativa { background: var(--acento); color: var(--acento-texto); }
 .botao-pilula { display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; border-radius: var(--raio); background: transparent; border: 1px solid var(--linha-forte); color: color-mix(in srgb, var(--texto), var(--apagado) 30%); font: 700 11px var(--corpo); letter-spacing: 0.1em; text-transform: uppercase; transition: border-color 0.15s, color 0.15s, background 0.15s; }
 .botao-pilula:hover:not(:disabled) { border-color: var(--acento); color: var(--texto); background: var(--acento-suave); }
 .botao-pilula[aria-pressed='true'] { border-color: var(--acento); color: var(--acento); background: var(--acento-suave); }
@@ -403,26 +397,6 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .comecar-cartao small { color: var(--apagado); font-size: 12px; line-height: 1.35; }
 .coluna-lista .item-tipo { min-width: 70px; }
 
-/* ---- Vigília: molduras e adornos (só linhas e cantos, sem brilho) ---- */
-[data-tema='vigilia'] .cabecalho { border-bottom: 3px double var(--linha-forte); }
-[data-tema='vigilia'] .coluna-lista { border-right: 3px double var(--linha-forte); }
-[data-tema='vigilia'] .faixa::before { width: 26px; height: 12px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 12' fill='none' stroke='%23cfd8d3' stroke-width='1'%3E%3Cpath d='M0 6h7M19 6h7'/%3E%3Cpath d='M13 1l5 5-5 5-5-5z'/%3E%3Cpath d='M13 4l2 2-2 2-2-2z' fill='%23cfd8d3'/%3E%3C/svg%3E") center / contain no-repeat; transform: none; }
-[data-tema='vigilia'] .faixa.grande::before { width: 40px; height: 18px; }
-[data-tema='vigilia'] .faixa.pequena::before { width: 20px; height: 10px; }
-[data-tema='vigilia'] .faixa::after { height: 3px; border-top: 1px solid var(--linha-forte); border-bottom: 1px solid var(--linha-forte); background: none; }
-[data-tema='vigilia'] :is(.cartao, .numeros, .recentes, .comecar-cartao, .ref, .leitura) {
-  border-color: var(--linha-forte); border-radius: 2px;
-  background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%23cfd8d3' stroke-width='1.2'%3E%3Cpath d='M1 13V4a3 3 0 013-3h9'/%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%23cfd8d3' stroke-width='1.2'%3E%3Cpath d='M1 1h9a3 3 0 013 3v9'/%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%23cfd8d3' stroke-width='1.2'%3E%3Cpath d='M1 1v9a3 3 0 003 3h9'/%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%23cfd8d3' stroke-width='1.2'%3E%3Cpath d='M13 1v9a3 3 0 01-3 3H1'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: 3px 3px, right 3px top 3px, left 3px bottom 3px, right 3px bottom 3px;
-}
-[data-tema='vigilia'] .botao-pilula, [data-tema='vigilia'] .ficha, [data-tema='vigilia'] .ficha:first-child, [data-tema='vigilia'] .ficha:last-child { border-radius: 2px; }
-[data-tema='vigilia'] .botao-pilula.destaque { background: transparent; color: #cfd8d3; outline: 1px solid var(--linha-forte); outline-offset: 2px; }
-[data-tema='vigilia'] .botao-pilula.destaque:hover:not(:disabled) { background: #cfd8d3; color: #0b0c10; }
 
 /* ---- Construtor de Cena e Encontro (EditorDeCena) ---- */
 .editor-cena { border: 1px solid var(--linha-forte); border-radius: 10px; background: var(--superficie); padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; margin: 8px 0; }

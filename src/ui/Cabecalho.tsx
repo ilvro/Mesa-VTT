@@ -1,10 +1,8 @@
-import { TEMAS, TEMAS_BASE } from '#mesa';
 import { campanhaAtiva, campanhas, escolherCampanha } from '../app/campanha.ts';
 import { sondarAplicativos } from '../app/inventario.ts';
 import { seloDoAssistente } from '../app/assistente-slot.ts';
 import { quadroAberto } from '../app/quadros.ts';
 import { navegarParaQuadro, tela } from '../app/rotas.ts';
-import { tema, trocarTema } from '../app/tema.ts';
 import { cx } from './cx.ts';
 
 export function Cabecalho() {
@@ -29,11 +27,6 @@ export function Cabecalho() {
       </nav>
       <span class="espaco" />
       {Selo ? <Selo /> : null}
-      <div class="grupo" role="radiogroup" aria-label="Tema">
-        {TEMAS_BASE.map(id => (
-          <button key={id} type="button" class={cx('ficha', tema.value.id === id && 'ativa')} role="radio" aria-checked={tema.value.id === id} data-testid={`tema-${id}`} onClick={() => trocarTema({ id })}>{TEMAS[id].nome}</button>
-        ))}
-      </div>
     </header>
   );
 }

@@ -1,11 +1,10 @@
 import { signal, computed } from '@preact/signals';
-import { abrirRepositorioCampanha, mesmaRef, type Campanha, type Entidade, type Ligacao, type Ref, type RepositorioCampanha, type TipoLigacao, type Tema, type TipoEntidade } from '#mesa';
+import { abrirRepositorioCampanha, mesmaRef, type Campanha, type Entidade, type Ligacao, type Ref, type RepositorioCampanha, type TipoLigacao, type TipoEntidade } from '#mesa';
 import { APP_DA_MESA, NOME_DO_APP, ehEncontro, filtrarEntidades, podarElenco, podeEditar, podeEditarConteudo, renomearTag, semAcento, type CategoriaFiltro, type FiltroDeEntidades, type OrdemColecao } from '../dominio/entidades.ts';
 import { refDaEntidade, refsMencionados } from '../dominio/notas.ts';
 import { casaCena, refParaLigacao } from '../dominio/cenas.ts';
 import { agendarSincronizacaoCofre } from './cofre.ts';
 import { removerQuadrosDaCampanha } from './banco-quadros.ts';
-import { trocarTema } from './tema.ts';
 import { avisar, mensagemDe } from './toasts.ts';
 
 /** A campanha em que o mestre está trabalhando. Chave compartilhada com os outros aplicativos da mesa. */
@@ -132,9 +131,6 @@ export async function escolherCampanha(id: string | null): Promise<void> {
   selecionadaId.value = null; busca.value = ''; filtroTipo.value = null; tagAtiva.value = null; soElenco.value = false; ordem.value = 'nome-asc';
   historico.value = [null]; indiceHistorico.value = 0;
   await atualizar();
-  // A campanha pode ter um tema próprio: ao entrar nela, a mesa inteira o veste.
-  const c = campanhaAtiva.value;
-  if (c?.tema) trocarTema({ id: c.tema });
 }
 
 export const SISTEMA_PADRAO = 'ordem-paranormal';
@@ -158,7 +154,6 @@ export async function alterarCampanha(c: Campanha, mudancas: Partial<Pick<Campan
     }
     await repo().salvarCampanha(nova);
     try { localStorage.setItem('mesa:campanha-atualizada', `${c.id}:${nova.atualizadaEm}`); } catch { /* ignora */ }
-    if (mudancas.tema && campanhaAtiva.value?.id === c.id) trocarTema({ id: mudancas.tema } satisfies Tema);
     await atualizar();
     return true;
   } catch (erro) { avisar(mensagemDe(erro), true); await atualizar(); return false; }

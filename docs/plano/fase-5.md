@@ -147,7 +147,8 @@ Plano escrito em 14/11/2026 contra o código desse dia. O usuário reclamou de q
 
 ## Etapa B — Temas
 
-### U5 — Tirar a escolha de tema da Mesa  ⬜
+### U5 — Tirar a escolha de tema da Mesa  ✅
+**Nota:** a Mesa fica sempre em `atlas` (`TEMA_PADRAO`); `app/tema.ts` só aplica o tema, sem ler/gravar `mesa:tema`; `Campanha.tema` segue nos dados, sem UI.
 **Ler:**
 - `src/ui/Cabecalho.tsx`;
 - `src/app/tema.ts`;

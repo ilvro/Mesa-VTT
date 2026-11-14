@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
-import { TEMAS, TEMAS_BASE, type Campanha, type Entidade } from '#mesa';
+import { type Campanha, type Entidade } from '#mesa';
 import {
   alterarCampanha,
   alternarPersonagemNoElenco,
@@ -284,12 +284,6 @@ function CartaoDeCampanha({ c }: { c: Campanha }) {
             <input key={`s-${c.id}`} type="text" maxLength={80} defaultValue={c.sistema} placeholder="ordem-paranormal" data-testid="campanha-sistema"
               onBlur={e => { const v = e.currentTarget.value.trim(); if (v !== c.sistema) void alterarCampanha(c, { sistema: v }); }}
               onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
-          </label>
-          <label>Tema
-            <select value={c.tema ?? ''} data-testid="campanha-tema" onChange={e => { const v = e.currentTarget.value; void alterarCampanha(c, { tema: v === '' ? null : (v as Campanha['tema']) }); }}>
-              <option value="">O da mesa</option>
-              {TEMAS_BASE.map(id => <option key={id} value={id}>{TEMAS[id].nome}</option>)}
-            </select>
           </label>
         </div>
         <SecaoElenco c={c} />
