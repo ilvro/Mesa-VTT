@@ -35,7 +35,8 @@ Plano escrito em 14/11/2026 contra o código desse dia. O usuário reclamou de q
 
 ## Etapa A — Etiquetas
 
-### U1 — Contrato: qualquer app edita etiquetas e notas  ⬜
+### U1 — Contrato: qualquer app edita etiquetas e notas  ✅
+**Nota:** Nenhuma divergência. (Ressalva: a comparação do retrato usa JSON, então só detecta troca de presença/ausência, não de conteúdo do Blob; já era assim.)
 **Projeto:** `Atlas/` (só `mesa-core/` e a doc). Depois, copiar o `dist` para a Mesa.
 
 **Ler:**
