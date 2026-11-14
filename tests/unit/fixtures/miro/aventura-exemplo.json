@@ -1,0 +1,95 @@
+{
+  "formato": "miro-bruto",
+  "versao": 1,
+  "baixadoEm": 1731580000000,
+  "board": {
+    "id": "uXjV123456=",
+    "name": "Castelo de Corvos"
+  },
+  "items": [
+    {
+      "id": "frame-1",
+      "type": "frame",
+      "data": { "title": "<p>Ato I &amp; Entrada</p>" },
+      "position": { "x": 500, "y": 400, "origin": "center" },
+      "geometry": { "width": 800, "height": 600 },
+      "style": { "fillColor": "#161d19" }
+    },
+    {
+      "id": "sticky-1",
+      "type": "sticky_note",
+      "parent": { "id": "frame-1" },
+      "position": { "x": 150, "y": 120, "origin": "center", "relativeTo": "parent_top_left" },
+      "geometry": { "width": 200, "height": 200 },
+      "data": {
+        "content": "<p><strong>Portão Norte</strong><br/>Exige [PERCEPÇÃO 13] para notar a fenda.</p>"
+      },
+      "style": {
+        "fillColor": "light_yellow",
+        "textAlign": "center",
+        "textAlignVertical": "middle"
+      }
+    },
+    {
+      "id": "shape-1",
+      "type": "shape",
+      "parent": { "id": "frame-1" },
+      "position": { "x": 500, "y": 150, "origin": "center", "relativeTo": "parent_top_left" },
+      "geometry": { "width": 240, "height": 120, "rotation": 15 },
+      "data": {
+        "shape": "round_rectangle",
+        "content": "<p>O vento uiva entre as torres de pedra.</p>"
+      },
+      "style": {
+        "fillColor": "#f7e48c",
+        "fillOpacity": "0.9",
+        "borderColor": "#35443b",
+        "borderWidth": "2",
+        "borderStyle": "dashed",
+        "fontFamily": "pt_serif",
+        "fontSize": "18"
+      }
+    },
+    {
+      "id": "text-1",
+      "type": "text",
+      "position": { "x": 1200, "y": 300, "origin": "center" },
+      "geometry": { "width": 300, "height": 100 },
+      "data": {
+        "content": "<p><span style=\"background-color: #f2a7b8; color: #111111\">Segredo da cripta antiga</span></p><ul><li>Chave de prata</li><li>Anel&#32;de&#x20;selo</li></ul>"
+      },
+      "style": {
+        "fontFamily": "caveat",
+        "fontSize": "20"
+      }
+    },
+    {
+      "id": "card-1",
+      "type": "card",
+      "position": { "x": 1200, "y": 550, "origin": "center" },
+      "geometry": { "width": 280, "height": 140 },
+      "data": {
+        "title": "Guarda Noturno",
+        "description": "<p>Patrulha a muralha a cada hora.</p>",
+        "fields": [{ "value": "Turno: meia-noite" }]
+      },
+      "style": { "cardTheme": "#7aa7f0" }
+    }
+  ],
+  "connectors": [
+    {
+      "id": "conn-1",
+      "shape": "elbowed",
+      "startItem": { "id": "sticky-1", "snapTo": "right" },
+      "endItem": { "id": "shape-1", "snapTo": "left" },
+      "style": {
+        "strokeColor": "#f7e48c",
+        "strokeWidth": "3",
+        "strokeStyle": "dotted",
+        "startStrokeCap": "none",
+        "endStrokeCap": "stealth"
+      },
+      "captions": [{ "content": "<p>passagem secreta</p>" }]
+    }
+  ]
+}

@@ -551,7 +551,7 @@ Testes: unitário só da extração do id da URL (puro, exportado do script). Va
 Pronto quando: o script gera o `.miro.zip` de um quadro real.
 Commit: `added script to download a miro board for import`
 
-### Q4b — Conversor Miro → Quadro (puro)  ⬜
+### Q4b — Conversor Miro → Quadro (puro)  ✅
 Objetivo: transformar o arquivo cru em itens do quadro, sugerindo o tipo de cada um.
 Depende de: Q4a, Q3b, Q2g, Q2i.
 Arquivos: criar `src/dominio/miro.ts`, `src/dominio/html-miro.ts` e `tests/unit/miro.test.ts` (com fixtures pequenas em `tests/unit/fixtures/miro/`, escritas à mão no formato da API e **sem dados reais do mestre**).

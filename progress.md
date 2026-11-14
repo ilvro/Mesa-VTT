@@ -52,3 +52,5 @@ Implementações de refinamento do hub da Mesa, transferência entre aparelhos, 
 
 - **Q6d (Checagem e linha do tempo):** criado `src/dominio/linha-do-tempo.ts` (`extrairLinhaDoTempo`, `parsearDataLore`) e `tests/unit/linha-do-tempo.test.ts`; adicionado `pendenciasDoQuadro` em `src/dominio/prontidao.ts` e testes em `tests/unit/prontidao.test.ts`; adicionado "Adicionar ao roteiro" em `MenuDoItem.tsx`, checagem de quadros/molduras em `DialogoChecagemSessao.tsx` e painel `src/ui/quadro/LinhaDoTempo.tsx` conectado em `Quadro.tsx`.
 - **Q4a (Script de download do Miro):** criados `scripts/miro-baixar.mjs`, `scripts/miro-baixar.d.mts` e `docs/miro.md`, adicionados script `miro:baixar` em `package.json`, regra `*.miro.zip` no `.gitignore` e testes de extração de ID em `tests/unit/miro.test.ts`.
+- **Q4b (Conversor Miro → Quadro puro):** criados `src/dominio/html-miro.ts` (tokenizador/parser HTML puro sem DOMParser) e `src/dominio/miro.ts` (`CORES_DE_NOTA_DO_MIRO`, `converterMiro`, `sugerirRevisaoMiro`), fixture `tests/unit/fixtures/miro/aventura-exemplo.json` e testes em `tests/unit/miro.test.ts`.
+
