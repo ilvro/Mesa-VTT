@@ -75,7 +75,7 @@ test('validarItem: recusa campo desconhecido e opacidade fora de 0..1 com caminh
   assert.throws(() => validarItem(item, 'itens[3]'), /itens\[3\]\.caixa\.opacidade/);
 });
 
-test('validarItem: remove nó e marca desconhecidos de doc em vez de lançar', () => {
+test('validarItem: preserva conteúdo de nós desconhecidos e remove marcas desconhecidas', () => {
   const item = novoTexto({ quadroId: 'q-1', x: 0, y: 0 }, 1000, 't-1');
   item.doc = {
     type: 'doc',
@@ -102,6 +102,10 @@ test('validarItem: remove nó e marca desconhecidos de doc em vez de lançar', (
       {
         type: 'paragraph',
         content: [{ type: 'text', text: 'Olá', marks: [{ type: 'bold' }] }],
+      },
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'fora' }],
       },
     ],
   });

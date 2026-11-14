@@ -126,6 +126,27 @@ export function fundoEfetivo(
   return null;
 }
 
+export function corComOpacidade(cor: string, opacidade: number): string {
+  const op = Math.max(0, Math.min(1, opacidade));
+  if (op >= 0.999) return cor;
+  const limpa = cor.trim();
+  const hex6 = /^#([0-9a-fA-F]{6})$/.exec(limpa);
+  if (hex6) {
+    const n = parseInt(hex6[1]!, 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${op})`;
+  }
+  const hex3 = /^#([0-9a-fA-F]{3})$/.exec(limpa);
+  if (hex3) {
+    const [r, g, b] = hex3[1]!.split('').map((c) => parseInt(c + c, 16));
+    return `rgba(${r}, ${g}, ${b}, ${op})`;
+  }
+  const rgb = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*[\d.]+)?\s*\)$/.exec(limpa);
+  if (rgb) {
+    return `rgba(${rgb[1]}, ${rgb[2]}, ${rgb[3]}, ${op})`;
+  }
+  return cor;
+}
+
 function renderizarMarcador(
   m: Marcador,
   entidades: readonly Entidade[] = [],

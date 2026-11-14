@@ -107,6 +107,9 @@ export function EditorRico({
       extensions: [
         StarterKit.configure({
           heading: { levels: [1, 2, 3] },
+          blockquote: false,
+          codeBlock: false,
+          horizontalRule: false,
         }),
         TextStyle,
         Color,

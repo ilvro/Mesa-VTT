@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/core';
+import { lerRef } from '#mesa';
 import { useSignal } from '@preact/signals';
 import { useEffect, useMemo, useRef } from 'preact/hooks';
 import {
@@ -52,10 +53,6 @@ import { refDaEntidade, sugerirEntidades } from '../../dominio/notas.ts';
 import { ROTULO_DO_TIPO } from '../../dominio/entidades.ts';
 import { entidades } from '../../app/campanha.ts';
 import {
-  removerLigacoesDoItem,
-  sincronizarLigacoesDoItem,
-} from '../../app/ligacoes-quadro.ts';
-import {
   filhos,
   ordemDeLeitura,
   type ItemMoldura,
@@ -88,6 +85,7 @@ import {
   itemPendente,
   itens,
   marcarFeito,
+  moverItemPatch,
   mudarFundo,
   paletaDaCampanha,
   quadroAberto,
@@ -378,10 +376,11 @@ export function Quadro() {
         x: tamanhoTela.value.largura / 2,
         y: tamanhoTela.value.altura / 2,
       });
+    const maxZ = Math.max(0, ...[...itens.value.values()].map((i) => i.z));
     const colados = colarArea(
       limpo,
       novoIdItem,
-      { quadroId: q.id, centro, deslocamento: 24 },
+      { quadroId: q.id, centro, deslocamento: 24, zBase: maxZ },
       Date.now(),
     );
     if (colados && colados.length > 0) {
@@ -389,8 +388,23 @@ export function Quadro() {
       selecao.value = new Set(colados.map((i) => i.id));
       return;
     }
-    // Texto comum ou Ref mesa:... (Q3c converte para item ref)
-    const maxZ = Math.max(0, ...[...itens.value.values()].map((i) => i.z));
+    const refColada = lerRef(limpo);
+    if (refColada) {
+      const novo = novaRef(
+        {
+          quadroId: q.id,
+          x: centro.x - 110,
+          y: centro.y - 36,
+          ref: refColada,
+          z: maxZ + 1,
+        },
+        Date.now(),
+        novoIdItem(),
+      );
+      executar({ rotulo: 'Colar referência', ops: [{ criar: [novo] }] });
+      selecao.value = new Set([novo.id]);
+      return;
+    }
     const novo = novoTexto(
       {
         quadroId: q.id,
@@ -608,7 +622,6 @@ export function Quadro() {
           if (remover.length > 0) {
             executar({ rotulo: 'Recortar', ops: [{ remover }] });
             selecao.value = new Set();
-            for (const r of remover) void removerLigacoesDoItem(q.id, r.id);
           }
         } else if (k === 'd') {
           e.preventDefault();
@@ -654,11 +667,11 @@ export function Quadro() {
         e.preventDefault();
         const remover = [...selecao.value]
           .map((id) => itens.value.get(id))
-          .filter((i): i is Item => Boolean(i));
+          .filter((i): i is Item => Boolean(i))
+          .filter((i) => !i.travado);
         if (remover.length > 0) {
           executar({ rotulo: 'Remover', ops: [{ remover }] });
           selecao.value = new Set();
-          for (const r of remover) void removerLigacoesDoItem(q.id, r.id);
         }
         return;
       }
@@ -683,11 +696,7 @@ export function Quadro() {
           rotulo: 'Mover',
           ops: [
             {
-              alterar: moviveis.map((it) => ({
-                id: it.id,
-                antes: { x: it.x, y: it.y, atualizadoEm: it.atualizadoEm },
-                depois: { x: it.x + dx, y: it.y + dy, atualizadoEm: agora },
-              })),
+              alterar: moviveis.map((it) => moverItemPatch(it, it.x + dx, it.y + dy, agora)),
             },
           ],
         });
@@ -1246,23 +1255,20 @@ export function Quadro() {
       } else {
         linhasGuia.value = [];
       }
+      if (q.fundo.encaixar && g.originais.size > 0) {
+        const ancora = g.originais.values().next().value!;
+        dx = encaixarNaGrade(ancora.x + dx, q.fundo.passo) - ancora.x;
+        dy = encaixarNaGrade(ancora.y + dy, q.fundo.passo) - ancora.y;
+      }
       const agora = Date.now();
       const alterar: { id: string; antes: Partial<Item>; depois: Partial<Item> }[] = [];
       for (const [id, orig] of g.originais) {
         const atual = itens.value.get(id);
         if (!atual) continue;
-        let nx = orig.x + dx;
-        let ny = orig.y + dy;
-        if (q.fundo.encaixar) {
-          nx = encaixarNaGrade(nx, q.fundo.passo);
-          ny = encaixarNaGrade(ny, q.fundo.passo);
-        }
+        const nx = orig.x + dx;
+        const ny = orig.y + dy;
         if (nx !== atual.x || ny !== atual.y) {
-          alterar.push({
-            id,
-            antes: { x: atual.x, y: atual.y, atualizadoEm: atual.atualizadoEm },
-            depois: { x: nx, y: ny, atualizadoEm: agora },
-          });
+          alterar.push(moverItemPatch(atual, nx, ny, agora));
         }
       }
       if (alterar.length > 0) {
@@ -1583,8 +1589,6 @@ export function Quadro() {
         },
       ],
     });
-    const atualizado = itens.value.get(id);
-    if (atualizado) void sincronizarLigacoesDoItem(atualizado);
   };
 
   const aoSairRotulo = (id: string, novoRotulo: string) => {
@@ -1608,8 +1612,6 @@ export function Quadro() {
         },
       ],
     });
-    const atualizado = itens.value.get(id);
-    if (atualizado) void sincronizarLigacoesDoItem(atualizado);
   };
 
   const aoSairEdicao = (id: string, novoDoc?: DocRico, novaAltura?: number) => {
@@ -1641,8 +1643,6 @@ export function Quadro() {
       rotulo: 'Editar texto',
       ops: [{ alterar: [{ id, antes, depois }] }],
     });
-    const atualizado = itens.value.get(id);
-    if (atualizado) void sincronizarLigacoesDoItem(atualizado);
   };
 
   return (
@@ -2136,7 +2136,6 @@ export function Quadro() {
                       );
                       executar({ rotulo: 'Colocar entidade', ops: [{ criar: [novo] }] });
                       selecao.value = new Set([novo.id]);
-                      void sincronizarLigacoesDoItem(novo);
                       seletorEntidade.value = null;
                       ferramenta.value = 'selecionar';
                     }}

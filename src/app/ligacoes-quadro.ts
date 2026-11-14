@@ -84,6 +84,30 @@ export function removerLigacoesDoItem(
   return fila;
 }
 
+export function removerLigacoesDoQuadro(quadroId: string): Promise<void> {
+  fila = fila
+    .then(async () => {
+      const c = campanhaAtiva.value;
+      if (!c) return;
+      const r = obterRepositorio();
+      const todas = await r.listarLigacoes(c.id);
+      const alvo = todas.filter((l) => {
+        if (l.tipo !== 'menciona' || l.criadaPor !== APP_DA_MESA) return false;
+        const parsed = parsearRefDeItemDeQuadro(l.de);
+        return parsed?.quadroId === quadroId;
+      });
+      if (alvo.length === 0) return;
+      for (const l of alvo) {
+        await r.removerLigacao(l.id);
+      }
+      await atualizar();
+    })
+    .catch((erro) => {
+      console.warn('Mesa: erro ao remover ligações do quadro', erro);
+    });
+  return fila;
+}
+
 export interface LigacaoNoQuadro {
   quadroId: string;
   quadroNome: string;

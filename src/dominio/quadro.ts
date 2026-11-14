@@ -251,10 +251,48 @@ function limparAttrsMarca(tipo: string, attrs: unknown): Record<string, unknown>
   return undefined;
 }
 
-function limparNo(v: unknown, caminho: string): NoRico | null {
+const NOS_BLOCO = new Set([
+  'paragraph',
+  'heading',
+  'bulletList',
+  'orderedList',
+  'listItem',
+]);
+
+function limparNoLista(v: unknown, caminho: string, noRaiz: boolean): NoRico[] {
   if (!ehObjeto(v)) falhar(caminho, 'nó deve ser um objeto');
   if (typeof v.type !== 'string') falhar(`${caminho}.type`, 'deve ser texto');
-  if (!NOS_ACEITOS.has(v.type)) return null;
+
+  if (!NOS_ACEITOS.has(v.type)) {
+    const coletados: NoRico[] = [];
+    if (Array.isArray(v.content)) {
+      for (let i = 0; i < v.content.length; i++) {
+        coletados.push(...limparNoLista(v.content[i], `${caminho}.content[${i}]`, false));
+      }
+    } else if (typeof v.text === 'string' && v.text.length > 0) {
+      coletados.push({ type: 'text', text: v.text });
+    }
+    if (coletados.length === 0) return [];
+    if (!noRaiz) return coletados;
+    const saida: NoRico[] = [];
+    let inlineBuf: NoRico[] = [];
+    const descarregarInline = () => {
+      if (inlineBuf.length > 0) {
+        saida.push({ type: 'paragraph', content: inlineBuf });
+        inlineBuf = [];
+      }
+    };
+    for (const c of coletados) {
+      if (NOS_BLOCO.has(c.type)) {
+        descarregarInline();
+        saida.push(c);
+      } else {
+        inlineBuf.push(c);
+      }
+    }
+    descarregarInline();
+    return saida;
+  }
 
   const no: NoRico = { type: v.type };
   const attrs = limparAttrsNo(v.type, v.attrs);
@@ -277,19 +315,18 @@ function limparNo(v: unknown, caminho: string): NoRico | null {
       }
       if (marks.length > 0) no.marks = marks;
     }
-    return no;
+    return [no];
   }
 
   if (v.content !== undefined) {
     if (!Array.isArray(v.content)) falhar(`${caminho}.content`, 'deve ser lista');
     const filhos: NoRico[] = [];
     for (let i = 0; i < v.content.length; i++) {
-      const limpo = limparNo(v.content[i], `${caminho}.content[${i}]`);
-      if (limpo) filhos.push(limpo);
+      filhos.push(...limparNoLista(v.content[i], `${caminho}.content[${i}]`, false));
     }
     no.content = filhos;
   }
-  return no;
+  return [no];
 }
 
 export function normalizarDoc(v: unknown, caminho = 'doc'): DocRico {
@@ -298,8 +335,7 @@ export function normalizarDoc(v: unknown, caminho = 'doc'): DocRico {
   if (!Array.isArray(v.content)) falhar(`${caminho}.content`, 'deve ser lista');
   const content: NoRico[] = [];
   for (let i = 0; i < v.content.length; i++) {
-    const limpo = limparNo(v.content[i], `${caminho}.content[${i}]`);
-    if (limpo) content.push(limpo);
+    content.push(...limparNoLista(v.content[i], `${caminho}.content[${i}]`, true));
   }
   return { type: 'doc', content };
 }

@@ -1,6 +1,8 @@
 import type { Entidade } from '#mesa';
 import type { PacoteDeCena } from './cenas.ts';
+import { analisarMarcadores } from './marcadores.ts';
 import { molduraQueContem, type ItemMoldura } from './molduras.ts';
+import { entidadePorNome, resolver } from './notas.ts';
 import { textoPuro, type Item } from './quadro.ts';
 
 export type Pendencia =
@@ -100,14 +102,6 @@ export type PendenciaDoQuadro =
   | { tipo: 'fala-sem-entidade'; quadroId: string; itemId: string; nome: string }
   | { tipo: 'loot-sem-atelie'; quadroId: string; itemId: string; trecho: string };
 
-function normalizarNome(s: string): string {
-  return s
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase();
-}
-
 function textoDoItemDoQuadro(item: Item): string {
   if (item.tipo === 'texto' || item.tipo === 'forma') return textoPuro(item.doc);
   if (item.tipo === 'moldura') return item.titulo;
@@ -122,7 +116,6 @@ export function pendenciasDoQuadro(
 ): PendenciaDoQuadro[] {
   const pendencias: PendenciaDoQuadro[] = [];
   const molduras = itens.filter((i): i is ItemMoldura => i.tipo === 'moldura');
-  const nomesEntidades = new Set(entidades.map((e) => normalizarNome(e.nome)));
   const filtroMoldura = opts?.molduraId ?? null;
 
   const molduraDoItem = (it: Item): string | null => {
@@ -138,15 +131,7 @@ export function pendenciasDoQuadro(
 
     const texto = textoDoItemDoQuadro(item);
     const trecho = texto.replace(/\s+/g, ' ').trim().slice(0, 80) || item.id;
-
-    if (!item.feito && /\[REVER\]/i.test(texto)) {
-      pendencias.push({
-        tipo: 'rever-em-aberto',
-        quadroId: item.quadroId,
-        itemId: item.id,
-        trecho,
-      });
-    }
+    const trechos = texto ? analisarMarcadores(texto) : [];
 
     if (item.revisao !== undefined) {
       pendencias.push({
@@ -157,25 +142,60 @@ export function pendenciasDoQuadro(
       });
     }
 
-    const regexLig = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
-    let mLig: RegExpExecArray | null;
-    while ((mLig = regexLig.exec(texto)) !== null) {
-      const destino = (mLig[1] ?? '').trim();
-      if (destino && !nomesEntidades.has(normalizarNome(destino))) {
-        pendencias.push({
-          tipo: 'ligacao-sem-destino',
-          quadroId: item.quadroId,
-          itemId: item.id,
-          destino,
-        });
+    let temRever = false;
+    let temFalaMarcador = false;
+    let temLootMarcador = false;
+
+    for (const t of trechos) {
+      if (t.tipo === 'ligacao') {
+        const dest = resolver(t.alvo, entidades);
+        if (dest.tipo === 'sem-destino') {
+          pendencias.push({
+            tipo: 'ligacao-sem-destino',
+            quadroId: item.quadroId,
+            itemId: item.id,
+            destino: dest.nome,
+          });
+        }
+      } else if (t.tipo === 'marcador') {
+        if (t.marcador.tipo === 'rever') temRever = true;
+        if (t.marcador.tipo === 'loot') temLootMarcador = true;
+        if (t.marcador.tipo === 'fala') {
+          temFalaMarcador = true;
+          if (!entidadePorNome(entidades, t.marcador.quem)) {
+            pendencias.push({
+              tipo: 'fala-sem-entidade',
+              quadroId: item.quadroId,
+              itemId: item.id,
+              nome: t.marcador.quem,
+            });
+          }
+          if (t.marcador.para && !entidadePorNome(entidades, t.marcador.para)) {
+            pendencias.push({
+              tipo: 'fala-sem-entidade',
+              quadroId: item.quadroId,
+              itemId: item.id,
+              nome: t.marcador.para,
+            });
+          }
+        }
       }
     }
 
+    if (temRever && !item.feito) {
+      pendencias.push({
+        tipo: 'rever-em-aberto',
+        quadroId: item.quadroId,
+        itemId: item.id,
+        trecho,
+      });
+    }
+
     const semantica = 'semantica' in item ? item.semantica : null;
-    if (semantica === 'fala') {
+    if (semantica === 'fala' && !temFalaMarcador) {
       const mFala = /^([^:\n]{1,50}):/.exec(texto.trim());
       const nome = mFala?.[1]?.trim() ?? '';
-      if (nome && !nomesEntidades.has(normalizarNome(nome))) {
+      if (nome && !entidadePorNome(entidades, nome)) {
         pendencias.push({
           tipo: 'fala-sem-entidade',
           quadroId: item.quadroId,
@@ -185,7 +205,7 @@ export function pendenciasDoQuadro(
       }
     }
 
-    if ((semantica === 'loot' || /\[LOOT\]/i.test(texto)) && /\bHANDOUT\b/i.test(texto)) {
+    if ((semantica === 'loot' || temLootMarcador) && /\bHANDOUT\b/i.test(texto)) {
       const temAtelie = itens.some(
         (outro) =>
           outro.tipo === 'ref' &&

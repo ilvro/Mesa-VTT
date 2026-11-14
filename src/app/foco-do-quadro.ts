@@ -4,9 +4,11 @@ import {
   type ItemMoldura,
   type ModoMoldurasAgem,
 } from '../dominio/molduras.ts';
-import { barramentoDaMesa } from './barramento.ts';
+import { barramentoDaMesa, pedidoParaAbrir } from './barramento.ts';
+import { entidades } from './campanha.ts';
 import { definirFato, estadoDoMundo } from './quadros.ts';
 import { sessaoAtiva } from './registro.ts';
+import { ativarCena } from './sessao.ts';
 import { avisar } from './toasts.ts';
 
 export type { ModoMoldurasAgem };
@@ -19,9 +21,15 @@ function executarAcoesDaMoldura(moldura: ItemMoldura): void {
   if (!aoFocar) return;
 
   if (aoFocar.cena) {
-    const b = barramentoDaMesa();
-    if (b) {
-      void b.pedir('jukebox.tocar', { ref: aoFocar.cena }).catch(() => null);
+    if (aoFocar.cena.app === 'mesa' && aoFocar.cena.tipo === 'cena') {
+      const ent = entidades.value.find((e) => e.id === aoFocar.cena!.id);
+      if (ent) void ativarCena(ent);
+    } else {
+      const pedido = pedidoParaAbrir(aoFocar.cena);
+      const b = barramentoDaMesa();
+      if (pedido && b) {
+        void b.pedir(pedido, { ref: aoFocar.cena }).catch(() => null);
+      }
     }
   }
 
@@ -30,7 +38,7 @@ function executarAcoesDaMoldura(moldura: ItemMoldura): void {
     ([chave]) => [chave, estadoDoMundo.value.fatos[chave]],
   );
   for (const [chave, valor] of entradas) {
-    definirFato(chave, valor);
+    void definirFato(chave, valor);
   }
 
   const nome = moldura.titulo.trim() || 'Moldura';
@@ -38,11 +46,7 @@ function executarAcoesDaMoldura(moldura: ItemMoldura): void {
     rotulo: 'Desfazer',
     aoClicar: () => {
       for (const [chave, valorAnterior] of anteriores) {
-        if (valorAnterior === undefined) {
-          definirFato(chave, false);
-        } else {
-          definirFato(chave, valorAnterior);
-        }
+        void definirFato(chave, valorAnterior);
       }
     },
   });

@@ -1,3 +1,4 @@
+import { FONTES, familiaCss } from './fontes.ts';
 import { normalizarDoc, type DocRico, type NoRico } from './quadro.ts';
 
 export { normalizarDoc };
@@ -12,17 +13,14 @@ const COR_SEGURA =
 const ALINHAMENTOS_ACEITOS = new Set(['left', 'center', 'right', 'justify']);
 
 const FONTES_CATALOGO = new Map<string, string>([
-  ['open sans', "'Open Sans', sans-serif"],
-  ['open-sans', "'Open Sans', sans-serif"],
-  ['pt serif', "'PT Serif', serif"],
-  ['pt-serif', "'PT Serif', serif"],
-  ['hanken grotesk', "'Hanken Grotesk Variable', 'Hanken Grotesk', sans-serif"],
-  ['hanken grotesk variable', "'Hanken Grotesk Variable', 'Hanken Grotesk', sans-serif"],
-  ['hanken', "'Hanken Grotesk Variable', 'Hanken Grotesk', sans-serif"],
-  ['cinzel', "'Cinzel', Georgia, serif"],
-  ['caveat', "'Caveat', cursive"],
-  ['jetbrains mono', "'JetBrains Mono', monospace"],
-  ['jetbrains-mono', "'JetBrains Mono', monospace"],
+  ...(Object.keys(FONTES) as (keyof typeof FONTES)[]).flatMap((id) => {
+    const css = familiaCss(id);
+    return [
+      [id, css] as [string, string],
+      [FONTES[id].nome.toLowerCase(), css] as [string, string],
+    ];
+  }),
+  ['hanken grotesk variable', familiaCss('hanken')],
 ]);
 
 export function escaparHtml(texto: string): string {

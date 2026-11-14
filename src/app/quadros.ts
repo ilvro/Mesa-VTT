@@ -47,6 +47,11 @@ import {
   salvarAjustesQuadro,
   salvarQuadro,
 } from './banco-quadros.ts';
+import {
+  removerLigacoesDoItem,
+  removerLigacoesDoQuadro,
+  sincronizarLigacoesDoItem,
+} from './ligacoes-quadro.ts';
 import { avisar, mensagemDe } from './toasts.ts';
 
 export const quadros = signal<Quadro[]>([]);
@@ -81,24 +86,47 @@ function novoIdQuadro(): string {
   return `q-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function itemPodeTerLigacoes(item: Item): boolean {
+  return (
+    item.tipo === 'texto' ||
+    item.tipo === 'forma' ||
+    item.tipo === 'moldura' ||
+    item.tipo === 'seta' ||
+    item.tipo === 'ref'
+  );
+}
+
 function marcarSujosDoPasso(passo: Passo, mapaAtual: ReadonlyMap<string, Item>): void {
   for (const op of passo.ops) {
     if ('criar' in op) {
       for (const item of op.criar) {
         sujosRemover.delete(item.id);
         sujosSalvar.add(item.id);
+        if (itemPodeTerLigacoes(item)) {
+          void sincronizarLigacoesDoItem(item);
+        }
       }
     } else if ('alterar' in op) {
       for (const alt of op.alterar) {
-        if (mapaAtual.has(alt.id)) {
+        const atual = mapaAtual.get(alt.id);
+        if (atual) {
           sujosRemover.delete(alt.id);
           sujosSalvar.add(alt.id);
+          if (
+            'doc' in alt.depois ||
+            'titulo' in alt.depois ||
+            'rotulo' in alt.depois ||
+            'ref' in alt.depois
+          ) {
+            void sincronizarLigacoesDoItem(atual);
+          }
         }
       }
     } else if ('remover' in op) {
       for (const item of op.remover) {
         sujosSalvar.delete(item.id);
         sujosRemover.add(item.id);
+        void removerLigacoesDoItem(item.quadroId, item.id);
       }
     }
   }
@@ -133,10 +161,24 @@ export async function descarregarPendentes(): Promise<void> {
   sujosSalvar.clear();
   sujosRemover.clear();
 
-  const p = gravarItens(salvar, remover).catch((erro) => {
+  const p = gravarItens(salvar, remover).catch(async (erro) => {
     console.warn('Mesa: erro ao gravar itens do quadro', erro);
-    for (const item of salvar) sujosSalvar.add(item.id);
-    for (const id of remover) sujosRemover.add(id);
+    avisar(`Erro ao gravar quadro: ${mensagemDe(erro)}`, true);
+    if (salvar.length > 1 || (salvar.length > 0 && remover.length > 0)) {
+      if (remover.length > 0) {
+        await gravarItens([], remover).catch(() => {
+          for (const id of remover) sujosRemover.add(id);
+        });
+      }
+      for (const item of salvar) {
+        await gravarItens([item], []).catch(() => {
+          sujosSalvar.add(item.id);
+        });
+      }
+    } else {
+      for (const item of salvar) sujosSalvar.add(item.id);
+      for (const id of remover) sujosRemover.add(id);
+    }
   });
   gravando = p;
   await p;
@@ -180,6 +222,24 @@ export async function carregarQuadros(): Promise<void> {
   }
 }
 
+let filaAjustes: Promise<void> = Promise.resolve();
+
+function enfileirarAjustes(
+  campanhaId: string,
+  patch: Partial<{ paleta: PaletaDaCampanha; estado: EstadoDoMundo }>,
+): Promise<void> {
+  const proxima = filaAjustes.then(async () => {
+    const existente = await lerAjustesQuadro(campanhaId);
+    await salvarAjustesQuadro({
+      ...(existente ?? { campanhaId }),
+      campanhaId,
+      ...patch,
+    });
+  });
+  filaAjustes = proxima.catch(() => {});
+  return proxima;
+}
+
 export async function definirFato(
   chave: string,
   valor: string | boolean | undefined,
@@ -215,12 +275,7 @@ export async function definirFato(
   const c = campanhaAtiva.value;
   if (!c) return;
   try {
-    const existente = await lerAjustesQuadro(c.id);
-    await salvarAjustesQuadro({
-      ...(existente ?? { campanhaId: c.id }),
-      campanhaId: c.id,
-      estado: proximo,
-    });
+    await enfileirarAjustes(c.id, { estado: proximo });
   } catch (erro) {
     avisar(mensagemDe(erro), true);
   }
@@ -228,7 +283,8 @@ export async function definirFato(
 
 export async function alternarFato(chave: string): Promise<void> {
   const atual = estadoDoMundo.value.fatos[chave.trim()];
-  const proximo = typeof atual === 'boolean' ? !atual : !atual;
+  if (typeof atual === 'string') return;
+  const proximo = typeof atual === 'boolean' ? !atual : true;
   await definirFato(chave, proximo);
 }
 
@@ -238,12 +294,7 @@ export async function atualizarCorDaPaleta(tipo: TipoSemantico, cor: string): Pr
   const c = campanhaAtiva.value;
   if (!c) return;
   try {
-    const existente = await lerAjustesQuadro(c.id);
-    await salvarAjustesQuadro({
-      ...(existente ?? { campanhaId: c.id }),
-      campanhaId: c.id,
-      paleta: proxima,
-    });
+    await enfileirarAjustes(c.id, { paleta: proxima });
   } catch (erro) {
     avisar(mensagemDe(erro), true);
   }
@@ -255,12 +306,7 @@ export async function restaurarPaletaPadrao(): Promise<void> {
   const c = campanhaAtiva.value;
   if (!c) return;
   try {
-    const existente = await lerAjustesQuadro(c.id);
-    await salvarAjustesQuadro({
-      ...(existente ?? { campanhaId: c.id }),
-      campanhaId: c.id,
-      paleta: padrao,
-    });
+    await enfileirarAjustes(c.id, { paleta: padrao });
   } catch (erro) {
     avisar(mensagemDe(erro), true);
   }
@@ -358,6 +404,7 @@ export async function excluirQuadro(id: string): Promise<void> {
       versaoHistorico.value++;
     }
     await removerQuadro(id);
+    void removerLigacoesDoQuadro(id);
     await carregarQuadros();
   } catch (erro) {
     avisar(mensagemDe(erro), true);
@@ -469,9 +516,31 @@ function enriquecerPassoComSetas(
     return { passo, proximo: itensDepois };
   }
 
+  let opsFinal: Operacao[];
+  if (passo.ops.length === 1 && 'alterar' in passo.ops[0]!) {
+    const baseAlterar = [...passo.ops[0]!.alterar];
+    const porId = new Map(baseAlterar.map((a, idx) => [a.id, idx]));
+    for (const altSeta of alterarSetas) {
+      const idx = porId.get(altSeta.id);
+      if (idx !== undefined) {
+        const prev = baseAlterar[idx]!;
+        baseAlterar[idx] = {
+          id: altSeta.id,
+          antes: { ...prev.antes, ...altSeta.antes } as Partial<Item>,
+          depois: { ...prev.depois, ...altSeta.depois } as Partial<Item>,
+        };
+      } else {
+        baseAlterar.push(altSeta);
+      }
+    }
+    opsFinal = [{ alterar: baseAlterar }];
+  } else {
+    opsFinal = [...passo.ops, { alterar: alterarSetas }];
+  }
+
   const passoComSetas: Passo = {
     ...passo,
-    ops: [...passo.ops, { alterar: alterarSetas }],
+    ops: opsFinal,
   };
   const proximoFinal = aplicar(itensDepois, { rotulo: passo.rotulo, ops: [{ alterar: alterarSetas }] });
   return { passo: passoComSetas, proximo: proximoFinal };
@@ -556,6 +625,46 @@ export function desagruparSelecao(): void {
   });
 }
 
+export function moverItemPatch(
+  it: Item,
+  nx: number,
+  ny: number,
+  agora: number,
+): { id: string; antes: Partial<Item>; depois: Partial<Item> } {
+  const dx = nx - it.x;
+  const dy = ny - it.y;
+  if (it.tipo === 'seta') {
+    const mudouDe = 'ponto' in it.de;
+    const mudouPara = 'ponto' in it.para;
+    return {
+      id: it.id,
+      antes: {
+        x: it.x,
+        y: it.y,
+        ...(mudouDe ? { de: it.de } : {}),
+        ...(mudouPara ? { para: it.para } : {}),
+        atualizadoEm: it.atualizadoEm,
+      },
+      depois: {
+        x: nx,
+        y: ny,
+        ...(mudouDe && 'ponto' in it.de
+          ? { de: { ponto: [it.de.ponto[0] + dx, it.de.ponto[1] + dy] } }
+          : {}),
+        ...(mudouPara && 'ponto' in it.para
+          ? { para: { ponto: [it.para.ponto[0] + dx, it.para.ponto[1] + dy] } }
+          : {}),
+        atualizadoEm: agora,
+      },
+    };
+  }
+  return {
+    id: it.id,
+    antes: { x: it.x, y: it.y, atualizadoEm: it.atualizadoEm },
+    depois: { x: nx, y: ny, atualizadoEm: agora },
+  };
+}
+
 export function alinharSelecao(modo: ModoAlinhamento): void {
   const lista = [...selecao.value]
     .map((id) => itens.value.get(id))
@@ -568,11 +677,7 @@ export function alinharSelecao(modo: ModoAlinhamento): void {
   for (const it of lista) {
     const pos = posicoes.get(it.id);
     if (!pos || (pos.x === it.x && pos.y === it.y)) continue;
-    alterar.push({
-      id: it.id,
-      antes: { x: it.x, y: it.y, atualizadoEm: it.atualizadoEm },
-      depois: { x: pos.x, y: pos.y, atualizadoEm: agora },
-    });
+    alterar.push(moverItemPatch(it, pos.x, pos.y, agora));
   }
   if (alterar.length > 0) {
     executar({ rotulo: 'Alinhar', ops: [{ alterar }] });
@@ -591,11 +696,7 @@ export function distribuirSelecao(eixo: 'h' | 'v'): void {
   for (const it of lista) {
     const pos = posicoes.get(it.id);
     if (!pos || (pos.x === it.x && pos.y === it.y)) continue;
-    alterar.push({
-      id: it.id,
-      antes: { x: it.x, y: it.y, atualizadoEm: it.atualizadoEm },
-      depois: { x: pos.x, y: pos.y, atualizadoEm: agora },
-    });
+    alterar.push(moverItemPatch(it, pos.x, pos.y, agora));
   }
   if (alterar.length > 0) {
     executar({ rotulo: 'Distribuir', ops: [{ alterar }] });

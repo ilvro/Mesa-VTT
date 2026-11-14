@@ -4,6 +4,7 @@ import { docParaHtml } from '../../dominio/doc-rico.ts';
 import { familiaCss } from '../../dominio/fontes.ts';
 import {
   PALETA_PADRAO,
+  corComOpacidade,
   corDoTexto,
   decorarMarcadores,
   fundoEfetivo,
@@ -101,8 +102,7 @@ function estiloCaixaCss(
   const fundo = fundoEfetivo(item, paleta);
   const cor = item.semantica && !c.fundo && fundo ? corDoTexto(fundo) : item.texto.cor;
   return {
-    backgroundColor: fundo ?? 'transparent',
-    opacity: fundo ? c.opacidade : 1,
+    backgroundColor: fundo ? corComOpacidade(fundo, c.opacidade) : 'transparent',
     border:
       c.borda && c.espessuraBorda > 0
         ? `${c.espessuraBorda}px ${
@@ -161,7 +161,7 @@ function ItemBase({
         style={{
           ...estiloPosicao,
           ...estiloCaixa,
-          opacity: condOk ? estiloCaixa.opacity : 0.35,
+          opacity: condOk ? 1 : 0.35,
         }}
       >
         {!condOk ? (
@@ -265,6 +265,22 @@ function ItemBase({
   return null;
 }
 
+function pontasSetaIguais(
+  seta: Extract<ItemModelo, { tipo: 'seta' }>,
+  a: ReadonlyMap<string, ItemModelo> | undefined,
+  b: ReadonlyMap<string, ItemModelo> | undefined,
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if ('itemId' in seta.de && a.get(seta.de.itemId) !== b.get(seta.de.itemId)) {
+    return false;
+  }
+  if ('itemId' in seta.para && a.get(seta.para.itemId) !== b.get(seta.para.itemId)) {
+    return false;
+  }
+  return true;
+}
+
 export const Item = memo(
   ItemBase,
   (prev, next) =>
@@ -272,6 +288,7 @@ export const Item = memo(
     prev.editando === next.editando &&
     ((next.item.tipo !== 'texto' && next.item.tipo !== 'forma') ||
       prev.lodSimples === next.lodSimples) &&
-    (next.item.tipo !== 'seta' || prev.todosItens === next.todosItens) &&
+    (next.item.tipo !== 'seta' ||
+      pontasSetaIguais(next.item, prev.todosItens, next.todosItens)) &&
     (next.item.tipo !== 'moldura' || prev.zoom === next.zoom),
 );

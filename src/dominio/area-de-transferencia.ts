@@ -1,5 +1,5 @@
 import type { Ponto } from './camera.ts';
-import type { Item, Ponta } from './quadro.ts';
+import { validarItem, type Item, type Ponta } from './quadro.ts';
 
 export const PREFIXO_CLIPBOARD = 'mesa-quadro:1:';
 
@@ -10,7 +10,7 @@ export function copiar(itens: readonly Item[]): string {
 export function colar(
   texto: string,
   novoId: () => string,
-  destino: { quadroId: string; centro: Ponto; deslocamento?: number },
+  destino: { quadroId: string; centro: Ponto; deslocamento?: number; zBase?: number },
   agora = Date.now(),
 ): Item[] | null {
   if (!texto.startsWith(PREFIXO_CLIPBOARD)) return null;
@@ -23,8 +23,17 @@ export function colar(
   if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as { itens?: unknown }).itens)) {
     return null;
   }
-  const originais = (parsed as { itens: Item[] }).itens;
-  if (originais.length === 0) return [];
+  const brutos = (parsed as { itens: unknown[] }).itens;
+  if (brutos.length === 0) return [];
+  const originais: Item[] = [];
+  for (const b of brutos) {
+    try {
+      validarItem(b);
+      originais.push(b as Item);
+    } catch {
+      return null;
+    }
+  }
 
   const mapaIds = new Map<string, string>();
   const mapaGrupos = new Map<string, string>();
@@ -63,6 +72,13 @@ export function colar(
     return { ponto: [destino.centro.x + deslocamento, destino.centro.y + deslocamento] };
   };
 
+  const zBase = destino.zBase ?? 0;
+  const ordenadosPorZ = [...originais].sort((a, b) => a.z - b.z);
+  const novoZPorId = new Map<string, number>();
+  ordenadosPorZ.forEach((it, idx) => {
+    novoZPorId.set(it.id, zBase + idx + 1);
+  });
+
   return originais.map((it): Item => {
     const base = {
       ...it,
@@ -70,6 +86,7 @@ export function colar(
       quadroId: destino.quadroId,
       x: it.x + dx,
       y: it.y + dy,
+      z: novoZPorId.get(it.id) ?? zBase + 1,
       molduraId: it.molduraId ? (mapaIds.get(it.molduraId) ?? null) : null,
       grupoId: it.grupoId ? (mapaGrupos.get(it.grupoId) ?? null) : null,
       criadoEm: agora,
