@@ -1,13 +1,20 @@
 import { useState } from 'preact/hooks';
-import type { Ref } from '#mesa';
+import { formatarRef, type Ref } from '#mesa';
 import type { ModoAlinhamento } from '../../dominio/alinhamento.ts';
+import { parsearRefAncora } from '../../dominio/ancoras.ts';
 import type { AoFocar, Item } from '../../dominio/quadro.ts';
 import {
   duplicar,
   levarParaTras,
   trazerParaFrente,
 } from '../../dominio/quadro-operacoes.ts';
+import { abrirNoApp } from '../../app/barramento.ts';
 import { entidades } from '../../app/campanha.ts';
+import {
+  ancorarItemEmRef,
+  ancorasDoItem,
+  desancorarItemDeRef,
+} from '../../app/foco-do-quadro.ts';
 import { adicionarAoRoteiro, sessaoAtiva } from '../../app/registro.ts';
 import {
   agruparSelecao,
@@ -48,6 +55,9 @@ export function MenuDoItem({
   const primeiro = selecionados[0];
   const [fatoChave, setFatoChave] = useState('');
   const [fatoValor, setFatoValor] = useState<'true' | 'false'>('true');
+  const [abrindoAncora, setAbrindoAncora] = useState(false);
+  const [textoAncora, setTextoAncora] = useState('');
+  const ancorasPrimeiro = primeiro ? ancorasDoItem(quadroId, primeiro.id) : [];
 
   const cenasSonoras = entidades.value
     .map((e) => {
@@ -423,14 +433,80 @@ export function MenuDoItem({
             </button>
           ) : null}
           {primeiro ? (
-            <button
-              type="button"
-              class="menu-contexto-btn"
-              data-testid="menu-copiar-link"
-              onClick={() => void copiarLink()}
-            >
-              Copiar link
-            </button>
+            <>
+              <button
+                type="button"
+                class="menu-contexto-btn"
+                data-testid="menu-ancorar-mapa"
+                onClick={() => setAbrindoAncora((v) => !v)}
+              >
+                Ancorar a objeto do mapa…
+              </button>
+              {abrindoAncora || ancorasPrimeiro.length > 0 ? (
+                <div class="menu-contexto-bloco" data-testid="menu-ancorar-bloco">
+                  {ancorasPrimeiro.map((anc, idx) => (
+                    <div key={anc.id} class="menu-ao-entrar-fato">
+                      <button
+                        type="button"
+                        class="botao-pilula pequeno"
+                        data-testid={`menu-ver-no-mapa-${idx}`}
+                        onClick={() => {
+                          void abrirNoApp(anc.para);
+                          onFechar();
+                        }}
+                      >
+                        📍 {anc.para.tipo}: {anc.para.id}
+                      </button>
+                      <button
+                        type="button"
+                        class="fmt-btn"
+                        aria-label="Remover âncora"
+                        data-testid={`menu-remover-ancora-${idx}`}
+                        onClick={() => {
+                          void desancorarItemDeRef(quadroId, primeiro.id, anc.para);
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {abrindoAncora ? (
+                    <div class="menu-ao-entrar-novo">
+                      <input
+                        type="text"
+                        class="campo"
+                        placeholder="Cole mesa:atlas/objeto/..."
+                        data-testid="menu-ancorar-input"
+                        value={textoAncora}
+                        onInput={(e) => setTextoAncora(e.currentTarget.value)}
+                      />
+                      <button
+                        type="button"
+                        class="fmt-btn"
+                        data-testid="menu-ancorar-confirmar"
+                        onClick={() => {
+                          const ref = parsearRefAncora(textoAncora);
+                          if (!ref) return;
+                          void ancorarItemEmRef(quadroId, primeiro.id, ref);
+                          setTextoAncora('');
+                          setAbrindoAncora(false);
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              <button
+                type="button"
+                class="menu-contexto-btn"
+                data-testid="menu-copiar-link"
+                onClick={() => void copiarLink()}
+              >
+                Copiar link
+              </button>
+            </>
           ) : null}
           <hr class="menu-contexto-sep" />
           <button

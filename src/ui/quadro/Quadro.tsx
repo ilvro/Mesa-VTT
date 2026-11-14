@@ -96,7 +96,9 @@ import {
 } from '../../app/quadros.ts';
 import {
   aoFocarMoldura,
+  espiarAtivo,
   modoMoldurasAgem,
+  pedidoFocarItem,
   type ModoMoldurasAgem,
 } from '../../app/foco-do-quadro.ts';
 import { navegarParaQuadro } from '../../app/rotas.ts';
@@ -118,6 +120,7 @@ import { PainelDaPaleta } from './PainelDaPaleta.tsx';
 import { PainelDeSegredos } from './PainelDeSegredos.tsx';
 import { PainelDoEstado } from './PainelDoEstado.tsx';
 import { PainelDoFundo, type ModoRoda } from './PainelDoFundo.tsx';
+import { PainelEspiar } from './PainelEspiar.tsx';
 
 const CHAVE_RODA = 'mesa:quadro:roda';
 const CHAVE_TRACO = 'mesa:quadro:traco';
@@ -522,6 +525,16 @@ export function Quadro() {
     selecao.value = new Set([alvo.id]);
     itemPendente.value = null;
   }, [itemPendente.value, itens.value, tamanhoTela.value]);
+
+  useEffect(() => {
+    const pedido = pedidoFocarItem.value;
+    if (!pedido || pedido.quadroId !== q.id) return;
+    const alvo = itens.value.get(pedido.itemId);
+    if (!alvo) return;
+    camera.value = enquadrar(caixaEnvolventeDeItem(alvo), tamanhoTela.value, 80);
+    selecao.value = new Set([alvo.id]);
+    pedidoFocarItem.value = null;
+  }, [pedidoFocarItem.value, q.id, itens.value, tamanhoTela.value]);
 
   useEffect(() => {
     const el = areaRef.current;
@@ -2218,6 +2231,8 @@ export function Quadro() {
             }}
           />
         ) : null}
+
+        {espiarAtivo.value ? <PainelEspiar /> : null}
 
         {painelEstadoAberto.value ? (
           <PainelDoEstado

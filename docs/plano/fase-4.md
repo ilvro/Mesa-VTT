@@ -642,7 +642,7 @@ Testes: unitários do Atlas para o Ref de objeto e região e para o atendimento 
 Pronto quando: os testes do Atlas passam.
 Commit: `added object and region refs and board inspect to atlas`
 
-### Q5c — Mesa: ancorar, atender `mesa.focar` e painel Espiar  ⬜
+### Q5c — Mesa: ancorar, atender `mesa.focar` e painel Espiar  ✅
 Objetivo: ligar itens do quadro a lugares e objetos, e ver o que está ligado sem perder a visão do quadro.
 Depende de: Q5a, Q3c.
 Ler: `src/app/barramento.ts`, `src/app/ligacoes-quadro.ts`.

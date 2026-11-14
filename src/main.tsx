@@ -18,6 +18,7 @@ import '@fontsource/jetbrains-mono/700-italic.css';
 import './ui/estilo.css';
 import { render } from 'preact';
 import { atualizar, campanhaAtiva, campanhas, entidades, iniciarCampanhas, observarCampanhaAtiva, repositorio } from './app/campanha.ts';
+import { iniciarFocoDoQuadro } from './app/foco-do-quadro.ts';
 import { sondarAplicativos } from './app/inventario.ts';
 import { iniciarRotas, tela } from './app/rotas.ts';
 import { iniciarTema } from './app/tema.ts';
@@ -25,6 +26,7 @@ import { App } from './ui/App.tsx';
 
 iniciarTema();
 iniciarRotas();
+iniciarFocoDoQuadro();
 render(<App />, document.getElementById('raiz')!);
 void iniciarCampanhas();
 observarCampanhaAtiva();

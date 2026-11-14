@@ -2028,3 +2028,65 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   gap: 6px;
   font-size: 0.78rem;
 }
+
+.item-pino-ancora {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 4;
+  background: rgba(16, 20, 18, 0.75);
+  border: 1px solid var(--borda);
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 0.72rem;
+  line-height: 1.1;
+  cursor: pointer;
+}
+
+.painel-espiar {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 32;
+  width: 340px;
+  max-height: calc(100% - 32px);
+  display: flex;
+  flex-direction: column;
+}
+
+.espiar-lista {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0 0 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.espiar-cartao {
+  background: var(--superficie-2, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--borda);
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.espiar-cartao-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.espiar-cartao-corpo {
+  font-size: 0.85rem;
+}
+
+.espiar-cartao-acoes {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}

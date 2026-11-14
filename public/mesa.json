@@ -10,5 +10,5 @@
   },
   "oferece": ["entidade", "quadro", "item"],
   "emite": [],
-  "atende": []
+  "atende": ["mesa.focar"]
 }

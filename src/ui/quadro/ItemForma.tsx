@@ -16,6 +16,7 @@ import {
 import type { DocRico, Item } from '../../dominio/quadro.ts';
 import { abrirNoApp } from '../../app/barramento.ts';
 import { entidades } from '../../app/campanha.ts';
+import { ancorasDoItem } from '../../app/foco-do-quadro.ts';
 import { alternarFato, estadoDoMundo, paletaDaCampanha } from '../../app/quadros.ts';
 import { abrirEntidade } from '../../app/rotas.ts';
 import { EditorRico } from './EditorRico.tsx';
@@ -103,6 +104,26 @@ export function ItemForma({
           stroke-dasharray={dashArray}
         />
       </svg>
+
+      {(() => {
+        const ancs = ancorasDoItem(item.quadroId, item.id);
+        if (ancs.length === 0) return null;
+        return (
+          <button
+            type="button"
+            class="item-pino-ancora"
+            title={`Ver no mapa (${ancs[0]!.para.tipo}: ${ancs[0]!.para.id})`}
+            data-testid={`pino-ancora-${item.id}`}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              void abrirNoApp(ancs[0]!.para);
+            }}
+          >
+            📍
+          </button>
+        );
+      })()}
 
       <div
         class="item-forma-conteudo"

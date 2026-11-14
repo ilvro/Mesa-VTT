@@ -469,3 +469,65 @@ test('Q4c: importar o fixture -> o quadro abre com os itens -> aceitar 2 itens n
     await ctx.close();
   }
 });
+
+test('Q5c: âncora em um cartão -> emitir mesa.focar na janela -> o painel Espiar abre com o cartão', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  const erros: string[] = [];
+  page.on('pageerror', (e) => erros.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') erros.push(m.text()); });
+
+  try {
+    await page.goto(`${amb.origem}/Mesa/`);
+    await page.waitForSelector('[data-testid="campanha-select"]');
+    await page.click('[data-testid="aba-campanhas"]');
+    await page.fill('[data-testid="nova-campanha-nome"]', 'Campanha Q5c');
+    await page.click('[data-testid="criar-campanha"]');
+    await page.waitForSelector('[data-testid="tela-entidades"]');
+
+    await page.click('[data-testid="aba-quadros"]');
+    await page.fill('[data-testid="novo-quadro-nome"]', 'Masmorra');
+    await page.click('[data-testid="criar-quadro"]');
+    await page.waitForSelector('[data-testid="area-quadro"]');
+
+    await page.click('[data-testid="ferramenta-texto"]');
+    const box = await page.locator('[data-testid="area-quadro"]').boundingBox();
+    assert.ok(box);
+    await page.mouse.click(box.x + 250, box.y + 200);
+    await page.waitForSelector('[data-testid="editor-rico"]');
+    await page.type('[data-testid="editor-rico"]', 'Gaveta com fundo falso');
+    await page.keyboard.press('Escape');
+
+    const itemEl = page.locator('[data-testid^="item-"]').first();
+    await itemEl.click({ button: 'right' });
+    await page.waitForSelector('[data-testid="menu-do-item"]');
+    await page.click('[data-testid="menu-ancorar-mapa"]');
+    await page.fill('[data-testid="menu-ancorar-input"]', 'mesa:atlas/objeto/m1/escrivaninha');
+    await page.click('[data-testid="menu-ancorar-confirmar"]');
+    await page.keyboard.press('Escape');
+
+    await page.waitForSelector('[data-testid^="pino-ancora-"]');
+
+    await page.evaluate(() => {
+      const ch = new BroadcastChannel('mesa:eventos');
+      ch.postMessage({
+        contrato: 1,
+        app: 'atlas',
+        tipo: 'mesa.focar',
+        id: 'evt-q5c-1',
+        em: Date.now(),
+        campanhaId: null,
+        dados: { ref: { app: 'atlas', tipo: 'objeto', id: 'm1/escrivaninha' } },
+      });
+      ch.close();
+    });
+
+    await page.waitForSelector('[data-testid="painel-espiar"]');
+    const textoEspiar = await page.locator('[data-testid="painel-espiar"]').textContent();
+    assert.ok(textoEspiar?.includes('Gaveta com fundo falso'));
+
+    assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
+  } finally {
+    await ctx.close();
+  }
+});
