@@ -21,3 +21,4 @@ Este diretório guarda o plano de evolução próprio da **Mesa** (`Projects/Mes
 | [fase-3.md](fase-3.md) | Detalhado |
 | [melhorias-pos-fase-14.md](melhorias-pos-fase-14.md) | Concluída |
 | [fase-4.md](fase-4.md) | Detalhado — Quadro (whiteboard da campanha), etapas A a F |
+| [fase-5.md](fase-5.md) | Detalhado — usabilidade: etiquetas, temas, modo sessão (U1 a U9) |
