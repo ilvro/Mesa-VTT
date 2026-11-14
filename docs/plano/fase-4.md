@@ -534,7 +534,7 @@ Commit: `added search and type filters to boards`
 
 ## Etapa D — Importar do Miro, com revisão
 
-### Q4a — Script que baixa um quadro do Miro  ⬜
+### Q4a — Script que baixa um quadro do Miro  ✅
 Objetivo: tirar um quadro do Miro para um arquivo local, sem credenciais dentro do app.
 Depende de: —. Pode ser feita a qualquer momento.
 Ler: a documentação da API REST v2 do Miro (`GET /v2/boards/{id}`, `GET /v2/boards/{id}/items` com `cursor`, `GET /v2/boards/{id}/connectors`, e os recursos de imagem).
