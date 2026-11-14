@@ -8,6 +8,7 @@ import { EditorRico } from './EditorRico.tsx';
 interface ItemFormaProps {
   item: Extract<Item, { tipo: 'forma' }>;
   editando: boolean;
+  lodSimples?: boolean;
   onSairEdicao: (novoDoc?: DocRico, novaAltura?: number) => void;
   onEditorPronto?: (editor: Editor | null) => void;
 }
@@ -28,6 +29,7 @@ const VERTICAL_CSS = {
 export function ItemForma({
   item,
   editando,
+  lodSimples = false,
   onSairEdicao,
   onEditorPronto,
 }: ItemFormaProps) {
@@ -101,6 +103,11 @@ export function ItemForma({
             onSair={(novoDoc) => onSairEdicao(novoDoc)}
             onEditorPronto={onEditorPronto}
           />
+        ) : lodSimples ? (
+          <div class="item-lod-linhas" aria-hidden="true">
+            <span />
+            <span />
+          </div>
         ) : (
           <div
             class="item-texto-conteudo doc-rico-html"

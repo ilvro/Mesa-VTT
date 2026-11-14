@@ -755,6 +755,7 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  contain: layout style;
 }
 .item-texto {
   white-space: pre-wrap;
@@ -762,6 +763,7 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   line-height: 1.4;
 }
 .item-imagem {
+  content-visibility: auto;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -988,6 +990,48 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
+}
+.item-lod-linhas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 0;
+}
+.item-lod-linhas span {
+  display: block;
+  height: 10px;
+  border-radius: 4px;
+  background: rgba(160, 175, 165, 0.35);
+}
+.item-lod-linhas span:last-child {
+  width: 65%;
+}
+.minimapa-quadro {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  background: var(--superficie-1);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: var(--sombra-flutuante);
+  z-index: 20;
+}
+.minimapa-cabecalho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.minimapa-canvas {
+  display: block;
+  border-radius: 6px;
+  background: var(--superficie-2);
+  cursor: crosshair;
 }
 .item-texto-conteudo {
   width: 100%;
@@ -1246,6 +1290,7 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   line-height: 1.4;
 }
 .item-imagem {
+  content-visibility: auto;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -1472,4 +1517,46 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
+}
+.item-lod-linhas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 0;
+}
+.item-lod-linhas span {
+  display: block;
+  height: 10px;
+  border-radius: 4px;
+  background: rgba(160, 175, 165, 0.35);
+}
+.item-lod-linhas span:last-child {
+  width: 65%;
+}
+.minimapa-quadro {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  background: var(--superficie-1);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: var(--sombra-flutuante);
+  z-index: 20;
+}
+.minimapa-cabecalho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.minimapa-canvas {
+  display: block;
+  border-radius: 6px;
+  background: var(--superficie-2);
+  cursor: crosshair;
 }

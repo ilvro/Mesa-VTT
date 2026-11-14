@@ -14,6 +14,7 @@ interface ItemProps {
   item: ItemModelo;
   todosItens?: ReadonlyMap<string, ItemModelo>;
   zoom?: number;
+  lodSimples?: boolean;
   editando: boolean;
   onSairEdicao: (novoDoc?: DocRico, novaAltura?: number) => void;
   onSairRotulo?: (novoRotulo: string) => void;
@@ -73,6 +74,7 @@ function ItemBase({
   item,
   todosItens,
   zoom = 1,
+  lodSimples = false,
   editando,
   onSairEdicao,
   onSairRotulo,
@@ -105,6 +107,12 @@ function ItemBase({
             onSair={(novoDoc, novaAltura) => onSairEdicao(novoDoc, novaAltura)}
             onEditorPronto={onEditorPronto}
           />
+        ) : lodSimples ? (
+          <div class="item-lod-linhas" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
         ) : (
           <div
             class="item-texto-conteudo doc-rico-html"
@@ -120,6 +128,7 @@ function ItemBase({
       <ItemForma
         item={item}
         editando={editando}
+        lodSimples={lodSimples}
         onSairEdicao={onSairEdicao}
         onEditorPronto={onEditorPronto}
       />
@@ -173,6 +182,8 @@ export const Item = memo(
   (prev, next) =>
     prev.item === next.item &&
     prev.editando === next.editando &&
+    ((next.item.tipo !== 'texto' && next.item.tipo !== 'forma') ||
+      prev.lodSimples === next.lodSimples) &&
     (next.item.tipo !== 'seta' || prev.todosItens === next.todosItens) &&
     (next.item.tipo !== 'moldura' || prev.zoom === next.zoom),
 );

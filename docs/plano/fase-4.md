@@ -430,7 +430,8 @@ Testes: alinhar e distribuir; guias encontram bordas e centros; copiar → colar
 Pronto quando: os testes passam.
 Commit: `added align, group, guides and clipboard to boards`
 
-### Q2k — Minimapa, nível de detalhe e desempenho  ⬜
+### Q2k — Minimapa, nível de detalhe e desempenho  ✅
+Nota: no teste e2e com 3000 itens (`tests/e2e/quadro-desempenho.test.ts`), o tempo por quadro ao ver tudo e dar zoom 10 vezes ficou em `max=30.9ms`, `media=16.3ms` (30 quadros medidos), abaixo do limite de 50 ms; `ItemForma.tsx` e `Quadro.tsx` também receberam loteamento via `requestAnimationFrame` e camada canvas de LOD quando há mais de 200 itens visíveis abaixo de 25% de zoom.
 Objetivo: um quadro do tamanho dos do Miro (milhares de itens) continua fluido.
 Depende de: Q2i.
 Arquivos: criar `src/ui/quadro/Minimapa.tsx` e `tests/e2e/quadro-desempenho.test.ts`; mudar `Mundo.tsx`, `Item.tsx` e `estilo.css`.

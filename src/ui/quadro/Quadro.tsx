@@ -87,6 +87,7 @@ import {
 import { BarraDeFormatacao } from './BarraDeFormatacao.tsx';
 import { Mundo, type TracoPreview } from './Mundo.tsx';
 import { MenuDoItem } from './MenuDoItem.tsx';
+import { Minimapa } from './Minimapa.tsx';
 import { Navegador } from './Navegador.tsx';
 import { PainelDoFundo, type ModoRoda } from './PainelDoFundo.tsx';
 
@@ -306,6 +307,14 @@ export function Quadro() {
   const retanguloSelecao = useSignal<Caixa | null>(null);
   const gestoRef = useRef<Gesto | null>(null);
   const inputImagemRef = useRef<HTMLInputElement | null>(null);
+  const rafMoverRef = useRef<number | null>(null);
+  const moverPendenteRef = useRef<{
+    clientX: number;
+    clientY: number;
+    shiftKey: boolean;
+    altKey: boolean;
+    pressure: number;
+  } | null>(null);
 
   const copiarSelecao = () => {
     const sel = [...selecao.value]
@@ -428,7 +437,8 @@ export function Quadro() {
   }, [q.id]);
 
   useEffect(() => {
-    gravarCamera(q.id, camera.value);
+    const t = window.setTimeout(() => gravarCamera(q.id, camera.value), 300);
+    return () => clearTimeout(t);
   }, [q.id, camera.value]);
 
   useEffect(() => {
@@ -479,7 +489,7 @@ export function Quadro() {
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
-  const pontoMundoDe = (e: PointerEvent | MouseEvent): Ponto => {
+  const pontoMundoDe = (e: { clientX: number; clientY: number }): Ponto => {
     const rect = areaRef.current!.getBoundingClientRect();
     return telaParaMundo(camera.value, {
       x: e.clientX - rect.left,
@@ -1035,7 +1045,13 @@ export function Quadro() {
     }
   };
 
-  const aoMover = (e: PointerEvent) => {
+  const processarMover = (e: {
+    clientX: number;
+    clientY: number;
+    shiftKey: boolean;
+    altKey: boolean;
+    pressure: number;
+  }) => {
     const g = gestoRef.current;
     if (!g) return;
     const cam = camera.value;
@@ -1340,6 +1356,24 @@ export function Quadro() {
     }
   };
 
+  const aoMover = (e: PointerEvent) => {
+    if (!gestoRef.current) return;
+    moverPendenteRef.current = {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      shiftKey: e.shiftKey,
+      altKey: e.altKey,
+      pressure: e.pressure,
+    };
+    if (rafMoverRef.current !== null) return;
+    rafMoverRef.current = requestAnimationFrame(() => {
+      rafMoverRef.current = null;
+      const pendente = moverPendenteRef.current;
+      moverPendenteRef.current = null;
+      if (pendente) processarMover(pendente);
+    });
+  };
+
   const inserirImagens = async (arquivos: readonly Blob[], pontoMundo?: Ponto) => {
     const centro =
       pontoMundo ??
@@ -1385,6 +1419,15 @@ export function Quadro() {
   };
 
   const aoSoltar = (e: PointerEvent) => {
+    if (rafMoverRef.current !== null) {
+      cancelAnimationFrame(rafMoverRef.current);
+      rafMoverRef.current = null;
+    }
+    if (moverPendenteRef.current) {
+      const pendente = moverPendenteRef.current;
+      moverPendenteRef.current = null;
+      processarMover(pendente);
+    }
     linhasGuia.value = [];
     const g = gestoRef.current;
     if (!g) return;
@@ -1751,6 +1794,15 @@ export function Quadro() {
             }}
           />
         </div>
+
+        <Minimapa
+          itens={itens.value}
+          camera={camera.value}
+          tamanhoTela={tamanhoTela.value}
+          onMoverCamera={(c) => {
+            camera.value = c;
+          }}
+        />
 
         {menuContexto.value ? (
           <MenuDoItem
