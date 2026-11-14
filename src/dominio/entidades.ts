@@ -243,6 +243,24 @@ export function lerTags(texto: string): string[] {
   return saida.slice(0, 50);
 }
 
+/** Acrescenta ao fim as etiquetas de “a, b” que ainda não existem (sem acento/caixa), respeitando os limites de `lerTags`. */
+export function adicionarTags(atuais: readonly string[], texto: string): string[] {
+  const vistas = new Set(atuais.map(t => semAcento(t.replace(/^#/, '').trim())));
+  const saida = [...atuais];
+  for (const tag of lerTags(texto)) {
+    const chave = semAcento(tag);
+    if (vistas.has(chave) || saida.length >= 50) continue;
+    vistas.add(chave); saida.push(tag);
+  }
+  return saida;
+}
+
+/** Tira a etiqueta (comparando sem acento/caixa e sem `#`). */
+export function removerTag(atuais: readonly string[], tag: string): string[] {
+  const chave = semAcento(tag.replace(/^#/, '').trim());
+  return atuais.filter(t => semAcento(t.replace(/^#/, '').trim()) !== chave);
+}
+
 export const ehAppConhecido = (valor: string): valor is AppId => (APPS as readonly string[]).includes(valor);
 
 /** Entidade `personagem` que tem ficha no Dossiê (`ref.app === 'ficha' && ref.tipo === 'ficha'`). */

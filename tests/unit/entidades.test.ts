@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Entidade } from '#mesa';
 import {
+  adicionarTags,
+  removerTag,
   agruparPorCategoria,
   alterarListaDeElenco,
   alternarModoExibicao,
@@ -271,4 +273,17 @@ test('elenco: entrar/sair, podar IDs órfãos, ordenar elenco primeiro e filtrar
     filtrarEntidades(todas, { soElenco: true, elenco: [] }),
     [],
   );
+});
+
+test('adicionarTags: aceita "a, b", ignora repetidas sem acento e respeita os limites', () => {
+  assert.deepEqual(adicionarTags(['Vila'], 'mansão, vila, Mansao, mistério'), ['Vila', 'mansão', 'mistério']);
+  assert.deepEqual(adicionarTags(['a'], '  , '), ['a']);
+  assert.equal(adicionarTags([], 'x'.repeat(60))[0]?.length, 40);
+  const cheias = Array.from({ length: 50 }, (_, i) => `t${i}`);
+  assert.equal(adicionarTags(cheias, 'nova').length, 50);
+});
+
+test('removerTag: compara sem acento e caixa', () => {
+  assert.deepEqual(removerTag(['Ateliê', 'vila'], 'atelie'), ['vila']);
+  assert.deepEqual(removerTag(['a'], 'b'), ['a']);
 });

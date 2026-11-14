@@ -35,7 +35,6 @@ import {
   contarPorTag,
   contarPorTipo,
   ehEncontro,
-  lerTags,
   NOME_DO_APP,
   NOME_DO_TIPO_DE_REF,
   podeEditar,
@@ -51,6 +50,7 @@ import { ehRefDeEntidadeDaMesa } from '../dominio/notas.ts';
 import { GradeDeColecao, modoExibicao } from './GradeDeColecao.tsx';
 import { EditorDeCena } from './EditorDeCena.tsx';
 import { cx } from './cx.ts';
+import { CampoDeEtiquetas } from './CampoDeEtiquetas.tsx';
 import { EditorDeNota } from './EditorDeNota.tsx';
 import {
   desvincularPastaLocal,
@@ -477,11 +477,10 @@ function Detalhe({ e }: { e: Entidade }) {
           onBlur={async ev => { const campo = ev.currentTarget, v = campo.value.trim(); if (v !== e.nome && !(await alterarEntidade(e, { nome: v }))) campo.value = e.nome; }}
           onKeyDown={ev => { if (ev.key === 'Enter') ev.currentTarget.blur(); }} />
       </label>
-      <label class="campo"><span>Etiquetas <span class="meta">(separadas por vírgula)</span></span>
-        <input key={`tags-${e.id}`} type="text" defaultValue={e.tags.join(', ')} disabled={!conteudo} data-testid="campo-tags" placeholder="mansão, vila, mistério"
-          onBlur={ev => { const novas = lerTags(ev.currentTarget.value); if (JSON.stringify(novas) !== JSON.stringify(e.tags)) void alterarEntidade(e, { tags: novas }); }}
-          onKeyDown={ev => { if (ev.key === 'Enter') ev.currentTarget.blur(); }} />
-      </label>
+      <div class="campo">
+        <span id="rotulo-etiquetas">Etiquetas</span>
+        <CampoDeEtiquetas key={`tags-${e.id}`} e={e} disabled={!conteudo} />
+      </div>
       {e.tipo === 'cena' && <EditorDeCena key={`cena-${e.id}`} e={e} editavel={editavel} />}
       <EditorDeNota key={`notas-${e.id}`} e={e} editavel={conteudo} />
       <h3 class="faixa pequena">Onde aparece</h3>

@@ -226,6 +226,13 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 
 .cartao-corpo-colecao { padding: 9px 11px; display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; }
 .cartao-nome { margin: 0; font: 700 13px/1.35 var(--corpo); color: var(--texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.campo-etiquetas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; background: var(--superficie-2); border: 1px solid var(--linha); border-radius: var(--raio); padding: 5px 8px; min-height: 38px; }
+.campo-etiquetas:focus-within { border-color: var(--acento); }
+.etiqueta-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 8px; background: var(--superficie); }
+.etiqueta-chip button { background: none; border: 0; padding: 0 3px; color: inherit; font: inherit; cursor: pointer; line-height: 1.4; }
+.etiqueta-chip button:hover { color: var(--acento); }
+.campo-etiquetas .etiqueta-input { flex: 1 1 120px; border: 0; background: transparent; padding: 3px 2px; min-width: 80px; }
+.campo-etiquetas .etiqueta-input:focus { border: 0; }
 .cartao-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: auto; padding-top: 3px; }
 .cartao-tag { font-size: 10.5px; color: var(--apagado); background: var(--superficie-2); padding: 1px 5px; border-radius: 3px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cartao-apps { font-size: 11px; color: var(--apagado); opacity: 0.85; margin-top: 2px; }

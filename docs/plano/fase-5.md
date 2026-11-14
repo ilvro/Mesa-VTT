@@ -95,7 +95,8 @@ Plano escrito em 14/11/2026 contra o código desse dia. O usuário reclamou de q
 
 **Commit:** `allow editing tags and notes of maps and characters`
 
-### U3 — Editor de etiquetas em chips  ⬜
+### U3 — Editor de etiquetas em chips  ✅
+**Nota:** `CampoDeEtiquetas.tsx` grava a cada mudança; `adicionarTags`/`removerTag` puras em `dominio/entidades.ts`; e2e do `hub.test.ts` adaptado (não rodado).
 **Ler:** `src/ui/Entidades.tsx` (`Detalhe`), `src/dominio/entidades.ts` (`lerTags`, `contarPorTag`, `semAcento`) e `src/ui/GradeDeColecao.tsx` (~220, `cartao-tags`, para o visual).
 
 **Como:**

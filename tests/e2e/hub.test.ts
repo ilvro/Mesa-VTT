@@ -62,8 +62,12 @@ test('9.1a: a Mesa cria a campanha, o Atlas a vê, e o lugar criado pelo Atlas a
     await mesa.fill('[data-testid="nova-entidade-nome"]', 'Muirenn');
     await mesa.press('[data-testid="nova-entidade-nome"]', 'Enter');
     await mesa.waitForSelector('[data-testid="detalhe"] [data-testid="campo-nome"]:not([disabled])');
-    await mesa.fill('[data-testid="campo-tags"]', 'investigadora, Ateliê, ');
+    await mesa.fill('[data-testid="campo-tags"]', 'investigadora, Ateliê, rascunho');
     await mesa.press('[data-testid="campo-tags"]', 'Enter');
+    await mesa.waitForSelector('[data-testid="etiqueta-rascunho"]');
+    await mesa.click('[data-testid="etiqueta-rascunho"] [aria-label="Remover etiqueta rascunho"]');
+    await mesa.waitForSelector('[data-testid="etiqueta-rascunho"]', { state: 'detached' });
+    await mesa.waitForSelector('[data-testid="etiqueta-atelie"]');
     await mesa.fill('[data-testid="campo-notas"]', 'Chegou na ilha de barco.');
     await mesa.locator('[data-testid="campo-nome"]').click();
     await mesa.waitForFunction(() => (window as unknown as { __mesa: { entidades(): { notas: string }[] } }).__mesa.entidades().some(e => e.notas === 'Chegou na ilha de barco.'));
