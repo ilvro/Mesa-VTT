@@ -194,7 +194,7 @@ export function ferramentasDeEntidade(ctx: ContextoDeEntidades): FerramentaDaPon
     },
     {
       nome: 'mesa_entidade_editar',
-      descricao: `Edita uma entidade criada pela Mesa (nome, tags, notas); as de outros apps são recusadas. Não remove. Detalhes: plataforma_guia ferramentas-mesa.`,
+      descricao: `Edita nome, tags e notas de uma entidade; nas criadas por outros apps só tags e notas (o nome é recusado). Não remove. Detalhes: plataforma_guia ferramentas-mesa.`,
       esquema: {
         type: 'object', required: ['id'], additionalProperties: false,
         properties: {
@@ -211,7 +211,7 @@ export function ferramentasDeEntidade(ctx: ContextoDeEntidades): FerramentaDaPon
         const id = String(args.id ?? '').replace(/^mesa:mesa\/entidade\//, '');
         const e = (await ctx.entidades()).find(x => x.id === id);
         if (!e) throw new Error(`Não há entidade com id "${id}" nesta campanha. Use campanha_ler para ver as entidades, ou mesa_entidade_criar.`);
-        if (!podeEditar(e)) throw new Error(`"${e.nome}" é do ${NOME_DO_APP[e.criadaPor] ?? e.criadaPor} (criada por ele); a Mesa só edita o que criou. Peça ao mestre para alterar no ${NOME_DO_APP[e.criadaPor] ?? e.criadaPor}.`);
+        if (args.nome !== undefined && !podeEditar(e) && String(args.nome).trim() !== e.nome) throw new Error(`"${e.nome}" é do ${NOME_DO_APP[e.criadaPor] ?? e.criadaPor} (criada por ele); a Mesa só altera as tags e as notas dela, não o nome. Peça ao mestre para renomear no ${NOME_DO_APP[e.criadaPor] ?? e.criadaPor}.`);
         const antes = { ...e };
         const mudancas: Partial<Pick<Entidade, 'nome' | 'tags' | 'notas'>> = {};
         if (args.nome !== undefined) { if (typeof args.nome !== 'string' || !args.nome.trim()) throw new Error('"nome" não pode ser vazio.'); mudancas.nome = args.nome.trim(); }

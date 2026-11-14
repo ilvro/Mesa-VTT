@@ -230,6 +230,8 @@ export function agruparPorCategoria(lista: readonly Entidade[]): SecaoColecao[] 
 /** Quem criou a entidade altera tudo; os outros só mexem nas referências do próprio aplicativo (regra do repositório). */
 export const podeEditar = (e: Pick<Entidade, 'criadaPor'>, app: AppId = APP_DA_MESA): boolean => e.criadaPor === app;
 export const podeRemover = podeEditar;
+/** Etiquetas e notas: qualquer app altera (contrato, U1). Nome, retrato e remoção: só o dono (`podeEditar`). */
+export const podeEditarConteudo = (_e: Pick<Entidade, 'criadaPor'>): boolean => true;
 
 /** “a, b ,, a” → ['a', 'b']: sem vazias, sem repetidas, até 50 de até 40 caracteres (o limite do contrato). */
 export function lerTags(texto: string): string[] {

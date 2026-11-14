@@ -136,6 +136,17 @@ test('entidade: editar, acrescentar notas e recusar entidade de outro app', asyn
   await assert.rejects(f.mesa_entidade_editar!.executar({ id }), /Nada a mudar/);
 });
 
+test('entidade de outro app: tags e notas aceitas, nome recusado (o mesmo nome passa)', async () => {
+  const { f, lista } = montarEntidades();
+  const r = await texto(f.mesa_entidade_editar!.executar({ id: 'x1', tags: ['aliado'], acrescentarNotas: 'Conhece a [[Forja]].' }));
+  assert.deepEqual(r.tags, ['aliado']);
+  assert.equal(lista().find(e => e.id === 'x1')!.notas, 'Conhece a [[Forja]].');
+  await assert.rejects(f.mesa_entidade_editar!.executar({ id: 'x1', nome: 'Outro nome', tags: ['x'] }), /é do Dossiê.*não o nome/);
+  assert.deepEqual(lista().find(e => e.id === 'x1')!.tags, ['aliado'], 'nada gravado quando o nome é recusado');
+  await texto(f.mesa_entidade_editar!.executar({ id: 'x1', nome: 'Ficha do Dossiê', tags: ['b'] }));
+  assert.deepEqual(lista().find(e => e.id === 'x1')!.tags, ['b']);
+});
+
 test('ligar: refs em texto e objeto; tipo inválido lista os tipos', async () => {
   const { f, ligacoes } = montarEntidades();
   const r = await texto(f.mesa_ligar!.executar({ de: 'mesa:mesa/entidade/e1', para: { app: 'atlas', tipo: 'mapa', id: 'm' }, tipo: 'esta-em' }));

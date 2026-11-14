@@ -15,6 +15,7 @@ import {
   personagensParaElenco,
   podarElenco,
   podeEditar,
+  podeEditarConteudo,
   ROTULO_DO_TIPO,
   semAcento,
 } from '../../src/dominio/entidades.ts';
@@ -56,6 +57,11 @@ test('filtrarEntidades: tipo e busca juntos', () => {
 test('contarPorTipo conta cada tipo', () => {
   const c = contarPorTipo(lista);
   assert.equal(c.lugar, 2); assert.equal(c.personagem, 1); assert.equal(c.cena, 0);
+});
+
+test('podeEditarConteudo: etiquetas e notas de qualquer app', () => {
+  assert.equal(podeEditarConteudo(e('b', 'personagem', 'y', { criadaPor: 'ficha' })), true);
+  assert.equal(podeEditarConteudo(e('a', 'lugar', 'x')), true);
 });
 
 test('podeEditar: só quem criou', () => {

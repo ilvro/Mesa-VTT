@@ -1,6 +1,6 @@
 import { signal, computed } from '@preact/signals';
 import { abrirRepositorioCampanha, mesmaRef, type Campanha, type Entidade, type Ligacao, type Ref, type RepositorioCampanha, type TipoLigacao, type Tema, type TipoEntidade } from '#mesa';
-import { APP_DA_MESA, ehEncontro, filtrarEntidades, podarElenco, podeEditar, semAcento, type CategoriaFiltro, type FiltroDeEntidades, type OrdemColecao } from '../dominio/entidades.ts';
+import { APP_DA_MESA, NOME_DO_APP, ehEncontro, filtrarEntidades, podarElenco, podeEditar, podeEditarConteudo, semAcento, type CategoriaFiltro, type FiltroDeEntidades, type OrdemColecao } from '../dominio/entidades.ts';
 import { refDaEntidade, refsMencionados } from '../dominio/notas.ts';
 import { casaCena, refParaLigacao } from '../dominio/cenas.ts';
 import { agendarSincronizacaoCofre } from './cofre.ts';
@@ -227,7 +227,7 @@ let filaDeLigacoes: Promise<void> = Promise.resolve();
 
 async function sincronizar(entidadeId: string): Promise<number> {
   const r = repo(), fonte = await r.obterEntidade(entidadeId);
-  if (!fonte || !podeEditar(fonte)) return 0;
+  if (!fonte || !podeEditarConteudo(fonte)) return 0;
   const todas = await r.listarEntidades(fonte.campanhaId), de = refDaEntidade(fonte.id);
   const alvos = refsMencionados(fonte.notas, todas, de);
   if (alvos.length) {
@@ -247,6 +247,10 @@ export async function ligacoesDaEntidade(e: Entidade): Promise<Ligacao[]> {
 
 /** Grava uma alteração na entidade. Devolve `false` (com aviso) se o repositório recusar, p. ex. nome vazio ou entidade de outro aplicativo. */
 export async function alterarEntidade(e: Entidade, mudancas: Partial<Pick<Entidade, 'nome' | 'tags' | 'notas'>>): Promise<boolean> {
+  if (mudancas.nome !== undefined && mudancas.nome !== e.nome && !podeEditar(e)) {
+    avisar(`O nome vem do ${NOME_DO_APP[e.criadaPor] ?? e.criadaPor}: renomeie lá. Etiquetas e notas você edita aqui.`, true);
+    return false;
+  }
   try {
     await repo().salvarEntidade({ ...e, ...mudancas });
     if (mudancas.notas !== undefined) await sincronizarLigacoes(e.id);

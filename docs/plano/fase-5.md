@@ -62,7 +62,8 @@ Plano escrito em 14/11/2026 contra o código desse dia. O usuário reclamou de q
 **Verificar:** no Atlas, `npm run typecheck` e `npm test`. Na Mesa, `npm run typecheck` e `npm test`.
 **Commit (Atlas):** `let any app edit tags and notes of shared entities`
 
-### U2 — Mesa: liberar etiquetas e notas de qualquer entidade  ⬜
+### U2 — Mesa: liberar etiquetas e notas de qualquer entidade  ✅
+**Nota:** `comRefDaMesa` (~263, `ligarRefs`) ficou com `podeEditar`: ele só atua em entidades `mesa`, e a ref da Mesa em entidade alheia já é criada pela sincronização de menções, que agora usa `podeEditarConteudo`. O botão "Abrir no {app}" usa a ref do app dono (`e.refs.find(app === criadaPor)`) e `enderecoDe`. Sem teste unitário direto de `alterarEntidade` (exige o banco); a recusa de nome vale na tela/ponte e o repositório a reforça. e2e não rodado.
 **Ler:**
 - `src/dominio/entidades.ts`, linha ~231 (`podeEditar`, `podeRemover`);
 - `src/ui/Entidades.tsx`, a função `Detalhe`;
