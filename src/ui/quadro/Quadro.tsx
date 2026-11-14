@@ -108,6 +108,7 @@ import {
 } from './BarraDeFerramentas.tsx';
 import { BarraDeFormatacao } from './BarraDeFormatacao.tsx';
 import { BuscaNoQuadro } from './BuscaNoQuadro.tsx';
+import { FilaDeRevisao } from './FilaDeRevisao.tsx';
 import { LinhaDoTempo } from './LinhaDoTempo.tsx';
 import { Mundo, type TracoPreview } from './Mundo.tsx';
 import { MenuDoItem } from './MenuDoItem.tsx';
@@ -320,6 +321,9 @@ export function Quadro() {
   const painelEstadoAberto = useSignal(false);
   const painelSegredosAberto = useSignal(false);
   const painelLinhaDoTempoAberto = useSignal(false);
+  const painelRevisaoAberto = useSignal(
+    [...itens.value.values()].some((i) => Boolean(i.revisao)),
+  );
   const buscaAberta = useSignal(false);
   const termoBusca = useSignal('');
   const indiceBusca = useSignal(0);
@@ -1740,10 +1744,29 @@ export function Quadro() {
               painelEstadoAberto.value = false;
               painelPaletaAberto.value = false;
               painelFundoAberto.value = false;
+              painelRevisaoAberto.value = false;
             }
           }}
         >
           Linha do tempo
+        </button>
+        <button
+          type="button"
+          class="botao-pilula"
+          aria-pressed={painelRevisaoAberto.value}
+          data-testid="botao-fila-revisao"
+          onClick={() => {
+            painelRevisaoAberto.value = !painelRevisaoAberto.value;
+            if (painelRevisaoAberto.value) {
+              painelSegredosAberto.value = false;
+              painelLinhaDoTempoAberto.value = false;
+              painelEstadoAberto.value = false;
+              painelPaletaAberto.value = false;
+              painelFundoAberto.value = false;
+            }
+          }}
+        >
+          Revisão ({[...itens.value.values()].filter((i) => Boolean(i.revisao)).length})
         </button>
         <label class="molduras-agem-wrap" title="Comportamento ao focar uma moldura na sessão">
           <span>Molduras agem</span>
@@ -2179,6 +2202,19 @@ export function Quadro() {
             }}
             onFechar={() => {
               painelLinhaDoTempoAberto.value = false;
+            }}
+          />
+        ) : null}
+
+        {painelRevisaoAberto.value ? (
+          <FilaDeRevisao
+            itens={itens.value}
+            onFocarItem={(alvo) => {
+              selecao.value = new Set([alvo.id]);
+              camera.value = enquadrar(caixaDe(alvo), tamanhoTela.value, 80);
+            }}
+            onFechar={() => {
+              painelRevisaoAberto.value = false;
             }}
           />
         ) : null}

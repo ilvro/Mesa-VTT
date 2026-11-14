@@ -577,7 +577,7 @@ Testes: fixtures de cada tipo; posições relativas à moldura; conector ligado;
 Pronto quando: os testes passam.
 Commit: `added miro board converter with type suggestions`
 
-### Q4c — Importar na Mesa e fila de revisão  ⬜
+### Q4c — Importar na Mesa e fila de revisão  ✅
 Objetivo: abrir o `.miro.zip` como um quadro novo e rever item por item.
 Depende de: Q4b.
 Arquivos: criar `src/app/importar-miro.ts` e `src/ui/quadro/FilaDeRevisao.tsx`; mudar `src/ui/quadro/Quadros.tsx` (botão "Importar do Miro…") e `Quadro.tsx`.

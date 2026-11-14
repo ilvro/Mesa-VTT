@@ -154,10 +154,11 @@ function ItemBase({
     const estiloCaixa = estiloCaixaCss(item, paleta);
     return (
       <div
-        class="item-quadro item-texto"
+        class={`item-quadro item-texto ${item.revisao ? 'em-revisao' : ''}`}
         data-testid={`item-${item.id}`}
         data-item-id={item.id}
         data-semantica={item.semantica ?? undefined}
+        data-em-revisao={item.revisao ? 'true' : undefined}
         style={{
           ...estiloPosicao,
           ...estiloCaixa,

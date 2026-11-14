@@ -1,5 +1,8 @@
 import { useSignal } from '@preact/signals';
+import { useRef } from 'preact/hooks';
 import { campanhaAtiva } from '../../app/campanha.ts';
+import { importarArquivoMiro } from '../../app/importar-miro.ts';
+import { avisar } from '../../app/toasts.ts';
 import {
   abrirQuadro,
   criarQuadro,
@@ -12,6 +15,7 @@ import { navegarParaQuadro, tela } from '../../app/rotas.ts';
 export function Quadros() {
   const nova = useSignal('');
   const confirmando = useSignal<string | null>(null);
+  const inputMiroRef = useRef<HTMLInputElement>(null);
   const c = campanhaAtiva.value;
 
   if (!c) {
@@ -74,6 +78,35 @@ export function Quadros() {
         >
           + Novo quadro
         </button>
+        <button
+          type="button"
+          class="botao-pilula"
+          data-testid="importar-miro-botao"
+          onClick={() => inputMiroRef.current?.click()}
+        >
+          Importar do Miro…
+        </button>
+        <input
+          ref={inputMiroRef}
+          type="file"
+          accept=".zip,.miro.zip,application/zip"
+          style={{ display: 'none' }}
+          data-testid="importar-miro-input"
+          onChange={async (e) => {
+            const f = e.currentTarget.files?.[0];
+            e.currentTarget.value = '';
+            if (!f) return;
+            try {
+              const rel = await importarArquivoMiro(f);
+              avisar(
+                `Quadro "${rel.quadro.nome}" importado (${rel.totalItens} itens, ${rel.paraRevisar} para revisar).`,
+              );
+              navegarParaQuadro(rel.quadro.id);
+            } catch (err) {
+              avisar(err instanceof Error ? err.message : String(err), true);
+            }
+          }}
+        />
       </form>
 
       {quadros.value.length === 0 ? (

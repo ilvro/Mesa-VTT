@@ -72,10 +72,11 @@ export function ItemForma({
 
   return (
     <div
-      class="item-quadro item-forma"
+      class={`item-quadro item-forma ${item.revisao ? 'em-revisao' : ''}`}
       data-testid={`item-${item.id}`}
       data-item-id={item.id}
       data-semantica={item.semantica ?? undefined}
+      data-em-revisao={item.revisao ? 'true' : undefined}
       style={{
         left: `${item.x}px`,
         top: `${item.y}px`,

@@ -1,5 +1,7 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { strToU8, zipSync } from 'fflate';
 import { iniciarAmbiente, type Ambiente } from './apoio.ts';
 
 let amb: Ambiente;
@@ -404,6 +406,63 @@ test('Q3c: entidade Sindre -> [[Sindre]] no quadro -> página da Sindre lista o 
     await page.click('[data-testid="nos-quadros-lista"] button');
     await page.waitForSelector('[data-testid="area-quadro"]');
     await page.waitForSelector('.quadro-ligacao');
+
+    assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('Q4c: importar o fixture -> o quadro abre com os itens -> aceitar 2 itens na fila -> o contador faltam N diminui -> desfazer', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  const erros: string[] = [];
+  page.on('pageerror', (e) => erros.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') erros.push(m.text()); });
+
+  try {
+    await page.goto(`${amb.origem}/Mesa/`);
+    await page.waitForSelector('[data-testid="campanha-select"]');
+    await page.click('[data-testid="aba-campanhas"]');
+    await page.fill('[data-testid="nova-campanha-nome"]', 'Campanha Q4c');
+    await page.click('[data-testid="criar-campanha"]');
+    await page.waitForSelector('[data-testid="tela-entidades"]');
+
+    await page.click('[data-testid="aba-quadros"]');
+    await page.waitForSelector('[data-testid="tela-quadros"]');
+
+    const fixtureJson = readFileSync(
+      new URL('../unit/fixtures/miro/aventura-exemplo.json', import.meta.url),
+      'utf8',
+    );
+    const zipBytes = zipSync({ 'quadro.json': strToU8(fixtureJson) });
+
+    await page.setInputFiles('[data-testid="importar-miro-input"]', {
+      name: 'castelo.miro.zip',
+      mimeType: 'application/zip',
+      buffer: Buffer.from(zipBytes),
+    });
+
+    await page.waitForSelector('[data-testid="area-quadro"]');
+    await page.waitForSelector('[data-testid="painel-fila-revisao"]');
+
+    assert.equal(
+      await page.locator('[data-testid="quadro-nome"]').inputValue(),
+      'Castelo de Corvos (importado)',
+    );
+    assert.equal(await page.locator('[data-testid="contador-revisao"]').textContent(), 'faltam 4');
+
+    const botoesAceitar = page.locator('[data-testid^="revisao-aceitar-"]:not([data-testid^="revisao-aceitar-moldura-"])');
+    assert.equal(await botoesAceitar.count(), 4);
+
+    await botoesAceitar.first().click();
+    assert.equal(await page.locator('[data-testid="contador-revisao"]').textContent(), 'faltam 3');
+
+    await botoesAceitar.first().click();
+    assert.equal(await page.locator('[data-testid="contador-revisao"]').textContent(), 'faltam 2');
+
+    await page.keyboard.press('Control+z');
+    assert.equal(await page.locator('[data-testid="contador-revisao"]').textContent(), 'faltam 3');
 
     assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
   } finally {
