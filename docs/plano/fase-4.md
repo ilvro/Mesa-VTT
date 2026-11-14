@@ -447,7 +447,7 @@ Commit: `added minimap and level of detail for large boards`
 
 ## Etapa C — Significado
 
-### Q3a — Marcadores  ⬜
+### Q3a — Marcadores  ✅
 Objetivo: reconhecer no texto a sintaxe que o mestre já usa.
 Depende de: Q1a.
 Ler: `src/dominio/notas.ts` (`analisarNota`, que o parser deve **reaproveitar** para `[[ligações]]`).
