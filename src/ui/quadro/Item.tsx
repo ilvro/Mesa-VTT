@@ -17,7 +17,7 @@ import {
 import type { DocRico, Item as ItemModelo } from '../../dominio/quadro.ts';
 import { abrirNoApp } from '../../app/barramento.ts';
 import { entidades } from '../../app/campanha.ts';
-import { alternarFato, estadoDoMundo, paletaDaCampanha } from '../../app/quadros.ts';
+import { alternarFato, estadoDoMundo, marcarFeito, paletaDaCampanha } from '../../app/quadros.ts';
 import { abrirEntidade } from '../../app/rotas.ts';
 import { EditorRico } from './EditorRico.tsx';
 import { ItemForma } from './ItemForma.tsx';
@@ -169,6 +169,19 @@ function ItemBase({
             se: {conds.join(', ')}
           </span>
         ) : null}
+        <button
+          type="button"
+          class={`item-feito-btn ${item.feito ? 'ativo' : ''}`}
+          title={item.feito ? 'Desmarcar feito (X)' : 'Marcar feito (X)'}
+          data-testid={`feito-${item.id}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            marcarFeito([item.id]);
+          }}
+        >
+          ✓
+        </button>
         {editando ? (
           <EditorRico
             doc={item.doc}

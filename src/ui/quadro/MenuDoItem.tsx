@@ -12,6 +12,7 @@ import {
   distribuirSelecao,
   executar,
   itens,
+  marcarFeito,
   selecao,
 } from '../../app/quadros.ts';
 
@@ -107,6 +108,17 @@ export function MenuDoItem({
             }}
           >
             Duplicar
+          </button>
+          <button
+            type="button"
+            class="menu-contexto-btn"
+            data-testid="menu-feito"
+            onClick={() => {
+              marcarFeito(selecionados.map((i) => i.id));
+              onFechar();
+            }}
+          >
+            {selecionados.every((i) => i.feito) ? 'Desmarcar feito' : 'Marcar feito'}
           </button>
           <hr class="menu-contexto-sep" />
           <button

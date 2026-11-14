@@ -1849,3 +1849,35 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .painel-estado-valor {
   width: 90px;
 }
+
+.item-feito-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(16, 20, 18, 0.55);
+  color: var(--texto-suave);
+  font-size: 11px;
+  line-height: 1;
+  display: inline-grid;
+  place-items: center;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.12s;
+  z-index: 3;
+}
+.item-texto:hover .item-feito-btn,
+.item-feito-btn.ativo {
+  opacity: 1;
+}
+.item-feito-btn.ativo {
+  background: var(--acento);
+  color: var(--acento-texto);
+  border-color: var(--acento);
+}
+.painel-segredos {
+  width: 300px;
+}

@@ -77,6 +77,13 @@ function registrar(texto: string, nota: boolean, em = Date.now()): void {
   alterarSessao({ registro: acrescentar(s.registro, { hora: horaDe(em), texto, nota }) });
 }
 
+export function registrarDoQuadro(texto: string, em = Date.now()): void {
+  const s = sessaoAtiva.value;
+  if (!s || !texto.trim() || ehRepeticao(ultimo, texto, em)) return;
+  ultimo = { texto, em };
+  registrar(texto, false, em);
+}
+
 function ouvirFatos(): void {
   pararDeOuvir();
   const b = barramentoDaMesa(); if (!b) return;

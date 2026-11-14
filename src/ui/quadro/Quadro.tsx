@@ -87,6 +87,7 @@ import {
   historico,
   itemPendente,
   itens,
+  marcarFeito,
   mudarFundo,
   paletaDaCampanha,
   quadroAberto,
@@ -109,6 +110,7 @@ import { MenuDoItem } from './MenuDoItem.tsx';
 import { Minimapa } from './Minimapa.tsx';
 import { Navegador } from './Navegador.tsx';
 import { PainelDaPaleta } from './PainelDaPaleta.tsx';
+import { PainelDeSegredos } from './PainelDeSegredos.tsx';
 import { PainelDoEstado } from './PainelDoEstado.tsx';
 import { PainelDoFundo, type ModoRoda } from './PainelDoFundo.tsx';
 
@@ -312,6 +314,7 @@ export function Quadro() {
   const painelFundoAberto = useSignal(false);
   const painelPaletaAberto = useSignal(false);
   const painelEstadoAberto = useSignal(false);
+  const painelSegredosAberto = useSignal(false);
   const buscaAberta = useSignal(false);
   const termoBusca = useSignal('');
   const indiceBusca = useSignal(0);
@@ -694,6 +697,10 @@ export function Quadro() {
         const k = e.key.toLowerCase();
         if (k === 'v') ferramenta.value = 'selecionar';
         else if (k === 'h') ferramenta.value = ferramenta.value === 'mao' ? 'selecionar' : 'mao';
+        else if (k === 'x' && selecao.value.size > 0) {
+          e.preventDefault();
+          marcarFeito([...selecao.value]);
+        }
         else if (k === 't') ferramenta.value = 'texto';
         else if (k === 'n') ferramenta.value = 'nota';
         else if (k === 's') ferramenta.value = 'forma';
@@ -1700,6 +1707,22 @@ export function Quadro() {
         <button
           type="button"
           class="botao-pilula"
+          aria-pressed={painelSegredosAberto.value}
+          data-testid="botao-segredos"
+          onClick={() => {
+            painelSegredosAberto.value = !painelSegredosAberto.value;
+            if (painelSegredosAberto.value) {
+              painelEstadoAberto.value = false;
+              painelPaletaAberto.value = false;
+              painelFundoAberto.value = false;
+            }
+          }}
+        >
+          Segredos
+        </button>
+        <button
+          type="button"
+          class="botao-pilula"
           aria-pressed={painelEstadoAberto.value}
           data-testid="botao-estado"
           onClick={() => {
@@ -2081,6 +2104,20 @@ export function Quadro() {
               ))}
             </ul>
           </aside>
+        ) : null}
+
+        {painelSegredosAberto.value ? (
+          <PainelDeSegredos
+            itens={itens.value}
+            onIrPara={(alvo) => {
+              selecao.value = new Set([alvo.id]);
+              camera.value = enquadrar(caixaDe(alvo), tamanhoTela.value, 80);
+            }}
+            onAlternarFeito={(alvo) => marcarFeito([alvo.id])}
+            onFechar={() => {
+              painelSegredosAberto.value = false;
+            }}
+          />
         ) : null}
 
         {painelEstadoAberto.value ? (

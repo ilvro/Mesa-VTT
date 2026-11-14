@@ -79,6 +79,33 @@ export function ehRepeticao(anterior: { texto: string; em: number } | null, text
 
 export interface ItemExportado { nome: string; onde: string; nota: string }
 
+export function formatarLinhaDoQuadro(
+  textoItem: string,
+  semantica: string | null,
+  molduraTitulo?: string | null,
+): string | null {
+  const limpo = textoItem.replace(/[\r\n]+/g, ' ').trim();
+  const sufixo = molduraTitulo?.trim() ? ` — ${molduraTitulo.trim()}` : '';
+
+  if (semantica === 'segredo' || /\[SEGREDO\]/i.test(limpo)) {
+    const corpo = limpo.replace(/\[SEGREDO\]/gi, '').trim().slice(0, 60);
+    return `Segredo revelado: ${corpo || 'sem descrição'}${sufixo}`;
+  }
+
+  if (semantica === 'loot' || /\[LOOT\]/i.test(limpo)) {
+    const corpo = limpo.replace(/\[LOOT\]/gi, '').trim().slice(0, 60);
+    return `Loot entregue: ${corpo || 'item'}${sufixo}`;
+  }
+
+  const mTeste = /\[([\p{Lu}][\p{Lu}\s/,-]*?)\s+(?:DT\s+)?(\d+)[^\]]*\]/u.exec(limpo);
+  if (mTeste) {
+    return `✓ Teste de ${mTeste[1]!.trim()} ${mTeste[2]!}${sufixo}`;
+  }
+
+  if (!limpo) return null;
+  return `✓ ${limpo.slice(0, 60)}${sufixo}`;
+}
+
 /** A sessão em Markdown: título, data, roteiro numerado (com as notas) e o registro. `dataTexto` já vem formatada (a função não depende do idioma do sistema). */
 export function exportarMarkdown(s: { nome: string; dataTexto: string; roteiro: readonly ItemExportado[]; registro: string }): string {
   const partes = [`# ${s.nome || 'Sessão'}`, '', `*${s.dataTexto}*`, '', '## Roteiro', ''];

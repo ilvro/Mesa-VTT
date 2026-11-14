@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Ref } from '#mesa';
-import { acrescentar, ehRepeticao, exportarMarkdown, formatarLinha, horaDe, lerRegistro, textoDoFato } from '../../src/dominio/registro.ts';
+import { acrescentar, ehRepeticao, exportarMarkdown, formatarLinha, formatarLinhaDoQuadro, horaDe, lerRegistro, textoDoFato } from '../../src/dominio/registro.ts';
 
 const ficha: Ref = { app: 'ficha', tipo: 'ficha', id: 's1' }, mapa: Ref = { app: 'atlas', tipo: 'mapa', id: 'm1' };
 const cena: Ref = { app: 'jukebox', tipo: 'cena-sonora', id: 'chuva' }, doc: Ref = { app: 'atelie', tipo: 'documento', id: 'd1' };
@@ -74,4 +74,18 @@ test('exportarMarkdown: título, data, roteiro numerado com notas e o registro c
   ].join('\n'));
   const vazio = exportarMarkdown({ nome: '', dataTexto: 'hoje', roteiro: [], registro: '' });
   assert.match(vazio, /# Sessão/); assert.match(vazio, /_Sem roteiro\._/); assert.match(vazio, /_Nada registrado\._/);
+});
+
+test('formatarLinhaDoQuadro formata testes, loot, segredos e itens genéricos sem repetição imediata', () => {
+  const l1 = formatarLinhaDoQuadro('[PERCEPÇÃO 13]', 'teste', 'Taverna');
+  assert.equal(l1, '✓ Teste de PERCEPÇÃO 13 — Taverna');
+
+  const l2 = formatarLinhaDoQuadro('[LOOT] HANDOUT 07', 'loot', null);
+  assert.equal(l2, 'Loot entregue: HANDOUT 07');
+
+  const l3 = formatarLinhaDoQuadro('[SEGREDO] Passagem sob a lareira', 'segredo', null);
+  assert.equal(l3, 'Segredo revelado: Passagem sob a lareira');
+
+  assert.equal(ehRepeticao({ texto: l1!, em: 1000 }, l1!, 1200), true);
+  assert.equal(ehRepeticao({ texto: l1!, em: 1000 }, l1!, 5000), false);
 });

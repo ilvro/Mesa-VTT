@@ -699,7 +699,7 @@ Testes: `avaliarCondicao` em todos os formatos; `condicoesDoItem`.
 Pronto quando: os testes passam.
 Commit: `added world state and conditional board cards`
 
-### Q6b — ✓ feito: testes, loot e segredos vão para o registro  ⬜
+### Q6b — ✓ feito: testes, loot e segredos vão para o registro  ✅
 Objetivo: marcar no quadro o que aconteceu e ter isso no diário sem reescrever.
 Depende de: Q6a.
 Ler: `src/app/registro.ts` e `src/dominio/registro.ts` (`acrescentar`).

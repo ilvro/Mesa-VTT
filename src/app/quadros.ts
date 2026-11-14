@@ -1,10 +1,12 @@
 import { computed, effect, signal } from '@preact/signals';
 import {
   novoQuadro,
+  textoPuro,
   type Item,
   type Quadro,
   type TipoSemantico,
 } from '../dominio/quadro.ts';
+import { formatarLinhaDoQuadro } from '../dominio/registro.ts';
 import {
   ESTADO_VAZIO,
   normalizarEstadoDoMundo,
@@ -15,7 +17,7 @@ import {
   resolverPaleta,
   type PaletaDaCampanha,
 } from '../dominio/paleta.ts';
-import { sessaoAtiva } from './registro.ts';
+import { registrarDoQuadro, sessaoAtiva } from './registro.ts';
 import {
   aplicar,
   Historico,
@@ -620,6 +622,53 @@ export function refazer(): Passo | null {
   marcarSujosDoPasso(passo, proximo);
   agendarGravacao();
   return passo;
+}
+
+export function marcarFeito(ids: readonly string[], forcar?: boolean): void {
+  const alvos = ids
+    .map((id) => itens.value.get(id))
+    .filter((i): i is Item => Boolean(i));
+  if (alvos.length === 0) return;
+  const novoEstado = forcar ?? !alvos.every((i) => i.feito);
+  const agora = Date.now();
+
+  executar({
+    rotulo: novoEstado ? 'Marcar feito' : 'Desmarcar feito',
+    ops: [
+      {
+        alterar: alvos.map((it) => ({
+          id: it.id,
+          antes: { feito: it.feito, atualizadoEm: it.atualizadoEm },
+          depois: {
+            feito: novoEstado
+              ? { em: agora, sessaoId: sessaoAtiva.value?.id ?? null }
+              : undefined,
+            atualizadoEm: agora,
+          },
+        })),
+      },
+    ],
+  });
+
+  if (!novoEstado) return;
+  const molduras = [...itens.value.values()].filter(
+    (i): i is ItemMoldura => i.tipo === 'moldura',
+  );
+  for (const it of alvos) {
+    if (it.feito) continue;
+    const texto =
+      it.tipo === 'texto' || it.tipo === 'forma'
+        ? textoPuro(it.doc)
+        : it.tipo === 'moldura'
+          ? it.titulo
+          : it.tipo === 'seta'
+            ? it.rotulo
+            : '';
+    const semantica = 'semantica' in it ? it.semantica : null;
+    const moldura = it.tipo === 'moldura' ? null : molduraQueContem(it, molduras);
+    const linha = formatarLinhaDoQuadro(texto, semantica, moldura?.titulo);
+    if (linha) registrarDoQuadro(linha, agora);
+  }
 }
 
 let ultimaCampanhaId: string | null | undefined;
