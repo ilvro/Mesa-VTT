@@ -5,13 +5,14 @@ import { alternarPainel, ESCALA_MINIMA, escalaDoPainel, LARGURA_LOGICA_MINIMA, L
 const soma = (l: Layout) => visiveis(l).reduce((a, p) => a + p.peso, 0);
 const peso = (l: Layout, id: string) => l.find(p => p.id === id)!.peso;
 
-test('presets: cada um tem os quatro painéis, ao menos um visível, e o padrão é o inicial', () => {
-  for (const [id, l] of Object.entries(PRESETS)) { assert.deepEqual(l.map(p => p.id), ['atlas', 'fichas', 'jukebox', 'diario'], id); assert.ok(visiveis(l).length >= 1, id); }
+test('presets: cada um tem os cinco painéis, ao menos um visível, e o padrão é o inicial', () => {
+  for (const [id, l] of Object.entries(PRESETS)) { assert.deepEqual(l.map(p => p.id), ['atlas', 'fichas', 'jukebox', 'diario', 'quadro'], id); assert.ok(visiveis(l).length >= 1, id); }
   assert.equal(LAYOUT_PADRAO, PRESETS.padrao);
   assert.deepEqual(visiveis(PRESETS['so-mapa']).map(p => p.id), ['atlas']);
   assert.deepEqual(visiveis(PRESETS['mapa-e-fichas']).map(p => p.id), ['atlas', 'fichas']);
+  assert.deepEqual(visiveis(PRESETS['com-quadro']).map(p => p.id), ['atlas', 'fichas', 'quadro']);
   assert.deepEqual(visiveis(PRESETS['com-diario']).map(p => p.id), ['atlas', 'fichas', 'diario']);
-  assert.deepEqual(visiveis(PRESETS.padrao).map(p => p.id), ['atlas', 'fichas', 'jukebox'], 'o diário só aparece quando pedido');
+  assert.deepEqual(visiveis(PRESETS.padrao).map(p => p.id), ['atlas', 'fichas', 'jukebox'], 'o diário e o quadro só aparecem quando pedidos');
 });
 
 test('presetDe: reconhece o preset (mesmo em outra escala) e devolve null para um ajuste à mão', () => {
@@ -61,10 +62,11 @@ test('alternarPainel: esconde e mostra, mas nunca deixa a tela sem painel', () =
   assert.equal(peso(l, 'jukebox'), 1.1, 'o peso é lembrado ao voltar');
 });
 
-test('lerLayout: aceita um layout válido; lixo, repetição, peso ruim ou tudo escondido voltam ao padrão', () => {
-  const ok = [{ id: 'jukebox', peso: 1, visivel: true }, { id: 'atlas', peso: 4, visivel: true }, { id: 'diario', peso: 1.5, visivel: false }, { id: 'fichas', peso: 2, visivel: false }];
+test('lerLayout: aceita um layout válido, normaliza layout antigo sem quadro e rejeita lixo, repetição, peso ruim ou tudo escondido', () => {
+  const ok = [{ id: 'jukebox', peso: 1, visivel: true }, { id: 'atlas', peso: 4, visivel: true }, { id: 'diario', peso: 1.5, visivel: false }, { id: 'fichas', peso: 2, visivel: false }, { id: 'quadro', peso: 2, visivel: false }];
   assert.deepEqual(lerLayout(ok), ok, 'a ordem guardada vale');
-  for (const ruim of [null, 'x', [], [ok[0]], [...ok.slice(0, 3), { id: 'atlas', peso: 1, visivel: true }], ok.slice(0, 3), ok.map(p => ({ ...p, peso: 0 })), ok.map(p => ({ ...p, peso: NaN })), ok.map(p => ({ ...p, visivel: false })), ok.map(p => ({ ...p, id: 'outro' })), ok.map(p => ({ ...p, visivel: 'sim' }))]) assert.equal(lerLayout(ruim), LAYOUT_PADRAO);
+  assert.deepEqual(lerLayout(ok.slice(0, 4)), ok, 'layout salvo antigo sem quadro ganha o painel escondido');
+  for (const ruim of [null, 'x', [], [ok[0]], [...ok.slice(0, 4), { id: 'atlas', peso: 1, visivel: true }], ok.slice(0, 3), ok.map(p => ({ ...p, peso: 0 })), ok.map(p => ({ ...p, peso: NaN })), ok.map(p => ({ ...p, visivel: false })), ok.map(p => ({ ...p, id: 'outro' })), ok.map(p => ({ ...p, visivel: 'sim' }))]) assert.equal(lerLayout(ruim), LAYOUT_PADRAO);
 });
 
 test('escalaDoPainel: 1 quando cabe, a razão quando aperta, nunca abaixo da metade; sem mínimo ou largura inválida, 1', () => {

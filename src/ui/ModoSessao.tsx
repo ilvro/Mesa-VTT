@@ -17,6 +17,9 @@ import { extrairPacoteDeCena, type PacoteDeCena } from '../dominio/cenas.ts';
 import { carregarFatos } from '../app/prontidao.ts';
 import { pendenciasDaSessao } from '../dominio/prontidao.ts';
 import { DialogoChecagemSessao } from './DialogoChecagemSessao.tsx';
+import { abrirQuadro, carregarQuadros, criarQuadro, quadroAberto, quadros } from '../app/quadros.ts';
+import { modoFocoSessao, type ModoFocoSessao } from '../app/foco-do-quadro.ts';
+import { Quadro } from './quadro/Quadro.tsx';
 
 export const buscaPersonagemSessao = signal('');
 const checandoProntidaoSessao = signal(false);
@@ -127,7 +130,93 @@ function PainelDoJukebox() {
   return <Escalado painel="jukebox"><iframe class="quadro" data-testid="iframe-jukebox" title="Jukebox" src={baseDoApp('jukebox')} allow="fullscreen; autoplay" /></Escalado>;
 }
 
-const CORPO: Record<PainelId, () => preact.JSX.Element> = { atlas: PainelDoAtlas, fichas: PainelDasFichas, jukebox: PainelDoJukebox, diario: Diario };
+const MODOS_FOCO: { id: ModoFocoSessao; rotulo: string }[] = [
+  { id: 'desligado', rotulo: 'Desligado' },
+  { id: 'espiar', rotulo: 'Espiar' },
+  { id: 'seguir', rotulo: 'Seguir' },
+];
+
+function PainelDoQuadro() {
+  const c = campanhaAtiva.value;
+  useEffect(() => {
+    void (async () => {
+      await carregarQuadros();
+      if (!quadroAberto.value && quadros.value.length > 0) {
+        await abrirQuadro(quadros.value[0]!.id);
+      }
+    })();
+  }, [c?.id]);
+
+  useEffect(() => {
+    if (!quadroAberto.value && quadros.value.length > 0) {
+      void abrirQuadro(quadros.value[0]!.id);
+    }
+  }, [quadros.value.length, quadroAberto.value?.id]);
+
+  return (
+    <>
+      <div class="painel-abas" data-testid="sessao-quadro-barra">
+        <select
+          data-testid="sessao-quadro-select"
+          value={quadroAberto.value?.id ?? ''}
+          disabled={quadros.value.length === 0}
+          onChange={(ev) => {
+            const id = ev.currentTarget.value;
+            if (id) void abrirQuadro(id);
+          }}
+        >
+          {quadros.value.length === 0 ? (
+            <option value="">Nenhum quadro</option>
+          ) : (
+            quadros.value.map((q) => (
+              <option key={q.id} value={q.id}>
+                {q.nome}
+              </option>
+            ))
+          )}
+        </select>
+        <span class="espaco" />
+        <div class="chips" role="group" aria-label="Modo de foco do quadro" data-testid="sessao-modo-foco">
+          {MODOS_FOCO.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              class={cx('chip', modoFocoSessao.value === m.id && 'ativa')}
+              aria-pressed={modoFocoSessao.value === m.id}
+              data-testid={`sessao-foco-${m.id}`}
+              onClick={() => {
+                modoFocoSessao.value = m.id;
+              }}
+            >
+              {m.rotulo}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div class="painel-corpo-abas" style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        {quadroAberto.value ? (
+          <Quadro />
+        ) : (
+          <div class="painel-vazio">
+            <p>Nenhum quadro na campanha.</p>
+            <button
+              type="button"
+              class="primario"
+              data-testid="sessao-criar-quadro"
+              onClick={() => {
+                void criarQuadro('Quadro da sessão');
+              }}
+            >
+              + Novo quadro
+            </button>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+const CORPO: Record<PainelId, () => preact.JSX.Element> = { atlas: PainelDoAtlas, fichas: PainelDasFichas, jukebox: PainelDoJukebox, diario: Diario, quadro: PainelDoQuadro };
 
 export function ModoSessao() {
   const c = campanhaAtiva.value, area = useRef<HTMLDivElement>(null);

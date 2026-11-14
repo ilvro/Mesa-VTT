@@ -663,7 +663,7 @@ Testes: `itensLigadosA` (direto, por entidade, por mapa); e2e com o barramento: 
 Pronto quando: os testes passam.
 Commit: `added anchors and peek panel for map objects on boards`
 
-### Q5d — Quadro no modo sessão: Espiar e Seguir  ⬜
+### Q5d — Quadro no modo sessão: Espiar e Seguir  ✅
 Objetivo: durante o jogo, o quadro fica ao lado do mapa e acompanha o grupo, se o mestre quiser.
 Depende de: Q5c, Q5b.
 Ler: `src/dominio/layout.ts`, `src/ui/ModoSessao.tsx`, `src/app/sessao.ts`.
@@ -678,6 +678,7 @@ Como:
 Testes: unitário do layout com `'quadro'` (normalização do salvo antigo, presets); e2e: modo sessão com o preset `com-quadro`, fato `atlas.regiao-entrou` simulado no barramento → no Seguir, o quadro enquadra o item; no Espiar, só aparece o selo.
 Pronto quando: os testes passam (`npm run test:e2e`).
 Commit: `added board panel with peek and follow to session mode`
+Nota: Concluído. Painel `'quadro'` e preset `'com-quadro'` em `src/dominio/layout.ts` com normalização de layouts antigos de 4 painéis; modos `Desligado | Espiar | Seguir` em `src/app/foco-do-quadro.ts` e `src/ui/ModoSessao.tsx` com disparo de `aoFocarMoldura` no modo Seguir e proteção contra roubo de câmera durante edição/arrasto.
 
 ---
 

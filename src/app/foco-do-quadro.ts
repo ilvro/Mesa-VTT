@@ -14,13 +14,17 @@ import { campanhaAtiva, entidades, ligacoes, repositorio } from './campanha.ts'
 import { abrirQuadro, definirFato, estadoDoMundo, itens, quadroAberto, quadros } from './quadros.ts'
 import { sessaoAtiva } from './registro.ts'
 import { navegarParaQuadro, tela } from './rotas.ts'
-import { ativarCena } from './sessao.ts'
+import { ativarCena, garantirPainelPara } from './sessao.ts'
 import { avisar } from './toasts.ts'
 
 export type { ModoMoldurasAgem }
 export type { ItemAncorado } from '../dominio/ancoras.ts'
 
+export type ModoFocoSessao = 'desligado' | 'espiar' | 'seguir'
+
 export const modoMoldurasAgem = signal<ModoMoldurasAgem>('perguntar')
+export const modoFocoSessao = signal<ModoFocoSessao>('espiar')
+export const usuarioInteragindoNoQuadro = signal(false)
 export const ultimaMolduraFocada = signal<string | null>(null)
 export const espiarAtivo = signal<{ alvo: Ref; itens: ItemAncorado[] } | null>(null)
 export const pedidoFocarItem = signal<{ quadroId: string; itemId: string } | null>(null)
@@ -160,7 +164,9 @@ export async function focarRefNoQuadro(
 
   if (ref.app === 'mesa' && ref.tipo === 'quadro') {
     await abrirQuadro(ref.id)
-    if (tela.value !== 'sessao') {
+    if (tela.value === 'sessao') {
+      garantirPainelPara(ref)
+    } else {
       navegarParaQuadro(ref.id)
     }
     return true
@@ -171,9 +177,11 @@ export async function focarRefNoQuadro(
     if (!parsed) return false
     if (quadroAberto.value?.id !== parsed.quadroId) {
       await abrirQuadro(parsed.quadroId)
-      if (tela.value !== 'sessao') {
-        navegarParaQuadro(parsed.quadroId)
-      }
+    }
+    if (tela.value === 'sessao') {
+      garantirPainelPara(ref)
+    } else {
+      navegarParaQuadro(parsed.quadroId)
     }
     pedidoFocarItem.value = { quadroId: parsed.quadroId, itemId: parsed.itemId }
     const item = itens.value.get(parsed.itemId)
@@ -213,6 +221,9 @@ export async function focarRefNoQuadro(
   )
 
   if (opcoes?.abrirEspiar !== false) {
+    if (tela.value === 'sessao') {
+      garantirPainelPara({ app: 'mesa', tipo: 'quadro', id: quadroAberto.value?.id ?? 'quadro' })
+    }
     espiarAtivo.value = { alvo: ref, itens: ancorados }
   }
 
@@ -221,7 +232,9 @@ export async function focarRefNoQuadro(
     if (quadroAberto.value?.id !== primeiro.quadroId) {
       await abrirQuadro(primeiro.quadroId)
     }
-    if (tela.value !== 'sessao') {
+    if (tela.value === 'sessao') {
+      garantirPainelPara({ app: 'mesa', tipo: 'quadro', id: primeiro.quadroId })
+    } else {
       navegarParaQuadro(primeiro.quadroId)
     }
     pedidoFocarItem.value = {
@@ -232,6 +245,83 @@ export async function focarRefNoQuadro(
   }
 
   return false
+}
+
+function dispararMolduraDoItem(item: Item): void {
+  const todasMolduras = [...itens.value.values()].filter(
+    (i): i is ItemMoldura => i.tipo === 'moldura',
+  )
+  const moldura =
+    item.tipo === 'moldura'
+      ? item
+      : item.molduraId
+      ? todasMolduras.find((m) => m.id === item.molduraId)
+      : undefined
+  if (moldura) {
+    aoFocarMoldura(moldura, todasMolduras)
+  }
+}
+
+export async function reagirAoEventoDoAtlas(evento: {
+  tipo: string
+  dados: unknown
+  campanhaId?: string | null
+}): Promise<void> {
+  const c = campanhaAtiva.value
+  if (!c) return
+  if (evento.campanhaId && evento.campanhaId !== c.id) return
+
+  const modo = modoFocoSessao.value
+  if (modo === 'desligado') return
+  if (modo === 'espiar' && evento.tipo === 'atlas.cena-aberta') return
+
+  const dados = (evento.dados ?? {}) as Record<string, unknown>
+  const alvo = (
+    evento.tipo === 'atlas.inspecionado' || evento.tipo === 'atlas.revelado'
+      ? dados.alvo
+      : evento.tipo === 'atlas.regiao-entrou'
+      ? dados.regiao
+      : evento.tipo === 'atlas.cena-aberta'
+      ? dados.mapa
+      : undefined
+  ) as Ref | undefined
+  if (!alvo || typeof alvo !== 'object') return
+
+  const repo = repositorio.value
+  if (repo && repo !== 'indisponivel') {
+    ligacoes.value = await repo.listarLigacoes(c.id)
+  }
+  const listaQuadros =
+    quadros.value.length > 0 ? quadros.value : await listarQuadros(c.id)
+  if (quadros.value.length === 0) {
+    quadros.value = listaQuadros
+  }
+
+  const mapaPorQuadro = await carregarMapaItensCampanha(c.id)
+  const ancorados = itensAncoradosEm(
+    alvo,
+    ligacoes.value,
+    mapaPorQuadro,
+    listaQuadros,
+    quadroAberto.value?.id,
+  )
+  if (ancorados.length === 0) return
+
+  if (modo === 'espiar' || usuarioInteragindoNoQuadro.value) {
+    espiarAtivo.value = { alvo, itens: ancorados }
+    return
+  }
+
+  const primeiro = ancorados[0]!
+  if (quadroAberto.value?.id !== primeiro.quadroId) {
+    await abrirQuadro(primeiro.quadroId)
+  }
+  pedidoFocarItem.value = {
+    quadroId: primeiro.quadroId,
+    itemId: primeiro.item.id,
+  }
+  const itemFocado = itens.value.get(primeiro.item.id) ?? primeiro.item
+  dispararMolduraDoItem(itemFocado)
 }
 
 let focoIniciado = false
@@ -245,4 +335,14 @@ export function iniciarFocoDoQuadro(): void {
     await focarRefNoQuadro(ref, { abrirEspiar: true })
     return { ok: true }
   })
+  for (const tipo of [
+    'atlas.inspecionado',
+    'atlas.revelado',
+    'atlas.regiao-entrou',
+    'atlas.cena-aberta',
+  ] as const) {
+    b.ouvir(tipo, (ev) => {
+      void reagirAoEventoDoAtlas(ev)
+    })
+  }
 }

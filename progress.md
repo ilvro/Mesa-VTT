@@ -57,6 +57,7 @@ Implementações de refinamento do hub da Mesa, transferência entre aparelhos, 
 - **Q5a (Eventos novos no contrato `mesa-core`):** adicionados `'atlas.inspecionado'` e `'mesa.focar'` em `Atlas/mesa-core/src/eventos.ts` com testes em `Atlas/mesa-core/tests/eventos.test.ts`, documentação em `Atlas/docs/PLATAFORMA.md` e atualização de `vendor/mesa-core/` na Mesa.
 - **Q5b (Atlas: Refs de objeto e região, e "Ver no quadro"):** adicionadas rotas `objeto` e `regiao` e emissão de `atlas.inspecionado` em `Atlas/public/mesa.json`, `Atlas/src/app/rotas.ts`, `Atlas/src/app/app.ts` e `Atlas/src/app/acoes.ts` ("Ver no quadro" e "Copiar referência"), com testes em `Atlas/tests/unit/plataforma.test.ts`.
 - **Q5c (Mesa: ancorar, atender `mesa.focar` e painel Espiar):** criados `src/dominio/ancoras.ts`, `tests/unit/ancoras.test.ts` e `src/ui/quadro/PainelEspiar.tsx`; adicionados atendimento de `mesa.focar` e ancoragem em `src/app/foco-do-quadro.ts`, `src/main.tsx`, `public/mesa.json`, `MenuDoItem.tsx`, `Item.tsx`, `ItemForma.tsx` e `Quadro.tsx`, com teste e2e em `tests/e2e/quadro.test.ts`.
+- **Q5d (Quadro no modo sessão: Espiar e Seguir):** adicionados painel `'quadro'` e preset `'com-quadro'` (com normalização de layout antigo) em `src/dominio/layout.ts` e `tests/unit/layout.test.ts`, `PainelDoQuadro` em `src/ui/ModoSessao.tsx`, modos `Desligado | Espiar | Seguir` e escuta dos eventos do Atlas em `src/app/foco-do-quadro.ts` (com disparo de `aoFocarMoldura` no modo Seguir), e teste e2e em `tests/e2e/quadro.test.ts`.
 
 
 

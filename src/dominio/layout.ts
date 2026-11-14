@@ -2,25 +2,26 @@
  * O layout do modo sessão: três painéis lado a lado (o Atlas, as fichas e o Jukebox), cada um com um peso (a largura relativa) e
  * podendo ser escondido. Tudo puro: a tela só mede a largura e aplica o resultado.
  */
-export const PAINEIS = ['atlas', 'fichas', 'jukebox', 'diario'] as const;
+export const PAINEIS = ['atlas', 'fichas', 'jukebox', 'diario', 'quadro'] as const;
 export type PainelId = (typeof PAINEIS)[number];
 
 export interface PainelDoLayout { id: PainelId; peso: number; visivel: boolean }
 export type Layout = readonly PainelDoLayout[];
 
-export const ROTULO_DO_PAINEL: Readonly<Record<PainelId, string>> = { atlas: 'Mapa', fichas: 'Fichas', jukebox: 'Música', diario: 'Diário' };
+export const ROTULO_DO_PAINEL: Readonly<Record<PainelId, string>> = { atlas: 'Mapa', fichas: 'Fichas', jukebox: 'Música', diario: 'Diário', quadro: 'Quadro' };
 
-export type PresetId = 'padrao' | 'mapa-grande' | 'mapa-e-fichas' | 'com-diario' | 'so-mapa';
-export const ROTULO_DO_PRESET: Readonly<Record<PresetId, string>> = { padrao: 'Padrão', 'mapa-grande': 'Mapa grande', 'mapa-e-fichas': 'Mapa e fichas', 'com-diario': 'Com diário', 'so-mapa': 'Só o mapa' };
-const P = (atlas: [number, boolean], fichas: [number, boolean], jukebox: [number, boolean], diario: [number, boolean]): Layout => [
-  { id: 'atlas', peso: atlas[0], visivel: atlas[1] }, { id: 'fichas', peso: fichas[0], visivel: fichas[1] }, { id: 'jukebox', peso: jukebox[0], visivel: jukebox[1] }, { id: 'diario', peso: diario[0], visivel: diario[1] },
+export type PresetId = 'padrao' | 'mapa-grande' | 'mapa-e-fichas' | 'com-diario' | 'com-quadro' | 'so-mapa';
+export const ROTULO_DO_PRESET: Readonly<Record<PresetId, string>> = { padrao: 'Padrão', 'mapa-grande': 'Mapa grande', 'mapa-e-fichas': 'Mapa e fichas', 'com-diario': 'Com diário', 'com-quadro': 'Com quadro', 'so-mapa': 'Só o mapa' };
+const P = (atlas: [number, boolean], fichas: [number, boolean], jukebox: [number, boolean], diario: [number, boolean], quadro: [number, boolean] = [2, false]): Layout => [
+  { id: 'atlas', peso: atlas[0], visivel: atlas[1] }, { id: 'fichas', peso: fichas[0], visivel: fichas[1] }, { id: 'jukebox', peso: jukebox[0], visivel: jukebox[1] }, { id: 'diario', peso: diario[0], visivel: diario[1] }, { id: 'quadro', peso: quadro[0], visivel: quadro[1] },
 ];
 export const PRESETS: Readonly<Record<PresetId, Layout>> = {
-  padrao: P([3, true], [2, true], [1.1, true], [1.3, false]),
-  'mapa-grande': P([6, true], [1.6, true], [1, true], [1.3, false]),
-  'mapa-e-fichas': P([3, true], [2, true], [1, false], [1.3, false]),
-  'com-diario': P([3, true], [1.8, true], [1, false], [1.5, true]),
-  'so-mapa': P([1, true], [1, false], [1, false], [1, false]),
+  padrao: P([3, true], [2, true], [1.1, true], [1.3, false], [2, false]),
+  'mapa-grande': P([6, true], [1.6, true], [1, true], [1.3, false], [2, false]),
+  'mapa-e-fichas': P([3, true], [2, true], [1, false], [1.3, false], [2, false]),
+  'com-diario': P([3, true], [1.8, true], [1, false], [1.5, true], [2, false]),
+  'com-quadro': P([3, true], [1.8, true], [1, false], [1.3, false], [2, true]),
+  'so-mapa': P([1, true], [1, false], [1, false], [1, false], [1, false]),
 };
 
 export const LAYOUT_PADRAO: Layout = PRESETS.padrao;
@@ -58,15 +59,18 @@ export function alternarPainel(l: Layout, id: PainelId): Layout {
   return l.map(p => p.id === id ? { ...p, visivel: !p.visivel } : p);
 }
 
-/** Lê um layout guardado (JSON do armazenamento); qualquer coisa fora do formato volta ao padrão. */
+/** Lê um layout guardado (JSON do armazenamento); um layout antigo sem `'quadro'` ganha o painel escondido; qualquer coisa fora do formato volta ao padrão. */
 export function lerLayout(bruto: unknown): Layout {
-  if (!Array.isArray(bruto) || bruto.length !== PAINEIS.length) return LAYOUT_PADRAO;
+  if (!Array.isArray(bruto) || (bruto.length !== PAINEIS.length && bruto.length !== PAINEIS.length - 1)) return LAYOUT_PADRAO;
   const lidos: PainelDoLayout[] = [];
   for (const x of bruto as Record<string, unknown>[]) {
     if (!x || typeof x !== 'object' || !(PAINEIS as readonly unknown[]).includes(x.id) || typeof x.peso !== 'number' || !Number.isFinite(x.peso) || x.peso <= 0 || typeof x.visivel !== 'boolean') return LAYOUT_PADRAO;
     lidos.push({ id: x.id as PainelId, peso: x.peso, visivel: x.visivel });
   }
-  if (new Set(lidos.map(p => p.id)).size !== PAINEIS.length || !lidos.some(p => p.visivel)) return LAYOUT_PADRAO;
+  if (!lidos.some(p => p.id === 'quadro')) {
+    lidos.push({ id: 'quadro', peso: 2, visivel: false });
+  }
+  if (lidos.length !== PAINEIS.length || new Set(lidos.map(p => p.id)).size !== PAINEIS.length || !lidos.some(p => p.visivel)) return LAYOUT_PADRAO;
   return lidos;
 }
 

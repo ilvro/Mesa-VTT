@@ -48,7 +48,7 @@ export function alternarFicha(fichaId: string): void {
 
 /** Antes de abrir uma coisa pelo roteiro: garante que o painel dela está à vista (e, para ficha e mapa, que a aba ou o mapa certo está escolhido). */
 export function garantirPainelPara(ref: Ref): void {
-  const painel: PainelId | undefined = ref.app === 'atlas' ? 'atlas' : ref.app === 'ficha' ? 'fichas' : ref.app === 'jukebox' ? 'jukebox' : undefined;
+  const painel: PainelId | undefined = ref.app === 'atlas' ? 'atlas' : ref.app === 'ficha' ? 'fichas' : ref.app === 'jukebox' ? 'jukebox' : ref.app === 'mesa' && (ref.tipo === 'quadro' || ref.tipo === 'item') ? 'quadro' : undefined;
   if (painel && !layout.value.find(p => p.id === painel)?.visivel) mudarLayout(alternarPainel(layout.value, painel));
   if (ref.app === 'ficha') {
     const f = personagens.value.find(p => p.fichaId === ref.id);

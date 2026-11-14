@@ -99,6 +99,7 @@ import {
   espiarAtivo,
   modoMoldurasAgem,
   pedidoFocarItem,
+  usuarioInteragindoNoQuadro,
   type ModoMoldurasAgem,
 } from '../../app/foco-do-quadro.ts';
 import { navegarParaQuadro } from '../../app/rotas.ts';
@@ -495,6 +496,13 @@ export function Quadro() {
     camera.value = lerCameraSalva(q.id);
     editandoId.value = null;
   }, [q.id]);
+
+  useEffect(() => {
+    usuarioInteragindoNoQuadro.value = editandoId.value !== null || gestoRef.current !== null;
+    return () => {
+      usuarioInteragindoNoQuadro.value = false;
+    };
+  }, [editandoId.value]);
 
   useEffect(() => {
     const t = window.setTimeout(() => gravarCamera(q.id, camera.value), 300);
@@ -1437,6 +1445,7 @@ export function Quadro() {
 
   const aoMover = (e: PointerEvent) => {
     if (!gestoRef.current) return;
+    usuarioInteragindoNoQuadro.value = true;
     moverPendenteRef.current = {
       clientX: e.clientX,
       clientY: e.clientY,
@@ -1511,6 +1520,7 @@ export function Quadro() {
     const g = gestoRef.current;
     if (!g) return;
     gestoRef.current = null;
+    usuarioInteragindoNoQuadro.value = editandoId.value !== null;
     if (g.tipo === 'desenhar') {
       tracoEmDesenho.value = null;
       const simplificados = simplificar(g.pontos, 1.2);
