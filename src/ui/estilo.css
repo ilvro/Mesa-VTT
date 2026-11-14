@@ -1718,3 +1718,81 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .seletor-entidade-opcao:hover {
   border-color: var(--acento);
 }
+
+.barra-filtros-quadro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--superficie);
+  border-bottom: 1px solid var(--linha);
+}
+.chip-filtro {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--linha);
+  background: transparent;
+  color: var(--texto-suave);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chip-filtro.ativa {
+  font-weight: 700;
+}
+.item-filtrado-fora {
+  opacity: 0.15;
+  pointer-events: auto;
+}
+.busca-quadro {
+  width: 340px;
+}
+.busca-quadro-topo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.busca-quadro-topo input {
+  flex: 1;
+  min-width: 0;
+}
+.busca-quadro-contagem {
+  min-width: 32px;
+  text-align: center;
+}
+.busca-quadro-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.busca-quadro-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: var(--superficie-2);
+  color: var(--texto);
+  cursor: pointer;
+  text-align: left;
+}
+.busca-quadro-item.ativa,
+.busca-quadro-item:hover {
+  border-color: var(--acento);
+}
+.busca-quadro-trecho {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.82rem;
+}

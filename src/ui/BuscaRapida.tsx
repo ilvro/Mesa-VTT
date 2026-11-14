@@ -3,7 +3,14 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { buscar, type ItemBusca } from '../dominio/busca.ts';
 import { campanhaAtiva, obterRepositorio } from '../app/campanha.ts';
 import { abrirNoApp } from '../app/barramento.ts';
-import { abrirEntidade, tela } from '../app/rotas.ts';
+import {
+  abrirEntidade,
+  navegarParaItemNoQuadro,
+  navegarParaQuadro,
+  tela,
+} from '../app/rotas.ts';
+import { listarItens, listarQuadros } from '../app/banco-quadros.ts';
+import { abrirQuadro } from '../app/quadros.ts';
 import { continuarSessao } from '../app/registro.ts';
 import { NOME_DO_APP, ROTULO_DO_TIPO } from '../dominio/entidades.ts';
 import { cx } from './cx.ts';
@@ -37,10 +44,14 @@ export function BuscaRapida() {
       if (!c) return;
       try {
         const repo = obterRepositorio();
-        const [entidades, sessoes] = await Promise.all([
+        const [entidades, sessoes, listaQuadros] = await Promise.all([
           repo.listarEntidades(c.id),
           repo.listarSessoes(c.id),
+          listarQuadros(c.id),
         ]);
+        const listasItens = await Promise.all(
+          listaQuadros.map((q) => listarItens(q.id).then((its) => ({ q, its }))),
+        );
         if (!ativo) return;
 
         const itensEntidade: ItemBusca[] = entidades.map(e => {
@@ -62,7 +73,29 @@ export function BuscaRapida() {
           origem: 'sessao',
         }));
 
-        setItens([...itensEntidade, ...itensSessao]);
+        const itensQuadro: ItemBusca[] = listaQuadros.map(q => ({
+          id: q.id,
+          nome: q.nome,
+          tipo: 'quadro',
+          origem: 'quadro',
+        }));
+
+        const itensMoldura: ItemBusca[] = [];
+        for (const { q, its } of listasItens) {
+          for (const it of its) {
+            if (it.tipo === 'moldura' && it.titulo.trim()) {
+              itensMoldura.push({
+                id: it.id,
+                quadroId: q.id,
+                nome: it.titulo,
+                tipo: 'moldura',
+                origem: 'moldura',
+              });
+            }
+          }
+        }
+
+        setItens([...itensEntidade, ...itensSessao, ...itensQuadro, ...itensMoldura]);
       } catch {
         // ignora erro ao carregar
       }
@@ -88,6 +121,11 @@ export function BuscaRapida() {
     if (item.origem === 'sessao') {
       continuarSessao(item.id);
       tela.value = 'sessao';
+    } else if (item.origem === 'quadro') {
+      navegarParaQuadro(item.id);
+      void abrirQuadro(item.id);
+    } else if (item.origem === 'moldura' && item.quadroId) {
+      navegarParaItemNoQuadro(item.quadroId, item.id);
     } else {
       if (item.ref && !shiftKey) {
         void abrirNoApp(item.ref);
@@ -156,9 +194,14 @@ export function BuscaRapida() {
         ) : (
           <ul class="busca-rapida-lista" data-testid="resultados-busca-rapida" role="listbox">
             {resultados.map((item, i) => {
-              const rotuloTipo = item.origem === 'sessao'
-                ? 'Sessão'
-                : ROTULO_DO_TIPO[item.tipo as keyof typeof ROTULO_DO_TIPO]?.singular ?? item.tipo;
+              const rotuloTipo =
+                item.origem === 'sessao'
+                  ? 'Sessão'
+                  : item.origem === 'quadro'
+                    ? 'Quadro'
+                    : item.origem === 'moldura'
+                      ? 'Moldura'
+                      : ROTULO_DO_TIPO[item.tipo as keyof typeof ROTULO_DO_TIPO]?.singular ?? item.tipo;
               const appExterno = item.ref ? NOME_DO_APP[item.ref.app] : null;
 
               return (

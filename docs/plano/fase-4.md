@@ -518,7 +518,7 @@ Testes: unitário da diferença de ligações (puro: `diferencaDeLigacoes(antes,
 Pronto quando: os testes passam.
 Commit: `added entity cards and backlinks between boards and entities`
 
-### Q3d — Busca e filtros no quadro  ⬜
+### Q3d — Busca e filtros no quadro  ✅
 Objetivo: achar coisas num quadro enorme e ver um tipo por vez.
 Depende de: Q3c.
 Arquivos: criar `src/dominio/busca-quadro.ts`, `tests/unit/busca-quadro.test.ts` e `src/ui/quadro/BuscaNoQuadro.tsx`; mudar `Quadro.tsx` e `Mundo.tsx`.

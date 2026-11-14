@@ -10,7 +10,8 @@ import {
 import type { LinhaGuia } from '../../dominio/alinhamento.ts';
 import type { Alca } from '../../dominio/geometria.ts';
 import { fundoEfetivo } from '../../dominio/paleta.ts';
-import type { DocRico, Item as ItemModelo } from '../../dominio/quadro.ts';
+import { itemEhSecreto, itemPassaNoFiltro } from '../../dominio/busca-quadro.ts';
+import type { DocRico, Item as ItemModelo, TipoSemantico } from '../../dominio/quadro.ts';
 import { paletaDaCampanha } from '../../app/quadros.ts';
 import { pontoDaPonta, type LadoResolvido } from '../../dominio/setas.ts';
 import { caminhoDoTraco, type PontoTraco } from '../../dominio/tracos.ts';
@@ -34,6 +35,8 @@ interface MundoProps {
   retanguloSelecao: Caixa | null;
   tracoEmDesenho?: TracoPreview | null;
   linhasGuia?: readonly LinhaGuia[];
+  tiposFiltro?: ReadonlySet<TipoSemantico>;
+  esconderSegredos?: boolean;
   onSairEdicao: (id: string, novoDoc?: DocRico, novaAltura?: number) => void;
   onSairRotulo: (id: string, novoRotulo: string) => void;
   onSairTitulo: (id: string, novoTitulo: string) => void;
@@ -53,6 +56,8 @@ export function Mundo({
   retanguloSelecao,
   tracoEmDesenho,
   linhasGuia,
+  tiposFiltro,
+  esconderSegredos = false,
   onSairEdicao,
   onSairRotulo,
   onSairTitulo,
@@ -103,7 +108,9 @@ export function Mundo({
     ctx.scale(camera.zoom, camera.zoom);
 
     for (const it of visiveis) {
+      if (esconderSegredos && itemEhSecreto(it)) continue;
       if (it.tipo === 'moldura' || selecao.has(it.id) || editandoId === it.id) continue;
+      ctx.globalAlpha = tiposFiltro && !itemPassaNoFiltro(it, tiposFiltro) ? 0.15 : 1;
       if (it.tipo === 'seta') {
         const p1 = pontoDaPonta(it.de, itens, it.para).ponto;
         const p2 = pontoDaPonta(it.para, itens, it.de).ponto;
@@ -173,20 +180,30 @@ export function Mundo({
           transformOrigin: '0 0',
         }}
       >
-        {itensDom.map((item) => (
-          <Item
-            key={item.id}
-            item={item}
-            todosItens={itens}
-            zoom={camera.zoom}
-            lodSimples={lodSimples}
-            editando={editandoId === item.id}
-            onSairEdicao={(novoDoc, novaAltura) => onSairEdicao(item.id, novoDoc, novaAltura)}
-            onSairRotulo={(novoRotulo) => onSairRotulo(item.id, novoRotulo)}
-            onSairTitulo={(novoTitulo) => onSairTitulo(item.id, novoTitulo)}
-            onEditorPronto={onEditorPronto}
-          />
-        ))}
+        {itensDom.map((item) => {
+          if (esconderSegredos && itemEhSecreto(item)) return null;
+          const esmaecido = tiposFiltro && tiposFiltro.size > 0 && !itemPassaNoFiltro(item, tiposFiltro);
+          const el = (
+            <Item
+              key={item.id}
+              item={item}
+              todosItens={itens}
+              zoom={camera.zoom}
+              lodSimples={lodSimples}
+              editando={editandoId === item.id}
+              onSairEdicao={(novoDoc, novaAltura) => onSairEdicao(item.id, novoDoc, novaAltura)}
+              onSairRotulo={(novoRotulo) => onSairRotulo(item.id, novoRotulo)}
+              onSairTitulo={(novoTitulo) => onSairTitulo(item.id, novoTitulo)}
+              onEditorPronto={onEditorPronto}
+            />
+          );
+          if (!esmaecido) return el;
+          return (
+            <div key={item.id} class="item-filtrado-fora">
+              {el}
+            </div>
+          );
+        })}
       {tracoEmDesenho && tracoEmDesenho.pontos.length > 0 ? (
         <svg
           class="traco-preview"

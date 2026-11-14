@@ -7,7 +7,8 @@ export interface ItemBusca {
   tipo: string;
   tags?: readonly string[];
   ref?: Ref;
-  origem: 'entidade' | 'sessao';
+  quadroId?: string;
+  origem: 'entidade' | 'sessao' | 'quadro' | 'moldura';
 }
 
 function calcularPontuacao(termoNorm: string, item: ItemBusca): number {

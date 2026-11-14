@@ -39,11 +39,15 @@ import {
   novaSeta,
   novoTexto,
   novoTraco,
+  TIPOS_SEMANTICOS,
   type DocRico,
   type Forma,
   type Item,
   type Ponta,
+  type TipoSemantico,
 } from '../../dominio/quadro.ts';
+import { buscarNoQuadro } from '../../dominio/busca-quadro.ts';
+import { NOMES_SEMANTICOS } from '../../dominio/paleta.ts';
 import { refDaEntidade, sugerirEntidades } from '../../dominio/notas.ts';
 import { ROTULO_DO_TIPO } from '../../dominio/entidades.ts';
 import { entidades } from '../../app/campanha.ts';
@@ -96,6 +100,7 @@ import {
   type FerramentaQuadro,
 } from './BarraDeFerramentas.tsx';
 import { BarraDeFormatacao } from './BarraDeFormatacao.tsx';
+import { BuscaNoQuadro } from './BuscaNoQuadro.tsx';
 import { Mundo, type TracoPreview } from './Mundo.tsx';
 import { MenuDoItem } from './MenuDoItem.tsx';
 import { Minimapa } from './Minimapa.tsx';
@@ -302,6 +307,11 @@ export function Quadro() {
   const tamanhoTela = useSignal<Tamanho>({ largura: 1280, altura: 720 });
   const painelFundoAberto = useSignal(false);
   const painelPaletaAberto = useSignal(false);
+  const buscaAberta = useSignal(false);
+  const termoBusca = useSignal('');
+  const indiceBusca = useSignal(0);
+  const tiposFiltro = useSignal<ReadonlySet<TipoSemantico>>(new Set());
+  const esconderSegredos = useSignal(false);
   const seletorEntidade = useSignal<{ ponto: Ponto; busca: string } | null>(null);
   const navegadorAberto = useSignal(false);
   const indiceMoldura = useSignal(0);
@@ -567,6 +577,9 @@ export function Quadro() {
         } else if (k === 'g' && e.shiftKey) {
           e.preventDefault();
           desagruparSelecao();
+        } else if (k === 'f') {
+          e.preventDefault();
+          buscaAberta.value = true;
         } else if (k === 'c') {
           e.preventDefault();
           copiarSelecao();
@@ -1658,6 +1671,30 @@ export function Quadro() {
         <button
           type="button"
           class="botao-pilula"
+          aria-pressed={buscaAberta.value}
+          data-testid="botao-buscar-quadro"
+          title="Buscar no quadro (Ctrl+F)"
+          onClick={() => {
+            buscaAberta.value = !buscaAberta.value;
+          }}
+        >
+          Buscar
+        </button>
+        <button
+          type="button"
+          class="botao-pilula"
+          aria-pressed={esconderSegredos.value}
+          data-testid="botao-esconder-segredos"
+          title="Esconder segredos e itens só do mestre"
+          onClick={() => {
+            esconderSegredos.value = !esconderSegredos.value;
+          }}
+        >
+          {esconderSegredos.value ? 'Segredos ocultos' : 'Esconder segredos'}
+        </button>
+        <button
+          type="button"
+          class="botao-pilula"
           aria-pressed={painelPaletaAberto.value}
           data-testid="botao-paleta"
           onClick={() => {
@@ -1695,6 +1732,46 @@ export function Quadro() {
         >
           {Math.round(camera.value.zoom * 100)}%
         </button>
+      </div>
+
+      <div class="barra-filtros-quadro" data-testid="barra-filtros-quadro">
+        {TIPOS_SEMANTICOS.map((tipo) => {
+          const ativo = tiposFiltro.value.has(tipo);
+          return (
+            <button
+              key={tipo}
+              type="button"
+              class={`chip-filtro ${ativo ? 'ativa' : ''}`}
+              aria-pressed={ativo}
+              data-testid={`filtro-tipo-${tipo}`}
+              style={{
+                borderColor: paletaDaCampanha.value[tipo],
+                backgroundColor: ativo ? paletaDaCampanha.value[tipo] : undefined,
+                color: ativo ? '#111111' : undefined,
+              }}
+              onClick={() => {
+                const prox = new Set(tiposFiltro.value);
+                if (prox.has(tipo)) prox.delete(tipo);
+                else prox.add(tipo);
+                tiposFiltro.value = prox;
+              }}
+            >
+              {NOMES_SEMANTICOS[tipo]}
+            </button>
+          );
+        })}
+        {tiposFiltro.value.size > 0 ? (
+          <button
+            type="button"
+            class="chip-filtro"
+            data-testid="limpar-filtros-quadro"
+            onClick={() => {
+              tiposFiltro.value = new Set();
+            }}
+          >
+            Limpar
+          </button>
+        ) : null}
       </div>
 
       <div
@@ -1769,6 +1846,8 @@ export function Quadro() {
           retanguloSelecao={retanguloSelecao.value}
           tracoEmDesenho={tracoEmDesenho.value}
           linhasGuia={linhasGuia.value}
+          tiposFiltro={tiposFiltro.value}
+          esconderSegredos={esconderSegredos.value}
           onSairEdicao={aoSairEdicao}
           onSairRotulo={aoSairRotulo}
           onSairTitulo={aoSairTitulo}
@@ -1890,6 +1969,28 @@ export function Quadro() {
               }}
             />
           </div>
+        ) : null}
+
+        {buscaAberta.value ? (
+          <BuscaNoQuadro
+            termo={termoBusca.value}
+            resultados={buscarNoQuadro(itens.value.values(), termoBusca.value, {
+              esconderSegredos: esconderSegredos.value,
+            })}
+            indiceAtivo={indiceBusca.value}
+            onMudarTermo={(novoTermo) => {
+              termoBusca.value = novoTermo;
+              indiceBusca.value = 0;
+            }}
+            onIrPara={(idx, alvo) => {
+              indiceBusca.value = idx;
+              selecao.value = new Set([alvo.id]);
+              camera.value = enquadrar(caixaDe(alvo), tamanhoTela.value, 80);
+            }}
+            onFechar={() => {
+              buscaAberta.value = false;
+            }}
+          />
         ) : null}
 
         {seletorEntidade.value ? (
