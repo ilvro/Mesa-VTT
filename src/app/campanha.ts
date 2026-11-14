@@ -1,6 +1,6 @@
 import { signal, computed } from '@preact/signals';
 import { abrirRepositorioCampanha, mesmaRef, type Campanha, type Entidade, type Ligacao, type Ref, type RepositorioCampanha, type TipoLigacao, type Tema, type TipoEntidade } from '#mesa';
-import { APP_DA_MESA, NOME_DO_APP, ehEncontro, filtrarEntidades, podarElenco, podeEditar, podeEditarConteudo, semAcento, type CategoriaFiltro, type FiltroDeEntidades, type OrdemColecao } from '../dominio/entidades.ts';
+import { APP_DA_MESA, NOME_DO_APP, ehEncontro, filtrarEntidades, podarElenco, podeEditar, podeEditarConteudo, renomearTag, semAcento, type CategoriaFiltro, type FiltroDeEntidades, type OrdemColecao } from '../dominio/entidades.ts';
 import { refDaEntidade, refsMencionados } from '../dominio/notas.ts';
 import { casaCena, refParaLigacao } from '../dominio/cenas.ts';
 import { agendarSincronizacaoCofre } from './cofre.ts';
@@ -257,6 +257,24 @@ export async function alterarEntidade(e: Entidade, mudancas: Partial<Pick<Entida
     await atualizar();
     return true;
   } catch (erro) { avisar(mensagemDe(erro), true); await atualizar(); return false; }
+}
+
+/** Renomeia (ou, com `para` vazio, apaga) a etiqueta de chave `chave` em todas as entidades da campanha, de qualquer aplicativo. Devolve quantas mudaram. */
+export async function renomearEtiquetaNaCampanha(chave: string, para: string): Promise<number> {
+  const novaChave = semAcento(para.replace(/^#/, '').trim().slice(0, 40));
+  let n = 0;
+  try {
+    for (const e of entidades.value) {
+      const tags = renomearTag(e.tags, chave, para);
+      if (tags.length === e.tags.length && tags.every((t, i) => t === e.tags[i])) continue;
+      await repo().salvarEntidade({ ...e, tags });
+      n++;
+    }
+  } catch (erro) { avisar(mensagemDe(erro), true); }
+  if (tagAtiva.value === chave) tagAtiva.value = novaChave || null;
+  await atualizar();
+  if (n > 0) avisar(`Etiqueta ${novaChave ? 'renomeada em' : 'removida de'} ${n} ${n === 1 ? 'item' : 'itens'}.`);
+  return n;
 }
 
 /** Liga duas referências (uso da ponte do assistente). Entidades da Mesa ganham o Ref da Mesa, para a ligação sair junto quando elas forem removidas. Lança em caso de erro. */

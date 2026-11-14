@@ -123,7 +123,7 @@ Plano escrito em 14/11/2026 contra o código desse dia. O usuário reclamou de q
 
 **Commit:** `added chip editor for entity tags`
 
-### U4 — Renomear e apagar uma etiqueta em toda a campanha  ⬜
+### U4 — Renomear e apagar uma etiqueta em toda a campanha  ✅
 **Ler:** `src/ui/Entidades.tsx`, `SidebarColecao` (a lista `tag-item`), e `src/app/campanha.ts` (`alterarEntidade`, `entidades`).
 
 **Como:**
@@ -141,6 +141,7 @@ Plano escrito em 14/11/2026 contra o código desse dia. O usuário reclamou de q
 
 **Testes:** unit de `renomearTag` (troca, fusão, remoção e acentos) e de `renomearEtiquetaNaCampanha`, com `fake-indexeddb`.
 **Commit:** `added rename and delete for tags across the campaign`
+**Nota:** `renomearTag` (pura) e `renomearEtiquetaNaCampanha` (grava via repositório só o que muda, inclusive entidades de outros apps). A barra lateral ganhou `LinhaTag` com ✎ e edição inline (Enter salva, Esc cancela, blur salva se mudou, "Apagar" pede "Apagar mesmo"). Testes em `tests/unit/etiquetas.test.ts`; não testei a UI no navegador.
 
 ---
 

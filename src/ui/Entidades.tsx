@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { formatarRef, type Entidade, type Ref, type TipoEntidade } from '#mesa';
 import {
   alterarEntidade,
@@ -17,6 +17,7 @@ import {
   podeAvancar,
   podeVoltar,
   removerEntidade,
+  renomearEtiquetaNaCampanha,
   selecionada,
   selecionadaId,
   sidebarAberta,
@@ -33,6 +34,7 @@ import {
 import { sondarAplicativos } from '../app/inventario.ts';
 import {
   contarPorTag,
+  type ContagemTag,
   contarPorTipo,
   ehEncontro,
   NOME_DO_APP,
@@ -65,6 +67,9 @@ const tipoNovo = signal<TipoEntidade>('personagem');
 const nomeNovo = signal('');
 const confirmando = signal<string | null>(null);
 const buscaTagLocal = signal('');
+/** Etiqueta da barra lateral em edição (chave) e se o "Apagar" aguarda confirmação. */
+const tagEmEdicao = signal<string | null>(null);
+const apagandoTag = signal(false);
 const nomeCampanhaNova = signal('');
 
 async function criarCampanhaPeloSemCampanha(e: Event) {
@@ -257,6 +262,84 @@ function BarraSuperior() {
   );
 }
 
+function LinhaTag({ ct }: { ct: ContagemTag }) {
+  const raiz = useRef<HTMLDivElement>(null);
+  const campo = useRef<HTMLInputElement>(null);
+  const encerrada = useRef(false);
+  const editando = tagEmEdicao.value === ct.chave;
+  useEffect(() => {
+    if (!editando) return;
+    encerrada.current = false;
+    campo.current?.focus(); campo.current?.select();
+  }, [editando]);
+
+  const encerrar = () => { encerrada.current = true; tagEmEdicao.value = null; apagandoTag.value = false; };
+  const salvar = () => {
+    if (encerrada.current) return;
+    const novo = campo.current?.value.trim() ?? ct.tag;
+    encerrar();
+    if (novo && novo !== ct.tag) void renomearEtiquetaNaCampanha(ct.chave, novo);
+  };
+  const apagar = () => { encerrar(); void renomearEtiquetaNaCampanha(ct.chave, ''); };
+
+  if (!editando) {
+    return (
+      <div class="tag-linha">
+        <button
+          type="button"
+          class={cx('tag-item', tagAtiva.value === ct.chave && 'ativa')}
+          data-testid={`tag-filtro-${ct.chave}`}
+          onClick={() => { tagAtiva.value = tagAtiva.value === ct.chave ? null : ct.chave; }}
+        >
+          <span class="tag-hash">#</span>
+          <span class="tag-nome">{ct.tag}</span>
+          <span class="tag-badge">({ct.contagem})</span>
+        </button>
+        <button
+          type="button"
+          class="tag-editar"
+          data-testid={`tag-editar-${ct.chave}`}
+          aria-label={`Editar etiqueta ${ct.tag}`}
+          title="Renomear ou apagar a etiqueta"
+          onClick={() => { apagandoTag.value = false; tagEmEdicao.value = ct.chave; }}
+        >✎</button>
+      </div>
+    );
+  }
+  return (
+    <div
+      class="tag-linha editando"
+      ref={raiz}
+      onFocusOut={ev => {
+        const para = ev.relatedTarget as Node | null;
+        if (para && raiz.current?.contains(para)) return;
+        const atual = campo.current?.value.trim() ?? '';
+        if (!atual || atual === ct.tag) encerrar(); else salvar();
+      }}
+    >
+      <input
+        ref={campo}
+        type="text"
+        class="tag-renomear"
+        maxLength={40}
+        defaultValue={ct.tag}
+        aria-label={`Novo nome da etiqueta ${ct.tag}`}
+        data-testid={`tag-renomear-${ct.chave}`}
+        onKeyDown={ev => {
+          if (ev.key === 'Enter') { ev.preventDefault(); salvar(); }
+          else if (ev.key === 'Escape') { ev.preventDefault(); encerrar(); }
+        }}
+      />
+      {apagandoTag.value
+        ? <>
+            <button type="button" class="botao-pilula perigo" data-testid={`tag-apagar-confirmar-${ct.chave}`} onClick={apagar}>Apagar mesmo</button>
+            <button type="button" class="botao-pilula" onClick={() => { apagandoTag.value = false; }}>Cancelar</button>
+          </>
+        : <button type="button" class="botao-pilula perigo" data-testid={`tag-apagar-${ct.chave}`} onClick={() => { apagandoTag.value = true; }}>Apagar</button>}
+    </div>
+  );
+}
+
 function SidebarColecao({ nomeCampanha }: { nomeCampanha: string }) {
   const lista = entidades.value;
   const tagsContadas = contarPorTag(lista);
@@ -360,19 +443,7 @@ function SidebarColecao({ nomeCampanha }: { nomeCampanha: string }) {
               {tagsContadas.length === 0 ? 'Sem etiquetas ainda.' : 'Nenhuma etiqueta encontrada.'}
             </p>
           ) : (
-            tagsFiltradas.map(ct => (
-              <button
-                key={ct.chave}
-                type="button"
-                class={cx('tag-item', tagAtiva.value === ct.chave && 'ativa')}
-                data-testid={`tag-filtro-${ct.chave}`}
-                onClick={() => { tagAtiva.value = tagAtiva.value === ct.chave ? null : ct.chave; }}
-              >
-                <span class="tag-hash">#</span>
-                <span class="tag-nome">{ct.tag}</span>
-                <span class="tag-badge">({ct.contagem})</span>
-              </button>
-            ))
+            tagsFiltradas.map(ct => <LinhaTag key={ct.chave} ct={ct} />)
           )}
         </div>
       </div>

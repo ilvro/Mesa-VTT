@@ -136,6 +136,13 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .tag-item { display: flex; align-items: center; gap: 7px; width: 100%; padding: 6px 8px; border-radius: var(--raio); text-align: left; font-size: 12.5px; color: var(--apagado); transition: background 0.15s, color 0.15s; }
 .tag-item:hover { background: var(--superficie-2); color: var(--texto); }
 .tag-item.ativa { background: var(--acento-suave); color: var(--acento); font-weight: 700; }
+.tag-linha { position: relative; display: flex; align-items: center; gap: 4px; }
+.tag-linha .tag-item { flex: 1; min-width: 0; }
+.tag-editar { flex: none; width: 24px; height: 24px; border-radius: var(--raio); font-size: 12px; color: var(--apagado); opacity: 0; transition: opacity 0.15s, background 0.15s, color 0.15s; }
+.tag-linha:hover .tag-editar, .tag-linha:focus-within .tag-editar { opacity: 1; }
+.tag-editar:hover { background: var(--superficie-2); color: var(--texto); }
+.tag-linha.editando { flex-wrap: wrap; padding: 4px 0; }
+.tag-renomear { flex: 1 1 100%; min-width: 0; font-size: 12.5px; padding: 5px 8px; }
 .tag-hash { color: var(--acento); font-weight: 700; }
 .tag-nome { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tag-badge { font-size: 11px; opacity: 0.75; flex: none; }

@@ -261,6 +261,24 @@ export function removerTag(atuais: readonly string[], tag: string): string[] {
   return atuais.filter(t => semAcento(t.replace(/^#/, '').trim()) !== chave);
 }
 
+/** Troca a etiqueta de chave `chaveDe` (sem acento/caixa e sem `#`) por `para` (trim, até 40), na mesma posição. Se `para` já existe, funde sem duplicar; `para` vazio remove. Ausente: devolve cópia igual. */
+export function renomearTag(tags: readonly string[], chaveDe: string, para: string): string[] {
+  const chaveDaTag = (t: string) => semAcento(t.replace(/^#/, '').trim());
+  const alvo = semAcento(chaveDe.replace(/^#/, '').trim());
+  if (!tags.some(t => chaveDaTag(t) === alvo)) return [...tags];
+  const novo = para.replace(/^#/, '').trim().slice(0, 40), chaveNova = semAcento(novo);
+  const saida: string[] = [];
+  const vistas = new Set<string>();
+  for (const t of tags) {
+    const chave = chaveDaTag(t);
+    if (chave === alvo) {
+      if (!novo || vistas.has(chaveNova)) continue;
+      vistas.add(chaveNova); saida.push(novo);
+    } else if (!vistas.has(chave)) { vistas.add(chave); saida.push(t); }
+  }
+  return saida;
+}
+
 export const ehAppConhecido = (valor: string): valor is AppId => (APPS as readonly string[]).includes(valor);
 
 /** Entidade `personagem` que tem ficha no Dossiê (`ref.app === 'ficha' && ref.tipo === 'ficha'`). */
