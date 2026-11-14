@@ -8,10 +8,15 @@ import {
   decorarMarcadores,
   fundoEfetivo,
 } from '../../dominio/paleta.ts';
+import {
+  chaveDaCondicao,
+  condicoesDoItem,
+  itemAtendeCondicoes,
+} from '../../dominio/estado-do-mundo.ts';
 import type { DocRico, Item } from '../../dominio/quadro.ts';
 import { abrirNoApp } from '../../app/barramento.ts';
 import { entidades } from '../../app/campanha.ts';
-import { paletaDaCampanha } from '../../app/quadros.ts';
+import { alternarFato, estadoDoMundo, paletaDaCampanha } from '../../app/quadros.ts';
 import { abrirEntidade } from '../../app/rotas.ts';
 import { EditorRico } from './EditorRico.tsx';
 
@@ -47,6 +52,9 @@ export function ItemForma({
   const paleta = item.semantica && !c.fundo ? paletaDaCampanha.value : PALETA_PADRAO;
   const fundo = fundoEfetivo(item, paleta);
   const corTexto = item.semantica && !c.fundo && fundo ? corDoTexto(fundo) : item.texto.cor;
+  const conds = condicoesDoItem(item);
+  const estado = conds.length > 0 ? estadoDoMundo.value : undefined;
+  const condOk = estado ? itemAtendeCondicoes(item, estado) : true;
   const d = caminhoDaForma(item.forma, item.largura, item.altura, c.raio);
   const util = areaUtil(item.forma, {
     x: 0,
@@ -75,6 +83,7 @@ export function ItemForma({
         height: `${item.altura}px`,
         zIndex: item.z,
         transform: item.rotacao ? `rotate(${item.rotacao}deg)` : undefined,
+        opacity: condOk ? 1 : 0.35,
         filter: c.sombra ? 'drop-shadow(0 8px 16px rgba(0, 0, 0, 0.35))' : undefined,
       }}
     >
@@ -127,6 +136,15 @@ export function ItemForma({
             class="item-texto-conteudo doc-rico-html"
             onClick={(e) => {
               const alvo = e.target as HTMLElement | null;
+              const elCond = alvo?.closest<HTMLElement>('[data-condicao]');
+              if (elCond) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (elCond.dataset.condicao) {
+                  void alternarFato(chaveDaCondicao(elCond.dataset.condicao));
+                }
+                return;
+              }
               const elEnt = alvo?.closest<HTMLElement>('[data-entidade-id]');
               if (elEnt) {
                 e.preventDefault();
@@ -146,13 +164,13 @@ export function ItemForma({
               }
             }}
             onPointerDown={(e) => {
-              if ((e.target as HTMLElement | null)?.closest('[data-entidade-id],[data-ref-app]')) {
+              if ((e.target as HTMLElement | null)?.closest('[data-entidade-id],[data-ref-app],[data-condicao]')) {
                 e.stopPropagation();
               }
             }}
             dangerouslySetInnerHTML={{
               __html: docParaHtml(item.doc, {
-                decorar: (t) => decorarMarcadores(t, entidades.value),
+                decorar: (t) => decorarMarcadores(t, entidades.value, estado),
               }),
             }}
           />

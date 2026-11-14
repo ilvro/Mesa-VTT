@@ -9,10 +9,15 @@ import {
   fundoEfetivo,
   type PaletaDaCampanha,
 } from '../../dominio/paleta.ts';
+import {
+  chaveDaCondicao,
+  condicoesDoItem,
+  itemAtendeCondicoes,
+} from '../../dominio/estado-do-mundo.ts';
 import type { DocRico, Item as ItemModelo } from '../../dominio/quadro.ts';
 import { abrirNoApp } from '../../app/barramento.ts';
 import { entidades } from '../../app/campanha.ts';
-import { paletaDaCampanha } from '../../app/quadros.ts';
+import { alternarFato, estadoDoMundo, paletaDaCampanha } from '../../app/quadros.ts';
 import { abrirEntidade } from '../../app/rotas.ts';
 import { EditorRico } from './EditorRico.tsx';
 import { ItemForma } from './ItemForma.tsx';
@@ -25,6 +30,14 @@ import { ItemTraco } from './ItemTraco.tsx';
 function aoClicarTextoDecorado(e: MouseEvent) {
   const alvo = e.target as HTMLElement | null;
   if (!alvo) return;
+  const elCond = alvo.closest<HTMLElement>('[data-condicao]');
+  if (elCond) {
+    e.preventDefault();
+    e.stopPropagation();
+    const cond = elCond.dataset.condicao;
+    if (cond) void alternarFato(chaveDaCondicao(cond));
+    return;
+  }
   const elEnt = alvo.closest<HTMLElement>('[data-entidade-id]');
   if (elEnt) {
     e.preventDefault();
@@ -135,14 +148,27 @@ function ItemBase({
   if (item.tipo === 'texto') {
     const paleta =
       item.semantica && !item.caixa.fundo ? paletaDaCampanha.value : PALETA_PADRAO;
+    const conds = condicoesDoItem(item);
+    const estado = conds.length > 0 ? estadoDoMundo.value : undefined;
+    const condOk = estado ? itemAtendeCondicoes(item, estado) : true;
+    const estiloCaixa = estiloCaixaCss(item, paleta);
     return (
       <div
         class="item-quadro item-texto"
         data-testid={`item-${item.id}`}
         data-item-id={item.id}
         data-semantica={item.semantica ?? undefined}
-        style={{ ...estiloPosicao, ...estiloCaixaCss(item, paleta) }}
+        style={{
+          ...estiloPosicao,
+          ...estiloCaixa,
+          opacity: condOk ? estiloCaixa.opacity : 0.35,
+        }}
       >
+        {!condOk ? (
+          <span class="selo-condicao" data-testid={`selo-condicao-${item.id}`}>
+            se: {conds.join(', ')}
+          </span>
+        ) : null}
         {editando ? (
           <EditorRico
             doc={item.doc}
@@ -162,13 +188,13 @@ function ItemBase({
             class="item-texto-conteudo doc-rico-html"
             onClick={aoClicarTextoDecorado}
             onPointerDown={(e) => {
-              if ((e.target as HTMLElement | null)?.closest('[data-entidade-id],[data-ref-app]')) {
+              if ((e.target as HTMLElement | null)?.closest('[data-entidade-id],[data-ref-app],[data-condicao]')) {
                 e.stopPropagation();
               }
             }}
             dangerouslySetInnerHTML={{
               __html: docParaHtml(item.doc, {
-                decorar: (t) => decorarMarcadores(t, entidades.value),
+                decorar: (t) => decorarMarcadores(t, entidades.value, estado),
               }),
             }}
           />

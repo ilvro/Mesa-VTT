@@ -45,7 +45,7 @@ describe('paleta semântica', () => {
 
     assert.match(html, /class="chip-marcador chip-teste"/);
     assert.match(html, /<strong class="chip-dt">DT 13<\/strong>/);
-    assert.match(html, /<em class="chip-condicao">se:poeira<\/em>/);
+    assert.match(html, /<em class="chip-condicao[^"]*"[^>]*>se:poeira<\/em>/);
     assert.match(html, /class="chip-marcador chip-segredo"/);
     assert.ok(!html.includes('<script>'));
     assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt; &amp;'));

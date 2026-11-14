@@ -6,10 +6,16 @@ import {
   type TipoSemantico,
 } from '../dominio/quadro.ts';
 import {
+  ESTADO_VAZIO,
+  normalizarEstadoDoMundo,
+  type EstadoDoMundo,
+} from '../dominio/estado-do-mundo.ts';
+import {
   PALETA_PADRAO,
   resolverPaleta,
   type PaletaDaCampanha,
 } from '../dominio/paleta.ts';
+import { sessaoAtiva } from './registro.ts';
 import {
   aplicar,
   Historico,
@@ -47,6 +53,7 @@ export const itens = signal<ReadonlyMap<string, Item>>(new Map());
 export const selecao = signal<ReadonlySet<string>>(new Set());
 export const itemPendente = signal<string | null>(null);
 export const paletaDaCampanha = signal<PaletaDaCampanha>({ ...PALETA_PADRAO });
+export const estadoDoMundo = signal<EstadoDoMundo>({ ...ESTADO_VAZIO });
 export const historico = new Historico();
 
 const versaoHistorico = signal(0);
@@ -152,6 +159,7 @@ export async function carregarQuadros(): Promise<void> {
   if (!c) {
     quadros.value = [];
     paletaDaCampanha.value = { ...PALETA_PADRAO };
+    estadoDoMundo.value = { ...ESTADO_VAZIO };
     return;
   }
   try {
@@ -161,11 +169,65 @@ export async function carregarQuadros(): Promise<void> {
     ]);
     quadros.value = lista;
     paletaDaCampanha.value = resolverPaleta(ajustes?.paleta);
+    estadoDoMundo.value = normalizarEstadoDoMundo(ajustes?.estado);
   } catch (erro) {
     console.warn('Mesa: erro ao listar quadros', erro);
     quadros.value = [];
     paletaDaCampanha.value = { ...PALETA_PADRAO };
+    estadoDoMundo.value = { ...ESTADO_VAZIO };
   }
+}
+
+export async function definirFato(
+  chave: string,
+  valor: string | boolean | undefined,
+): Promise<void> {
+  const limpa = chave.trim();
+  if (!limpa) return;
+  const atual = estadoDoMundo.value;
+  const de = atual.fatos[limpa];
+  if (de === valor) return;
+
+  const fatos = { ...atual.fatos };
+  if (valor === undefined) {
+    delete fatos[limpa];
+  } else {
+    fatos[limpa] = valor;
+  }
+
+  const proximo: EstadoDoMundo = {
+    fatos,
+    historico: [
+      ...atual.historico,
+      {
+        chave: limpa,
+        de,
+        para: valor,
+        em: Date.now(),
+        sessaoId: sessaoAtiva.value?.id ?? null,
+      },
+    ],
+  };
+  estadoDoMundo.value = proximo;
+
+  const c = campanhaAtiva.value;
+  if (!c) return;
+  try {
+    const existente = await lerAjustesQuadro(c.id);
+    await salvarAjustesQuadro({
+      ...(existente ?? { campanhaId: c.id }),
+      campanhaId: c.id,
+      estado: proximo,
+    });
+  } catch (erro) {
+    avisar(mensagemDe(erro), true);
+  }
+}
+
+export async function alternarFato(chave: string): Promise<void> {
+  const atual = estadoDoMundo.value.fatos[chave.trim()];
+  const proximo = typeof atual === 'boolean' ? !atual : !atual;
+  await definirFato(chave, proximo);
 }
 
 export async function atualizarCorDaPaleta(tipo: TipoSemantico, cor: string): Promise<void> {

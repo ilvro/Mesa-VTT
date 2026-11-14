@@ -75,10 +75,13 @@ import { duplicar } from '../../dominio/quadro-operacoes.ts';
 import { FORMATOS_IMAGEM_ACEITOS, importarArquivoImagem } from '../../app/imagens-quadro.ts';
 import {
   agruparSelecao,
+  alternarFato,
   atualizarCorDaPaleta,
   atualizarMolduras,
+  definirFato,
   desagruparSelecao,
   desfazer,
+  estadoDoMundo,
   executar,
   fecharQuadro,
   historico,
@@ -106,6 +109,7 @@ import { MenuDoItem } from './MenuDoItem.tsx';
 import { Minimapa } from './Minimapa.tsx';
 import { Navegador } from './Navegador.tsx';
 import { PainelDaPaleta } from './PainelDaPaleta.tsx';
+import { PainelDoEstado } from './PainelDoEstado.tsx';
 import { PainelDoFundo, type ModoRoda } from './PainelDoFundo.tsx';
 
 const CHAVE_RODA = 'mesa:quadro:roda';
@@ -307,6 +311,7 @@ export function Quadro() {
   const tamanhoTela = useSignal<Tamanho>({ largura: 1280, altura: 720 });
   const painelFundoAberto = useSignal(false);
   const painelPaletaAberto = useSignal(false);
+  const painelEstadoAberto = useSignal(false);
   const buscaAberta = useSignal(false);
   const termoBusca = useSignal('');
   const indiceBusca = useSignal(0);
@@ -1695,6 +1700,21 @@ export function Quadro() {
         <button
           type="button"
           class="botao-pilula"
+          aria-pressed={painelEstadoAberto.value}
+          data-testid="botao-estado"
+          onClick={() => {
+            painelEstadoAberto.value = !painelEstadoAberto.value;
+            if (painelEstadoAberto.value) {
+              painelPaletaAberto.value = false;
+              painelFundoAberto.value = false;
+            }
+          }}
+        >
+          Estado
+        </button>
+        <button
+          type="button"
+          class="botao-pilula"
           aria-pressed={painelPaletaAberto.value}
           data-testid="botao-paleta"
           onClick={() => {
@@ -2061,6 +2081,21 @@ export function Quadro() {
               ))}
             </ul>
           </aside>
+        ) : null}
+
+        {painelEstadoAberto.value ? (
+          <PainelDoEstado
+            estado={estadoDoMundo.value}
+            onDefinirFato={(k, v) => {
+              void definirFato(k, v);
+            }}
+            onAlternarFato={(k) => {
+              void alternarFato(k);
+            }}
+            onFechar={() => {
+              painelEstadoAberto.value = false;
+            }}
+          />
         ) : null}
 
         {painelPaletaAberto.value ? (

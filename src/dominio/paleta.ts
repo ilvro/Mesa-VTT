@@ -1,5 +1,6 @@
 import type { Entidade } from '#mesa';
 import { escaparHtml } from './doc-rico.ts';
+import { avaliarCondicao, type EstadoDoMundo } from './estado-do-mundo.ts';
 import { analisarMarcadores, type Marcador } from './marcadores.ts';
 import { entidadePorNome, resolver } from './notas.ts';
 import { TIPOS_SEMANTICOS, type TipoSemantico } from './quadro.ts';
@@ -125,36 +126,44 @@ export function fundoEfetivo(
   return null;
 }
 
-function renderizarMarcador(m: Marcador, entidades: readonly Entidade[] = []): string {
-  const condHtml =
-    'condicao' in m && m.condicao
-      ? ` <em class="chip-condicao">se:${escaparHtml(m.condicao)}</em>`
-      : '';
+function renderizarMarcador(
+  m: Marcador,
+  entidades: readonly Entidade[] = [],
+  estado?: EstadoDoMundo,
+): string {
+  const condStr = 'condicao' in m ? m.condicao : undefined;
+  const condFalsa = Boolean(condStr && estado && !avaliarCondicao(condStr, estado));
+  const condCls = condFalsa ? ' chip-condicao-falsa' : '';
+  const condHtml = condStr
+    ? ` <em class="chip-condicao chip-clicavel" data-condicao="${escaparHtml(condStr)}">se:${escaparHtml(condStr)}</em>`
+    : '';
 
   switch (m.tipo) {
     case 'teste': {
       const pericias = escaparHtml(m.pericias.join(' / '));
       const nota = m.nota ? ` <span class="chip-nota">${escaparHtml(m.nota)}</span>` : '';
-      return `<span class="chip-marcador chip-teste">${pericias} <strong class="chip-dt">DT ${escaparHtml(String(m.dificuldade))}</strong>${nota}${condHtml}</span>`;
+      return `<span class="chip-marcador chip-teste${condCls}">${pericias} <strong class="chip-dt">DT ${escaparHtml(String(m.dificuldade))}</strong>${nota}${condHtml}</span>`;
     }
     case 'loot':
-      return `<span class="chip-marcador chip-loot">LOOT${condHtml}</span>`;
+      return `<span class="chip-marcador chip-loot${condCls}">LOOT${condHtml}</span>`;
     case 'evento':
-      return `<span class="chip-marcador chip-evento">EVENTO${condHtml}</span>`;
+      return `<span class="chip-marcador chip-evento${condCls}">EVENTO${condHtml}</span>`;
     case 'tarefa':
-      return `<span class="chip-marcador chip-tarefa">TAREFA${condHtml}</span>`;
+      return `<span class="chip-marcador chip-tarefa${condCls}">TAREFA${condHtml}</span>`;
     case 'rever':
-      return `<span class="chip-marcador chip-rever">REVER${condHtml}</span>`;
+      return `<span class="chip-marcador chip-rever${condCls}">REVER${condHtml}</span>`;
     case 'musica':
-      return `<span class="chip-marcador chip-musica">♪ ${escaparHtml(m.nome)}${condHtml}</span>`;
+      return `<span class="chip-marcador chip-musica${condCls}">♪ ${escaparHtml(m.nome)}${condHtml}</span>`;
     case 'data':
-      return `<span class="chip-marcador chip-data">DATA ${escaparHtml(m.valor)}${condHtml}</span>`;
+      return `<span class="chip-marcador chip-data${condCls}">DATA ${escaparHtml(m.valor)}${condHtml}</span>`;
     case 'segredo':
-      return `<span class="chip-marcador chip-segredo">SEGREDO${condHtml}</span>`;
+      return `<span class="chip-marcador chip-segredo${condCls}">SEGREDO${condHtml}</span>`;
     case 'fala': {
       const texto = m.para ? `${m.quem} → ${m.para}` : m.quem;
       const entidade = entidadePorNome(entidades, m.quem);
-      const cls = entidade ? 'chip-marcador chip-fala chip-clicavel' : 'chip-marcador chip-fala';
+      const cls = entidade
+        ? `chip-marcador chip-fala chip-clicavel${condCls}`
+        : `chip-marcador chip-fala${condCls}`;
       const entAttr = entidade ? ` data-entidade-id="${escaparHtml(entidade.id)}"` : '';
       const attrs = `data-fala-quem="${escaparHtml(m.quem)}"${m.para ? ` data-fala-para="${escaparHtml(m.para)}"` : ''}${entAttr}`;
       return `<span class="${cls}" ${attrs}>${escaparHtml(texto)}${condHtml}</span>`;
@@ -162,9 +171,9 @@ function renderizarMarcador(m: Marcador, entidades: readonly Entidade[] = []): s
     case 'rotulo': {
       const entidade = entidadePorNome(entidades, m.texto);
       if (entidade) {
-        return `<span class="chip-marcador chip-fala chip-clicavel" data-fala-quem="${escaparHtml(m.texto)}" data-entidade-id="${escaparHtml(entidade.id)}">${escaparHtml(m.texto)}${condHtml}</span>`;
+        return `<span class="chip-marcador chip-fala chip-clicavel${condCls}" data-fala-quem="${escaparHtml(m.texto)}" data-entidade-id="${escaparHtml(entidade.id)}">${escaparHtml(m.texto)}${condHtml}</span>`;
       }
-      return `<span class="chip-marcador chip-rotulo">${escaparHtml(m.texto)}${condHtml}</span>`;
+      return `<span class="chip-marcador chip-rotulo${condCls}">${escaparHtml(m.texto)}${condHtml}</span>`;
     }
   }
 }
@@ -172,6 +181,7 @@ function renderizarMarcador(m: Marcador, entidades: readonly Entidade[] = []): s
 export function decorarMarcadores(
   texto: string,
   entidades: readonly Entidade[] = [],
+  estado?: EstadoDoMundo,
 ): string {
   if (!texto.includes('[') && !texto.includes('Tarefa:')) {
     return escaparHtml(texto);
@@ -195,7 +205,7 @@ export function decorarMarcadores(
         }
       }
     } else {
-      html += renderizarMarcador(t.marcador, entidades);
+      html += renderizarMarcador(t.marcador, entidades, estado);
     }
   }
   return html;

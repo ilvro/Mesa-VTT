@@ -683,7 +683,7 @@ Commit: `added board panel with peek and follow to session mode`
 
 ## Etapa F — Continuidade
 
-### Q6a — Estado do mundo e condições  ⬜
+### Q6a — Estado do mundo e condições  ✅
 Objetivo: fatos da campanha (`chave do sótão: Naira`, `poeira: limpa`) que acendem ou apagam cartões.
 Depende de: Q3a, Q3b.
 Arquivos: criar `src/dominio/estado-do-mundo.ts`, `tests/unit/estado-do-mundo.test.ts` e `src/ui/quadro/PainelDoEstado.tsx`; mudar `src/app/banco-quadros.ts` (`ajustes.estado`), `src/app/quadros.ts` e `Item.tsx`.

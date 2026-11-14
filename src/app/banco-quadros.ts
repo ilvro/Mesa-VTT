@@ -1,4 +1,5 @@
 import { abrirBanco, obterTudo, promessa, transacao, type DefinicaoStore } from '#mesa';
+import type { EstadoDoMundo } from '../dominio/estado-do-mundo.ts';
 import {
   validarItem,
   validarQuadro,
@@ -210,6 +211,7 @@ export async function guardarImagem(
 export interface AjustesQuadro {
   campanhaId: string;
   paleta?: Partial<Record<TipoSemantico, string>>;
+  estado?: EstadoDoMundo;
 }
 
 export async function lerAjustesQuadro(
