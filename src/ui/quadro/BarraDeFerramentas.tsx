@@ -36,7 +36,7 @@ const FERRAMENTAS: readonly DefinicaoFerramenta[] = [
   { id: 'borracha', rotulo: 'Borracha', atalho: 'E', icone: '⌫', habilitada: true },
   { id: 'imagem', rotulo: 'Imagem', icone: '🖼', habilitada: true },
   { id: 'moldura', rotulo: 'Moldura', atalho: 'F', icone: '#', habilitada: true },
-  { id: 'entidade', rotulo: 'Entidade', icone: '◆', habilitada: false },
+  { id: 'entidade', rotulo: 'Entidade', icone: '◆', habilitada: true },
 ];
 
 const ROTULO_FORMA: Record<Forma, string> = {

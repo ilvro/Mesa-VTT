@@ -4,7 +4,10 @@ import { familiaCss } from '../../dominio/fontes.ts';
 import { areaUtil, caminhoDaForma } from '../../dominio/formas.ts';
 import { corDoTexto, decorarMarcadores, fundoEfetivo } from '../../dominio/paleta.ts';
 import type { DocRico, Item } from '../../dominio/quadro.ts';
+import { abrirNoApp } from '../../app/barramento.ts';
+import { entidades } from '../../app/campanha.ts';
 import { paletaDaCampanha } from '../../app/quadros.ts';
+import { abrirEntidade } from '../../app/rotas.ts';
 import { EditorRico } from './EditorRico.tsx';
 
 interface ItemFormaProps {
@@ -117,8 +120,35 @@ export function ItemForma({
         ) : (
           <div
             class="item-texto-conteudo doc-rico-html"
+            onClick={(e) => {
+              const alvo = e.target as HTMLElement | null;
+              const elEnt = alvo?.closest<HTMLElement>('[data-entidade-id]');
+              if (elEnt) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (elEnt.dataset.entidadeId) abrirEntidade(elEnt.dataset.entidadeId);
+                return;
+              }
+              const elRef = alvo?.closest<HTMLElement>('[data-ref-app]');
+              if (elRef && elRef.dataset.refApp && elRef.dataset.refTipo && elRef.dataset.refId) {
+                e.preventDefault();
+                e.stopPropagation();
+                void abrirNoApp({
+                  app: elRef.dataset.refApp as 'mesa',
+                  tipo: elRef.dataset.refTipo,
+                  id: elRef.dataset.refId,
+                });
+              }
+            }}
+            onPointerDown={(e) => {
+              if ((e.target as HTMLElement | null)?.closest('[data-entidade-id],[data-ref-app]')) {
+                e.stopPropagation();
+              }
+            }}
             dangerouslySetInnerHTML={{
-              __html: docParaHtml(item.doc, { decorar: decorarMarcadores }),
+              __html: docParaHtml(item.doc, {
+                decorar: (t) => decorarMarcadores(t, entidades.value),
+              }),
             }}
           />
         )}

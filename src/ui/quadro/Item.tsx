@@ -9,13 +9,41 @@ import {
   type PaletaDaCampanha,
 } from '../../dominio/paleta.ts';
 import type { DocRico, Item as ItemModelo } from '../../dominio/quadro.ts';
+import { abrirNoApp } from '../../app/barramento.ts';
+import { entidades } from '../../app/campanha.ts';
 import { paletaDaCampanha } from '../../app/quadros.ts';
+import { abrirEntidade } from '../../app/rotas.ts';
 import { EditorRico } from './EditorRico.tsx';
 import { ItemForma } from './ItemForma.tsx';
 import { ItemImagem } from './ItemImagem.tsx';
 import { ItemMoldura } from './ItemMoldura.tsx';
+import { ItemRef } from './ItemRef.tsx';
 import { ItemSeta } from './ItemSeta.tsx';
 import { ItemTraco } from './ItemTraco.tsx';
+
+function aoClicarTextoDecorado(e: MouseEvent) {
+  const alvo = e.target as HTMLElement | null;
+  if (!alvo) return;
+  const elEnt = alvo.closest<HTMLElement>('[data-entidade-id]');
+  if (elEnt) {
+    e.preventDefault();
+    e.stopPropagation();
+    const id = elEnt.dataset.entidadeId;
+    if (id) abrirEntidade(id);
+    return;
+  }
+  const elRef = alvo.closest<HTMLElement>('[data-ref-app]');
+  if (elRef) {
+    e.preventDefault();
+    e.stopPropagation();
+    const app = elRef.dataset.refApp;
+    const tipo = elRef.dataset.refTipo;
+    const id = elRef.dataset.refId;
+    if (app && tipo && id) {
+      void abrirNoApp({ app: app as 'mesa', tipo, id });
+    }
+  }
+}
 
 interface ItemProps {
   item: ItemModelo;
@@ -130,8 +158,16 @@ function ItemBase({
         ) : (
           <div
             class="item-texto-conteudo doc-rico-html"
+            onClick={aoClicarTextoDecorado}
+            onPointerDown={(e) => {
+              if ((e.target as HTMLElement | null)?.closest('[data-entidade-id],[data-ref-app]')) {
+                e.stopPropagation();
+              }
+            }}
             dangerouslySetInnerHTML={{
-              __html: docParaHtml(item.doc, { decorar: decorarMarcadores }),
+              __html: docParaHtml(item.doc, {
+                decorar: (t) => decorarMarcadores(t, entidades.value),
+              }),
             }}
           />
         )}
@@ -153,6 +189,10 @@ function ItemBase({
 
   if (item.tipo === 'imagem') {
     return <ItemImagem item={item} />;
+  }
+
+  if (item.tipo === 'ref') {
+    return <ItemRef item={item} />;
   }
 
   if (item.tipo === 'seta') {
@@ -181,16 +221,7 @@ function ItemBase({
     );
   }
 
-  return (
-    <div
-      class="item-quadro item-provisorio"
-      data-testid={`item-${item.id}`}
-      data-item-id={item.id}
-      style={estiloPosicao}
-    >
-      <span class="meta">{item.tipo}</span>
-    </div>
-  );
+  return null;
 }
 
 export const Item = memo(

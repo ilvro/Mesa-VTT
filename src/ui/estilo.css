@@ -1616,3 +1616,105 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .chip-rever { background: rgba(255, 216, 77, 0.32); border-color: rgba(255, 216, 77, 0.6); }
 .chip-musica { background: rgba(168, 130, 255, 0.24); border-color: rgba(168, 130, 255, 0.5); }
 .chip-data { background: rgba(148, 163, 184, 0.24); border-color: rgba(148, 163, 184, 0.5); }
+
+.quadro-ligacao {
+  color: var(--acento);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+}
+.quadro-ligacao-orfa {
+  text-decoration: underline dashed;
+  opacity: 0.75;
+}
+.chip-clicavel {
+  cursor: pointer;
+}
+.editor-rico-sugestoes {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  min-width: 220px;
+  z-index: 40;
+}
+.item-ref {
+  position: absolute;
+  background: var(--superficie);
+  border: 1px solid var(--linha);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: var(--sombra-flutuante);
+  overflow: hidden;
+  user-select: none;
+}
+.item-ref-topo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.item-ref-titulos {
+  min-width: 0;
+  flex: 1;
+}
+.item-ref-nome {
+  font-weight: 700;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.item-ref-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.item-ref-notas {
+  flex: 1;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--texto-suave);
+  overflow: hidden;
+}
+.item-ref-acoes {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+.painel-entidade-seletor {
+  width: 260px;
+}
+.seletor-entidade-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.seletor-entidade-opcao {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: var(--superficie-2);
+  color: var(--texto);
+  cursor: pointer;
+  text-align: left;
+}
+.seletor-entidade-opcao:hover {
+  border-color: var(--acento);
+}

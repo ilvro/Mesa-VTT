@@ -499,7 +499,7 @@ Testes: contraste; `tipoMaisProximo`; `docParaHtml` com `decorar` gera chips sem
 Pronto quando: mudar a cor de "teste" na paleta muda todos os cartões de teste.
 Commit: `added semantic block types and campaign palette`
 
-### Q3c — Entidades e ligações no quadro  ⬜
+### Q3c — Entidades e ligações no quadro  ✅
 Objetivo: NPCs, lugares e criaturas da campanha aparecem no quadro como cartões vivos, e as menções viram ligações.
 Depende de: Q3b, Q2j.
 Ler: `src/dominio/notas.ts` (`resolver`, `refsMencionados`, `autocompletarEm`, `sugerirEntidades`), `src/ui/EditorDeNota.tsx`, `src/ui/Entidades.tsx` (página da entidade), `src/app/barramento.ts` (`abrirNoApp`).

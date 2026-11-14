@@ -35,6 +35,7 @@ import {
   novaImagem,
   novaMoldura,
   novaNotaAdesiva,
+  novaRef,
   novaSeta,
   novoTexto,
   novoTraco,
@@ -43,6 +44,13 @@ import {
   type Item,
   type Ponta,
 } from '../../dominio/quadro.ts';
+import { refDaEntidade, sugerirEntidades } from '../../dominio/notas.ts';
+import { ROTULO_DO_TIPO } from '../../dominio/entidades.ts';
+import { entidades } from '../../app/campanha.ts';
+import {
+  removerLigacoesDoItem,
+  sincronizarLigacoesDoItem,
+} from '../../app/ligacoes-quadro.ts';
 import {
   filhos,
   ordemDeLeitura,
@@ -294,6 +302,7 @@ export function Quadro() {
   const tamanhoTela = useSignal<Tamanho>({ largura: 1280, altura: 720 });
   const painelFundoAberto = useSignal(false);
   const painelPaletaAberto = useSignal(false);
+  const seletorEntidade = useSignal<{ ponto: Ponto; busca: string } | null>(null);
   const navegadorAberto = useSignal(false);
   const indiceMoldura = useSignal(0);
   const ferramenta = useSignal<FerramentaQuadro>('selecionar');
@@ -571,6 +580,7 @@ export function Quadro() {
           if (remover.length > 0) {
             executar({ rotulo: 'Recortar', ops: [{ remover }] });
             selecao.value = new Set();
+            for (const r of remover) void removerLigacoesDoItem(q.id, r.id);
           }
         } else if (k === 'd') {
           e.preventDefault();
@@ -620,6 +630,7 @@ export function Quadro() {
         if (remover.length > 0) {
           executar({ rotulo: 'Remover', ops: [{ remover }] });
           selecao.value = new Set();
+          for (const r of remover) void removerLigacoesDoItem(q.id, r.id);
         }
         return;
       }
@@ -841,6 +852,13 @@ export function Quadro() {
     const p = pontoMundoDe(e);
     const encaixar = q.fundo.encaixar;
     const passoGrade = q.fundo.passo;
+
+    if (ferramenta.value === 'entidade') {
+      const x = encaixar ? encaixarNaGrade(p.x, passoGrade) : Math.round(p.x);
+      const y = encaixar ? encaixarNaGrade(p.y, passoGrade) : Math.round(p.y);
+      seletorEntidade.value = { ponto: { x, y }, busca: '' };
+      return;
+    }
 
     if (ferramenta.value === 'texto' || ferramenta.value === 'nota') {
       const agora = Date.now();
@@ -1532,6 +1550,8 @@ export function Quadro() {
         },
       ],
     });
+    const atualizado = itens.value.get(id);
+    if (atualizado) void sincronizarLigacoesDoItem(atualizado);
   };
 
   const aoSairRotulo = (id: string, novoRotulo: string) => {
@@ -1555,6 +1575,8 @@ export function Quadro() {
         },
       ],
     });
+    const atualizado = itens.value.get(id);
+    if (atualizado) void sincronizarLigacoesDoItem(atualizado);
   };
 
   const aoSairEdicao = (id: string, novoDoc?: DocRico, novaAltura?: number) => {
@@ -1586,6 +1608,8 @@ export function Quadro() {
       rotulo: 'Editar texto',
       ops: [{ alterar: [{ id, antes, depois }] }],
     });
+    const atualizado = itens.value.get(id);
+    if (atualizado) void sincronizarLigacoesDoItem(atualizado);
   };
 
   return (
@@ -1866,6 +1890,76 @@ export function Quadro() {
               }}
             />
           </div>
+        ) : null}
+
+        {seletorEntidade.value ? (
+          <aside
+            class="painel-fundo painel-entidade-seletor"
+            data-testid="seletor-entidade"
+            onPointerDown={(e) => e.stopPropagation()}
+            onDblClick={(e) => e.stopPropagation()}
+          >
+            <div class="painel-fundo-topo">
+              <span class="faixa pequena">Colocar entidade</span>
+              <button
+                type="button"
+                class="botao-pilula"
+                onClick={() => {
+                  seletorEntidade.value = null;
+                }}
+              >
+                Fechar
+              </button>
+            </div>
+            <input
+              type="search"
+              data-testid="seletor-entidade-busca"
+              placeholder="Buscar entidade..."
+              value={seletorEntidade.value.busca}
+              onInput={(e) => {
+                if (!seletorEntidade.value) return;
+                seletorEntidade.value = {
+                  ...seletorEntidade.value,
+                  busca: e.currentTarget.value,
+                };
+              }}
+            />
+            <ul class="seletor-entidade-lista">
+              {sugerirEntidades(entidades.value, seletorEntidade.value.busca, 12).map((ent) => (
+                <li key={ent.id}>
+                  <button
+                    type="button"
+                    class="seletor-entidade-opcao"
+                    data-testid={`colocar-entidade-${ent.id}`}
+                    onClick={() => {
+                      const sel = seletorEntidade.value;
+                      if (!sel) return;
+                      const maxZ = Math.max(0, ...[...itens.value.values()].map((i) => i.z));
+                      const novo = novaRef(
+                        {
+                          quadroId: q.id,
+                          ref: refDaEntidade(ent.id),
+                          x: sel.ponto.x,
+                          y: sel.ponto.y,
+                          z: maxZ + 1,
+                        },
+                        Date.now(),
+                        novoIdItem(),
+                      );
+                      executar({ rotulo: 'Colocar entidade', ops: [{ criar: [novo] }] });
+                      selecao.value = new Set([novo.id]);
+                      void sincronizarLigacoesDoItem(novo);
+                      seletorEntidade.value = null;
+                      ferramenta.value = 'selecionar';
+                    }}
+                  >
+                    <span>{ent.nome}</span>
+                    <span class="meta">{ROTULO_DO_TIPO[ent.tipo].singular}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </aside>
         ) : null}
 
         {painelPaletaAberto.value ? (

@@ -355,3 +355,58 @@ test('Q2f: colar uma imagem aparece no quadro e persiste ao recarregar', async (
     await ctx.close();
   }
 });
+
+test('Q3c: entidade Sindre -> [[Sindre]] no quadro -> página da Sindre lista o quadro -> clique volta ao item', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  const erros: string[] = [];
+  page.on('pageerror', (e) => erros.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') erros.push(m.text()); });
+
+  try {
+    await page.goto(`${amb.origem}/Mesa/`);
+    await page.waitForSelector('[data-testid="campanha-select"]');
+    await page.click('[data-testid="aba-campanhas"]');
+    await page.fill('[data-testid="nova-campanha-nome"]', 'Campanha Q3c');
+    await page.click('[data-testid="criar-campanha"]');
+    await page.waitForSelector('[data-testid="tela-entidades"]');
+
+    await page.fill('[data-testid="nova-entidade-nome"]', 'Sindre');
+    await page.click('[data-testid="criar-entidade"]');
+    await page.waitForSelector('[data-testid="detalhe"]');
+
+    await page.click('[data-testid="aba-quadros"]');
+    await page.fill('[data-testid="novo-quadro-nome"]', 'Taverna');
+    await page.click('[data-testid="criar-quadro"]');
+    await page.waitForSelector('[data-testid="area-quadro"]');
+
+    await page.click('[data-testid="ferramenta-texto"]');
+    const box = await page.locator('[data-testid="area-quadro"]').boundingBox();
+    assert.ok(box);
+    await page.mouse.click(box.x + 250, box.y + 200);
+    await page.waitForSelector('[data-testid="editor-rico"]');
+    await page.type('[data-testid="editor-rico"]', 'Falar com [[Sin');
+    await page.waitForSelector('[data-testid="editor-rico-sugestoes"]');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Escape');
+
+    await page.waitForSelector('.quadro-ligacao');
+    await page.click('.quadro-ligacao');
+
+    await page.waitForSelector('[data-testid="detalhe"]');
+    await page.waitForSelector('[data-testid="nos-quadros-lista"] button');
+    const textoBacklink = await page
+      .locator('[data-testid="nos-quadros-lista"] button')
+      .first()
+      .textContent();
+    assert.ok(textoBacklink?.includes('Taverna'));
+
+    await page.click('[data-testid="nos-quadros-lista"] button');
+    await page.waitForSelector('[data-testid="area-quadro"]');
+    await page.waitForSelector('.quadro-ligacao');
+
+    assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
+  } finally {
+    await ctx.close();
+  }
+});

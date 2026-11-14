@@ -1,4 +1,5 @@
 import { signal } from '@preact/signals';
+import { useEffect, useState } from 'preact/hooks';
 import { formatarRef, type Entidade, type Ref, type TipoEntidade } from '#mesa';
 import {
   alterarEntidade,
@@ -24,7 +25,11 @@ import {
   visiveis,
   voltarSelecao,
 } from '../app/campanha.ts';
-import { abrirEntidade, tela } from '../app/rotas.ts';
+import { abrirEntidade, navegarParaItemNoQuadro, tela } from '../app/rotas.ts';
+import {
+  linksNosQuadrosDaEntidade,
+  type LigacaoNoQuadro,
+} from '../app/ligacoes-quadro.ts';
 import { sondarAplicativos } from '../app/inventario.ts';
 import {
   contarPorTag,
@@ -402,6 +407,46 @@ function ChipDeRef({ r }: { r: Ref }) {
   );
 }
 
+function NosQuadros({ e }: { e: Entidade }) {
+  const [lista, setLista] = useState<LigacaoNoQuadro[]>([]);
+  const todas = ligacoes.value;
+
+  useEffect(() => {
+    let cancelado = false;
+    void linksNosQuadrosDaEntidade(e, todas).then((res) => {
+      if (!cancelado) setLista(res);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [e.id, todas]);
+
+  return (
+    <>
+      <h3 class="faixa pequena">Nos quadros</h3>
+      {lista.length === 0 ? (
+        <p class="dica">Nenhuma menção em quadros ainda.</p>
+      ) : (
+        <ul class="refs" data-testid="nos-quadros-lista">
+          {lista.map((l) => (
+            <li key={`${l.quadroId}/${l.itemId}`} class="ref">
+              <button
+                type="button"
+                class="botao-pilula"
+                data-testid={`ir-para-quadro-item-${l.itemId}`}
+                onClick={() => navegarParaItemNoQuadro(l.quadroId, l.itemId)}
+              >
+                {l.quadroNome}
+                {l.molduraNome ? ` · ${l.molduraNome}` : ''}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
 function Detalhe({ e }: { e: Entidade }) {
   const editavel = podeEditar(e), refsVisiveis = e.refs.filter(r => !ehRefDeEntidadeDaMesa(r));
   return (
@@ -435,6 +480,7 @@ function Detalhe({ e }: { e: Entidade }) {
       {refsVisiveis.length === 0
         ? <p class="dica">Ainda não está em nenhum aplicativo. O Atlas, o Dossiê e os outros acrescentam aqui o que a representa neles.</p>
         : <ul class="refs">{refsVisiveis.map(r => <ChipDeRef key={formatarRef(r)} r={r} />)}</ul>}
+      <NosQuadros e={e} />
     </section>
   );
 }

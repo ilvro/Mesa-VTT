@@ -49,6 +49,7 @@ export function lerHash(): void {
 export function abrirEntidade(id: string | null): void {
   selecionadaId.value = id;
   registrarSelecaoNoHistorico(id);
+  if (id) tela.value = 'entidades';
   const alvo = id ? `#/entidade/${encodeURIComponent(id)}` : location.pathname + location.search;
   try { history.replaceState(null, '', alvo); } catch { /* ignora */ }
 }
@@ -56,6 +57,14 @@ export function abrirEntidade(id: string | null): void {
 export function navegarParaQuadro(id: string | null): void {
   tela.value = 'quadros';
   const alvo = id ? `#/quadro/${encodeURIComponent(id)}` : '#/quadros';
+  try { history.replaceState(null, '', alvo); } catch { /* ignora */ }
+}
+
+export function navegarParaItemNoQuadro(quadroId: string, itemId: string): void {
+  itemPendente.value = itemId;
+  tela.value = 'quadros';
+  void abrirQuadro(quadroId);
+  const alvo = `#/quadro/${encodeURIComponent(quadroId)}/item/${encodeURIComponent(itemId)}`;
   try { history.replaceState(null, '', alvo); } catch { /* ignora */ }
 }
 

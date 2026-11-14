@@ -1,5 +1,7 @@
+import type { Entidade } from '#mesa';
 import { escaparHtml } from './doc-rico.ts';
 import { analisarMarcadores, type Marcador } from './marcadores.ts';
+import { entidadePorNome, resolver } from './notas.ts';
 import { TIPOS_SEMANTICOS, type TipoSemantico } from './quadro.ts';
 
 export type PaletaDaCampanha = Record<TipoSemantico, string>;
@@ -123,7 +125,7 @@ export function fundoEfetivo(
   return null;
 }
 
-function renderizarMarcador(m: Marcador): string {
+function renderizarMarcador(m: Marcador, entidades: readonly Entidade[] = []): string {
   const condHtml =
     'condicao' in m && m.condicao
       ? ` <em class="chip-condicao">se:${escaparHtml(m.condicao)}</em>`
@@ -151,24 +153,46 @@ function renderizarMarcador(m: Marcador): string {
       return `<span class="chip-marcador chip-segredo">SEGREDO${condHtml}</span>`;
     case 'fala': {
       const texto = m.para ? `${m.quem} → ${m.para}` : m.quem;
-      const attrs = `data-fala-quem="${escaparHtml(m.quem)}"${m.para ? ` data-fala-para="${escaparHtml(m.para)}"` : ''}`;
-      return `<span class="chip-marcador chip-fala" ${attrs}>${escaparHtml(texto)}${condHtml}</span>`;
+      const entidade = entidadePorNome(entidades, m.quem);
+      const cls = entidade ? 'chip-marcador chip-fala chip-clicavel' : 'chip-marcador chip-fala';
+      const entAttr = entidade ? ` data-entidade-id="${escaparHtml(entidade.id)}"` : '';
+      const attrs = `data-fala-quem="${escaparHtml(m.quem)}"${m.para ? ` data-fala-para="${escaparHtml(m.para)}"` : ''}${entAttr}`;
+      return `<span class="${cls}" ${attrs}>${escaparHtml(texto)}${condHtml}</span>`;
     }
-    case 'rotulo':
+    case 'rotulo': {
+      const entidade = entidadePorNome(entidades, m.texto);
+      if (entidade) {
+        return `<span class="chip-marcador chip-fala chip-clicavel" data-fala-quem="${escaparHtml(m.texto)}" data-entidade-id="${escaparHtml(entidade.id)}">${escaparHtml(m.texto)}${condHtml}</span>`;
+      }
       return `<span class="chip-marcador chip-rotulo">${escaparHtml(m.texto)}${condHtml}</span>`;
+    }
   }
 }
 
-export function decorarMarcadores(texto: string): string {
+export function decorarMarcadores(
+  texto: string,
+  entidades: readonly Entidade[] = [],
+): string {
   const trechos = analisarMarcadores(texto);
   let html = '';
   for (const t of trechos) {
     if (t.tipo === 'texto') {
       html += escaparHtml(t.texto);
     } else if (t.tipo === 'ligacao') {
-      html += escaparHtml(t.bruto);
+      if (entidades.length === 0) {
+        html += escaparHtml(t.bruto);
+      } else {
+        const dest = resolver(t.alvo, entidades);
+        if (dest.tipo === 'entidade') {
+          html += `<a href="#/entidade/${encodeURIComponent(dest.entidade.id)}" class="quadro-ligacao" data-entidade-id="${escaparHtml(dest.entidade.id)}">${escaparHtml(t.rotulo ?? dest.entidade.nome)}</a>`;
+        } else if (dest.tipo === 'ref') {
+          html += `<button type="button" class="quadro-ligacao quadro-ligacao-ref" data-ref-app="${escaparHtml(dest.ref.app)}" data-ref-tipo="${escaparHtml(dest.ref.tipo)}" data-ref-id="${escaparHtml(dest.ref.id)}">${escaparHtml(t.rotulo ?? `${dest.ref.app}:${dest.ref.tipo}`)}</button>`;
+        } else {
+          html += `<span class="quadro-ligacao-orfa">${escaparHtml(t.rotulo ?? dest.nome)}</span>`;
+        }
+      }
     } else {
-      html += renderizarMarcador(t.marcador);
+      html += renderizarMarcador(t.marcador, entidades);
     }
   }
   return html;
