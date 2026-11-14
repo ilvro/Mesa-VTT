@@ -619,7 +619,7 @@ Testes: os dois eventos são válidos e inválidos nos casos certos (no Atlas: `
 Pronto quando: os testes do Atlas e da Mesa passam com o vendor atualizado.
 Commit: `added inspect and board focus events to the platform contract`
 
-### Q5b — Atlas: Refs de objeto e região, e "Ver no quadro"  ⬜
+### Q5b — Atlas: Refs de objeto e região, e "Ver no quadro"  ✅
 Objetivo: no Atlas, o mestre clica num objeto ou numa região e vê no quadro tudo o que está ligado a ele.
 Depende de: Q5a.
 Ler:
