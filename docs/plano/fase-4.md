@@ -714,7 +714,7 @@ Testes: o formato da linha do registro e a não repetição (reaproveitar `ehRep
 Pronto quando: os testes passam.
 Commit: `added done marks that feed the session log`
 
-### Q6c — Molduras que agem  ⬜
+### Q6c — Molduras que agem  ✅
 Objetivo: uma moldura "Casa" ou "Subida da trilha" funciona como uma região do Atlas, mas no quadro.
 Depende de: Q6a, Q5d.
 Arquivos: mudar `ItemMoldura.tsx`, `MenuDoItem.tsx` (o editor de "Ao entrar"), `src/app/foco-do-quadro.ts` e `src/app/quadros.ts`; criar `tests/unit/ao-focar.test.ts` (com a regra pura em `src/dominio/molduras.ts`).

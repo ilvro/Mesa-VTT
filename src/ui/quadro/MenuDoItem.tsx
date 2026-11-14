@@ -1,10 +1,13 @@
+import { useState } from 'preact/hooks';
+import type { Ref } from '#mesa';
 import type { ModoAlinhamento } from '../../dominio/alinhamento.ts';
-import type { Item } from '../../dominio/quadro.ts';
+import type { AoFocar, Item } from '../../dominio/quadro.ts';
 import {
   duplicar,
   levarParaTras,
   trazerParaFrente,
 } from '../../dominio/quadro-operacoes.ts';
+import { entidades } from '../../app/campanha.ts';
 import {
   agruparSelecao,
   alinharSelecao,
@@ -42,6 +45,42 @@ export function MenuDoItem({
   const todosSoMestre = temSelecao && selecionados.every((i) => i.soMestre);
   const temGrupo = selecionados.some((i) => i.grupoId !== null);
   const primeiro = selecionados[0];
+  const [fatoChave, setFatoChave] = useState('');
+  const [fatoValor, setFatoValor] = useState<'true' | 'false'>('true');
+
+  const cenasSonoras = entidades.value
+    .map((e) => {
+      const refJukebox = e.refs.find((r) => r.app === 'jukebox');
+      if (!refJukebox && e.tipo !== 'cena') return null;
+      const ref: Ref = refJukebox ?? { app: 'mesa', tipo: e.tipo, id: e.id };
+      return { nome: e.nome, ref, chave: `${ref.app}:${ref.tipo}:${ref.id}` };
+    })
+    .filter((c): c is { nome: string; ref: Ref; chave: string } => c !== null);
+
+  const atualizarAoFocar = (novo: AoFocar) => {
+    if (!primeiro || primeiro.tipo !== 'moldura') return;
+    const vazio = novo.cena === null && Object.keys(novo.fatos).length === 0;
+    executar({
+      rotulo: 'Ao entrar na moldura',
+      ops: [
+        {
+          alterar: [
+            {
+              id: primeiro.id,
+              antes: {
+                aoFocar: primeiro.aoFocar,
+                atualizadoEm: primeiro.atualizadoEm,
+              },
+              depois: {
+                aoFocar: vazio ? undefined : novo,
+                atualizadoEm: Date.now(),
+              },
+            },
+          ],
+        },
+      ],
+    });
+  };
 
   const copiarLink = async () => {
     if (!primeiro) return;
@@ -274,6 +313,97 @@ export function MenuDoItem({
           >
             {todosSoMestre ? '✓ Só mestre' : 'Só mestre'}
           </button>
+          {selecionados.length === 1 && primeiro?.tipo === 'moldura' ? (
+            <div class="menu-contexto-alinhar" data-testid="menu-ao-entrar">
+              <span class="meta">Ao entrar</span>
+              <select
+                class="campo"
+                data-testid="ao-entrar-cena"
+                value={
+                  primeiro.aoFocar?.cena
+                    ? `${primeiro.aoFocar.cena.app}:${primeiro.aoFocar.cena.tipo}:${primeiro.aoFocar.cena.id}`
+                    : ''
+                }
+                onChange={(e) => {
+                  const val = e.currentTarget.value;
+                  const cena =
+                    cenasSonoras.find((c) => c.chave === val)?.ref ?? null;
+                  atualizarAoFocar({
+                    cena,
+                    fatos: { ...(primeiro.aoFocar?.fatos ?? {}) },
+                  });
+                }}
+              >
+                <option value="">Sem cena sonora</option>
+                {cenasSonoras.map((c) => (
+                  <option key={c.chave} value={c.chave}>
+                    {c.nome}
+                  </option>
+                ))}
+              </select>
+              {Object.entries(primeiro.aoFocar?.fatos ?? {}).map(([k, v]) => (
+                <div key={k} class="menu-ao-entrar-fato">
+                  <span>
+                    {k}: {String(v)}
+                  </span>
+                  <button
+                    type="button"
+                    class="fmt-btn"
+                    title="Remover fato"
+                    onClick={() => {
+                      const fatos = { ...(primeiro.aoFocar?.fatos ?? {}) };
+                      delete fatos[k];
+                      atualizarAoFocar({
+                        cena: primeiro.aoFocar?.cena ?? null,
+                        fatos,
+                      });
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <div class="menu-ao-entrar-novo">
+                <input
+                  type="text"
+                  class="campo"
+                  placeholder="fato..."
+                  value={fatoChave}
+                  onInput={(e) => setFatoChave(e.currentTarget.value)}
+                />
+                <select
+                  class="campo"
+                  value={fatoValor}
+                  onChange={(e) =>
+                    setFatoValor(
+                      e.currentTarget.value === 'false' ? 'false' : 'true',
+                    )
+                  }
+                >
+                  <option value="true">sim</option>
+                  <option value="false">não</option>
+                </select>
+                <button
+                  type="button"
+                  class="fmt-btn"
+                  onClick={() => {
+                    const ch = fatoChave.trim();
+                    if (!ch) return;
+                    atualizarAoFocar({
+                      cena: primeiro.aoFocar?.cena ?? null,
+                      fatos: {
+                        ...(primeiro.aoFocar?.fatos ?? {}),
+                        [ch]: fatoValor === 'true',
+                      },
+                    });
+                    setFatoChave('');
+                  }}
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          ) : null}
           {primeiro ? (
             <button
               type="button"

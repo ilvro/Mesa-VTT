@@ -96,6 +96,11 @@ import {
   restaurarPaletaPadrao,
   selecao,
 } from '../../app/quadros.ts';
+import {
+  aoFocarMoldura,
+  modoMoldurasAgem,
+  type ModoMoldurasAgem,
+} from '../../app/foco-do-quadro.ts';
 import { navegarParaQuadro } from '../../app/rotas.ts';
 import { cx } from '../cx.ts';
 import {
@@ -724,6 +729,7 @@ export function Quadro() {
           const m = ordenadas[proxIdx]!;
           camera.value = enquadrar(m, tamanhoTela.value, 60);
           selecao.value = new Set([m.id]);
+          aoFocarMoldura(m, todas);
         }
       }
     };
@@ -1720,6 +1726,21 @@ export function Quadro() {
         >
           Segredos
         </button>
+        <label class="molduras-agem-wrap" title="Comportamento ao focar uma moldura na sessão">
+          <span>Molduras agem</span>
+          <select
+            class="campo molduras-agem-select"
+            data-testid="select-molduras-agem"
+            value={modoMoldurasAgem.value}
+            onChange={(e) => {
+              modoMoldurasAgem.value = e.currentTarget.value as ModoMoldurasAgem;
+            }}
+          >
+            <option value="sim">sim</option>
+            <option value="perguntar">perguntar</option>
+            <option value="nao">não</option>
+          </select>
+        </label>
         <button
           type="button"
           class="botao-pilula"
@@ -2006,6 +2027,10 @@ export function Quadro() {
               onFocarMoldura={(m) => {
                 camera.value = enquadrar(m, tamanhoTela.value, 60);
                 selecao.value = new Set([m.id]);
+                const todas = [...itens.value.values()].filter(
+                  (it): it is ItemMoldura => it.tipo === 'moldura',
+                );
+                aoFocarMoldura(m, todas);
               }}
               onFechar={() => {
                 navegadorAberto.value = false;

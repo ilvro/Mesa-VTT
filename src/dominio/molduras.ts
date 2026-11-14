@@ -70,3 +70,45 @@ export function ordemDeLeitura(molduras: Iterable<ItemMoldura>): ItemMoldura[] {
 export function linkDaMoldura(quadroId: string, molduraId: string): string {
   return `mesa:mesa/item/${quadroId}/${molduraId}`;
 }
+
+export type ModoMoldurasAgem = 'sim' | 'perguntar' | 'nao';
+
+function molduraEhAncestral(
+  ancestralId: string,
+  descendente: ItemMoldura,
+  porId: ReadonlyMap<string, ItemMoldura>,
+): boolean {
+  let atual: ItemMoldura | undefined = descendente;
+  const visitados = new Set<string>();
+  while (atual?.molduraId) {
+    if (visitados.has(atual.id)) break;
+    visitados.add(atual.id);
+    if (atual.molduraId === ancestralId) return true;
+    atual = porId.get(atual.molduraId);
+  }
+  return false;
+}
+
+export function deveDisparar(
+  anteriorId: string | null,
+  atual: ItemMoldura,
+  todasMolduras: readonly ItemMoldura[],
+  modo: ModoMoldurasAgem,
+): boolean {
+  if (modo === 'nao') return false;
+  if (!atual.aoFocar) return false;
+  const temAcao =
+    atual.aoFocar.cena !== null ||
+    Object.keys(atual.aoFocar.fatos).length > 0;
+  if (!temAcao) return false;
+  if (anteriorId === atual.id) return false;
+
+  if (anteriorId) {
+    const porId = new Map(todasMolduras.map((m) => [m.id, m]));
+    const anterior = porId.get(anteriorId);
+    if (anterior && molduraEhAncestral(atual.id, anterior, porId)) {
+      return false;
+    }
+  }
+  return true;
+}

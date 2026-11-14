@@ -84,6 +84,16 @@ export function ItemMoldura({
         ) : (
           <span class="item-moldura-titulo" data-item-id={item.id}>
             {item.titulo}
+            {item.aoFocar &&
+            (item.aoFocar.cena || Object.keys(item.aoFocar.fatos).length > 0) ? (
+              <span
+                class="item-moldura-ao-entrar"
+                title="Ações ao entrar configuradas"
+              >
+                {item.aoFocar.cena ? ' ♪' : ''}
+                {Object.keys(item.aoFocar.fatos).length > 0 ? ' ⚡' : ''}
+              </span>
+            ) : null}
           </span>
         )}
       </div>

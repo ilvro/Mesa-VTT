@@ -1881,3 +1881,38 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .painel-segredos {
   width: 300px;
 }
+
+.molduras-agem-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--tinta-suave);
+}
+.molduras-agem-select {
+  padding: 2px 6px;
+  font-size: 0.78rem;
+  height: 26px;
+}
+.menu-ao-entrar-fato,
+.menu-ao-entrar-novo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+.menu-ao-entrar-fato {
+  justify-content: space-between;
+  font-size: 0.78rem;
+}
+.menu-ao-entrar-novo .campo {
+  min-width: 0;
+  flex: 1;
+  padding: 2px 4px;
+  font-size: 0.76rem;
+}
+.item-moldura-ao-entrar {
+  margin-left: 6px;
+  font-size: 0.8em;
+  opacity: 0.75;
+}

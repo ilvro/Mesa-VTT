@@ -47,3 +47,5 @@ Implementações de refinamento do hub da Mesa, transferência entre aparelhos, 
 - **Q6a (Estado do mundo e condições):** criado `src/dominio/estado-do-mundo.ts` (`avaliarCondicao`, `condicoesDoItem`, `itemAtendeCondicoes`), `tests/unit/estado-do-mundo.test.ts` e `src/ui/quadro/PainelDoEstado.tsx`; persistência em `banco-quadros.ts`/`quadros.ts`, opacidade 35% e chips riscados/clicáveis em `paleta.ts`, `Item.tsx`, `ItemForma.tsx` e `Quadro.tsx`.
 
 - **Q6b (✓ feito e registro):** adicionado `formatarLinhaDoQuadro` em `src/dominio/registro.ts`, `registrarDoQuadro` em `src/app/registro.ts`, `marcarFeito` em `src/app/quadros.ts`, botão ✓ e atalho `X` em `Item.tsx`/`MenuDoItem.tsx`/`Quadro.tsx`, painel `PainelDeSegredos.tsx` e teste unitário em `tests/unit/registro.test.ts`.
+
+- **Q6c (Molduras que agem):** adicionado `deveDisparar` e `ModoMoldurasAgem` em `src/dominio/molduras.ts`, `src/app/foco-do-quadro.ts` (`aoFocarMoldura`, `modoMoldurasAgem`), editor "Ao entrar" em `MenuDoItem.tsx`, indicador em `ItemMoldura.tsx`, seletor "Molduras agem" e disparo em `Quadro.tsx`, e testes em `tests/unit/ao-focar.test.ts`.
