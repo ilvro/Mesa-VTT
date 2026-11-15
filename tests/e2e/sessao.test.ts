@@ -72,12 +72,12 @@ test('9.5a: o modo sessão mostra Atlas, fichas e Jukebox lado a lado, com layou
     if (process.env.CAPTURAR) await mesa.screenshot({ path: process.env.CAPTURAR });
 
     // Layout: presets, painéis, divisor arrastado e por teclado, tela cheia, e tudo persiste ao recarregar.
-    await mesa.click('[data-testid="preset-so-mapa"]');
+    await mesa.click('[data-testid="abrir-menu-paineis"]'); await mesa.click('[data-testid="preset-so-mapa"]');
     await mesa.waitForFunction(() => document.querySelector('[data-testid="escala-atlas"]')?.getAttribute('data-escala') === '1.000');   // o mapa sozinho tem largura de sobra: sem redução
     assert.equal(await mesa.locator('[data-testid="painel-corpo-fichas"]').count(), 0); assert.equal(await mesa.locator('[data-testid="iframe-jukebox"]').count(), 0);
-    await mesa.click('[data-testid="preset-padrao"]');
+    await mesa.click('[data-testid="abrir-menu-paineis"]'); await mesa.click('[data-testid="preset-padrao"]');
     assert.equal(await mesa.locator('[data-testid="painel-corpo-fichas"]').count(), 1);
-    await mesa.click('[data-testid="painel-jukebox"]');
+    await mesa.click('[data-testid="abrir-menu-paineis"]'); await mesa.click('[data-testid="painel-jukebox"]');
     assert.equal(await mesa.locator('[data-testid="painel-corpo-jukebox"]').count(), 0, 'o painel de música some');
     const antes = await larguraDoPainel(mesa, 'atlas'), caixa = (await mesa.locator('[data-testid="divisor-0"]').boundingBox())!;
     await mesa.mouse.move(caixa.x + caixa.width / 2, caixa.y + caixa.height / 2); await mesa.mouse.down(); await mesa.mouse.move(caixa.x + 150, caixa.y + 40, { steps: 8 }); await mesa.mouse.up();
@@ -89,7 +89,7 @@ test('9.5a: o modo sessão mostra Atlas, fichas e Jukebox lado a lado, com layou
     await mesa.reload(); await mesa.waitForSelector('[data-testid="aba-sessao"]'); await mesa.click('[data-testid="aba-sessao"]'); await mesa.waitForSelector('[data-testid="painel-corpo-atlas"]');
     assert.equal(await mesa.locator('[data-testid="painel-corpo-jukebox"]').count(), 0, 'o painel escondido continua escondido');
     assert.ok(Math.abs(await larguraDoPainel(mesa, 'atlas') - ajustado) < 4, 'a largura ajustada foi lembrada');
-    await mesa.click('[data-testid="layout-padrao"]');
+    await mesa.click('[data-testid="abrir-menu-paineis"]'); await mesa.click('[data-testid="layout-padrao"]');
     assert.equal(await mesa.locator('[data-testid="painel-corpo-jukebox"]').count(), 1);
 
     await mesa.click('[data-testid="tela-cheia-atlas"]');

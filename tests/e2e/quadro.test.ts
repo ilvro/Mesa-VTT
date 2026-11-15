@@ -572,7 +572,7 @@ test('Q5d: modo sessão com painel Quadro e os três modos (Desligado, Espiar e 
     // Abre o modo sessão e ativa o preset Com quadro
     await page.click('[data-testid="aba-sessao"]');
     await page.waitForSelector('[data-testid="tela-sessao"]');
-    await page.click('[data-testid="preset-com-quadro"]');
+    await page.click('[data-testid="abrir-menu-paineis"]'); await page.click('[data-testid="preset-com-quadro"]');
     await page.waitForSelector('[data-testid="painel-corpo-quadro"]');
     await page.waitForSelector('[data-testid="area-quadro"]');
 

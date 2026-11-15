@@ -53,7 +53,7 @@ test('9.5b: roteiro e registro da sessão: avisa o início, registra só os fato
 
     const outro = await aplicativoFalso(await ctx.newPage());
     await mesa.bringToFront();
-    await mesa.click('[data-testid="aba-sessao"]'); await mesa.click('[data-testid="preset-com-diario"]');
+    await mesa.click('[data-testid="aba-sessao"]'); await mesa.click('[data-testid="abrir-menu-paineis"]'); await mesa.click('[data-testid="preset-com-diario"]');
     await mesa.waitForSelector('[data-testid="sem-sessao"]');
     assert.equal(await mesa.locator('[data-testid="painel-corpo-diario"]').count(), 1);
 
@@ -148,7 +148,7 @@ test('9.5b: as notas do roteiro que estavam no navegador (versão antiga) passam
       localStorage.setItem('mesa:roteiro-notas:sessao-antiga', JSON.stringify({ 'atlas/mapa/m1': 'Nota velha', 'atlas/mapa/fora': 'some' }));
       localStorage.setItem(`mesa:sessao-ativa:${campanhaId}`, JSON.stringify({ id: 'sessao-antiga', gravando: false }));
     }, [campanhaId, MAPA] as const);
-    await mesa.reload(); await mesa.click('[data-testid="aba-sessao"]'); await mesa.click('[data-testid="painel-diario"]');
+    await mesa.reload(); await mesa.click('[data-testid="aba-sessao"]'); await mesa.click('[data-testid="abrir-menu-paineis"]'); await mesa.click('[data-testid="painel-diario"]');
     await mesa.waitForSelector('[data-testid="diario"]');
     assert.equal(await mesa.inputValue('[data-testid="roteiro-nota-0"]'), 'Nota velha');
     let [s] = await sessoesDoBanco(mesa);

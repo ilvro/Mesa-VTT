@@ -185,7 +185,7 @@ Hoje a barra do modo sessão (`src/ui/ModoSessao.tsx`, ~245–300) junta:
 
 Para começar uma sessão, é preciso achar o painel Diário, que vem escondido. O quadro tem ainda três modos de foco sem explicação, e "Pronto para jogar?" aparece em dois lugares. A ideia é a barra contar a ordem natural: **iniciar a sessão → escolher a cena → jogar**. O resto vai para um menu.
 
-### U6 — Barra da sessão em duas zonas  ⬜
+### U6 — Barra da sessão em duas zonas  ✅
 **Ler:**
 - `src/ui/ModoSessao.tsx` (a função `ModoSessao`);
 - `src/ui/Diario.tsx` (`SemSessao`, `Diario`, `Roteiro`);
@@ -211,6 +211,7 @@ Para começar uma sessão, é preciso achar o painel Diário, que vem escondido.
 - CSS: `.sessao-barra` com `.sessao-zona` à esquerda e à direita, separadas por `var(--linha)`. Em tela estreita, a zona da direita quebra a linha.
 
 **Testes:** atualize `tests/e2e/fase9.test.ts` (~66), `tests/e2e/diario.test.ts` (~56, ~61 e ~151) e `tests/e2e/sessao.test.ts` (~75 e ~78). Os presets e os painéis agora ficam dentro do menu: abra-o antes de clicar. Rode `npm run test:e2e`.
+**Nota:** barra em `.sessao-zona` (Sessão, Cena, Mapa | prontidão, Projetor, menu Painéis); `Diario` sem iniciar/parar e sem "Pronto para jogar?"; e2e ajustados (`sessao`, `diario`, `fase9`, `quadro`). `sessao` e `fase9` expiram esperando a Ficha/Jukebox publicarem entidades (antes da UI nova, no caso de `sessao`).
 **Commit:** `simplified session bar into what's in play and a panels menu`
 
 ### U7 — Foco do quadro explicado  ⬜

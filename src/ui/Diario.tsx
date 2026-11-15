@@ -1,34 +1,17 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { signal } from '@preact/signals';
 import { chaveDaRef, type Ref } from '#mesa';
 import { entidades } from '../app/campanha.ts';
-import { adicionarAoRoteiro, anotar, baixarMarkdown, continuarSessao, definirNotaDoItem, encerrarSessao, fecharSessao, gravando, iniciarSessao, linhas, moverNoRoteiro, notasDoRoteiro, removerDoRoteiro, retomarGravacao, roteiroDaSessao, sessaoAtiva, sessoes, abrirItemDoRoteiro } from '../app/registro.ts';
+import { adicionarAoRoteiro, anotar, baixarMarkdown, continuarSessao, definirNotaDoItem, fecharSessao, gravando, linhas, moverNoRoteiro, notasDoRoteiro, removerDoRoteiro, roteiroDaSessao, sessaoAtiva, sessoes, abrirItemDoRoteiro } from '../app/registro.ts';
 import { garantirPainelPara } from '../app/sessao.ts';
 import { candidatos, nomeDoRef, ondeEstaORef } from '../dominio/roteiro.ts';
-import { DialogoChecagemSessao } from './DialogoChecagemSessao.tsx';
 import { cx } from './cx.ts';
-
-const checandoProntidao = signal(false);
 
 function Roteiro() {
   const roteiro = roteiroDaSessao.value, opcoes = candidatos(entidades.value).filter(c => !roteiro.some(r => chaveDaRef(r) === chaveDaRef(c.ref)));
   const abrir = (r: Ref) => { garantirPainelPara(r); void abrirItemDoRoteiro(r); };
   return (
     <section class="diario-secao" data-testid="roteiro">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>
-        <h4 class="faixa pequena" style={{ margin: 0 }}>Roteiro</h4>
-        <button
-          type="button"
-          class="botao-pilula"
-          data-testid="checar-sessao"
-          onClick={() => { checandoProntidao.value = true; }}
-        >
-          Pronto para jogar?
-        </button>
-      </div>
-      {checandoProntidao.value && (
-        <DialogoChecagemSessao aoFechar={() => { checandoProntidao.value = false; }} />
-      )}
+      <h4 class="faixa pequena">Roteiro</h4>
       {roteiro.length === 0 && <p class="dica">Nada no roteiro ainda. Acrescente mapas, cenas sonoras, documentos e fichas na ordem em que devem acontecer.</p>}
       <ol class="roteiro">
         {roteiro.map((r, i) => (
@@ -77,14 +60,9 @@ function Registro() {
 }
 
 function SemSessao() {
-  const [nome, setNome] = useState('');
   return (
     <div class="diario-vazio" data-testid="sem-sessao">
-      <form class="nova-sessao" onSubmit={ev => { ev.preventDefault(); void iniciarSessao(nome).then(() => setNome('')); }}>
-        <input type="text" placeholder="Nome da sessão (opcional)" maxLength={200} value={nome} data-testid="sessao-nome" onInput={ev => setNome(ev.currentTarget.value)} />
-        <button type="submit" class="botao-pilula destaque" data-testid="sessao-iniciar">Iniciar sessão</button>
-      </form>
-      <p class="dica">Ao iniciar, o diário passa a registrar o que acontece na mesa (rolagens, mapas, revelações, músicas) e avisa os outros aplicativos.</p>
+      <p class="dica">Inicie a sessão na barra de cima.</p>
       {sessoes.value.length > 0 && (
         <>
           <h4 class="faixa pequena">Sessões anteriores</h4>
@@ -104,12 +82,8 @@ export function Diario() {
   return (
     <div class="diario" data-testid="diario">
       <header class="diario-topo">
-        <strong class="diario-nome" data-testid="sessao-nome-ativa">{s.nome}</strong>
-        <span class={cx('selo', gravando.value ? 'selo-achado' : 'selo-sem-manifesto')} data-testid="sessao-estado"><i class="ponto" />{gravando.value ? 'Gravando' : 'Parada'}</span>
+        <strong class="diario-nome">{s.nome}</strong>
         <span class="espaco" />
-        {gravando.value
-          ? <button type="button" class="botao-pilula" data-testid="sessao-encerrar" onClick={encerrarSessao}>Parar</button>
-          : <button type="button" class="botao-pilula destaque" data-testid="sessao-retomar" onClick={retomarGravacao}>Gravar</button>}
         <button type="button" class="botao-pilula" data-testid="sessao-exportar" onClick={baixarMarkdown}>Exportar .md</button>
         <button type="button" class="botao-icone-texto" aria-label="Fechar a sessão" title="Fechar (a sessão fica guardada)" data-testid="sessao-fechar" onClick={fecharSessao}>✕</button>
       </header>

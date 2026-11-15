@@ -11,7 +11,7 @@ import { alternarPainel, escalaDoPainel, LARGURA_LOGICA_MINIMA, presetDe, PRESET
 import { enderecoDaFicha, enderecoDoAtlas, filtrarPersonagensSessao } from '../dominio/sessao.ts';
 import { cx } from './cx.ts';
 import { Diario } from './Diario.tsx';
-import { carregarSessoes, sessaoAtiva } from '../app/registro.ts';
+import { carregarSessoes, encerrarSessao, gravando, iniciarSessao, retomarGravacao, sessaoAtiva } from '../app/registro.ts';
 import { abrirProjetorNoSegundoMonitor } from '../app/desktop.ts';
 import { extrairPacoteDeCena, type PacoteDeCena } from '../dominio/cenas.ts';
 import { carregarFatos } from '../app/prontidao.ts';
@@ -218,6 +218,69 @@ function PainelDoQuadro() {
 
 const CORPO: Record<PainelId, () => preact.JSX.Element> = { atlas: PainelDoAtlas, fichas: PainelDasFichas, jukebox: PainelDoJukebox, diario: Diario, quadro: PainelDoQuadro };
 
+/** Zona "Sessão" da barra: inicia a sessão (e mostra o Diário) ou mostra o estado dela com Parar/Gravar. */
+function ControleDaSessao() {
+  const [nome, setNome] = useState('');
+  const sessao = sessaoAtiva.value;
+  if (!sessao) {
+    const iniciar = (ev: Event) => {
+      ev.preventDefault();
+      void iniciarSessao(nome).then(nova => {
+        setNome('');
+        if (nova && !layout.value.find(p => p.id === 'diario')?.visivel) mudarLayout(alternarPainel(layout.value, 'diario'));
+      });
+    };
+    return (
+      <form class="sessao-iniciar" onSubmit={iniciar}>
+        <input type="text" placeholder="Nome da sessão" aria-label="Nome da sessão" maxLength={200} value={nome} data-testid="sessao-nome" onInput={ev => setNome(ev.currentTarget.value)} />
+        <button type="submit" class="botao-pilula destaque" data-testid="sessao-iniciar">▶ Iniciar sessão</button>
+      </form>
+    );
+  }
+  return (
+    <div class="sessao-ativa">
+      <strong class="sessao-nome-ativa" data-testid="sessao-nome-ativa">{sessao.nome}</strong>
+      <span class={cx('selo', gravando.value ? 'selo-achado' : 'selo-sem-manifesto')} data-testid="sessao-estado"><i class="ponto" />{gravando.value ? 'Gravando' : 'Parada'}</span>
+      {gravando.value
+        ? <button type="button" class="botao-pilula" data-testid="sessao-encerrar" onClick={encerrarSessao}>Parar</button>
+        : <button type="button" class="botao-pilula destaque" data-testid="sessao-retomar" onClick={retomarGravacao}>Gravar</button>}
+    </div>
+  );
+}
+
+/** Menu "Painéis ▾": quais painéis aparecem, os arranjos prontos e o layout padrão. Fecha ao clicar fora. */
+function MenuDePaineis({ l, preset }: { l: Layout; preset: PresetId | null }) {
+  const caixa = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const fora = (ev: PointerEvent) => { const d = caixa.current; if (d?.open && !d.contains(ev.target as Node)) d.open = false; };
+    document.addEventListener('pointerdown', fora);
+    return () => document.removeEventListener('pointerdown', fora);
+  }, []);
+  const fechar = () => { if (caixa.current) caixa.current.open = false; };
+  return (
+    <details class="menu-paineis-caixa" ref={caixa} data-testid="menu-paineis">
+      <summary class="botao-pilula" data-testid="abrir-menu-paineis">Painéis ▾</summary>
+      <div class="menu-fichas menu-paineis">
+        {l.map(p => (
+          <label key={p.id} data-testid={`painel-${p.id}`}>
+            <input type="checkbox" checked={p.visivel} onChange={() => mudarLayout(alternarPainel(layout.value, p.id))} />
+            {ROTULO_DO_PAINEL[p.id]}
+          </label>
+        ))}
+        <hr class="menu-separador" />
+        <h4 class="faixa pequena">Arranjos</h4>
+        <ul class="menu-arranjos">
+          {(Object.keys(PRESETS) as PresetId[]).map(id => (
+            <li key={id}><button type="button" class={cx('menu-item', preset === id && 'ativa')} aria-pressed={preset === id} data-testid={`preset-${id}`} onClick={() => { mudarLayout(PRESETS[id]); fechar(); }}>{ROTULO_DO_PRESET[id]}</button></li>
+          ))}
+        </ul>
+        <hr class="menu-separador" />
+        <button type="button" class="botao-pilula" data-testid="layout-padrao" onClick={() => { restaurarLayoutPadrao(); fechar(); }}>Restaurar padrão</button>
+      </div>
+    </details>
+  );
+}
+
 export function ModoSessao() {
   const c = campanhaAtiva.value, area = useRef<HTMLDivElement>(null);
   const [arrastando, setArrastando] = useState(false);
@@ -272,65 +335,63 @@ export function ModoSessao() {
   return (
     <section class="sessao" data-testid="tela-sessao">
       <div class="sessao-barra">
-        <label class="linha-campanha">Mapa
-          <select data-testid="sessao-mapa" value={mapaAtual.value?.mapaId ?? ''} disabled={mapas.value.length === 0} onChange={ev => mudarEscolhas({ mapaId: ev.currentTarget.value || null })}>
-            {mapas.value.length === 0 ? <option value="">Nenhum mapa na campanha</option> : mapas.value.map(m => <option key={m.mapaId} value={m.mapaId}>{m.nome}</option>)}
-          </select>
-        </label>
-        <label class="linha-campanha">Cena / Encontro
-          <select
-            data-testid="sessao-cena"
-            value=""
-            disabled={cenasDisponiveis.length === 0}
-            onChange={ev => {
-              const id = ev.currentTarget.value;
-              if (!id) return;
-              const cenaSel = entidades.value.find(x => x.id === id);
-              if (cenaSel) void ativarCena(cenaSel);
-              ev.currentTarget.value = '';
-            }}
-          >
-            <option value="">{cenasDisponiveis.length === 0 ? 'Nenhuma cena criada' : '▶ Ativar Cena…'}</option>
-            {cenasDisponiveis.map(cs => (
-              <option key={cs.id} value={cs.id}>
-                {ehEncontro(cs) ? '⚔ ' : '🎬 '}{cs.nome}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div class="chips" role="group" aria-label="Layout">
-          {(Object.keys(PRESETS) as PresetId[]).map(id => <button key={id} type="button" class={cx('chip', preset === id && 'ativa')} aria-pressed={preset === id} data-testid={`preset-${id}`} onClick={() => mudarLayout(PRESETS[id])}>{ROTULO_DO_PRESET[id]}</button>)}
+        <div class="sessao-zona" data-testid="sessao-zona-esquerda">
+          <ControleDaSessao />
+          <label class="linha-campanha">Cena
+            <select
+              data-testid="sessao-cena"
+              value=""
+              disabled={cenasDisponiveis.length === 0}
+              onChange={ev => {
+                const id = ev.currentTarget.value;
+                if (!id) return;
+                const cenaSel = entidades.value.find(x => x.id === id);
+                if (cenaSel) void ativarCena(cenaSel);
+                ev.currentTarget.value = '';
+              }}
+            >
+              <option value="">{cenasDisponiveis.length === 0 ? 'Nenhuma cena criada' : '▶ Ativar Cena…'}</option>
+              {cenasDisponiveis.map(cs => (
+                <option key={cs.id} value={cs.id}>
+                  {ehEncontro(cs) ? '⚔ ' : '🎬 '}{cs.nome}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label class="linha-campanha">Mapa
+            <select data-testid="sessao-mapa" value={mapaAtual.value?.mapaId ?? ''} disabled={mapas.value.length === 0} onChange={ev => mudarEscolhas({ mapaId: ev.currentTarget.value || null })}>
+              {mapas.value.length === 0 ? <option value="">Nenhum mapa na campanha</option> : mapas.value.map(m => <option key={m.mapaId} value={m.mapaId}>{m.nome}</option>)}
+            </select>
+          </label>
         </div>
-        <div class="chips" role="group" aria-label="Painéis">
-          {l.map(p => <button key={p.id} type="button" class={cx('chip', p.visivel && 'ativa')} aria-pressed={p.visivel} data-testid={`painel-${p.id}`} onClick={() => mudarLayout(alternarPainel(layout.value, p.id))}>{ROTULO_DO_PAINEL[p.id]}</button>)}
-        </div>
-        <span class="espaco" />
-        {sessaoAtiva.value && (
+        <div class="sessao-zona sessao-zona-direita">
+          {sessaoAtiva.value && (
+            <button
+              type="button"
+              class="selo"
+              style={{ cursor: 'pointer', border: '1px solid var(--linha)' }}
+              data-testid="selo-prontidao-sessao"
+              title="Checagem de prontidão da sessão"
+              onClick={() => { checandoProntidaoSessao.value = true; }}
+            >
+              {pendenciasAtivasCount.value === null
+                ? 'Prontidão'
+                : pendenciasAtivasCount.value === 0
+                ? '✓ Pronta'
+                : `⚠️ ${pendenciasAtivasCount.value} ${pendenciasAtivasCount.value === 1 ? 'pendência' : 'pendências'}`}
+            </button>
+          )}
           <button
             type="button"
-            class="selo"
-            style={{ cursor: 'pointer', border: '1px solid var(--linha)' }}
-            data-testid="selo-prontidao-sessao"
-            title="Checagem de prontidão da sessão"
-            onClick={() => { checandoProntidaoSessao.value = true; }}
+            class="botao-pilula"
+            title="Abrir visão do projetor para os jogadores na TV ou 2º monitor"
+            data-testid="sessao-abrir-projetor"
+            onClick={() => { void abrirProjetorNoSegundoMonitor(mapaAtual.value?.mapaId ?? null); }}
           >
-            {pendenciasAtivasCount.value === null
-              ? 'Prontidão'
-              : pendenciasAtivasCount.value === 0
-              ? '✓ Pronta'
-              : `⚠️ ${pendenciasAtivasCount.value} ${pendenciasAtivasCount.value === 1 ? 'pendência' : 'pendências'}`}
+            📽 Projetor
           </button>
-        )}
-        <button
-          type="button"
-          class="botao-pilula"
-          title="Abrir visão do projetor para os jogadores na TV ou 2º monitor"
-          data-testid="sessao-abrir-projetor"
-          onClick={() => { void abrirProjetorNoSegundoMonitor(mapaAtual.value?.mapaId ?? null); }}
-        >
-          📽 Projetor
-        </button>
-        <button type="button" class="botao-pilula" data-testid="layout-padrao" onClick={restaurarLayoutPadrao}>Layout padrão</button>
+          <MenuDePaineis l={l} preset={preset} />
+        </div>
       </div>
       <div class={cx('sessao-paineis', arrastando && 'arrastando')} ref={area} data-testid="sessao-paineis">
         {v.map((p, i) => {

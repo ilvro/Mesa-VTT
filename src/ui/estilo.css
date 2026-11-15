@@ -299,7 +299,7 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 
 /* Modo sessão: os aplicativos lado a lado */
 .sessao { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.sessao-barra { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 14px; background: var(--superficie); border-bottom: 1px solid var(--linha); }
+.sessao-barra { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; justify-content: space-between; padding: 8px 14px; background: var(--superficie); border-bottom: 1px solid var(--linha); }
 .sessao-paineis { flex: 1; min-height: 0; display: flex; background: var(--fundo); }
 .sessao-paineis.arrastando { cursor: col-resize; user-select: none; }
 .sessao-paineis.arrastando iframe { pointer-events: none; }
@@ -2078,3 +2078,21 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   gap: 6px;
   justify-content: flex-end;
 }
+
+.sessao-zona { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sessao-zona-direita { margin-left: auto; padding-left: 16px; border-left: 1px solid var(--linha); }
+.sessao-iniciar { display: flex; align-items: center; gap: 8px; }
+.sessao-iniciar input { width: 160px; }
+.sessao-ativa { display: flex; align-items: center; gap: 8px; }
+.sessao-nome-ativa { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-paineis-caixa { position: relative; }
+.menu-paineis-caixa summary { list-style: none; cursor: pointer; }
+.menu-paineis-caixa summary::-webkit-details-marker { display: none; }
+.menu-paineis { min-width: 220px; }
+.menu-paineis .faixa { margin: 4px 0; }
+.menu-separador { border: 0; border-top: 1px solid var(--linha); margin: 8px 0; }
+.menu-arranjos { list-style: none; margin: 0 0 4px; padding: 0; display: grid; gap: 2px; }
+.menu-item { width: 100%; text-align: left; padding: 4px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+.menu-item:hover { background: var(--superficie); }
+.menu-item.ativa { border-color: var(--acento); }
+@media (max-width: 760px) { .sessao-zona-direita { margin-left: 0; padding-left: 0; border-left: 0; width: 100%; } }

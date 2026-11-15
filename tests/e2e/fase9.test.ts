@@ -63,7 +63,7 @@ test('fase 9 (validação): a ficha vira peça, a rolagem aparece sobre ela e no
     await mesa.click('[data-testid="aba-campanhas"]'); await mesa.fill('[data-testid="nova-campanha-nome"]', 'A Ilha'); await mesa.press('[data-testid="nova-campanha-nome"]', 'Enter');
     await mesa.waitForSelector('[data-testid="tela-entidades"]');
     await mesa.click('[data-testid="aba-sessao"]');
-    await mesa.click('[data-testid="painel-diario"]');
+    await mesa.click('[data-testid="abrir-menu-paineis"]'); await mesa.click('[data-testid="painel-diario"]');
     for (const p of ['atlas', 'fichas', 'jukebox']) await mesa.click(`[data-testid="painel-${p}"]`);
     await mesa.fill('[data-testid="sessao-nome"]', 'Noite na ilha'); await mesa.click('[data-testid="sessao-iniciar"]');
     await mesa.waitForSelector('[data-testid="diario"]');
