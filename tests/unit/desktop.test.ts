@@ -17,7 +17,18 @@ import {
   planejarMontagemDesktop,
   gerarIndexRedirecionador,
   filtroCopiaJukebox,
+  executarMontagemDesktop,
+  montarVelhos,
+  interpretarArgsBuildDesktop,
+  SAIDA_BUILD_DESKTOP,
+  type ComandoBuildDesktop,
 } from '../../scripts/build-desktop.ts';
+import {
+  ARQUIVO_DO_CARIMBO,
+  ENTRADAS_DO_BUILD,
+  carimboDoApp,
+  lerCarimboMontado,
+} from '../../scripts/carimbo.ts';
 // @ts-expect-error módulo mjs sem tipagem
 import { iniciarServidorEstatico } from '../../scripts/launch-desktop.mjs';
 
@@ -241,4 +252,127 @@ test('servidor estático desktop: 404 para arquivos inexistentes com extensão e
     server.closeAllConnections?.();
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+function criarWorkspaceFalso(raiz: string): void {
+  for (const app of Object.keys(ENTRADAS_DO_BUILD)) {
+    fs.mkdirSync(path.join(raiz, app, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(raiz, app, 'src', 'main.ts'), `// ${app}`, 'utf-8');
+    fs.writeFileSync(path.join(raiz, app, 'index.html'), `<!doctype html><title>${app}</title>`, 'utf-8');
+  }
+}
+
+test('executarMontagemDesktop: monta só os apps pedidos, grava .carimbo e faz troca atômica sem deixar .novo', async () => {
+  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'mesa-build-seletivo-'));
+  const distDesktop = path.join(raiz, 'Mesa', 'dist-desktop');
+  try {
+    criarWorkspaceFalso(raiz);
+
+    const comandosRodados: ComandoBuildDesktop[] = [];
+    const rodarFalso = (c: ComandoBuildDesktop): number => {
+      comandosRodados.push(c);
+      const outDir = path.join(c.cwd, SAIDA_BUILD_DESKTOP);
+      fs.mkdirSync(outDir, { recursive: true });
+      fs.writeFileSync(path.join(outDir, 'index.html'), `<html>build:${path.basename(c.cwd)}</html>`, 'utf-8');
+      return 0;
+    };
+
+    const plano = planejarMontagemDesktop(raiz, distDesktop);
+    const res = await executarMontagemDesktop(plano, () => {}, rodarFalso, { apps: ['Atlas'] });
+
+    assert.deepEqual(res.copiados, ['Atlas']);
+    assert.equal(res.indexCriado, true);
+    assert.equal(comandosRodados.length, 1);
+    assert.equal(path.basename(comandosRodados[0]!.cwd), 'Atlas');
+
+    // .carimbo gravado no destino e pasta .novo removida após rename
+    assert.equal(lerCarimboMontado(path.join(distDesktop, 'Atlas')), carimboDoApp(raiz, 'Atlas'));
+    assert.equal(fs.existsSync(path.join(distDesktop, 'Atlas.novo')), false);
+    assert.equal(fs.existsSync(path.join(distDesktop, 'Mesa')), false);
+    assert.equal(fs.existsSync(path.join(distDesktop, 'index.html')), true);
+  } finally {
+    fs.rmSync(raiz, { recursive: true, force: true });
+  }
+});
+
+test('executarMontagemDesktop: falha no build mantém o destino antigo intacto e apaga .novo', async () => {
+  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'mesa-build-falha-'));
+  const distDesktop = path.join(raiz, 'Mesa', 'dist-desktop');
+  try {
+    criarWorkspaceFalso(raiz);
+
+    // Prepara destino antigo do Atlas e um .novo residual
+    const destinoAtlas = path.join(distDesktop, 'Atlas');
+    const destinoNovo = path.join(distDesktop, 'Atlas.novo');
+    fs.mkdirSync(destinoAtlas, { recursive: true });
+    fs.writeFileSync(path.join(destinoAtlas, 'index.html'), 'versao-antiga', 'utf-8');
+    fs.writeFileSync(path.join(destinoAtlas, ARQUIVO_DO_CARIMBO), 'carimbo-antigo', 'utf-8');
+    fs.mkdirSync(destinoNovo, { recursive: true });
+    fs.writeFileSync(path.join(destinoNovo, 'lixo.txt'), 'residual', 'utf-8');
+
+    const plano = planejarMontagemDesktop(raiz, distDesktop);
+    await assert.rejects(
+      () => executarMontagemDesktop(plano, () => {}, () => 1, { apps: ['Atlas'] }),
+      /O build desktop de Atlas falhou/
+    );
+
+    assert.equal(fs.readFileSync(path.join(destinoAtlas, 'index.html'), 'utf-8'), 'versao-antiga');
+    assert.equal(lerCarimboMontado(destinoAtlas), 'carimbo-antigo');
+    assert.equal(fs.existsSync(destinoNovo), false);
+  } finally {
+    fs.rmSync(raiz, { recursive: true, force: true });
+  }
+});
+
+test('montarVelhos: monta o que está desatualizado e não monta nada quando tudo bate', async () => {
+  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'mesa-montar-velhos-'));
+  const distDesktop = path.join(raiz, 'Mesa', 'dist-desktop');
+  try {
+    criarWorkspaceFalso(raiz);
+
+    let compilarContagem = 0;
+    const rodarFalso = (c: ComandoBuildDesktop): number => {
+      compilarContagem++;
+      const outDir = path.join(c.cwd, SAIDA_BUILD_DESKTOP);
+      fs.mkdirSync(outDir, { recursive: true });
+      fs.writeFileSync(path.join(outDir, 'index.html'), `<html>${path.basename(c.cwd)}</html>`, 'utf-8');
+      return 0;
+    };
+
+    const primeira = await montarVelhos(raiz, distDesktop, () => {}, rodarFalso);
+    assert.deepEqual(primeira.sort(), Object.keys(ENTRADAS_DO_BUILD).sort());
+    const contagemAposPrimeira = compilarContagem;
+    assert.ok(contagemAposPrimeira > 0);
+
+    // Segunda execução sem mudanças: não deve compilar nem copiar nada
+    const logs: string[] = [];
+    const segunda = await montarVelhos(raiz, distDesktop, msg => logs.push(msg), rodarFalso);
+    assert.deepEqual(segunda, []);
+    assert.equal(compilarContagem, contagemAposPrimeira);
+    assert.ok(logs.some(l => l.includes('tudo em dia')));
+
+    // Tocar um arquivo apenas do Atlas: remonta só o Atlas
+    const arqAtlas = path.join(raiz, 'Atlas', 'src', 'main.ts');
+    const futuro = new Date(Date.now() + 60_000);
+    fs.utimesSync(arqAtlas, futuro, futuro);
+
+    const terceira = await montarVelhos(raiz, distDesktop, () => {}, rodarFalso);
+    assert.deepEqual(terceira, ['Atlas']);
+    assert.equal(compilarContagem, contagemAposPrimeira + 1);
+  } finally {
+    fs.rmSync(raiz, { recursive: true, force: true });
+  }
+});
+
+test('interpretarArgsBuildDesktop: lê --apps e --se-mudou', () => {
+  assert.deepEqual(interpretarArgsBuildDesktop([]), { seMudou: false });
+  assert.deepEqual(interpretarArgsBuildDesktop(['--se-mudou']), { seMudou: true });
+  assert.deepEqual(interpretarArgsBuildDesktop(['--apps', 'Atlas,Mesa']), {
+    apps: ['Atlas', 'Mesa'],
+    seMudou: false,
+  });
+  assert.deepEqual(interpretarArgsBuildDesktop(['--apps=Atlas', '--se-mudou']), {
+    apps: ['Atlas'],
+    seMudou: true,
+  });
 });
