@@ -31,9 +31,15 @@ A Mesa conta com um invólucro desktop leve nativo baseado em **Tauri v2**, unif
 - No modo Sessão, o botão rápido `📽 Projetor` abre o mapa ativo diretamente na TV ou segundo monitor.
 - No navegador, a Mesa utiliza a moderna *Window Management / Multi-Screen API* (`window.getScreenDetails()`) com fallback elegante para janela popup.
 
+- O lançador desktop (`npm run desktop:launch` / atalho do sistema) verifica o carimbo de cada aplicativo e remonta sozinho apenas o que mudou — tanto ao abrir quanto em segundo plano enquanto o app está aberto — exibindo um aviso na aba afetada para recarregar quando quiser. Reiniciar o app (e o app do Claude) só é necessário quando a ponte (`Atlas/scripts/ponte/`) ou o núcleo das instruções (`nucleo.md`) mudam.
+
 ```bash
-# 1. Empacotar todos os aplicativos em dist-desktop/
+# 1. Abrir o app desktop (remonta automaticamente o que mudou ao abrir e observa mudanças em segundo plano)
+npm run desktop:launch
+
+# Empacotar manualmente (tudo ou só o que mudou) em dist-desktop/
 npm run desktop:prep
+npm run desktop:prep -- --se-mudou
 
 # 2. Rodar em modo desenvolvimento com hot-reload (conecta no mesa-dev em http://127.0.0.1:5100/Mesa/)
 npm run desktop:dev
