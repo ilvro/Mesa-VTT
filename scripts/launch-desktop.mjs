@@ -291,7 +291,7 @@ async function iniciarAppDesktop() {
   fs.mkdirSync(dataDir, { recursive: true });
 
   const pyScript = `
-import sys, os, gi
+import sys, os, json, gi
 gi.require_version('Gtk', '3.0')
 try:
     gi.require_version('WebKit2', '4.1')
@@ -582,6 +582,95 @@ preparar_view(mesa)
 principal['mesa'] = mesa
 acrescentar_aba(caderno, mesa, False)
 mesa.load_uri(url)
+
+def aviso_js(texto, com_recarregar):
+    msg = json.dumps(texto)
+    recarregar = 'true' if com_recarregar else 'false'
+    return (
+        "(function(){"
+        "var id='mesa-vtt-aviso-atualizacao';"
+        "var antigo=document.getElementById(id);"
+        "if(antigo)antigo.remove();"
+        "var d=document.createElement('div');"
+        "d.id=id;"
+        "d.setAttribute('role','status');"
+        "d.style.cssText='position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:2147483647;"
+        "display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:8px;"
+        "background:rgba(15,17,26,0.92);color:#e6e9f4;border:1px solid rgba(110,168,254,0.45);"
+        "box-shadow:0 8px 24px rgba(0,0,0,0.45);backdrop-filter:blur(6px);"
+        "font:600 13px/1.4 sans-serif;';"
+        "var s=document.createElement('span');"
+        "s.textContent=" + msg + ";"
+        "d.appendChild(s);"
+        "if(" + recarregar + "){"
+        "var b1=document.createElement('button');"
+        "b1.type='button';"
+        "b1.textContent='Recarregar';"
+        "b1.style.cssText='padding:5px 12px;border-radius:6px;border:none;background:#6ea8fe;color:#0f111a;font:600 12px/1.2 sans-serif;cursor:pointer;';"
+        "b1.onclick=function(){location.reload();};"
+        "d.appendChild(b1);"
+        "}"
+        "var b2=document.createElement('button');"
+        "b2.type='button';"
+        "b2.textContent=" + recarregar + "?'Depois':'Fechar';"
+        "b2.style.cssText='padding:5px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:#c3c7db;font:500 12px/1.2 sans-serif;cursor:pointer;';"
+        "b2.onclick=function(){d.remove();};"
+        "d.appendChild(b2);"
+        "(document.body||document.documentElement).appendChild(d);"
+        "})();"
+    )
+
+def executar_js(wv, js):
+    if hasattr(wv, 'evaluate_javascript'):
+        wv.evaluate_javascript(js, -1, None, None, None, None, None)
+    else:
+        wv.run_javascript(js, None, None, None)
+
+def ao_ler(canal, condicao):
+    if condicao & GLib.IOCondition.IN:
+        try:
+            status, linha, _ = canal.read_line()
+        except Exception:
+            return False
+        if status == GLib.IOStatus.EOF:
+            return False
+        if linha:
+            try:
+                ev = json.loads(linha.strip())
+                tipo = ev.get('tipo')
+                app = ev.get('app') or ''
+                if tipo == 'atualizado' and app:
+                    alvo = '/' + app + '/'
+                    js = aviso_js('%s foi atualizado.' % app, True)
+                    for _nb, wv in todas_as_abas():
+                        if caminho_do_app(wv.get_uri() or '') == alvo:
+                            executar_js(wv, js)
+                elif tipo == 'falhou' and app:
+                    alvo = '/' + app + '/'
+                    js = aviso_js('Falha ao atualizar o %s: veja o terminal' % app, False)
+                    for _nb, wv in todas_as_abas():
+                        if caminho_do_app(wv.get_uri() or '') == alvo:
+                            executar_js(wv, js)
+                elif tipo == 'ponte':
+                    wv_mesa = principal.get('mesa')
+                    if wv_mesa is not None:
+                        executar_js(
+                            wv_mesa,
+                            aviso_js('A ponte do assistente mudou. Feche e abra o app, e reinicie o app do Claude.', False)
+                        )
+            except Exception:
+                pass
+    if condicao & GLib.IOCondition.HUP:
+        return False
+    return True
+
+GLib.io_add_watch(
+    GLib.IOChannel.unix_new(sys.stdin.fileno()),
+    GLib.PRIORITY_DEFAULT,
+    GLib.IOCondition.IN | GLib.IOCondition.HUP,
+    ao_ler
+)
+
 win.show_all()
 Gtk.main()
 `;
