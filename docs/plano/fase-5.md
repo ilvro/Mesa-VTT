@@ -229,7 +229,7 @@ Para começar uma sessão, é preciso achar o painel Diário, que vem escondido.
 **Nota:** `<select>` "Foco:" com três opções. Quadro parado = ignora os eventos do Atlas; Mostrar o que está no mapa (padrão) = em inspeção, revelação ou entrada em região, abre o painel Espiar com os itens ligados, sem trocar de quadro (ignora "cena aberta"); Acompanhar o mapa = abre o quadro do primeiro item ligado, foca-o e dispara a moldura (cai em Espiar se a pessoa está mexendo no quadro). e2e `quadro` ajustado.
 **Commit:** `clearer board focus modes in session`
 
-### U8 — Guia "Como usar" no modo sessão  ⬜
+### U8 — Guia "Como usar" no modo sessão  ✅
 **Ler:** `src/ui/ModoSessao.tsx`, `src/app/sessao.ts` (`ativarCena`, `mapaAtual`) e `src/app/desktop.ts` (`abrirProjetorNoSegundoMonitor`).
 
 **Como:**
@@ -249,6 +249,7 @@ Para começar uma sessão, é preciso achar o painel Diário, que vem escondido.
 
 **Testes:** unit de `passosDoGuia`; um passo e2e opcional que dispensa o guia.
 **Commit:** `added how-to guide strip in session mode`
+**Nota:** `passosDoGuia` em `dominio/sessao.ts`; signals `cenaAtivadaNestaVisita`/`projetorAberto` e `abrirProjetor()` em `app/sessao.ts`; `GuiaDaSessao` e botão "?" em `ModoSessao.tsx`. `diario.test.ts` dispensa o guia.
 
 ---
 

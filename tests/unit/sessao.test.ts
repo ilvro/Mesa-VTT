@@ -76,3 +76,16 @@ test('filtrarPersonagensSessao: busca vazia retorna todos; busca sem acento e ca
   assert.deepEqual(filtrarPersonagensSessao(chars, 'inexistente', null).map(c => c.fichaId), []);
 });
 
+
+import { passosDoGuia } from '../../src/dominio/sessao.ts';
+
+test('passosDoGuia: ordem, textos e estado dos passos', () => {
+  const falsos = passosDoGuia({ temSessao: false, cenaAtivada: false, projetorAberto: false });
+  assert.deepEqual(falsos.map(p => p.id), ['sessao', 'cena', 'projetor']);
+  assert.ok(falsos.every(p => !p.feito));
+  assert.equal(falsos[0]!.titulo, 'Inicie a sessão');
+  assert.equal(falsos[1]!.dica, 'Abre o mapa, a música e os participantes da cena de uma vez.');
+  assert.equal(falsos[2]!.titulo, 'Abra o projetor');
+  assert.deepEqual(passosDoGuia({ temSessao: true, cenaAtivada: false, projetorAberto: true }).map(p => p.feito), [true, false, true]);
+  assert.ok(passosDoGuia({ temSessao: true, cenaAtivada: true, projetorAberto: true }).every(p => p.feito));
+});

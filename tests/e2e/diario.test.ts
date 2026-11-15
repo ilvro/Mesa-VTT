@@ -55,6 +55,9 @@ test('9.5b: roteiro e registro da sessão: avisa o início, registra só os fato
     await mesa.bringToFront();
     await mesa.click('[data-testid="aba-sessao"]'); await mesa.click('[data-testid="abrir-menu-paineis"]'); await mesa.click('[data-testid="preset-com-diario"]');
     await mesa.waitForSelector('[data-testid="sem-sessao"]');
+    // Guia “Como usar”: aparece, e o “Entendi” o esconde.
+    await mesa.waitForSelector('[data-testid="guia-sessao"]'); await mesa.click('[data-testid="guia-sessao-entendi"]');
+    assert.equal(await mesa.locator('[data-testid="guia-sessao"]').count(), 0);
     assert.equal(await mesa.locator('[data-testid="painel-corpo-diario"]').count(), 1);
 
     // Iniciar: cria a sessão e avisa a todos (`mesa.sessao-iniciada`, com o Ref da sessão).

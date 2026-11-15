@@ -2,17 +2,16 @@ import { Fragment } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
 import { mesmaRef } from '#mesa';
-import { ativarCena, carregarEscolhas, escolhas, fichaDaAba, fichasEmAbas, layout, mapaAtual, mapas, mudarEscolhas, mudarLayout, personagens, alternarFicha, restaurarLayoutPadrao } from '../app/sessao.ts';
+import { abrirProjetor, ativarCena, carregarEscolhas, cenaAtivadaNestaVisita, projetorAberto, escolhas, fichaDaAba, fichasEmAbas, layout, mapaAtual, mapas, mudarEscolhas, mudarLayout, personagens, alternarFicha, restaurarLayoutPadrao } from '../app/sessao.ts';
 import { baseDoApp, inventario, sondarAplicativos } from '../app/inventario.ts';
 import { campanhaAtiva, entidades, ligacoes } from '../app/campanha.ts';
 import { enderecoDe } from '../app/aplicativos.ts';
 import { ehEncontro } from '../dominio/entidades.ts';
 import { alternarPainel, escalaDoPainel, LARGURA_LOGICA_MINIMA, presetDe, PRESETS, redimensionar, ROTULO_DO_PAINEL, ROTULO_DO_PRESET, visiveis, type Layout, type PainelId, type PresetId } from '../dominio/layout.ts';
-import { enderecoDaFicha, enderecoDoAtlas, filtrarPersonagensSessao } from '../dominio/sessao.ts';
+import { enderecoDaFicha, enderecoDoAtlas, filtrarPersonagensSessao, passosDoGuia } from '../dominio/sessao.ts';
 import { cx } from './cx.ts';
 import { Diario } from './Diario.tsx';
 import { carregarSessoes, encerrarSessao, gravando, iniciarSessao, retomarGravacao, sessaoAtiva } from '../app/registro.ts';
-import { abrirProjetorNoSegundoMonitor } from '../app/desktop.ts';
 import { extrairPacoteDeCena, type PacoteDeCena } from '../dominio/cenas.ts';
 import { carregarFatos } from '../app/prontidao.ts';
 import { pendenciasDaSessao } from '../dominio/prontidao.ts';
@@ -220,6 +219,28 @@ function PainelDoQuadro() {
 const CORPO: Record<PainelId, () => preact.JSX.Element> = { atlas: PainelDoAtlas, fichas: PainelDasFichas, jukebox: PainelDoJukebox, diario: Diario, quadro: PainelDoQuadro };
 
 /** Zona "Sessão" da barra: inicia a sessão (e mostra o Diário) ou mostra o estado dela com Parar/Gravar. */
+const CHAVE_GUIA_VISTO = 'mesa:guia-sessao-visto';
+function guiaJaVisto(): boolean { try { return localStorage.getItem(CHAVE_GUIA_VISTO) === '1'; } catch { return false; } }
+const guiaVisivel = signal(!guiaJaVisto());
+
+/** Faixa fina com os três passos para começar; some quando todos estão feitos ou com “Entendi”. */
+function GuiaDaSessao() {
+  const passos = passosDoGuia({ temSessao: !!sessaoAtiva.value, cenaAtivada: cenaAtivadaNestaVisita.value, projetorAberto: projetorAberto.value });
+  if (!guiaVisivel.value || passos.every(p => p.feito)) return null;
+  return (
+    <div class="sessao-guia" data-testid="guia-sessao">
+      <ol class="sessao-guia-passos">
+        {passos.map((p, i) => (
+          <li key={p.id} class={cx('sessao-guia-passo', p.feito && 'feito')} data-testid={`guia-passo-${p.id}`}>
+            <strong>{p.feito ? '✓' : `${i + 1}.`} {p.titulo}</strong> <span class="meta">{p.dica}</span>
+          </li>
+        ))}
+      </ol>
+      <button type="button" class="botao-pilula" data-testid="guia-sessao-entendi" onClick={() => { guiaVisivel.value = false; try { localStorage.setItem(CHAVE_GUIA_VISTO, '1'); } catch { /* sem armazenamento */ } }}>Entendi</button>
+    </div>
+  );
+}
+
 function ControleDaSessao() {
   const [nome, setNome] = useState('');
   const sessao = sessaoAtiva.value;
@@ -387,13 +408,15 @@ export function ModoSessao() {
             class="botao-pilula"
             title="Abrir visão do projetor para os jogadores na TV ou 2º monitor"
             data-testid="sessao-abrir-projetor"
-            onClick={() => { void abrirProjetorNoSegundoMonitor(mapaAtual.value?.mapaId ?? null); }}
+            onClick={() => abrirProjetor(mapaAtual.value?.mapaId ?? null)}
           >
             📽 Projetor
           </button>
+          <button type="button" class="botao-icone-texto" data-testid="guia-sessao-abrir" title="Como usar o modo sessão" aria-label="Como usar o modo sessão" onClick={() => { guiaVisivel.value = true; }}>?</button>
           <MenuDePaineis l={l} preset={preset} />
         </div>
       </div>
+      <GuiaDaSessao />
       <div class={cx('sessao-paineis', arrastando && 'arrastando')} ref={area} data-testid="sessao-paineis">
         {v.map((p, i) => {
           const Corpo = CORPO[p.id];

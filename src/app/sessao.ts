@@ -8,6 +8,15 @@ import { campanhaAtiva, entidades, ligacoes } from './campanha.ts';
 import { barramentoDaMesa } from './barramento.ts';
 import { anotar } from './registro.ts';
 import { avisar } from './toasts.ts';
+import { abrirProjetorNoSegundoMonitor } from './desktop.ts';
+
+/** Só de tela (não persistem): alimentam o guia “Como usar” do modo sessão. */
+export const cenaAtivadaNestaVisita = signal(false);
+export const projetorAberto = signal(false);
+
+/** Abre a visão do projetor e marca o passo do guia. */
+export function abrirProjetor(mapaId: string | null): void { projetorAberto.value = true; void abrirProjetorNoSegundoMonitor(mapaId); }
+
 
 const CHAVE_LAYOUT = 'mesa:sessao-layout';
 const chaveDasEscolhas = (campanhaId: string) => `mesa:sessao:${campanhaId}`;
@@ -114,5 +123,6 @@ export async function ativarCena(cena: Entidade): Promise<boolean> {
   // 4. Feedback visual
   avisar(combate ? `Encontro “${cena.nome}” lançado!` : `Cena “${cena.nome}” ativada!`);
 
+  cenaAtivadaNestaVisita.value = true;
   return true;
 }

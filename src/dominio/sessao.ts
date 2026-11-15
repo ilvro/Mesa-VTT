@@ -67,3 +67,14 @@ export function filtrarPersonagensSessao<T extends { fichaId: string; nome: stri
   return lista.filter(item => (fichaAtivaId != null && item.fichaId === fichaAtivaId) || semAcento(item.nome).includes(limpo));
 }
 
+
+export interface PassoDoGuia { id: 'sessao' | 'cena' | 'projetor'; titulo: string; dica: string; feito: boolean }
+
+/** Os três passos do guia “Como usar” do modo sessão, na ordem, com o que já foi feito. */
+export function passosDoGuia(estado: { temSessao: boolean; cenaAtivada: boolean; projetorAberto: boolean }): PassoDoGuia[] {
+  return [
+    { id: 'sessao', titulo: 'Inicie a sessão', dica: 'O diário passa a registrar rolagens, mapas e músicas.', feito: estado.temSessao },
+    { id: 'cena', titulo: 'Ative uma cena', dica: 'Abre o mapa, a música e os participantes da cena de uma vez.', feito: estado.cenaAtivada },
+    { id: 'projetor', titulo: 'Abra o projetor', dica: 'Mostra o mapa aos jogadores na TV ou no segundo monitor.', feito: estado.projetorAberto },
+  ];
+}

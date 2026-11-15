@@ -2081,6 +2081,10 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 
 .sessao-zona { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .sessao-zona-direita { margin-left: auto; padding-left: 16px; border-left: 1px solid var(--linha); }
+.sessao-guia { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; padding: 6px 14px; background: var(--superficie); border-bottom: 1px solid var(--linha); font-size: 12.5px; }
+.sessao-guia-passos { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; padding: 0; list-style: none; }
+.sessao-guia-passo.feito { opacity: 0.5; }
+@media (max-width: 700px) { .sessao-guia-passos { flex-direction: column; } }
 .sessao-iniciar { display: flex; align-items: center; gap: 8px; }
 .sessao-iniciar input { width: 160px; }
 .sessao-ativa { display: flex; align-items: center; gap: 8px; }
