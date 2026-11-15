@@ -6,6 +6,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { execSync, spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+  ENTRADAS_DO_BUILD,
+  criarFila,
+  deveIgnorarEvento,
+  mensagemDeTermino,
+} from './fila-de-montagem.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -164,8 +170,111 @@ export function atualizarAppsNaAbertura({
   } catch (err) {
     logErro(`[Mesa VTT] A atualização falhou; abrindo a versão anterior: ${err instanceof Error ? err.message : err}`);
     notificar('A atualização falhou; abrindo a versão anterior');
-    return false;
+  return false;
   }
+}
+
+export function iniciarObservadorDeFontes({
+  raizProjetos = path.resolve(mesaRoot, '..'),
+  cwd = mesaRoot,
+  enviarParaPython,
+  observar = (caminho, opcoes, cb) => fs.watch(caminho, opcoes, cb),
+  montarApp,
+  esperaMs = 4000,
+  agendar = setTimeout,
+  cancelar = clearTimeout,
+} = {}) {
+  let procAtual = null;
+
+  const montarPadrao = app => {
+    if (app === '__ponte') return Promise.resolve(true);
+    return new Promise(resolve => {
+      const child = spawn('node', ['scripts/build-desktop.ts', '--apps', app], {
+        cwd,
+        stdio: 'inherit',
+      });
+      procAtual = child;
+      child.on('error', () => {
+        if (procAtual === child) procAtual = null;
+        resolve(false);
+      });
+      child.on('exit', code => {
+        if (procAtual === child) procAtual = null;
+        resolve(code === 0);
+      });
+    });
+  };
+
+  const fila = criarFila({
+    montar: montarApp
+      ? app => (app === '__ponte' ? Promise.resolve(true) : montarApp(app))
+      : montarPadrao,
+    esperaMs,
+    agendar,
+    cancelar,
+    aoTerminar: (app, ok) => {
+      enviarParaPython?.(`${mensagemDeTermino(app, ok)}\n`);
+    },
+  });
+
+  const watchers = [];
+
+  const vigiarEntrada = (app, raizApp, entrada) => {
+    const caminhoEntrada = path.resolve(raizApp, entrada);
+    if (!fs.existsSync(caminhoEntrada)) return;
+    let ehPasta = false;
+    try {
+      ehPasta = fs.statSync(caminhoEntrada).isDirectory();
+    } catch {
+      return;
+    }
+    try {
+      const w = observar(caminhoEntrada, { recursive: ehPasta }, (_evento, nomeArquivo) => {
+        const sub = nomeArquivo ? String(nomeArquivo).split(path.sep).join('/') : '';
+        const rel =
+          entrada === '.'
+            ? sub
+            : ehPasta
+              ? sub
+                ? `${entrada}/${sub}`
+                : entrada
+              : entrada;
+        if (rel && deveIgnorarEvento(app, rel)) return;
+        fila.sujar(app);
+      });
+      w?.on?.('error', () => {});
+      watchers.push(w);
+    } catch {}
+  };
+
+  for (const [app, entradas] of Object.entries(ENTRADAS_DO_BUILD)) {
+    const raizApp = path.join(raizProjetos, app);
+    for (const entrada of entradas) {
+      vigiarEntrada(app, raizApp, entrada);
+    }
+  }
+
+  // Observar também Atlas/scripts/ponte/ com app fictício __ponte
+  vigiarEntrada('__ponte', path.join(raizProjetos, 'Atlas'), 'scripts/ponte');
+
+  return {
+    sujar: fila.sujar,
+    parar() {
+      fila.parar();
+      for (const w of watchers) {
+        try {
+          w?.close?.();
+        } catch {}
+      }
+      watchers.length = 0;
+      if (procAtual) {
+        try {
+          procAtual.kill();
+        } catch {}
+        procAtual = null;
+      }
+    },
+  };
 }
 
 async function iniciarAppDesktop() {
@@ -480,15 +589,29 @@ Gtk.main()
   // GTK 3 no Wayland derruba o processo ao arrastar uma aba para fora da janela (gtk_notebook_drag_end);
   // pelo XWayland o arrastar de abas funciona.
   const py = spawn('python3', ['-c', pyScript, targetUrl, iconPath, dataDir], {
-    stdio: 'inherit',
+    stdio: ['pipe', 'inherit', 'inherit'],
     env: { ...process.env, GDK_BACKEND: 'x11' },
   });
+  py.stdin?.on('error', () => {});
+
+  const observador = !jaRodando
+    ? iniciarObservadorDeFontes({
+        enviarParaPython: linha => {
+          if (py.stdin && !py.stdin.destroyed && py.stdin.writable) {
+            try {
+              py.stdin.write(linha);
+            } catch {}
+          }
+        },
+      })
+    : null;
 
   py.on('error', () => {
     spawn('xdg-open', [targetUrl], { stdio: 'ignore', detached: true }).unref();
   });
 
   py.on('exit', code => {
+    if (observador) observador.parar();
     if (hospedeiro) hospedeiro.fechar();
     if (code && code !== 0) {
       spawn('xdg-open', [targetUrl], { stdio: 'ignore', detached: true }).unref();
