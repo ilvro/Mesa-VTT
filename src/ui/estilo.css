@@ -176,7 +176,7 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .coluna-detalhe { min-width: 0; overflow: auto; padding: 24px clamp(16px, 3vw, 44px) 56px; }
 .fechar-detalhe { margin-left: auto; width: 26px; height: 26px; display: inline-grid; place-items: center; border-radius: 4px; color: var(--apagado); cursor: pointer; font-size: 13px; }
 .fechar-detalhe:hover { background: var(--superficie-2); color: var(--texto); }
-.nova-entidade { display: flex; gap: 6px; }
+.nova-entidade { display: flex; gap: 6px; min-width: 280px; align-items: center; }
 .nova-entidade input { flex: 1; }
 .busca { width: 100%; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -423,10 +423,9 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .botao-desvincular:hover { color: #e06c75; background: var(--superficie-2); }
 
 /* ---- Ações de Cofre na Sidebar da Coleção ---- */
-.colecao-sidebar-acoes-cofre { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.botao-icone-cofre { border: 1px solid var(--linha); background: var(--superficie); color: var(--texto); border-radius: 6px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; transition: all 0.15s; }
-.botao-icone-cofre:hover { background: var(--superficie-2); border-color: var(--acento); }
-.botao-icone-cofre.ativo { border-color: #98c379; color: #98c379; background: rgba(152, 195, 121, 0.15); }
+.menu-cofre { flex-shrink: 0; }
+.menu-cofre .menu-fichas { right: auto; left: 0; display: flex; flex-direction: column; gap: 2px; }
+.menu-cofre .menu-item:disabled { opacity: 0.6; cursor: default; }
 .tag-pasta-vinculada { font-size: 11px; color: #98c379; display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 4px; background: rgba(152, 195, 121, 0.1); margin: 0 10px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tag-pasta-vinculada .ponto-status { font-size: 8px; color: #98c379; }
 

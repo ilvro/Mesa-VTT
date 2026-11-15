@@ -65,6 +65,8 @@ import {
 
 const tipoNovo = signal<TipoEntidade>('personagem');
 const nomeNovo = signal('');
+/** Popover "+ Nova" da barra da coleção aberto. */
+const criadorAberto = signal(false);
 const confirmando = signal<string | null>(null);
 const buscaTagLocal = signal('');
 /** Etiqueta da barra lateral em edição (chave) e se o "Apagar" aguarda confirmação. */
@@ -81,7 +83,7 @@ async function criarCampanhaPeloSemCampanha(e: Event) {
 async function criar(e: Event) {
   e.preventDefault();
   const criada = await criarEntidade(tipoNovo.value, nomeNovo.value);
-  if (criada) { nomeNovo.value = ''; filtroTipo.value = null; busca.value = ''; abrirEntidade(criada.id); }
+  if (criada) { nomeNovo.value = ''; filtroTipo.value = null; soElenco.value = false; busca.value = ''; criadorAberto.value = false; abrirEntidade(criada.id); }
 }
 
 const CATEGORIAS_PADRAO: readonly { id: CategoriaFiltro | null; rotulo: string; testId: string; encontro?: boolean }[] = [
@@ -94,6 +96,8 @@ const CATEGORIAS_PADRAO: readonly { id: CategoriaFiltro | null; rotulo: string; 
   { id: 'pista', rotulo: 'Pistas', testId: 'tipo-pista' },
   { id: 'faccao', rotulo: 'Facções', testId: 'tipo-faccao' },
   { id: 'nota', rotulo: 'Notas', testId: 'tipo-nota' },
+  { id: 'efeito', rotulo: 'Efeitos', testId: 'tipo-efeito' },
+  { id: 'sessao', rotulo: 'Sessões', testId: 'tipo-sessao' },
 ];
 
 function selecionarCategoria(cat: CategoriaFiltro | null) {
@@ -102,6 +106,39 @@ function selecionarCategoria(cat: CategoriaFiltro | null) {
   } else {
     filtroTipo.value = filtroTipo.value === cat ? null : cat;
   }
+  // "Só o elenco" só existe em Personagens: ao sair, não deixa filtro invisível ligado.
+  if (filtroTipo.value !== 'personagem') soElenco.value = false;
+}
+
+function CriadorDeEntidade() {
+  const caixa = useRef<HTMLDetailsElement>(null);
+  const campo = useRef<HTMLInputElement>(null);
+  const aberto = criadorAberto.value;
+  useEffect(() => {
+    const fora = (ev: PointerEvent) => { const d = caixa.current; if (d?.open && !d.contains(ev.target as Node)) criadorAberto.value = false; };
+    document.addEventListener('pointerdown', fora);
+    return () => document.removeEventListener('pointerdown', fora);
+  }, []);
+  useEffect(() => { if (aberto) campo.current?.focus(); }, [aberto]);
+  return (
+    <details
+      class="menu-paineis-caixa"
+      ref={caixa}
+      open={aberto}
+      data-testid="criador"
+      onToggle={ev => { criadorAberto.value = ev.currentTarget.open; }}
+      onKeyDown={ev => { if (ev.key === 'Escape') criadorAberto.value = false; }}
+    >
+      <summary class="botao-pilula destaque botao-novo" data-testid="abrir-criador" title="Nova entidade">+ Nova</summary>
+      <form class="menu-fichas nova-entidade" onSubmit={criar}>
+        <select aria-label="Tipo da nova entidade" data-testid="novo-tipo" value={tipoNovo.value} onChange={ev => { tipoNovo.value = ev.currentTarget.value as TipoEntidade; }}>
+          {TIPOS_CRIAVEIS.map(t => <option key={t} value={t}>{ROTULO_DO_TIPO[t].singular}</option>)}
+        </select>
+        <input type="text" ref={campo} data-testid="nova-entidade-nome" placeholder="Nome e Enter" maxLength={200} value={nomeNovo.value} onInput={ev => { nomeNovo.value = ev.currentTarget.value; }} />
+        <button type="submit" class="botao-pilula destaque" data-testid="criar-entidade" disabled={!nomeNovo.value.trim()}>Criar</button>
+      </form>
+    </details>
+  );
 }
 
 function BarraSuperior() {
@@ -152,6 +189,7 @@ function BarraSuperior() {
         {CATEGORIAS_PADRAO.map(cat => {
           const ativo = filtroTipo.value === cat.id;
           const qtd = cat.id === null ? lista.length : cat.id === 'encontro' ? contagemEncontros : contagem[cat.id];
+          if (cat.id !== null && qtd === 0 && !ativo) return null;
           return (
             <button
               key={cat.testId}
@@ -164,36 +202,18 @@ function BarraSuperior() {
             </button>
           );
         })}
-        {contagem.efeito > 0 && (
+        {filtroTipo.value === 'personagem' && (
           <button
             type="button"
-            class={cx('chip', filtroTipo.value === 'efeito' && 'ativa')}
-            data-testid="tipo-efeito"
-            onClick={() => selecionarCategoria('efeito')}
+            class={cx('chip', soElenco.value && 'ativa')}
+            data-testid="filtro-so-elenco"
+            aria-pressed={soElenco.value}
+            title="Mostrar apenas personagens do elenco da campanha"
+            onClick={() => { soElenco.value = !soElenco.value; }}
           >
-            Efeitos <b>{contagem.efeito}</b>
+            Só o elenco
           </button>
         )}
-        {contagem.sessao > 0 && (
-          <button
-            type="button"
-            class={cx('chip', filtroTipo.value === 'sessao' && 'ativa')}
-            data-testid="tipo-sessao"
-            onClick={() => selecionarCategoria('sessao')}
-          >
-            Sessões <b>{contagem.sessao}</b>
-          </button>
-        )}
-        <button
-          type="button"
-          class={cx('chip', soElenco.value && 'ativa')}
-          data-testid="filtro-so-elenco"
-          aria-pressed={soElenco.value}
-          title="Mostrar apenas personagens do elenco da campanha"
-          onClick={() => { soElenco.value = !soElenco.value; }}
-        >
-          Só o elenco
-        </button>
       </div>
 
       <span class="espaco" />
@@ -242,21 +262,7 @@ function BarraSuperior() {
           <option value="nome-desc">Nome (Z-A)</option>
           <option value="recentes">Mais recentes</option>
         </select>
-        <button
-          type="button"
-          class="botao-pilula destaque botao-novo"
-          data-testid="abrir-criador"
-          title="Nova entidade"
-          onClick={() => {
-            const input = document.querySelector<HTMLInputElement>('[data-testid="nova-entidade-nome"]');
-            if (input) {
-              input.focus();
-              input.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
-          }}
-        >
-          + Nova
-        </button>
+        <CriadorDeEntidade />
       </div>
     </header>
   );
@@ -341,6 +347,13 @@ function LinhaTag({ ct }: { ct: ContagemTag }) {
 }
 
 function SidebarColecao({ nomeCampanha }: { nomeCampanha: string }) {
+  const menuCofre = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const fora = (ev: PointerEvent) => { const d = menuCofre.current; if (d?.open && !d.contains(ev.target as Node)) d.open = false; };
+    document.addEventListener('pointerdown', fora);
+    return () => document.removeEventListener('pointerdown', fora);
+  }, []);
+  const fecharMenuCofre = () => { if (menuCofre.current) menuCofre.current.open = false; };
   const lista = entidades.value;
   const tagsContadas = contarPorTag(lista);
   const buscaLimpa = semAcento(buscaTagLocal.value.trim());
@@ -366,44 +379,44 @@ function SidebarColecao({ nomeCampanha }: { nomeCampanha: string }) {
           <span class="nome-campanha" title={nomeCampanha}>{nomeCampanha}</span>
         </button>
 
-        <div class="colecao-sidebar-acoes-cofre">
-          <button
-            type="button"
-            class={cx('botao-icone-cofre', pastaVinculadaNome.value && 'ativo')}
-            data-testid="vincular-pasta-cofre"
-            title={pastaVinculadaNome.value ? `Pasta vinculada: ${pastaVinculadaNome.value} (clique para desvincular)` : 'Vincular pasta local no computador (Cofre)'}
-            aria-label="Vincular pasta local"
-            onClick={() => {
-              if (pastaVinculadaNome.value) desvincularPastaLocal();
-              else void vincularPastaLocal();
-            }}
-          >
-            {sincronizandoCofre.value ? '🔄' : (pastaVinculadaNome.value ? '💾' : '📁')}
-          </button>
-          <button
-            type="button"
-            class="botao-icone-cofre"
-            data-testid="exportar-cofre"
-            title="Exportar cofre da campanha (.json)"
-            aria-label="Exportar cofre"
-            onClick={() => {
-              const c = campanhaAtiva.value;
-              if (c) exportarCofreJson(c, entidades.value, ligacoes.value);
-            }}
-          >
-            ↓
-          </button>
-          <button
-            type="button"
-            class="botao-icone-cofre"
-            data-testid="importar-cofre"
-            title="Importar cofre (.json)"
-            aria-label="Importar cofre"
-            onClick={() => void importarCofreParaApp()}
-          >
-            ↑
-          </button>
-        </div>
+        <details class="menu-paineis-caixa menu-cofre" ref={menuCofre} data-testid="menu-cofre">
+          <summary class="botao-pilula" data-testid="abrir-menu-cofre">Cofre ▾</summary>
+          <div class="menu-fichas">
+            <button
+              type="button"
+              class="menu-item"
+              data-testid="vincular-pasta-cofre"
+              disabled={sincronizandoCofre.value}
+              onClick={() => {
+                fecharMenuCofre();
+                if (pastaVinculadaNome.value) desvincularPastaLocal();
+                else void vincularPastaLocal();
+              }}
+            >
+              {sincronizandoCofre.value ? 'Sincronizando…' : (pastaVinculadaNome.value ? `Desvincular ${pastaVinculadaNome.value}` : 'Vincular pasta…')}
+            </button>
+            <button
+              type="button"
+              class="menu-item"
+              data-testid="exportar-cofre"
+              onClick={() => {
+                fecharMenuCofre();
+                const c = campanhaAtiva.value;
+                if (c) exportarCofreJson(c, entidades.value, ligacoes.value);
+              }}
+            >
+              Exportar .json
+            </button>
+            <button
+              type="button"
+              class="menu-item"
+              data-testid="importar-cofre"
+              onClick={() => { fecharMenuCofre(); void importarCofreParaApp(); }}
+            >
+              Importar .json
+            </button>
+          </div>
+        </details>
       </div>
       {pastaVinculadaNome.value && (
         <div class="tag-pasta-vinculada" title={`Sincronizando com ${pastaVinculadaNome.value}`}>
@@ -583,7 +596,7 @@ function Visao({ nome }: { nome: string }) {
       </>)}
       <h3 class="faixa pequena">Começar</h3>
       <div class="comecar">
-        <button type="button" class="comecar-cartao" onClick={() => document.querySelector<HTMLInputElement>('[data-testid="nova-entidade-nome"]')?.focus()}><b>Criar uma entidade</b><small>Personagem, lugar, pista, facção ou nota.</small></button>
+        <button type="button" class="comecar-cartao" onClick={() => { criadorAberto.value = true; }}><b>Criar uma entidade</b><small>Personagem, lugar, pista, facção ou nota.</small></button>
         <button type="button" class="comecar-cartao" onClick={() => { tela.value = 'sessao'; }}><b>Abrir a sessão</b><small>Os aplicativos lado a lado, com o diário.</small></button>
         <button type="button" class="comecar-cartao" onClick={() => { tela.value = 'aplicativos'; void sondarAplicativos(); }}><b>Ver os aplicativos</b><small>O que a Mesa achou ao lado dela.</small></button>
       </div>
@@ -648,14 +661,6 @@ export function Entidades() {
         <div class="colecao-conteudo">
           <aside class="coluna-lista">
             <h2 class="faixa">{c.nome}</h2>
-            <form class="nova-entidade" onSubmit={criar}>
-              <select aria-label="Tipo da nova entidade" data-testid="novo-tipo" value={tipoNovo.value} onChange={ev => { tipoNovo.value = ev.currentTarget.value as TipoEntidade; }}>
-                {TIPOS_CRIAVEIS.map(t => <option key={t} value={t}>{ROTULO_DO_TIPO[t].singular}</option>)}
-              </select>
-              <input type="text" data-testid="nova-entidade-nome" placeholder="Nome e Enter" maxLength={200} value={nomeNovo.value} onInput={ev => { nomeNovo.value = ev.currentTarget.value; }} />
-              <button type="submit" class="botao-pilula destaque" data-testid="criar-entidade" disabled={!nomeNovo.value.trim()}>Criar</button>
-            </form>
-
             {tagAtiva.value && (
               <div class="filtro-ativo-tag">
                 <span>Tag ativa: <b>#{tagAtiva.value}</b></span>

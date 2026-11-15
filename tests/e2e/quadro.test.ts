@@ -373,6 +373,7 @@ test('Q3c: entidade Sindre -> [[Sindre]] no quadro -> página da Sindre lista o 
     await page.click('[data-testid="criar-campanha"]');
     await page.waitForSelector('[data-testid="tela-entidades"]');
 
+    await page.click('[data-testid="abrir-criador"]');
     await page.fill('[data-testid="nova-entidade-nome"]', 'Sindre');
     await page.click('[data-testid="criar-entidade"]');
     await page.waitForSelector('[data-testid="detalhe"]');

@@ -255,7 +255,7 @@ Para começar uma sessão, é preciso achar o painel Diário, que vem escondido.
 
 ## Etapa D — Interface geral
 
-### U9 — Barra da coleção mais enxuta  ⬜
+### U9 — Barra da coleção mais enxuta  ✅
 **Ler:** `src/ui/Entidades.tsx` (`BarraSuperior`, `CATEGORIAS_PADRAO`, o formulário `nova-entidade`).
 
 **Como:**
@@ -272,6 +272,7 @@ Para começar uma sessão, é preciso achar o painel Diário, que vem escondido.
 
 **Testes:** e2e de criação em `tests/e2e/hub.test.ts`: abra o popover antes de preencher.
 **Commit:** `tidied collection bar and creation popover`
+**Nota:** categorias vazias somem (exceto Tudo e a ativa), Efeitos/Sessões na mesma lista; "Só o elenco" só em Personagens e `selecionarCategoria` o desliga ao sair. `CriadorDeEntidade` (`<details>` + signal `criadorAberto`, Esc/clique fora fecham) substitui o formulário do topo; menu "Cofre ▾" na barra lateral. e2e abrem o popover antes de criar.
 
 ---
 

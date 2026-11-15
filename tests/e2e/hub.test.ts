@@ -58,6 +58,7 @@ test('9.1a: a Mesa cria a campanha, o Atlas a vê, e o lugar criado pelo Atlas a
     assert.match(await mesa.locator('[data-testid="ref"]').first().textContent() ?? '', /Atlas · mapa/);
 
     // 5. Entidade da própria Mesa: cria, edita nome, etiquetas e notas, e tudo sobrevive a recarregar.
+    await mesa.click('[data-testid="abrir-criador"]');
     await mesa.selectOption('[data-testid="novo-tipo"]', 'personagem');
     await mesa.fill('[data-testid="nova-entidade-nome"]', 'Muirenn');
     await mesa.press('[data-testid="nova-entidade-nome"]', 'Enter');
@@ -149,6 +150,7 @@ test('9.1b: nota com [[ligações]]: autocompleta, vira ligações no banco, abr
     assert.ok(mapaId, 'o Atlas está no mapa');
 
     // Uma nota da Mesa; ao digitar `[[Casa` o autocompletar sugere o lugar, e Enter o aceita.
+    await mesa.click('[data-testid="abrir-criador"]');
     await mesa.selectOption('[data-testid="novo-tipo"]', 'nota');
     await mesa.fill('[data-testid="nova-entidade-nome"]', 'Diário do mestre'); await mesa.press('[data-testid="nova-entidade-nome"]', 'Enter');
     await mesa.waitForSelector('[data-testid="campo-notas"]');
