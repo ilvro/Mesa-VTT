@@ -30,7 +30,7 @@ import {
   lerCarimboMontado,
 } from '../../scripts/carimbo.ts';
 // @ts-expect-error módulo mjs sem tipagem
-import { iniciarServidorEstatico } from '../../scripts/launch-desktop.mjs';
+import { iniciarServidorEstatico, atualizarAppsNaAbertura } from '../../scripts/launch-desktop.mjs';
 
 test('escolherMonitorParaProjetor: lista vazia retorna null; 1 monitor retorna o próprio', () => {
   assert.equal(escolherMonitorParaProjetor([]), null);
@@ -375,4 +375,40 @@ test('interpretarArgsBuildDesktop: lê --apps e --se-mudou', () => {
     apps: ['Atlas'],
     seMudou: true,
   });
+});
+
+test('atualizarAppsNaAbertura: executa build-desktop.ts --se-mudou e segue sem lançar se o build falhar', () => {
+  const notificacoes: string[] = [];
+  const comandos: string[] = [];
+
+  const ok = atualizarAppsNaAbertura({
+    executar: (cmd: string) => {
+      comandos.push(cmd);
+    },
+    notificar: (msg: string) => {
+      notificacoes.push(msg);
+    },
+    logErro: () => {},
+  });
+
+  assert.equal(ok, true);
+  assert.deepEqual(comandos, ['node scripts/build-desktop.ts --se-mudou']);
+  assert.deepEqual(notificacoes, ['Atualizando os apps…']);
+
+  const notificacoesFalha: string[] = [];
+  const okFalha = atualizarAppsNaAbertura({
+    executar: () => {
+      throw new Error('falha simulada');
+    },
+    notificar: (msg: string) => {
+      notificacoesFalha.push(msg);
+    },
+    logErro: () => {},
+  });
+
+  assert.equal(okFalha, false);
+  assert.deepEqual(notificacoesFalha, [
+    'Atualizando os apps…',
+    'A atualização falhou; abrindo a versão anterior',
+  ]);
 });

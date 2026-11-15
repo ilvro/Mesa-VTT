@@ -144,15 +144,36 @@ export async function iniciarServidorComPonte({ rootDir, port, host, raizAtlas =
   return { server, ponte, porta, fechar() { try { ponte?.fechar?.(); } catch {} server.close(); server.closeAllConnections?.(); } };
 }
 
+function notificarDesktop(mensagem) {
+  try {
+    const proc = spawn('notify-send', ['Mesa VTT', mensagem], { stdio: 'ignore' });
+    proc.on('error', () => {});
+  } catch {}
+}
+
+export function atualizarAppsNaAbertura({
+  cwd = mesaRoot,
+  executar = cmd => execSync(cmd, { cwd, stdio: 'inherit' }),
+  notificar = notificarDesktop,
+  logErro = msg => console.error(msg),
+} = {}) {
+  notificar('Atualizando os apps…');
+  try {
+    executar('node scripts/build-desktop.ts --se-mudou');
+    return true;
+  } catch (err) {
+    logErro(`[Mesa VTT] A atualização falhou; abrindo a versão anterior: ${err instanceof Error ? err.message : err}`);
+    notificar('A atualização falhou; abrindo a versão anterior');
+    return false;
+  }
+}
+
 async function iniciarAppDesktop() {
   const jaRodando = await portaEmUso(PORT, HOST);
   let hospedeiro = null;
 
   if (!jaRodando) {
-    if (!fs.existsSync(path.join(distDesktop, 'Mesa', 'index.html'))) {
-      console.log('[Mesa VTT] Preparando pacote desktop (dist-desktop)...');
-      execSync('npm run desktop:prep', { cwd: mesaRoot, stdio: 'inherit' });
-    }
+    atualizarAppsNaAbertura();
     hospedeiro = await iniciarServidorComPonte({ rootDir: distDesktop, port: PORT, host: HOST });
   }
 
