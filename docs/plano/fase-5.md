@@ -214,7 +214,7 @@ Para começar uma sessão, é preciso achar o painel Diário, que vem escondido.
 **Nota:** barra em `.sessao-zona` (Sessão, Cena, Mapa | prontidão, Projetor, menu Painéis); `Diario` sem iniciar/parar e sem "Pronto para jogar?"; e2e ajustados (`sessao`, `diario`, `fase9`, `quadro`). `sessao` e `fase9` expiram esperando a Ficha/Jukebox publicarem entidades (antes da UI nova, no caso de `sessao`).
 **Commit:** `simplified session bar into what's in play and a panels menu`
 
-### U7 — Foco do quadro explicado  ⬜
+### U7 — Foco do quadro explicado  ✅
 **Ler:** `src/app/foco-do-quadro.ts` (o que `espiar` e `seguir` fazem de fato) e `src/ui/ModoSessao.tsx` (`PainelDoQuadro`, `MODOS_FOCO`).
 
 **Como:**
@@ -226,6 +226,7 @@ Para começar uma sessão, é preciso achar o painel Diário, que vem escondido.
 - O padrão continua `espiar`.
 
 **Testes:** atualize `tests/e2e/quadro.test.ts` (~586, ~607 e ~648) para `selectOption`.
+**Nota:** `<select>` "Foco:" com três opções. Quadro parado = ignora os eventos do Atlas; Mostrar o que está no mapa (padrão) = em inspeção, revelação ou entrada em região, abre o painel Espiar com os itens ligados, sem trocar de quadro (ignora "cena aberta"); Acompanhar o mapa = abre o quadro do primeiro item ligado, foca-o e dispara a moldura (cai em Espiar se a pessoa está mexendo no quadro). e2e `quadro` ajustado.
 **Commit:** `clearer board focus modes in session`
 
 ### U8 — Guia "Como usar" no modo sessão  ⬜

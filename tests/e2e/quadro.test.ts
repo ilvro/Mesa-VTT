@@ -583,7 +583,7 @@ test('Q5d: modo sessão com painel Quadro e os três modos (Desligado, Espiar e 
     assert.equal(await page.locator('[data-testid="caixa-selecao"]').count(), 0);
 
     // 1. Modo Desligado: evento do Atlas não abre o painel Espiar
-    await page.click('[data-testid="sessao-foco-desligado"]');
+    await page.selectOption('[data-testid="sessao-modo-foco"]', 'desligado');
     await page.evaluate(() => {
       const ch = new BroadcastChannel('mesa:eventos');
       ch.postMessage({
@@ -604,7 +604,7 @@ test('Q5d: modo sessão com painel Quadro e os três modos (Desligado, Espiar e 
     assert.equal(await page.locator('[data-testid="painel-espiar"]').count(), 0);
 
     // 2. Modo Espiar: objeto sem âncora não faz nada; objeto ancorado abre o painel Espiar
-    await page.click('[data-testid="sessao-foco-espiar"]');
+    await page.selectOption('[data-testid="sessao-modo-foco"]', 'espiar');
     await page.evaluate(() => {
       const ch = new BroadcastChannel('mesa:eventos');
       ch.postMessage({
@@ -645,7 +645,7 @@ test('Q5d: modo sessão com painel Quadro e os três modos (Desligado, Espiar e 
     await page.click('[data-testid="espiar-fechar"]');
 
     // 3. Modo Seguir: enquadra e seleciona o cartão ancorado
-    await page.click('[data-testid="sessao-foco-seguir"]');
+    await page.selectOption('[data-testid="sessao-modo-foco"]', 'seguir');
     await page.evaluate(() => {
       const ch = new BroadcastChannel('mesa:eventos');
       ch.postMessage({

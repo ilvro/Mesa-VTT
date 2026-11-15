@@ -2096,3 +2096,4 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .menu-item:hover { background: var(--superficie); }
 .menu-item.ativa { border-color: var(--acento); }
 @media (max-width: 760px) { .sessao-zona-direita { margin-left: 0; padding-left: 0; border-left: 0; width: 100%; } }
+.foco-modo { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--texto-fraco, inherit); }

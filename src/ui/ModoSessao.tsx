@@ -130,10 +130,10 @@ function PainelDoJukebox() {
   return <Escalado painel="jukebox"><iframe class="quadro" data-testid="iframe-jukebox" title="Jukebox" src={baseDoApp('jukebox')} allow="fullscreen; autoplay" /></Escalado>;
 }
 
-const MODOS_FOCO: { id: ModoFocoSessao; rotulo: string }[] = [
-  { id: 'desligado', rotulo: 'Desligado' },
-  { id: 'espiar', rotulo: 'Espiar' },
-  { id: 'seguir', rotulo: 'Seguir' },
+const MODOS_FOCO: { id: ModoFocoSessao; rotulo: string; dica: string }[] = [
+  { id: 'desligado', rotulo: 'Quadro parado', dica: 'O quadro ignora o que acontece no mapa.' },
+  { id: 'espiar', rotulo: 'Mostrar o que está no mapa', dica: 'Quando algo é inspecionado ou revelado no mapa, mostra as notas ligadas a isso num painel, sem trocar de quadro.' },
+  { id: 'seguir', rotulo: 'Acompanhar o mapa', dica: 'Abre o quadro e foca a nota ligada ao que acontece no mapa, inclusive ao abrir um mapa, e aplica as ações da moldura.' },
 ];
 
 function PainelDoQuadro() {
@@ -176,22 +176,23 @@ function PainelDoQuadro() {
           )}
         </select>
         <span class="espaco" />
-        <div class="chips" role="group" aria-label="Modo de foco do quadro" data-testid="sessao-modo-foco">
-          {MODOS_FOCO.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              class={cx('chip', modoFocoSessao.value === m.id && 'ativa')}
-              aria-pressed={modoFocoSessao.value === m.id}
-              data-testid={`sessao-foco-${m.id}`}
-              onClick={() => {
-                modoFocoSessao.value = m.id;
-              }}
-            >
-              {m.rotulo}
-            </button>
-          ))}
-        </div>
+        <label class="foco-modo">
+          <span>Foco:</span>
+          <select
+            data-testid="sessao-modo-foco"
+            aria-label="Modo de foco do quadro"
+            value={modoFocoSessao.value}
+            onChange={(ev) => {
+              modoFocoSessao.value = ev.currentTarget.value as ModoFocoSessao;
+            }}
+          >
+            {MODOS_FOCO.map((m) => (
+              <option key={m.id} value={m.id} title={m.dica}>
+                {m.rotulo}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
       <div class="painel-corpo-abas" style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         {quadroAberto.value ? (
