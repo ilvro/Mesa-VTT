@@ -3,11 +3,6 @@ import { formatarRef, type Ref } from '#mesa';
 import type { ModoAlinhamento } from '../../dominio/alinhamento.ts';
 import { parsearRefAncora } from '../../dominio/ancoras.ts';
 import type { AoFocar, Item } from '../../dominio/quadro.ts';
-import {
-  duplicar,
-  levarParaTras,
-  trazerParaFrente,
-} from '../../dominio/quadro-operacoes.ts';
 import { abrirNoApp } from '../../app/barramento.ts';
 import { entidades } from '../../app/campanha.ts';
 import {
@@ -21,11 +16,17 @@ import {
   alinharSelecao,
   desagruparSelecao,
   distribuirSelecao,
-  executar,
-  itens,
   marcarFeito,
-  selecao,
 } from '../../app/quadros.ts';
+import {
+  alternarSoMestreSelecao,
+  alternarTravadoSelecao,
+  atualizarAoFocarMoldura,
+  duplicarSelecao,
+  levarSelecaoParaTras,
+  removerSelecao,
+  trazerSelecaoParaFrente,
+} from '../../app/quadro-acoes.ts';
 
 interface MenuDoItemProps {
   x: number;
@@ -70,27 +71,7 @@ export function MenuDoItem({
 
   const atualizarAoFocar = (novo: AoFocar) => {
     if (!primeiro || primeiro.tipo !== 'moldura') return;
-    const vazio = novo.cena === null && Object.keys(novo.fatos).length === 0;
-    executar({
-      rotulo: 'Ao entrar na moldura',
-      ops: [
-        {
-          alterar: [
-            {
-              id: primeiro.id,
-              antes: {
-                aoFocar: primeiro.aoFocar,
-                atualizadoEm: primeiro.atualizadoEm,
-              },
-              depois: {
-                aoFocar: vazio ? undefined : novo,
-                atualizadoEm: Date.now(),
-              },
-            },
-          ],
-        },
-      ],
-    });
+    atualizarAoFocarMoldura(primeiro.id, novo);
   };
 
   const copiarLink = async () => {
@@ -143,17 +124,7 @@ export function MenuDoItem({
             class="menu-contexto-btn"
             data-testid="menu-duplicar"
             onClick={() => {
-              const maxZ = Math.max(0, ...[...itens.value.values()].map((i) => i.z));
-              const passo = duplicar(selecionados, novoId, { dx: 24, dy: 24 }, {
-                agora: Date.now(),
-                zBase: maxZ + 1,
-              });
-              executar(passo);
-              for (const op of passo.ops) {
-                if ('criar' in op) {
-                  selecao.value = new Set(op.criar.map((i) => i.id));
-                }
-              }
+              duplicarSelecao(novoId);
               onFechar();
             }}
           >
@@ -176,7 +147,7 @@ export function MenuDoItem({
             class="menu-contexto-btn"
             data-testid="menu-frente"
             onClick={() => {
-              executar(trazerParaFrente(itens.value, selecao.value));
+              trazerSelecaoParaFrente();
               onFechar();
             }}
           >
@@ -187,7 +158,7 @@ export function MenuDoItem({
             class="menu-contexto-btn"
             data-testid="menu-tras"
             onClick={() => {
-              executar(levarParaTras(itens.value, selecao.value));
+              levarSelecaoParaTras();
               onFechar();
             }}
           >
@@ -198,19 +169,7 @@ export function MenuDoItem({
             class="menu-contexto-btn"
             data-testid="menu-travar"
             onClick={() => {
-              const agora = Date.now();
-              executar({
-                rotulo: todosTravados ? 'Destravar' : 'Travar',
-                ops: [
-                  {
-                    alterar: selecionados.map((it) => ({
-                      id: it.id,
-                      antes: { travado: it.travado, atualizadoEm: it.atualizadoEm },
-                      depois: { travado: !todosTravados, atualizadoEm: agora },
-                    })),
-                  },
-                ],
-              });
+              alternarTravadoSelecao();
               onFechar();
             }}
           >
@@ -306,19 +265,7 @@ export function MenuDoItem({
             class="menu-contexto-btn"
             data-testid="menu-somestre"
             onClick={() => {
-              const agora = Date.now();
-              executar({
-                rotulo: todosSoMestre ? 'Visível a todos' : 'Só mestre',
-                ops: [
-                  {
-                    alterar: selecionados.map((it) => ({
-                      id: it.id,
-                      antes: { soMestre: it.soMestre, atualizadoEm: it.atualizadoEm },
-                      depois: { soMestre: !todosSoMestre, atualizadoEm: agora },
-                    })),
-                  },
-                ],
-              });
+              alternarSoMestreSelecao();
               onFechar();
             }}
           >
@@ -514,11 +461,7 @@ export function MenuDoItem({
             class="menu-contexto-btn perigo"
             data-testid="menu-apagar"
             onClick={() => {
-              const removiveis = selecionados.filter((i) => !i.travado);
-              if (removiveis.length > 0) {
-                executar({ rotulo: 'Apagar', ops: [{ remover: removiveis }] });
-                selecao.value = new Set();
-              }
+              removerSelecao('Apagar');
               onFechar();
             }}
           >

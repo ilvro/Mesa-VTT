@@ -20,20 +20,24 @@ import {
 } from '../../dominio/quadro.ts';
 import { NOMES_SEMANTICOS } from '../../dominio/paleta.ts';
 import {
-  duplicar,
-  levarParaTras,
-  trazerParaFrente,
-} from '../../dominio/quadro-operacoes.ts';
-import {
   agruparSelecao,
   alinharSelecao,
   desagruparSelecao,
   distribuirSelecao,
-  executar,
-  itens,
   paletaDaCampanha,
-  selecao,
 } from '../../app/quadros.ts';
+import {
+  alterarCaixasSelecao as alterarCaixas,
+  alterarSetasSelecao as alterarSetas,
+  alterarTextuaisSelecao as alterarTextuais,
+  alterarTracosSelecao as alterarTracos,
+  alternarSoMestreSelecao,
+  alternarTravadoSelecao,
+  duplicarSelecao,
+  levarSelecaoParaTras,
+  removerSelecao,
+  trazerSelecaoParaFrente,
+} from '../../app/quadro-acoes.ts';
 import type { ModoAlinhamento } from '../../dominio/alinhamento.ts';
 import { SeletorDeCor } from './SeletorDeCor.tsx';
 
@@ -347,99 +351,6 @@ export function BarraDeFormatacao({
     (i): i is Extract<Item, { tipo: 'traco' }> => i.tipo === 'traco',
   );
   const todosTracos = tracos.length === selecionados.length;
-
-  const alterarTracos = (
-    rotulo: string,
-    fn: (t: Extract<Item, { tipo: 'traco' }>) => Partial<Extract<Item, { tipo: 'traco' }>>,
-  ) => {
-    const agora = Date.now();
-    executar({
-      rotulo,
-      ops: [
-        {
-          alterar: tracos.map((t) => ({
-            id: t.id,
-            antes: {
-              cor: t.cor,
-              espessura: t.espessura,
-              atualizadoEm: t.atualizadoEm,
-            },
-            depois: { ...fn(t), atualizadoEm: agora },
-          })),
-        },
-      ],
-    });
-  };
-
-  const alterarSetas = (
-    rotulo: string,
-    fn: (s: Extract<Item, { tipo: 'seta' }>) => Partial<Extract<Item, { tipo: 'seta' }>>,
-  ) => {
-    const agora = Date.now();
-    executar({
-      rotulo,
-      ops: [
-        {
-          alterar: setas.map((s) => ({
-            id: s.id,
-            antes: {
-              cor: s.cor,
-              espessura: s.espessura,
-              tracejado: s.tracejado,
-              rota: s.rota,
-              inicio: s.inicio,
-              fim: s.fim,
-              de: s.de,
-              para: s.para,
-              atualizadoEm: s.atualizadoEm,
-            },
-            depois: { ...fn(s), atualizadoEm: agora },
-          })),
-        },
-      ],
-    });
-  };
-
-  const alterarTextuais = (
-    rotulo: string,
-    fn: (it: Extract<Item, { tipo: 'texto' | 'forma' }>) => Partial<Extract<Item, { tipo: 'texto' | 'forma' }>>,
-  ) => {
-    const agora = Date.now();
-    executar({
-      rotulo,
-      ops: [
-        {
-          alterar: textuais.map((it) => {
-            const mud = fn(it);
-            return {
-              id: it.id,
-              antes: { texto: it.texto, doc: it.doc, atualizadoEm: it.atualizadoEm },
-              depois: { ...mud, atualizadoEm: agora },
-            };
-          }),
-        },
-      ],
-    });
-  };
-
-  const alterarCaixas = (
-    rotulo: string,
-    fn: (c: EstiloDeCaixa) => EstiloDeCaixa,
-  ) => {
-    const agora = Date.now();
-    executar({
-      rotulo,
-      ops: [
-        {
-          alterar: comCaixa.map((it) => ({
-            id: it.id,
-            antes: { caixa: it.caixa, atualizadoEm: it.atualizadoEm },
-            depois: { caixa: fn(it.caixa), atualizadoEm: agora },
-          })),
-        },
-      ],
-    });
-  };
 
   const fonteComum = valorComum(textuais.map((i) => i.texto.fonte)) ?? '';
   const semanticaComum = valorComum(textuais.map((i) => i.semantica ?? ''));
@@ -912,7 +823,7 @@ export function BarraDeFormatacao({
         class="fmt-btn"
         data-testid="fmt-frente"
         title="Trazer para frente"
-        onClick={() => executar(trazerParaFrente(itens.value, selecao.value))}
+        onClick={() => trazerSelecaoParaFrente()}
       >
         ↑
       </button>
@@ -921,7 +832,7 @@ export function BarraDeFormatacao({
         class="fmt-btn"
         data-testid="fmt-tras"
         title="Levar para trás"
-        onClick={() => executar(levarParaTras(itens.value, selecao.value))}
+        onClick={() => levarSelecaoParaTras()}
       >
         ↓
       </button>
@@ -930,22 +841,7 @@ export function BarraDeFormatacao({
         class={`fmt-btn ${todosTravados ? 'ativa' : ''}`}
         data-testid="fmt-travar"
         title={todosTravados ? 'Destravar' : 'Travar'}
-        onClick={() => {
-          const travado = !todosTravados;
-          const agora = Date.now();
-          executar({
-            rotulo: travado ? 'Travar' : 'Destravar',
-            ops: [
-              {
-                alterar: selecionados.map((i) => ({
-                  id: i.id,
-                  antes: { travado: i.travado, atualizadoEm: i.atualizadoEm },
-                  depois: { travado, atualizadoEm: agora },
-                })),
-              },
-            ],
-          });
-        }}
+        onClick={() => alternarTravadoSelecao()}
       >
         🔒
       </button>
@@ -954,22 +850,7 @@ export function BarraDeFormatacao({
         class={`fmt-btn ${todosSoMestre ? 'ativa' : ''}`}
         data-testid="fmt-so-mestre"
         title="Só mestre"
-        onClick={() => {
-          const soMestre = !todosSoMestre;
-          const agora = Date.now();
-          executar({
-            rotulo: 'Visibilidade',
-            ops: [
-              {
-                alterar: selecionados.map((i) => ({
-                  id: i.id,
-                  antes: { soMestre: i.soMestre, atualizadoEm: i.atualizadoEm },
-                  depois: { soMestre, atualizadoEm: agora },
-                })),
-              },
-            ],
-          });
-        }}
+        onClick={() => alternarSoMestreSelecao(false)}
       >
         👁
       </button>
@@ -979,14 +860,7 @@ export function BarraDeFormatacao({
         data-testid="fmt-duplicar"
         title="Duplicar (Ctrl+D)"
         onClick={() => {
-          const maxZ = Math.max(0, ...[...itens.value.values()].map((i) => i.z));
-          const passo = duplicar(selecionados, novoId, { dx: 24, dy: 24 }, {
-            agora: Date.now(),
-            zBase: maxZ + 1,
-          });
-          executar(passo);
-          const criados = (passo.ops[0] as { criar: Item[] } | undefined)?.criar ?? [];
-          selecao.value = new Set(criados.map((i) => i.id));
+          duplicarSelecao(novoId);
         }}
       >
         ⧉
@@ -997,8 +871,7 @@ export function BarraDeFormatacao({
         data-testid="fmt-apagar"
         title="Apagar (Delete)"
         onClick={() => {
-          executar({ rotulo: 'Remover', ops: [{ remover: selecionados }] });
-          selecao.value = new Set();
+          removerSelecao('Remover');
         }}
       >
         ✕

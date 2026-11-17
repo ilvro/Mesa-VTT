@@ -68,7 +68,7 @@ import {
   tracoToca,
   type PontoTraco,
 } from '../../dominio/tracos.ts';
-import { duplicar } from '../../dominio/quadro-operacoes.ts';
+import { duplicarSelecao, removerSelecao } from '../../app/quadro-acoes.ts';
 import { FORMATOS_IMAGEM_ACEITOS, importarArquivoImagem } from '../../app/imagens-quadro.ts';
 import {
   agruparSelecao,
@@ -650,18 +650,7 @@ export function Quadro() {
           }
         } else if (k === 'd') {
           e.preventDefault();
-          const sel = [...selecao.value]
-            .map((id) => itens.value.get(id))
-            .filter((i): i is Item => Boolean(i));
-          if (sel.length === 0) return;
-          const maxZ = Math.max(0, ...[...itens.value.values()].map((i) => i.z));
-          const passo = duplicar(sel, novoIdItem, { dx: 24, dy: 24 }, {
-            agora: Date.now(),
-            zBase: maxZ + 1,
-          });
-          executar(passo);
-          const criados = (passo.ops[0] as { criar: Item[] } | undefined)?.criar ?? [];
-          selecao.value = new Set(criados.map((i) => i.id));
+          duplicarSelecao(novoIdItem);
         }
         return;
       }
@@ -690,14 +679,7 @@ export function Quadro() {
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selecao.value.size === 0) return;
         e.preventDefault();
-        const remover = [...selecao.value]
-          .map((id) => itens.value.get(id))
-          .filter((i): i is Item => Boolean(i))
-          .filter((i) => !i.travado);
-        if (remover.length > 0) {
-          executar({ rotulo: 'Remover', ops: [{ remover }] });
-          selecao.value = new Set();
-        }
+        removerSelecao('Remover');
         return;
       }
 
