@@ -1,25 +1,24 @@
 import type { Editor } from '@tiptap/core';
-import { docParaHtml } from '../../dominio/doc-rico.ts';
 import { familiaCss } from '../../dominio/fontes.ts';
 import { areaUtil, caminhoDaForma } from '../../dominio/formas.ts';
 import {
   PALETA_PADRAO,
   corDoTexto,
-  decorarMarcadores,
   fundoEfetivo,
 } from '../../dominio/paleta.ts';
 import {
-  chaveDaCondicao,
   condicoesDoItem,
   itemAtendeCondicoes,
 } from '../../dominio/estado-do-mundo.ts';
 import type { DocRico, Item } from '../../dominio/quadro.ts';
-import { abrirNoApp } from '../../app/barramento.ts';
-import { entidades } from '../../app/campanha.ts';
-import { ancorasDoItem } from '../../app/foco-do-quadro.ts';
-import { alternarFato, estadoDoMundo, paletaDaCampanha } from '../../app/quadros.ts';
-import { abrirEntidade } from '../../app/rotas.ts';
+import { estadoDoMundo, paletaDaCampanha } from '../../app/quadros.ts';
 import { EditorRico } from './EditorRico.tsx';
+import {
+  ALINHAMENTO_CSS,
+  ConteudoDecorado,
+  PinoAncora,
+  VERTICAL_CSS,
+} from './TextoDecorado.tsx';
 
 interface ItemFormaProps {
   item: Extract<Item, { tipo: 'forma' }>;
@@ -28,19 +27,6 @@ interface ItemFormaProps {
   onSairEdicao: (novoDoc?: DocRico, novaAltura?: number) => void;
   onEditorPronto?: (editor: Editor | null) => void;
 }
-
-const ALINHAMENTO_CSS = {
-  esquerda: 'left',
-  centro: 'center',
-  direita: 'right',
-  justificado: 'justify',
-} as const;
-
-const VERTICAL_CSS = {
-  topo: 'flex-start',
-  meio: 'center',
-  base: 'flex-end',
-} as const;
 
 export function ItemForma({
   item,
@@ -105,25 +91,7 @@ export function ItemForma({
         />
       </svg>
 
-      {(() => {
-        const ancs = ancorasDoItem(item.quadroId, item.id);
-        if (ancs.length === 0) return null;
-        return (
-          <button
-            type="button"
-            class="item-pino-ancora"
-            title={`Ver no mapa (${ancs[0]!.para.tipo}: ${ancs[0]!.para.id})`}
-            data-testid={`pino-ancora-${item.id}`}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              void abrirNoApp(ancs[0]!.para);
-            }}
-          >
-            📍
-          </button>
-        );
-      })()}
+      <PinoAncora quadroId={item.quadroId} itemId={item.id} />
 
       <div
         class="item-forma-conteudo"
@@ -154,48 +122,7 @@ export function ItemForma({
             <span />
           </div>
         ) : (
-          <div
-            class="item-texto-conteudo doc-rico-html"
-            onClick={(e) => {
-              const alvo = e.target as HTMLElement | null;
-              const elCond = alvo?.closest<HTMLElement>('[data-condicao]');
-              if (elCond) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (elCond.dataset.condicao) {
-                  void alternarFato(chaveDaCondicao(elCond.dataset.condicao));
-                }
-                return;
-              }
-              const elEnt = alvo?.closest<HTMLElement>('[data-entidade-id]');
-              if (elEnt) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (elEnt.dataset.entidadeId) abrirEntidade(elEnt.dataset.entidadeId);
-                return;
-              }
-              const elRef = alvo?.closest<HTMLElement>('[data-ref-app]');
-              if (elRef && elRef.dataset.refApp && elRef.dataset.refTipo && elRef.dataset.refId) {
-                e.preventDefault();
-                e.stopPropagation();
-                void abrirNoApp({
-                  app: elRef.dataset.refApp as 'mesa',
-                  tipo: elRef.dataset.refTipo,
-                  id: elRef.dataset.refId,
-                });
-              }
-            }}
-            onPointerDown={(e) => {
-              if ((e.target as HTMLElement | null)?.closest('[data-entidade-id],[data-ref-app],[data-condicao]')) {
-                e.stopPropagation();
-              }
-            }}
-            dangerouslySetInnerHTML={{
-              __html: docParaHtml(item.doc, {
-                decorar: (t) => decorarMarcadores(t, entidades.value, estado),
-              }),
-            }}
-          />
+          <ConteudoDecorado doc={item.doc} estado={estado} />
         )}
       </div>
     </div>

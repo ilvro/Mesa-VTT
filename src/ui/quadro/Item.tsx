@@ -1,26 +1,19 @@
 import type { Editor } from '@tiptap/core';
 import { memo } from 'preact/compat';
-import { docParaHtml } from '../../dominio/doc-rico.ts';
 import { familiaCss } from '../../dominio/fontes.ts';
 import {
   PALETA_PADRAO,
   corComOpacidade,
   corDoTexto,
-  decorarMarcadores,
   fundoEfetivo,
   type PaletaDaCampanha,
 } from '../../dominio/paleta.ts';
 import {
-  chaveDaCondicao,
   condicoesDoItem,
   itemAtendeCondicoes,
 } from '../../dominio/estado-do-mundo.ts';
 import type { DocRico, Item as ItemModelo } from '../../dominio/quadro.ts';
-import { abrirNoApp } from '../../app/barramento.ts';
-import { entidades } from '../../app/campanha.ts';
-import { ancorasDoItem } from '../../app/foco-do-quadro.ts';
-import { alternarFato, estadoDoMundo, marcarFeito, paletaDaCampanha } from '../../app/quadros.ts';
-import { abrirEntidade } from '../../app/rotas.ts';
+import { estadoDoMundo, marcarFeito, paletaDaCampanha } from '../../app/quadros.ts';
 import { EditorRico } from './EditorRico.tsx';
 import { ItemForma } from './ItemForma.tsx';
 import { ItemImagem } from './ItemImagem.tsx';
@@ -28,38 +21,12 @@ import { ItemMoldura } from './ItemMoldura.tsx';
 import { ItemRef } from './ItemRef.tsx';
 import { ItemSeta } from './ItemSeta.tsx';
 import { ItemTraco } from './ItemTraco.tsx';
-
-function aoClicarTextoDecorado(e: MouseEvent) {
-  const alvo = e.target as HTMLElement | null;
-  if (!alvo) return;
-  const elCond = alvo.closest<HTMLElement>('[data-condicao]');
-  if (elCond) {
-    e.preventDefault();
-    e.stopPropagation();
-    const cond = elCond.dataset.condicao;
-    if (cond) void alternarFato(chaveDaCondicao(cond));
-    return;
-  }
-  const elEnt = alvo.closest<HTMLElement>('[data-entidade-id]');
-  if (elEnt) {
-    e.preventDefault();
-    e.stopPropagation();
-    const id = elEnt.dataset.entidadeId;
-    if (id) abrirEntidade(id);
-    return;
-  }
-  const elRef = alvo.closest<HTMLElement>('[data-ref-app]');
-  if (elRef) {
-    e.preventDefault();
-    e.stopPropagation();
-    const app = elRef.dataset.refApp;
-    const tipo = elRef.dataset.refTipo;
-    const id = elRef.dataset.refId;
-    if (app && tipo && id) {
-      void abrirNoApp({ app: app as 'mesa', tipo, id });
-    }
-  }
-}
+import {
+  ALINHAMENTO_CSS,
+  ConteudoDecorado,
+  PinoAncora,
+  VERTICAL_CSS,
+} from './TextoDecorado.tsx';
 
 interface ItemProps {
   item: ItemModelo;
@@ -72,28 +39,6 @@ interface ItemProps {
   onSairTitulo?: (novoTitulo: string) => void;
   onEditorPronto?: (editor: Editor | null) => void;
 }
-
-const ALINHAMENTO_CSS = {
-  esquerda: 'left',
-  centro: 'center',
-  direita: 'right',
-  justificado: 'justify',
-} as const;
-
-const VERTICAL_CSS = {
-  topo: 'flex-start',
-  meio: 'center',
-  base: 'flex-end',
-} as const;
-
-const FAMILIA_FONTE: Record<string, string> = {
-  'open-sans': "'Open Sans', sans-serif",
-  'pt-serif': "'PT Serif', serif",
-  hanken: "'Hanken Grotesk Variable', 'Hanken Grotesk', sans-serif",
-  cinzel: "'Cinzel', Georgia, serif",
-  caveat: "'Caveat', cursive",
-  'jetbrains-mono': "'JetBrains Mono', monospace",
-};
 
 function estiloCaixaCss(
   item: Extract<ItemModelo, { tipo: 'texto' }>,
@@ -171,25 +116,7 @@ function ItemBase({
             se: {conds.join(', ')}
           </span>
         ) : null}
-        {(() => {
-          const ancs = ancorasDoItem(item.quadroId, item.id);
-          if (ancs.length === 0) return null;
-          return (
-            <button
-              type="button"
-              class="item-pino-ancora"
-              title={`Ver no mapa (${ancs[0]!.para.tipo}: ${ancs[0]!.para.id})`}
-              data-testid={`pino-ancora-${item.id}`}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                void abrirNoApp(ancs[0]!.para);
-              }}
-            >
-              📍
-            </button>
-          );
-        })()}
+        <PinoAncora quadroId={item.quadroId} itemId={item.id} />
         <button
           type="button"
           class={`item-feito-btn ${item.feito ? 'ativo' : ''}`}
@@ -218,20 +145,7 @@ function ItemBase({
             <span />
           </div>
         ) : (
-          <div
-            class="item-texto-conteudo doc-rico-html"
-            onClick={aoClicarTextoDecorado}
-            onPointerDown={(e) => {
-              if ((e.target as HTMLElement | null)?.closest('[data-entidade-id],[data-ref-app],[data-condicao]')) {
-                e.stopPropagation();
-              }
-            }}
-            dangerouslySetInnerHTML={{
-              __html: docParaHtml(item.doc, {
-                decorar: (t) => decorarMarcadores(t, entidades.value, estado),
-              }),
-            }}
-          />
+          <ConteudoDecorado doc={item.doc} estado={estado} />
         )}
       </div>
     );

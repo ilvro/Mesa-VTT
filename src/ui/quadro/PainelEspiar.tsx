@@ -1,5 +1,4 @@
 import { docParaHtml } from '../../dominio/doc-rico.ts'
-import { chaveDaCondicao } from '../../dominio/estado-do-mundo.ts'
 import { decorarMarcadores, NOMES_SEMANTICOS } from '../../dominio/paleta.ts'
 import { abrirNoApp } from '../../app/barramento.ts'
 import { entidades } from '../../app/campanha.ts'
@@ -11,45 +10,13 @@ import {
 } from '../../app/foco-do-quadro.ts'
 import {
   abrirQuadro,
-  alternarFato,
   estadoDoMundo,
   itens,
   marcarFeito,
   quadroAberto,
 } from '../../app/quadros.ts'
-import { abrirEntidade, navegarParaQuadro, tela } from '../../app/rotas.ts'
-
-function aoClicarTextoEspiar(e: MouseEvent) {
-  const alvo = e.target as HTMLElement | null
-  if (!alvo) return
-  const elCond = alvo.closest<HTMLElement>('[data-condicao]')
-  if (elCond) {
-    e.preventDefault()
-    e.stopPropagation()
-    const cond = elCond.dataset.condicao
-    if (cond) void alternarFato(chaveDaCondicao(cond))
-    return
-  }
-  const elEnt = alvo.closest<HTMLElement>('[data-entidade-id]')
-  if (elEnt) {
-    e.preventDefault()
-    e.stopPropagation()
-    const id = elEnt.dataset.entidadeId
-    if (id) abrirEntidade(id)
-    return
-  }
-  const elRef = alvo.closest<HTMLElement>('[data-ref-app]')
-  if (elRef) {
-    e.preventDefault()
-    e.stopPropagation()
-    const app = elRef.dataset.refApp
-    const tipo = elRef.dataset.refTipo
-    const id = elRef.dataset.refId
-    if (app && tipo && id) {
-      void abrirNoApp({ app: app as 'mesa', tipo, id })
-    }
-  }
-}
+import { navegarParaQuadro, tela } from '../../app/rotas.ts'
+import { aoClicarTextoDecorado } from './TextoDecorado.tsx'
 
 export function PainelEspiar() {
   const estado = espiarAtivo.value
@@ -156,7 +123,7 @@ export function PainelEspiar() {
                 </div>
                 <div
                   class="espiar-cartao-corpo item-texto-html"
-                  onClick={aoClicarTextoEspiar}
+                  onClick={aoClicarTextoDecorado}
                   dangerouslySetInnerHTML={{ __html: html }}
                 />
                 <div class="espiar-cartao-acoes">

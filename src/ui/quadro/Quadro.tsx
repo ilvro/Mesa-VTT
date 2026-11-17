@@ -23,7 +23,6 @@ import {
 } from '../../dominio/area-de-transferencia.ts';
 import {
   caixaDe,
-  contemPonto,
   encaixarNaGrade,
   girar,
   itensNoRetangulo,
@@ -45,6 +44,7 @@ import {
   type Forma,
   type Item,
   type Ponta,
+  type Quadro as QuadroModelo,
   type TipoSemantico,
 } from '../../dominio/quadro.ts';
 import { buscarNoQuadro } from '../../dominio/busca-quadro.ts';
@@ -106,7 +106,6 @@ import { navegarParaQuadro } from '../../app/rotas.ts';
 import { cx } from '../cx.ts';
 import {
   BarraDeFerramentas,
-  type ConfigTraco,
   type FerramentaQuadro,
 } from './BarraDeFerramentas.tsx';
 import { BarraDeFormatacao } from './BarraDeFormatacao.tsx';
@@ -122,154 +121,20 @@ import { PainelDeSegredos } from './PainelDeSegredos.tsx';
 import { PainelDoEstado } from './PainelDoEstado.tsx';
 import { PainelDoFundo, type ModoRoda } from './PainelDoFundo.tsx';
 import { PainelEspiar } from './PainelEspiar.tsx';
-
-const CHAVE_RODA = 'mesa:quadro:roda';
-const CHAVE_TRACO = 'mesa:quadro:traco';
-const CHAVE_CAMERA = (id: string) => `mesa:quadro-camera:${id}`;
-const CAMERA_PADRAO: Camera = { x: -200, y: -150, zoom: 1 };
-
-interface ConfigTracos {
-  caneta: ConfigTraco;
-  'marca-texto': ConfigTraco;
-}
-
-const CONFIG_TRACOS_PADRAO: ConfigTracos = {
-  caneta: { cor: '#e8efe9', espessura: 4 },
-  'marca-texto': { cor: '#f7e48c', espessura: 18 },
-};
-
-function lerConfigTracos(): ConfigTracos {
-  try {
-    const raw = localStorage.getItem(CHAVE_TRACO);
-    if (!raw) return CONFIG_TRACOS_PADRAO;
-    const parsed = JSON.parse(raw) as Partial<ConfigTracos>;
-    return {
-      caneta: parsed.caneta ?? CONFIG_TRACOS_PADRAO.caneta,
-      'marca-texto': parsed['marca-texto'] ?? CONFIG_TRACOS_PADRAO['marca-texto'],
-    };
-  } catch {
-    return CONFIG_TRACOS_PADRAO;
-  }
-}
-
-function gravarConfigTracos(cfg: ConfigTracos): void {
-  try {
-    localStorage.setItem(CHAVE_TRACO, JSON.stringify(cfg));
-  } catch {
-    /* ignora */
-  }
-}
-
-function novoIdItem(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `it-${crypto.randomUUID()}`;
-  }
-  return `it-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function lerModoRoda(): ModoRoda {
-  try {
-    return localStorage.getItem(CHAVE_RODA) === 'rolagem' ? 'rolagem' : 'zoom';
-  } catch {
-    return 'zoom';
-  }
-}
-
-function gravarModoRoda(modo: ModoRoda): void {
-  try {
-    localStorage.setItem(CHAVE_RODA, modo);
-  } catch {
-    /* ignora */
-  }
-}
-
-function lerCameraSalva(id: string): Camera {
-  try {
-    const bruto = localStorage.getItem(CHAVE_CAMERA(id));
-    if (!bruto) return CAMERA_PADRAO;
-    const obj = JSON.parse(bruto) as Partial<Camera>;
-    if (
-      typeof obj.x === 'number' &&
-      Number.isFinite(obj.x) &&
-      typeof obj.y === 'number' &&
-      Number.isFinite(obj.y) &&
-      typeof obj.zoom === 'number' &&
-      Number.isFinite(obj.zoom) &&
-      obj.zoom > 0
-    ) {
-      return { x: obj.x, y: obj.y, zoom: obj.zoom };
-    }
-  } catch {
-    /* ignora */
-  }
-  return CAMERA_PADRAO;
-}
-
-function gravarCamera(id: string, cam: Camera): void {
-  try {
-    localStorage.setItem(CHAVE_CAMERA(id), JSON.stringify(cam));
-  } catch {
-    /* ignora */
-  }
-}
-
-function corFundoClara(hex: string): boolean {
-  const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return false;
-  const n = parseInt(m[1]!, 16);
-  const r = (n >> 16) & 255;
-  const g = (n >> 8) & 255;
-  const b = n & 255;
-  return (r * 299 + g * 587 + b * 114) / 1000 > 140;
-}
-
-function estiloGrade(
-  fundo: { cor: string; grade: 'nenhuma' | 'pontos' | 'linhas'; passo: number },
-  cam: Camera,
-): Record<string, string | undefined> {
-  const passoTela = fundo.passo * cam.zoom;
-  if (fundo.grade === 'nenhuma' || passoTela < 6) {
-    return { backgroundColor: fundo.cor };
-  }
-  const clara = corFundoClara(fundo.cor);
-  const traco = clara ? 'rgba(0, 0, 0, 0.14)' : 'rgba(255, 255, 255, 0.14)';
-  const ponto = clara ? 'rgba(0, 0, 0, 0.22)' : 'rgba(255, 255, 255, 0.2)';
-  const ox = ((-cam.x * cam.zoom) % passoTela + passoTela) % passoTela;
-  const oy = ((-cam.y * cam.zoom) % passoTela + passoTela) % passoTela;
-
-  const backgroundImage =
-    fundo.grade === 'pontos'
-      ? `radial-gradient(circle, ${ponto} 1px, transparent 1px)`
-      : `linear-gradient(to right, ${traco} 1px, transparent 1px), linear-gradient(to bottom, ${traco} 1px, transparent 1px)`;
-
-  return {
-    backgroundColor: fundo.cor,
-    backgroundImage,
-    backgroundSize: `${passoTela}px ${passoTela}px`,
-    backgroundPosition: `${ox}px ${oy}px`,
-  };
-}
-
-function emCampoDeTexto(alvo: EventTarget | null): boolean {
-  if (!(alvo instanceof HTMLElement)) return false;
-  const tag = alvo.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || alvo.isContentEditable;
-}
-
-function itemNoPonto(
-  mapa: ReadonlyMap<string, Item>,
-  ponto: Ponto,
-  ignorarSetas = false,
-): Item | null {
-  const ordenados = [...mapa.values()].sort(
-    (a, b) => b.z - a.z || b.id.localeCompare(a.id),
-  );
-  for (const item of ordenados) {
-    if (ignorarSetas && item.tipo === 'seta') continue;
-    if (contemPonto(item, ponto)) return item;
-  }
-  return null;
-}
+import {
+  CAMERA_PADRAO,
+  emCampoDeTexto,
+  estiloGrade,
+  gravarCamera,
+  gravarConfigTracos,
+  gravarModoRoda,
+  itemNoPonto,
+  lerCameraSalva,
+  lerConfigTracos,
+  lerModoRoda,
+  novoIdItem,
+  type ConfigTracos,
+} from './quadro-helpers.ts';
 
 type Gesto =
   | { tipo: 'pan'; x: number; y: number; camX: number; camY: number }
@@ -315,7 +180,10 @@ type Gesto =
 
 export function Quadro() {
   const q = quadroAberto.value;
-  if (!q) return null;
+  return q ? <QuadroAberto key={q.id} q={q} /> : null;
+}
+
+function QuadroAberto({ q }: { q: QuadroModelo }) {
 
   const areaRef = useRef<HTMLDivElement>(null);
   const camera = useSignal<Camera>(lerCameraSalva(q.id));
