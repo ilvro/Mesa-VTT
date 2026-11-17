@@ -173,7 +173,11 @@ export async function baixarExportacaoAparelho(): Promise<void> {
   }, 1000);
 }
 
-function criarLojasEIndices(db: IDBDatabase, lojas: DescricaoDaLoja[]): void {
+function criarLojasEIndices(
+  db: IDBDatabase,
+  tx: IDBTransaction | null,
+  lojas: DescricaoDaLoja[],
+): void {
   for (const loja of lojas) {
     let store: IDBObjectStore;
     if (!db.objectStoreNames.contains(loja.nome)) {
@@ -183,7 +187,8 @@ function criarLojasEIndices(db: IDBDatabase, lojas: DescricaoDaLoja[]): void {
       if (loja.keyPath !== null) params.keyPath = loja.keyPath;
       store = db.createObjectStore(loja.nome, params);
     } else {
-      store = (db as any).transaction.objectStore(loja.nome);
+      if (!tx) throw new Error(`Transação de upgrade indisponível para a loja "${loja.nome}".`);
+      store = tx.objectStore(loja.nome);
     }
 
     for (const idx of loja.indices) {
@@ -215,7 +220,7 @@ async function abrirParaImportacao(
     return new Promise<IDBDatabase>((resolve, reject) => {
       const req = indexedDB.open(banco.nome, banco.versao);
       req.onupgradeneeded = () => {
-        criarLojasEIndices(req.result, banco.lojas);
+        criarLojasEIndices(req.result, req.transaction, banco.lojas);
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -250,7 +255,7 @@ async function abrirParaImportacao(
   return new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(banco.nome, versaoDestino);
     req.onupgradeneeded = () => {
-      criarLojasEIndices(req.result, banco.lojas);
+      criarLojasEIndices(req.result, req.transaction, banco.lojas);
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);

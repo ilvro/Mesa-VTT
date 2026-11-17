@@ -1,10 +1,9 @@
-// Só em desenvolvimento: importado por `app/ponte.ts` (que entra por `import()` sob `import.meta.env.DEV`); o estilo vai junto, num <style>, para não ir ao build.
+// Só em desenvolvimento: montado por `main.tsx` sob `import.meta.env.DEV`; o estilo vai junto, num <style>, para não ir ao build.
 import { signal } from '@preact/signals';
-import type { EstadoDaPonte } from '#mesa/ponte';
+import { estadoDaPonte } from '../app/assistente-slot.ts';
 import { PainelDoAssistente } from './PainelDoAssistente.tsx';
 
 const painelAberto = signal(false);
-export const estadoDaPonte = signal<EstadoDaPonte | null>(null);
 
 const ESTILO = `
 .selo-assistente { font-family: inherit; color: inherit; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--linha); border-radius: 999px; background: var(--acento-suave); font-size: 12px; line-height: 1.4; cursor: pointer; user-select: none; }

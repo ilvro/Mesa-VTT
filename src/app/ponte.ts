@@ -1,7 +1,6 @@
-// Só em desenvolvimento: importado por `main.tsx` dentro de `if (import.meta.env.DEV)`; o Vite elimina o chunk do build.
+// Só em desenvolvimento: carregado por `main.tsx` dentro de `if (import.meta.env.DEV)`; o Vite elimina o chunk do build.
 import { conectarPonte, type FerramentaDaPonte } from '#mesa/ponte';
-import { SeloDoAssistente, estadoDaPonte } from '../ui/SeloDoAssistente.tsx';
-import { seloDoAssistente } from './assistente-slot.ts';
+import { estadoDaPonte } from './assistente-slot.ts';
 import { abrirAplicativo } from './aplicativos.ts';
 import { alternarEncontroDaCena, alterarEntidade, atualizar, campanhaAtiva, campanhas, criarCampanha, criarEntidade, definirMomentoDaCena, ligarRefs, obterRepositorio, salvarElencoDaCampanha, vincularMapaNaCena, vincularParticipanteNaCena, vincularPistaNaCena, vincularTrilhaNaCena } from './campanha.ts';
 import { ferramentasDaMesa } from './ponte-ferramentas.ts';
@@ -137,4 +136,3 @@ const cliente = conectarPonte({
 
 estadoDaPonte.value = cliente.estado();
 cliente.aoMudarEstado(e => { estadoDaPonte.value = e; });
-seloDoAssistente.value = SeloDoAssistente;

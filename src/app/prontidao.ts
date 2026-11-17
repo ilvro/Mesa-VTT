@@ -51,6 +51,16 @@ async function lerDocumentosEntregues(): Promise<Set<string>> {
   return ids;
 }
 
+function lerRespostaProntidao(res: unknown): { total: number; faltando: number } | null {
+  if (!res || typeof res !== 'object') return null;
+  const obj = res as { ok?: unknown; total?: unknown; faltando?: unknown };
+  if (!obj.ok) return null;
+  return {
+    total: Number(obj.total) || 0,
+    faltando: Number(obj.faltando) || 0,
+  };
+}
+
 /**
  * Coleta os fatos da campanha necessários para a checagem de prontidão:
  * - Documentos entregues aos jogadores (mesa-handouts-v1);
@@ -85,14 +95,7 @@ export async function carregarFatos(
           b.pedir('jukebox.prontidao', { ref }).catch(() => null),
           timeoutPromise,
         ]);
-        if (res && (res as any).ok) {
-          mapaTrilhas.set(id, {
-            total: Number((res as any).total) || 0,
-            faltando: Number((res as any).faltando) || 0,
-          });
-        } else {
-          mapaTrilhas.set(id, null);
-        }
+        mapaTrilhas.set(id, lerRespostaProntidao(res));
       } catch {
         mapaTrilhas.set(id, null);
       }
