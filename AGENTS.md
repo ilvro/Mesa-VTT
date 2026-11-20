@@ -3,7 +3,7 @@
 O hub da plataforma da campanha (Atlas, Ficha, Ateliê, Jukebox, Tabletop). Contrato e decisões: `../Atlas/docs/PLATAFORMA.md` (§9 descreve a Mesa). O plano de tarefas mora em `../Atlas/docs/plano/fase-9.md` (9.1 a 9.5).
 
 - Uma tarefa por vez, pela ficha. Não decida arquitetura fora dela; se a ficha não bate com o código, pare e reporte.
-- Não commite. Ao fim de cada tarefa: `npm run typecheck`, `npm test` e (quando a ficha pedir) `npm run test:e2e` passando, ficha marcada ✅ no Atlas, uma linha no `progress.md` do Atlas e uma sugestão de commit curta em inglês.
+- Um commit por mudança, no usuário do git e sem coautoria (regras em `../CLAUDE.md`). Ao fim de cada tarefa: `npm run typecheck`, `npm test` e (quando a ficha pedir) `npm run test:e2e` passando, ficha marcada ✅ no Atlas, uma linha no `progress.md` do Atlas e o commit feito, em inglês curto.
 - Mesma pilha do Atlas: TypeScript `strict`, Preact com signals, Vite, CSS próprio (sem Tailwind), identidade de `../Atlas/docs/INTERFACE.md`. Tema só pelo `mesa:tema` (`mesa-core`).
 - `src/dominio` é puro: não importa UI, nem `app`, nem DOM. A UI lê signals de `src/app` e altera só por funções de `src/app`.
 - O `mesa-core` vive em `vendor/mesa-core/` (cópia compilada e fixa). **A fonte continua no Atlas** (`Atlas/mesa-core/`, `npm run build:core`); para atualizar a cópia: `cp -r ../Atlas/mesa-core/dist/. vendor/mesa-core/`. Nunca edite o `vendor/` à mão.
