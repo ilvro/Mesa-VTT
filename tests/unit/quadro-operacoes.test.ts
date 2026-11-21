@@ -97,6 +97,25 @@ test('z-order: trazerParaFrente, levarParaTras, subirUm e descerUm', () => {
   assert.deepEqual(ordem(aplicar(m, descerUm(m, ['c']))), ['a', 'c', 'b']);
 });
 
+test('z-order mexe só nos itens que mudam de lugar', () => {
+  const lista = Array.from({ length: 50 }, (_, i) =>
+    novoTexto({ quadroId: 'q', x: 0, y: 0, z: (i + 1) * 2 }, 100, `i${String(i).padStart(2, '0')}`),
+  );
+  const m = mapaDe(...lista);
+  const alterados = (p: ReturnType<typeof trazerParaFrente>) =>
+    p.ops.flatMap((op) => ('alterar' in op ? op.alterar.map((a) => a.id) : []));
+
+  assert.deepEqual(alterados(trazerParaFrente(m, ['i10'])), ['i10']);
+  assert.deepEqual(alterados(levarParaTras(m, ['i10', 'i20'])).sort(), ['i10', 'i20']);
+  assert.deepEqual(alterados(subirUm(m, ['i10'])).sort(), ['i10', 'i11']);
+  assert.deepEqual(alterados(descerUm(m, ['i10'])).sort(), ['i09', 'i10']);
+  assert.equal(trazerParaFrente(m, ['i49']).ops.length, 0);
+
+  const atras = aplicar(m, levarParaTras(m, ['i10', 'i20']));
+  const ordemAtras = [...atras.values()].sort((x, y) => x.z - y.z).map((x) => x.id);
+  assert.deepEqual(ordemAtras.slice(0, 3), ['i10', 'i20', 'i00']);
+});
+
 test('duplicar: desloca itens e religa setas entre itens duplicados para as cópias', () => {
   const a = novoTexto({ quadroId: 'q', x: 10, y: 10, z: 1 }, 100, 'a');
   const b = novoTexto({ quadroId: 'q', x: 100, y: 10, z: 2 }, 100, 'b');

@@ -172,44 +172,79 @@ function normalizarConjunto(ids: ReadonlySet<string> | readonly string[]): Set<s
   return ids instanceof Set ? new Set(ids) : new Set(ids);
 }
 
-function passoDeReordenacao(
-  rotulo: string,
-  antesLista: Item[],
-  depoisLista: Item[],
-): Passo {
-  const alterar: { id: string; antes: Partial<Item>; depois: Partial<Item> }[] = [];
+type Alteracao = { id: string; antes: Partial<Item>; depois: Partial<Item> };
+
+function zDistintos(ordenados: readonly Item[]): boolean {
+  for (let i = 1; i < ordenados.length; i++) {
+    if (ordenados[i]!.z <= ordenados[i - 1]!.z) return false;
+  }
+  return true;
+}
+
+/**
+ * Grava a nova ordem mexendo no menor número de itens. Com z distintos, a
+ * posição i recebe o i-ésimo z que já existia, e só muda quem trocou de lugar.
+ * Com z repetidos (quadros antigos ou importados), renumera tudo de 1 a N uma vez.
+ */
+function passoDeReordenacao(rotulo: string, antesLista: Item[], depoisLista: Item[]): Passo {
+  const alterar: Alteracao[] = [];
+  const reaproveitar = zDistintos(antesLista);
   for (let i = 0; i < depoisLista.length; i++) {
     const item = depoisLista[i];
     if (!item) continue;
-    const novoZ = i + 1;
+    const novoZ = reaproveitar ? antesLista[i]!.z : i + 1;
     if (item.z !== novoZ) {
       alterar.push({ id: item.id, antes: { z: item.z }, depois: { z: novoZ } });
     }
   }
-  void antesLista;
   return { rotulo, ops: alterar.length > 0 ? [{ alterar }] : [] };
+}
+
+/** Leva a seleção para uma ponta da pilha dando z novos só a ela (acima do maior ou abaixo do menor). */
+function passoParaPonta(
+  rotulo: string,
+  ordenados: readonly Item[],
+  alvo: ReadonlySet<string>,
+  ponta: 'frente' | 'tras',
+): Passo {
+  const selecionados = ordenados.filter((i) => alvo.has(i.id));
+  const resto = ordenados.filter((i) => !alvo.has(i.id));
+  if (selecionados.length === 0 || resto.length === 0) return { rotulo, ops: [] };
+  const jaNaPonta =
+    ponta === 'frente'
+      ? selecionados[0]!.z > resto[resto.length - 1]!.z
+      : selecionados[selecionados.length - 1]!.z < resto[0]!.z;
+  if (jaNaPonta) return { rotulo, ops: [] };
+  const alterar: Alteracao[] = [];
+  if (ponta === 'frente') {
+    let z = ordenados[ordenados.length - 1]!.z;
+    for (const it of selecionados) {
+      z += 1;
+      alterar.push({ id: it.id, antes: { z: it.z }, depois: { z } });
+    }
+  } else {
+    let z = ordenados[0]!.z;
+    for (let i = selecionados.length - 1; i >= 0; i--) {
+      const it = selecionados[i]!;
+      z -= 1;
+      alterar.push({ id: it.id, antes: { z: it.z }, depois: { z } });
+    }
+  }
+  return { rotulo, ops: [{ alterar }] };
 }
 
 export function trazerParaFrente(
   itens: ReadonlyMap<string, Item>,
   ids: ReadonlySet<string> | readonly string[],
 ): Passo {
-  const alvo = normalizarConjunto(ids);
-  const ordenados = ordenarPorZ(itens);
-  const resto = ordenados.filter((i) => !alvo.has(i.id));
-  const selecionados = ordenados.filter((i) => alvo.has(i.id));
-  return passoDeReordenacao('Trazer para frente', ordenados, [...resto, ...selecionados]);
+  return passoParaPonta('Trazer para frente', ordenarPorZ(itens), normalizarConjunto(ids), 'frente');
 }
 
 export function levarParaTras(
   itens: ReadonlyMap<string, Item>,
   ids: ReadonlySet<string> | readonly string[],
 ): Passo {
-  const alvo = normalizarConjunto(ids);
-  const ordenados = ordenarPorZ(itens);
-  const selecionados = ordenados.filter((i) => alvo.has(i.id));
-  const resto = ordenados.filter((i) => !alvo.has(i.id));
-  return passoDeReordenacao('Levar para trás', ordenados, [...selecionados, ...resto]);
+  return passoParaPonta('Levar para trás', ordenarPorZ(itens), normalizarConjunto(ids), 'tras');
 }
 
 export function subirUm(
