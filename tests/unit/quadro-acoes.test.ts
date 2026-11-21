@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { docDeTexto, novoTexto, type Item } from '../../src/dominio/quadro.ts';
+import { docDeTexto, novaMoldura, novaNotaAdesiva, novoTexto, type Item } from '../../src/dominio/quadro.ts';
 import {
   alterarTextuaisSelecao,
   alternarTravadoSelecao,
@@ -9,6 +9,7 @@ import {
 } from '../../src/app/quadro-acoes.ts';
 import {
   desfazer,
+  executar,
   historico,
   itens,
   quadroAberto,
@@ -82,4 +83,32 @@ test('duplicarSelecao cria cópias e alternarTravadoSelecao alterna trava com de
   assert.equal(itens.value.get('dup-1')?.travado, true);
   desfazer();
   assert.equal(itens.value.get('dup-1')?.travado, false);
+});
+
+test('executar: item criado dentro da moldura ganha molduraId e arrasto para dentro desfaz de uma vez', () => {
+  const m = novaMoldura({ quadroId: 'q1', x: 0, y: 0, largura: 500, altura: 500 }, 1, 'm');
+  prepararQuadro([m], []);
+  const dentro = novaNotaAdesiva({ quadroId: 'q1', x: 100, y: 100, largura: 50, altura: 50 }, 1, 'n1');
+  executar({ rotulo: 'Criar', ops: [{ criar: [dentro] }] });
+  assert.equal(itens.value.get('n1')?.molduraId, 'm');
+
+  const fora = novaNotaAdesiva({ quadroId: 'q1', x: 800, y: 100, largura: 50, altura: 50 }, 1, 'n2');
+  prepararQuadro([m, fora], []);
+  const passoMover = (x: number) => ({
+    rotulo: 'Mover',
+    ops: [
+      {
+        alterar: [
+          { id: 'n2', antes: { x: itens.value.get('n2')!.x }, depois: { x } },
+        ],
+      },
+    ],
+  });
+  executar(passoMover(600), 'arrasto');
+  executar(passoMover(200), 'arrasto');
+  assert.equal(itens.value.get('n2')?.molduraId, 'm');
+  assert.equal(itens.value.get('n2')?.x, 200);
+  desfazer();
+  assert.equal(itens.value.get('n2')?.molduraId, null);
+  assert.equal(itens.value.get('n2')?.x, 800);
 });

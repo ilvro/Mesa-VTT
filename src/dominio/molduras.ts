@@ -2,10 +2,14 @@ import type { Item } from './quadro.ts';
 
 export type ItemMoldura = Extract<Item, { tipo: 'moldura' }>;
 
+const FOLGA = 0.01;
+
 export function molduraQueContem(
-  item: Pick<Item, 'id' | 'x' | 'y' | 'largura' | 'altura'>,
+  item: Pick<Item, 'id' | 'x' | 'y' | 'largura' | 'altura'> & { tipo?: Item['tipo'] },
   molduras: Iterable<ItemMoldura>,
 ): ItemMoldura | null {
+  const ehMoldura = item.tipo === 'moldura';
+  const areaItem = item.largura * item.altura;
   const cx = item.x + item.largura / 2;
   const cy = item.y + item.altura / 2;
   let melhor: ItemMoldura | null = null;
@@ -13,15 +17,69 @@ export function molduraQueContem(
 
   for (const m of molduras) {
     if (m.id === item.id) continue;
-    if (cx >= m.x && cx <= m.x + m.largura && cy >= m.y && cy <= m.y + m.altura) {
-      const area = m.largura * m.altura;
-      if (area < melhorArea) {
-        melhorArea = area;
-        melhor = m;
+    const area = m.largura * m.altura;
+    if (ehMoldura) {
+      // mãe de moldura: contém a caixa inteira e é estritamente maior (sem ciclos)
+      if (area <= areaItem + FOLGA) continue;
+      if (
+        item.x < m.x - FOLGA ||
+        item.y < m.y - FOLGA ||
+        item.x + item.largura > m.x + m.largura + FOLGA ||
+        item.y + item.altura > m.y + m.altura + FOLGA
+      ) {
+        continue;
       }
+    } else if (!(cx >= m.x && cx <= m.x + m.largura && cy >= m.y && cy <= m.y + m.altura)) {
+      continue;
+    }
+    if (area < melhorArea) {
+      melhorArea = area;
+      melhor = m;
     }
   }
   return melhor;
+}
+
+export interface MudancaDePertencimento {
+  id: string;
+  antes: string | null;
+  depois: string | null;
+}
+
+/** Itens cuja geometria define o pertencimento. */
+export const CAMPOS_GEOMETRICOS = ['x', 'y', 'largura', 'altura', 'rotacao', 'de', 'para'] as const;
+
+/**
+ * Mudanças de `molduraId` necessárias após um passo. Recalcula os itens tocados;
+ * se alguma moldura foi criada, removida ou movida/redimensionada, recalcula todos.
+ * Setas com as duas pontas ligadas a itens seguem os itens e ficam sem moldura.
+ */
+export function pertencimentoDoPasso(
+  itensDepois: ReadonlyMap<string, Item>,
+  tocados: ReadonlySet<string>,
+  molduraMudou: boolean,
+): MudancaDePertencimento[] {
+  const molduras: ItemMoldura[] = [];
+  for (const it of itensDepois.values()) {
+    if (it.tipo === 'moldura') molduras.push(it);
+  }
+  const mudancas: MudancaDePertencimento[] = [];
+  const candidatos: Iterable<Item | undefined> = molduraMudou
+    ? itensDepois.values()
+    : [...tocados].map((id) => itensDepois.get(id));
+  for (const it of candidatos) {
+    if (!it) continue;
+    let nova: string | null;
+    if (it.tipo === 'seta' && !('ponto' in it.de || 'ponto' in it.para)) {
+      nova = null;
+    } else {
+      nova = molduraQueContem(it, molduras)?.id ?? null;
+    }
+    if (nova !== it.molduraId) {
+      mudancas.push({ id: it.id, antes: it.molduraId, depois: nova });
+    }
+  }
+  return mudancas;
 }
 
 export function filhos(

@@ -74,7 +74,6 @@ import {
   agruparSelecao,
   alternarFato,
   atualizarCorDaPaleta,
-  atualizarMolduras,
   definirFato,
   desagruparSelecao,
   desfazer,
@@ -1399,7 +1398,6 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
     } else if (g.tipo === 'criar-forma' || g.tipo === 'criar-seta' || g.tipo === 'criar-moldura') {
       historico.agrupar(null);
       ferramenta.value = 'selecionar';
-      if (g.tipo === 'criar-moldura') atualizarMolduras();
     } else if (
       g.tipo === 'mover' ||
       g.tipo === 'redimensionar' ||
@@ -1408,9 +1406,6 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
       g.tipo === 'borracha'
     ) {
       historico.agrupar(null);
-      if (g.tipo === 'mover') {
-        atualizarMolduras(new Set(g.originais.keys()));
-      }
     }
     try {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);

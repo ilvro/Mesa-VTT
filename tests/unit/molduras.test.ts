@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { novaMoldura, novaNotaAdesiva, type Item } from '../../src/dominio/quadro.ts';
-import { filhos, linkDaMoldura, molduraQueContem, ordemDeLeitura } from '../../src/dominio/molduras.ts';
+import { novaMoldura, novaNotaAdesiva, novaSeta, type Item } from '../../src/dominio/quadro.ts';
+import { filhos, linkDaMoldura, molduraQueContem, ordemDeLeitura, pertencimentoDoPasso } from '../../src/dominio/molduras.ts';
 
 test('molduraQueContem escolhe a menor moldura que contém o centro do item', () => {
   const externa = novaMoldura({ quadroId: 'q1', x: 0, y: 0, largura: 800, altura: 600 }, 1, 'm1');
@@ -39,4 +39,75 @@ test('filhos e linkDaMoldura funcionam corretamente', () => {
     ['n1'],
   );
   assert.equal(linkDaMoldura('q1', 'm1'), 'mesa:mesa/item/q1/m1');
+});
+
+const mold = (id: string, x: number, y: number, l: number, a: number) =>
+  novaMoldura({ quadroId: 'q1', x, y, largura: l, altura: a }, 1, id);
+const nota = (id: string, x: number, y: number) =>
+  novaNotaAdesiva({ quadroId: 'q1', x, y, largura: 50, altura: 50 }, 1, id);
+const mapa = (...l: Item[]) => new Map(l.map((i) => [i.id, i]));
+
+test('moldura aninhada: mãe é a menor que contém a caixa inteira e é estritamente maior', () => {
+  const grande = mold('g', 0, 0, 1000, 800);
+  const media = mold('m', 100, 100, 500, 400);
+  const pequena = mold('p', 150, 150, 200, 100);
+  const parcial = mold('x', 500, 300, 300, 300);
+  assert.equal(molduraQueContem(pequena, [grande, media, pequena])?.id, 'm');
+  assert.equal(molduraQueContem(media, [grande, media, pequena])?.id, 'g');
+  assert.equal(molduraQueContem(parcial, [grande, media])?.id, 'g');
+  assert.equal(molduraQueContem(grande, [grande, media, pequena]), null);
+});
+
+test('molduras iguais não viram mãe uma da outra', () => {
+  const a = mold('a', 0, 0, 300, 300);
+  const b = mold('b', 0, 0, 300, 300);
+  assert.equal(molduraQueContem(a, [a, b]), null);
+  assert.equal(molduraQueContem(b, [a, b]), null);
+});
+
+test('pertencimentoDoPasso: item criado dentro ganha molduraId', () => {
+  const m = mold('m', 0, 0, 500, 500);
+  const n = nota('n', 100, 100);
+  const r = pertencimentoDoPasso(mapa(m, n), new Set(['n']), false);
+  assert.deepEqual(r, [{ id: 'n', antes: null, depois: 'm' }]);
+  assert.deepEqual(pertencimentoDoPasso(mapa(m, n), new Set(), false), []);
+});
+
+test('pertencimentoDoPasso: moldura redimensionada adota e solta', () => {
+  const m = mold('m', 0, 0, 500, 500);
+  const dentro = { ...nota('d', 100, 100), molduraId: 'm' };
+  const fora = nota('f', 700, 100);
+  const antes = pertencimentoDoPasso(mapa(m, dentro, fora), new Set(['m']), true);
+  assert.deepEqual(antes, []);
+  const m2 = { ...m, largura: 800 };
+  const r = pertencimentoDoPasso(mapa(m2, dentro, fora), new Set(['m']), true);
+  assert.deepEqual(r, [{ id: 'f', antes: null, depois: 'm' }]);
+  const m3 = { ...m, largura: 50, altura: 50 };
+  const r3 = pertencimentoDoPasso(mapa(m3, dentro, fora), new Set(['m']), true);
+  assert.deepEqual(r3, [{ id: 'd', antes: 'm', depois: null }]);
+});
+
+test('pertencimentoDoPasso: moldura removida solta filhos ou passa para a avó', () => {
+  const avo = mold('a', 0, 0, 1000, 1000);
+  const filho = { ...nota('n', 100, 100), molduraId: 'm' };
+  const r = pertencimentoDoPasso(mapa(avo, filho), new Set(), true);
+  assert.deepEqual(r, [{ id: 'n', antes: 'm', depois: 'a' }]);
+  const solto = pertencimentoDoPasso(mapa(filho), new Set(), true);
+  assert.deepEqual(solto, [{ id: 'n', antes: 'm', depois: null }]);
+});
+
+test('pertencimentoDoPasso: seta com ponta livre entra; ligada nas duas pontas não', () => {
+  const m = mold('m', 0, 0, 500, 500);
+  const livre = novaSeta(
+    { quadroId: 'q1', de: { ponto: [10, 10] }, para: { ponto: [100, 100] }, x: 10, y: 10, largura: 90, altura: 90 },
+    1,
+    's1',
+  );
+  const ligada = novaSeta(
+    { quadroId: 'q1', de: { itemId: 'a', lado: 'direita' }, para: { itemId: 'b', lado: 'esquerda' }, x: 10, y: 10, largura: 90, altura: 90 },
+    1,
+    's2',
+  );
+  const r = pertencimentoDoPasso(mapa(m, livre, ligada), new Set(['s1', 's2']), false);
+  assert.deepEqual(r, [{ id: 's1', antes: null, depois: 'm' }]);
 });

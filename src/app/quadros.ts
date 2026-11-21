@@ -29,7 +29,12 @@ import {
   pontoDaPonta,
   setasLigadasA,
 } from '../dominio/setas.ts';
-import { molduraQueContem, type ItemMoldura } from '../dominio/molduras.ts';
+import {
+  CAMPOS_GEOMETRICOS,
+  molduraQueContem,
+  pertencimentoDoPasso,
+  type ItemMoldura,
+} from '../dominio/molduras.ts';
 import {
   alinhar,
   distribuir,
@@ -452,12 +457,16 @@ function enriquecerPassoComSetas(
     }
   }
 
-  if (removidos.size === 0 && alterados.size === 0) {
+  if (removidos.size === 0 && alterados.size === 0 && jaTratados.size === 0) {
     return { passo, proximo: itensDepois };
   }
 
   const tocados = new Set<string>([...removidos, ...alterados]);
   const setas = setasLigadasA(tocados, itensDepois);
+  for (const id of jaTratados) {
+    const seta = itensDepois.get(id);
+    if (seta?.tipo === 'seta' && !setas.includes(seta)) setas.push(seta);
+  }
   if (setas.length === 0) {
     return { passo, proximo: itensDepois };
   }
@@ -465,18 +474,18 @@ function enriquecerPassoComSetas(
   const alterarSetas: Extract<Operacao, { alterar: unknown }>['alterar'] = [];
 
   for (const seta of setas) {
-    if (jaTratados.has(seta.id)) continue;
+    const jaVeio = jaTratados.has(seta.id);
 
     let novoDe = seta.de;
     let novoPara = seta.para;
     let mudouPonta = false;
 
-    if ('itemId' in seta.de && removidos.has(seta.de.itemId)) {
+    if (!jaVeio && 'itemId' in seta.de && removidos.has(seta.de.itemId)) {
       const { ponto } = pontoDaPonta(seta.de, itensAntes, seta.para);
       novoDe = { ponto: [ponto.x, ponto.y] };
       mudouPonta = true;
     }
-    if ('itemId' in seta.para && removidos.has(seta.para.itemId)) {
+    if (!jaVeio && 'itemId' in seta.para && removidos.has(seta.para.itemId)) {
       const { ponto } = pontoDaPonta(seta.para, itensAntes, seta.de);
       novoPara = { ponto: [ponto.x, ponto.y] };
       mudouPonta = true;
@@ -546,41 +555,96 @@ function enriquecerPassoComSetas(
   return { passo: passoComSetas, proximo: proximoFinal };
 }
 
+function acrescentarAlteracoes(
+  passo: Passo,
+  alterar: Extract<Operacao, { alterar: unknown }>['alterar'],
+): Passo {
+  if (passo.ops.length === 1 && 'alterar' in passo.ops[0]!) {
+    const base = [...passo.ops[0]!.alterar];
+    const porId = new Map(base.map((a, idx) => [a.id, idx]));
+    for (const alt of alterar) {
+      const idx = porId.get(alt.id);
+      if (idx === undefined) {
+        base.push(alt);
+      } else {
+        const prev = base[idx]!;
+        base[idx] = {
+          id: alt.id,
+          antes: { ...alt.antes, ...prev.antes } as Partial<Item>,
+          depois: { ...prev.depois, ...alt.depois } as Partial<Item>,
+        };
+      }
+    }
+    return { ...passo, ops: [{ alterar: base }] };
+  }
+  return { ...passo, ops: [...passo.ops, { alterar }] };
+}
+
+function enriquecerPassoComPertencimento(
+  passo: Passo,
+  itensDepois: Map<string, Item>,
+): { passo: Passo; proximo: Map<string, Item> } {
+  const tocados = new Set<string>();
+  let molduraMudou = false;
+  const ehMoldura = (id: string, item?: Item) =>
+    (item ?? itensDepois.get(id))?.tipo === 'moldura';
+  for (const op of passo.ops) {
+    if ('criar' in op) {
+      for (const it of op.criar) {
+        tocados.add(it.id);
+        if (it.tipo === 'moldura') molduraMudou = true;
+      }
+    } else if ('remover' in op) {
+      for (const it of op.remover) {
+        if (it.tipo === 'moldura') molduraMudou = true;
+      }
+    } else {
+      for (const a of op.alterar) {
+        if (!CAMPOS_GEOMETRICOS.some((c) => c in a.depois)) continue;
+        tocados.add(a.id);
+        // Moldura só arrastada leva os filhos junto (já estão no passo) e não adota
+        // o que atravessa; o quadro todo só é recalculado se ela muda de tamanho.
+        if (
+          ehMoldura(a.id) &&
+          ('largura' in a.depois || 'altura' in a.depois || 'rotacao' in a.depois)
+        ) {
+          molduraMudou = true;
+        }
+      }
+    }
+  }
+  if (tocados.size === 0 && !molduraMudou) return { passo, proximo: itensDepois };
+
+  const mudancas = pertencimentoDoPasso(itensDepois, tocados, molduraMudou);
+  if (mudancas.length === 0) return { passo, proximo: itensDepois };
+
+  const agora = Date.now();
+  const alterar: Extract<Operacao, { alterar: unknown }>['alterar'] = mudancas.map((m) => {
+    const atual = itensDepois.get(m.id)!;
+    return {
+      id: m.id,
+      antes: { molduraId: m.antes, atualizadoEm: atual.atualizadoEm },
+      depois: { molduraId: m.depois, atualizadoEm: agora },
+    };
+  });
+  const proximo = aplicar(itensDepois, { rotulo: passo.rotulo, ops: [{ alterar }] });
+  return { passo: acrescentarAlteracoes(passo, alterar), proximo };
+}
+
 export function executar(passo: Passo, chaveAgrupamento?: string): void {
   if (passo.ops.length === 0) return;
   const antes = itens.value;
   const proximoInicial = aplicar(antes, passo);
-  const { passo: passoFinal, proximo } = enriquecerPassoComSetas(antes, passo, proximoInicial);
+  const comSetas = enriquecerPassoComSetas(antes, passo, proximoInicial);
+  const { passo: passoFinal, proximo } = enriquecerPassoComPertencimento(
+    comSetas.passo,
+    comSetas.proximo,
+  );
   itens.value = proximo;
   historico.registrar(passoFinal, chaveAgrupamento);
   versaoHistorico.value++;
   marcarSujosDoPasso(passoFinal, proximo);
   agendarGravacao();
-}
-
-export function atualizarMolduras(idsAlvo?: ReadonlySet<string>): void {
-  const mapa = itens.value;
-  const molduras: ItemMoldura[] = [];
-  for (const it of mapa.values()) {
-    if (it.tipo === 'moldura') molduras.push(it);
-  }
-  const alterar: Extract<Operacao, { alterar: unknown }>['alterar'] = [];
-  const agora = Date.now();
-  for (const it of mapa.values()) {
-    if (it.tipo === 'moldura' || it.tipo === 'seta') continue;
-    if (idsAlvo && !idsAlvo.has(it.id)) continue;
-    const nova = molduraQueContem(it, molduras)?.id ?? null;
-    if (nova !== it.molduraId) {
-      alterar.push({
-        id: it.id,
-        antes: { molduraId: it.molduraId, atualizadoEm: it.atualizadoEm },
-        depois: { molduraId: nova, atualizadoEm: agora },
-      });
-    }
-  }
-  if (alterar.length > 0) {
-    executar({ rotulo: 'Atualizar moldura', ops: [{ alterar }] });
-  }
 }
 
 export function agruparSelecao(grupoId: string): void {
