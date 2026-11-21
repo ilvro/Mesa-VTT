@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { criarRef, type Ligacao } from '#mesa'
-import { itensAncoradosEm, parsearRefAncora } from '../../src/dominio/ancoras.ts'
+import { itensAncoradosEm, parsearRefAncora, quadrosLigadosA } from '../../src/dominio/ancoras.ts'
 import { refDoItemDeQuadro } from '../../src/dominio/ligacoes-quadro.ts'
 import { novaMoldura, novoQuadro, novoTexto, type Item } from '../../src/dominio/quadro.ts'
 
@@ -41,5 +41,18 @@ describe('Q5c — ancoras (domínio)', () => {
       res.map((r) => `${r.quadroId}/${r.item.id}`),
       ['q1/it1-topo', 'q1/it1-baixo', 'q2/it2'],
     )
+  })
+
+  it('quadrosLigadosA só aponta os quadros com item ligado ao alvo', () => {
+    const alvo = criarRef('atlas', 'regiao', 'mapa-1/sotao')
+    const outro = criarRef('atlas', 'regiao', 'mapa-1/porao')
+    const ligacoes: Ligacao[] = [
+      { id: 'l1', campanhaId: 'c', de: refDoItemDeQuadro('q1', 'a'), para: alvo, tipo: 'esta-em', criadaPor: 'mesa', criadaEm: 1 },
+      { id: 'l2', campanhaId: 'c', de: refDoItemDeQuadro('q1', 'b'), para: alvo, tipo: 'menciona', criadaPor: 'mesa', criadaEm: 1 },
+      { id: 'l3', campanhaId: 'c', de: refDoItemDeQuadro('q2', 'c'), para: outro, tipo: 'esta-em', criadaPor: 'mesa', criadaEm: 1 },
+      { id: 'l4', campanhaId: 'c', de: criarRef('ficha', 'personagem', 'x'), para: alvo, tipo: 'menciona', criadaPor: 'ficha', criadaEm: 1 },
+    ]
+    assert.deepEqual([...quadrosLigadosA(alvo, ligacoes)], ['q1'])
+    assert.equal(quadrosLigadosA(criarRef('atlas', 'objeto', 'nada'), ligacoes).size, 0)
   })
 })

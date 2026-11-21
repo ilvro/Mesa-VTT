@@ -38,6 +38,18 @@ function ordenarItensEmLeituraNoQuadro(
   })
 }
 
+/** Os quadros que têm algum item ancorado em `alvo` ou que o menciona: só eles precisam ser lidos do banco. */
+export function quadrosLigadosA(alvo: Ref, ligacoes: readonly Ligacao[]): Set<string> {
+  const ids = new Set<string>()
+  for (const lig of ligacoes) {
+    if (lig.tipo !== 'esta-em' && lig.tipo !== 'menciona') continue
+    if (!mesmaRef(lig.para, alvo)) continue
+    const parsed = parsearRefDeItemDeQuadro(lig.de)
+    if (parsed) ids.add(parsed.quadroId)
+  }
+  return ids
+}
+
 export function itensAncoradosEm(
   alvo: Ref,
   ligacoes: readonly Ligacao[],

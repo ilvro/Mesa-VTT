@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals'
 import { mesmaRef, type Ligacao, type Ref } from '#mesa'
-import { itensAncoradosEm, type ItemAncorado } from '../dominio/ancoras.ts'
+import { itensAncoradosEm, quadrosLigadosA, type ItemAncorado } from '../dominio/ancoras.ts'
 import { parsearRefDeItemDeQuadro, refDoItemDeQuadro } from '../dominio/ligacoes-quadro.ts'
 import {
   deveDisparar,
@@ -137,19 +137,17 @@ export async function desancorarItemDeRef(
   ligacoes.value = await repo.listarLigacoes(c.id)
 }
 
-export async function carregarMapaItensCampanha(
-  campanhaId: string,
+/** Lê os itens só dos quadros pedidos; o quadro aberto vem da memória, já com as mudanças não gravadas. */
+export async function carregarItensDosQuadros(
+  quadroIds: ReadonlySet<string>,
 ): Promise<Map<string, Map<string, Item>>> {
-  const listaQuadros =
-    quadros.value.length > 0 ? quadros.value : await listarQuadros(campanhaId)
   const mapaPorQuadro = new Map<string, Map<string, Item>>()
-
-  for (const q of listaQuadros) {
-    if (quadroAberto.value?.id === q.id) {
-      mapaPorQuadro.set(q.id, new Map(itens.value))
+  for (const id of quadroIds) {
+    if (quadroAberto.value?.id === id) {
+      mapaPorQuadro.set(id, new Map(itens.value))
     } else {
-      const lista = await listarItens(q.id)
-      mapaPorQuadro.set(q.id, new Map(lista.map((i) => [i.id, i])))
+      const lista = await listarItens(id)
+      mapaPorQuadro.set(id, new Map(lista.map((i) => [i.id, i])))
     }
   }
   return mapaPorQuadro
@@ -211,7 +209,7 @@ export async function focarRefNoQuadro(
     quadros.value = listaQuadros
   }
 
-  const mapaPorQuadro = await carregarMapaItensCampanha(c.id)
+  const mapaPorQuadro = await carregarItensDosQuadros(quadrosLigadosA(ref, ligacoes.value))
   const ancorados = itensAncoradosEm(
     ref,
     ligacoes.value,
@@ -297,7 +295,9 @@ export async function reagirAoEventoDoAtlas(evento: {
     quadros.value = listaQuadros
   }
 
-  const mapaPorQuadro = await carregarMapaItensCampanha(c.id)
+  const ligados = quadrosLigadosA(alvo, ligacoes.value)
+  if (ligados.size === 0) return
+  const mapaPorQuadro = await carregarItensDosQuadros(ligados)
   const ancorados = itensAncoradosEm(
     alvo,
     ligacoes.value,
