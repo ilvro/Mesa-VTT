@@ -8,6 +8,7 @@ import type {
   EstiloDeCaixa,
   Item,
 } from '../dominio/quadro.ts';
+import { comConteudo, itensDeTopo } from '../dominio/molduras.ts';
 import { executar, itens, selecao } from './quadros.ts';
 
 type ItemTextual = Extract<Item, { tipo: 'texto' | 'forma' }>;
@@ -25,7 +26,7 @@ export function duplicarSelecao(
   novoId: () => string,
   deslocamento: { dx: number; dy: number } = { dx: 24, dy: 24 },
 ): Item[] {
-  const selecionados = obterSelecionados();
+  const selecionados = comConteudo(selecao.value, itens.value);
   if (selecionados.length === 0) return [];
   const maxZ = Math.max(0, ...[...itens.value.values()].map((i) => i.z));
   const passo = duplicar(selecionados, novoId, deslocamento, {
@@ -34,12 +35,12 @@ export function duplicarSelecao(
   });
   executar(passo);
   const criados = passo.ops.flatMap((op) => ('criar' in op ? op.criar : []));
-  selecao.value = new Set(criados.map((i) => i.id));
+  selecao.value = new Set(itensDeTopo(criados).map((i) => i.id));
   return criados;
 }
 
 export function removerSelecao(rotulo = 'Remover'): Item[] {
-  const removiveis = obterSelecionados().filter((i) => !i.travado);
+  const removiveis = comConteudo(selecao.value, itens.value).filter((i) => !i.travado);
   if (removiveis.length === 0) return [];
   executar({ rotulo, ops: [{ remover: removiveis }] });
   selecao.value = new Set();

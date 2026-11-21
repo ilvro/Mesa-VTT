@@ -53,7 +53,9 @@ import { refDaEntidade, sugerirEntidades } from '../../dominio/notas.ts';
 import { ROTULO_DO_TIPO } from '../../dominio/entidades.ts';
 import { entidades } from '../../app/campanha.ts';
 import {
+  comConteudo,
   filhos,
+  itensDeTopo,
   ordemDeLeitura,
   type ItemMoldura,
 } from '../../dominio/molduras.ts';
@@ -229,9 +231,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
   } | null>(null);
 
   const copiarSelecao = () => {
-    const sel = [...selecao.value]
-      .map((id) => itens.value.get(id))
-      .filter((i): i is Item => Boolean(i));
+    const sel = comConteudo(selecao.value, itens.value);
     if (sel.length === 0) return;
     const texto = copiarArea(sel);
     ultimoTextoCopiadoRef.current = texto;
@@ -260,7 +260,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
     );
     if (colados && colados.length > 0) {
       executar({ rotulo: 'Colar', ops: [{ criar: colados }] });
-      selecao.value = new Set(colados.map((i) => i.id));
+      selecao.value = new Set(itensDeTopo(colados).map((i) => i.id));
       return;
     }
     const refColada = lerRef(limpo);
@@ -507,10 +507,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
         } else if (k === 'x') {
           e.preventDefault();
           copiarSelecao();
-          const remover = [...selecao.value]
-            .map((id) => itens.value.get(id))
-            .filter((i): i is Item => Boolean(i))
-            .filter((i) => !i.travado);
+          const remover = comConteudo(selecao.value, itens.value).filter((i) => !i.travado);
           if (remover.length > 0) {
             executar({ rotulo: 'Recortar', ops: [{ remover }] });
             selecao.value = new Set();

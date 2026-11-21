@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { novaMoldura, novaNotaAdesiva, novaSeta, type Item } from '../../src/dominio/quadro.ts';
-import { filhos, linkDaMoldura, molduraQueContem, ordemDeLeitura, pertencimentoDoPasso } from '../../src/dominio/molduras.ts';
+import { comConteudo, filhos, linkDaMoldura, molduraQueContem, ordemDeLeitura, pertencimentoDoPasso } from '../../src/dominio/molduras.ts';
 
 test('molduraQueContem escolhe a menor moldura que contém o centro do item', () => {
   const externa = novaMoldura({ quadroId: 'q1', x: 0, y: 0, largura: 800, altura: 600 }, 1, 'm1');
@@ -110,4 +110,21 @@ test('pertencimentoDoPasso: seta com ponta livre entra; ligada nas duas pontas n
   );
   const r = pertencimentoDoPasso(mapa(m, livre, ligada), new Set(['s1', 's2']), false);
   assert.deepEqual(r, [{ id: 's1', antes: null, depois: 'm' }]);
+});
+
+test('comConteudo traz descendentes recursivos, setas internas e ignora o resto', () => {
+  const ext = novaMoldura({ quadroId: 'q1', x: 0, y: 0, largura: 800, altura: 600 }, 1, 'm1');
+  const int: Item = { ...novaMoldura({ quadroId: 'q1', x: 50, y: 50, largura: 300, altura: 300 }, 1, 'm2'), molduraId: 'm1' };
+  const n1: Item = { ...novaNotaAdesiva({ quadroId: 'q1', x: 60, y: 60 }, 1, 'n1'), molduraId: 'm2' };
+  const n2: Item = { ...novaNotaAdesiva({ quadroId: 'q1', x: 400, y: 60 }, 1, 'n2'), molduraId: 'm1' };
+  const solta = novaNotaAdesiva({ quadroId: 'q1', x: 2000, y: 0 }, 1, 'n3');
+  const interna = novaSeta({ quadroId: 'q1', de: { itemId: 'n1', lado: 'direita' }, para: { itemId: 'n2', lado: 'esquerda' } }, 1, 's1');
+  const saindo = novaSeta({ quadroId: 'q1', de: { itemId: 'n1', lado: 'direita' }, para: { itemId: 'n3', lado: 'esquerda' } }, 1, 's2');
+  const livre = novaSeta({ quadroId: 'q1', de: { itemId: 'n2', lado: 'direita' }, para: { ponto: [5, 5] } }, 1, 's3');
+  const mapa = new Map<string, Item>([ext, int, n1, n2, solta, interna, saindo, livre].map((i) => [i.id, i]));
+
+  const ids = (l: Item[]) => l.map((i) => i.id).sort();
+  assert.deepEqual(ids(comConteudo(['m1', 'm1', 'inexistente'], mapa)), ['m1', 'm2', 'n1', 'n2', 's1', 's3']);
+  assert.deepEqual(ids(comConteudo(['m2'], mapa)), ['m2', 'n1']);
+  assert.deepEqual(ids(comConteudo(['n3', 'm2'], mapa)), ['m2', 'n1', 'n3', 's2']);
 });

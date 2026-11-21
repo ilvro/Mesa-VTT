@@ -112,3 +112,30 @@ test('executar: item criado dentro da moldura ganha molduraId e arrasto para den
   assert.equal(itens.value.get('n2')?.molduraId, null);
   assert.equal(itens.value.get('n2')?.x, 800);
 });
+
+test('duplicarSelecao leva o conteúdo da moldura e seleciona só o topo', () => {
+  const m = novaMoldura({ quadroId: 'q1', x: 0, y: 0, largura: 500, altura: 500 }, 1, 'm1');
+  const a: Item = { ...novaNotaAdesiva({ quadroId: 'q1', x: 10, y: 10 }, 1, 'a'), molduraId: 'm1' };
+  const b: Item = { ...novaNotaAdesiva({ quadroId: 'q1', x: 200, y: 10 }, 1, 'b'), molduraId: 'm1' };
+  prepararQuadro([m, a, b], ['m1']);
+  let n = 0;
+  const criados = duplicarSelecao(() => `novo${++n}`);
+  assert.equal(criados.length, 3);
+  assert.equal(itens.value.size, 6);
+  const novaM = criados.find((i) => i.tipo === 'moldura')!;
+  const notas = criados.filter((i) => i.tipo !== 'moldura');
+  assert.ok(notas.every((i) => i.molduraId === novaM.id));
+  assert.deepEqual([...selecao.value], [novaM.id]);
+});
+
+test('removerSelecao apaga moldura e conteúdo, poupa travado, e desfaz em um passo', () => {
+  const m = novaMoldura({ quadroId: 'q1', x: 0, y: 0, largura: 500, altura: 500 }, 1, 'm1');
+  const a: Item = { ...novaNotaAdesiva({ quadroId: 'q1', x: 10, y: 10 }, 1, 'a'), molduraId: 'm1' };
+  const b: Item = { ...novaNotaAdesiva({ quadroId: 'q1', x: 200, y: 10 }, 1, 'b'), molduraId: 'm1', travado: true };
+  prepararQuadro([m, a, b], ['m1']);
+  removerSelecao('Apagar');
+  assert.deepEqual([...itens.value.keys()], ['b']);
+  assert.equal(itens.value.get('b')!.molduraId, null);
+  desfazer();
+  assert.deepEqual([...itens.value.keys()].sort(), ['a', 'b', 'm1']);
+});

@@ -170,3 +170,68 @@ export function deveDisparar(
   }
   return true;
 }
+
+function idDaPonta(ponta: { itemId: string } | { ponto: [number, number] }): string | null {
+  return 'itemId' in ponta ? ponta.itemId : null;
+}
+
+/**
+ * Os itens dos ids mais todo o conteúdo das molduras entre eles (recursivo, pelo `molduraId`).
+ * Setas com uma ponta ligada ao conjunto e a outra no conjunto ou livre também entram;
+ * setas que saem para fora não. Ids inexistentes são ignorados; sem repetição.
+ */
+export function comConteudo(
+  ids: Iterable<string>,
+  itens: ReadonlyMap<string, Item>,
+): Item[] {
+  const conjunto = new Map<string, Item>();
+  for (const id of ids) {
+    const it = itens.get(id);
+    if (it) conjunto.set(id, it);
+  }
+  const filhosPorMoldura = new Map<string, Item[]>();
+  for (const it of itens.values()) {
+    if (!it.molduraId) continue;
+    const lista = filhosPorMoldura.get(it.molduraId);
+    if (lista) lista.push(it);
+    else filhosPorMoldura.set(it.molduraId, [it]);
+  }
+  const fila = [...conjunto.values()].filter((i) => i.tipo === 'moldura');
+  while (fila.length > 0) {
+    const m = fila.pop()!;
+    for (const f of filhosPorMoldura.get(m.id) ?? []) {
+      if (conjunto.has(f.id)) continue;
+      conjunto.set(f.id, f);
+      if (f.tipo === 'moldura') fila.push(f);
+    }
+  }
+  for (const it of itens.values()) {
+    if (it.tipo !== 'seta' || conjunto.has(it.id)) continue;
+    const a = idDaPonta(it.de);
+    const b = idDaPonta(it.para);
+    if (a === null && b === null) continue;
+    const dentro = (x: string | null) => x === null || conjunto.has(x);
+    if (dentro(a) && dentro(b)) conjunto.set(it.id, it);
+  }
+  return [...conjunto.values()];
+}
+
+/**
+ * Itens de topo de um conjunto copiado: sem os que estão dentro de uma moldura do
+ * conjunto e sem as setas ligadas a esses descendentes.
+ */
+export function itensDeTopo(itens: readonly Item[]): Item[] {
+  const porId = new Map(itens.map((i) => [i.id, i]));
+  const descendente = (id: string | null): boolean => {
+    if (id === null) return false;
+    const it = porId.get(id);
+    return Boolean(it?.molduraId && porId.has(it.molduraId));
+  };
+  return itens.filter((i) => {
+    if (i.molduraId && porId.has(i.molduraId)) return false;
+    if (i.tipo === 'seta') {
+      return !(descendente(idDaPonta(i.de)) || descendente(idDaPonta(i.para)));
+    }
+    return true;
+  });
+}
