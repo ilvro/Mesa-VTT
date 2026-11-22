@@ -68,6 +68,8 @@ export interface ItemMiroBruto {
   parent?: {
     id?: string
   }
+  /** Ids de tags (preenchido pelo script de download); aceita também objetos `{ id }`. */
+  tagIds?: unknown
   arquivoLocal?: string
 }
 
@@ -88,6 +90,19 @@ export interface ConectorMiroBruto {
   captions?: { content?: string }[]
 }
 
+export interface TagMiroBruta {
+  id?: string
+  title?: string
+  fillColor?: string
+}
+
+export interface GrupoMiroBruto {
+  id?: string
+  /** Forma da API v2: `data.items` (ids). `items` solto também é aceito. */
+  data?: { items?: unknown }
+  items?: unknown
+}
+
 export interface PacoteMiroBruto {
   formato?: string
   versao?: number
@@ -95,6 +110,8 @@ export interface PacoteMiroBruto {
   board?: { id?: string; name?: string }
   items?: ItemMiroBruto[]
   connectors?: ConectorMiroBruto[]
+  tags?: TagMiroBruta[]
+  groups?: GrupoMiroBruto[]
 }
 
 export interface MetadadosImagemImportada {
@@ -221,11 +238,43 @@ function mapearLadoSnap(snapTo: unknown): (typeof LADOS_PONTA)[number] {
   return 'auto'
 }
 
+/** Nome de tag (sem acento, minúsculo, sem espaços nas pontas) -> tipo. */
+export const TAGS_PARA_TIPO: Record<string, TipoSemantico> = {
+  teste: 'teste',
+  pericia: 'teste',
+  percepcao: 'teste',
+  segredo: 'segredo',
+  loot: 'loot',
+  tesouro: 'loot',
+  item: 'loot',
+  npc: 'fala',
+  fala: 'fala',
+  dialogo: 'fala',
+  leitura: 'leitura',
+  ler: 'leitura',
+  narracao: 'leitura',
+  evento: 'evento',
+  tarefa: 'tarefa',
+  todo: 'tarefa',
+  rever: 'rever',
+  revisar: 'rever',
+  titulo: 'titulo',
+}
+
+export function normalizarNomeDeTag(nome: string): string {
+  return nome
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
 export function sugerirRevisaoMiro(
   doc: DocRico | null,
   corFundoCaixa: string | null,
   htmlOriginal: string | null,
   paleta: PaletaDaCampanha = PALETA_PADRAO,
+  tags: readonly string[] = [],
 ): Revisao {
   const motivos: string[] = []
   let tipoSugerido: TipoSemantico | null = null
@@ -280,6 +329,23 @@ export function sugerirRevisaoMiro(
     }
   }
 
+  // Prioridade: marcador no texto > tag > cor
+  if (tags.length > 0) {
+    const desconhecidas: string[] = []
+    for (const nome of tags) {
+      const tipo = TAGS_PARA_TIPO[normalizarNomeDeTag(nome)]
+      if (!tipo) {
+        desconhecidas.push(nome.trim())
+        continue
+      }
+      if (!tipoSugerido) {
+        tipoSugerido = tipo
+        motivos.push(`tag "${nome.trim()}"`)
+      }
+    }
+    if (desconhecidas.length > 0) motivos.push(`tags: ${desconhecidas.join(', ')}`)
+  }
+
   const corDominante = corFundoCaixa || extrairCorDominanteHtml(htmlOriginal)
   if (corDominante) {
     const porCor = tipoMaisProximo(corDominante, paleta)
@@ -300,6 +366,29 @@ export function sugerirRevisaoMiro(
     motivos,
     origem: 'miro',
   }
+}
+
+function nomesDasTagsDoItem(item: ItemMiroBruto, tagsPorId: ReadonlyMap<string, string>): string[] {
+  const bruto = item.tagIds
+  if (!Array.isArray(bruto)) return []
+  const nomes: string[] = []
+  for (const t of bruto) {
+    const id = typeof t === 'string' || typeof t === 'number' ? String(t) : t && typeof t === 'object' ? String((t as { id?: unknown }).id ?? '') : ''
+    const nome = tagsPorId.get(id)
+    if (nome && !nomes.includes(nome)) nomes.push(nome)
+  }
+  return nomes
+}
+
+function idsDoGrupo(g: GrupoMiroBruto | null | undefined): string[] {
+  const lista = g?.data?.items ?? g?.items
+  if (!Array.isArray(lista)) return []
+  const ids: string[] = []
+  for (const x of lista) {
+    if (typeof x === 'string' || typeof x === 'number') ids.push(String(x))
+    else if (x && typeof x === 'object' && (x as { id?: unknown }).id !== undefined) ids.push(String((x as { id: unknown }).id))
+  }
+  return ids
 }
 
 function docDeCardMiro(data: Record<string, unknown> | undefined): DocRico {
@@ -335,6 +424,12 @@ export function converterMiro(
   const rawConnectors = Array.isArray(bruto.connectors) ? bruto.connectors : []
   const avisos: string[] = []
   const mapaId = new Map<string, string>()
+  const tagsPorId = new Map<string, string>()
+  for (const t of Array.isArray(bruto.tags) ? bruto.tags : []) {
+    if (t && t.id !== undefined && typeof t.title === 'string' && t.title.trim()) {
+      tagsPorId.set(String(t.id), t.title.trim())
+    }
+  }
 
   const toposDasMolduras = new Map<
     string,
@@ -415,6 +510,7 @@ export function converterMiro(
     const y = cy - altura / 2
     const st = item.style || {}
     const dt = item.data || {}
+    const nomesDasTags = nomesDasTagsDoItem(item, tagsPorId)
 
     if (item.type === 'text') {
       const html = typeof dt.content === 'string' ? dt.content : ''
@@ -454,7 +550,7 @@ export function converterMiro(
         fundo: corFundo,
         opacidade: Number.isFinite(opacidade) ? opacidade : 1,
       }
-      criado.revisao = sugerirRevisaoMiro(doc, corFundo, html, paleta)
+      criado.revisao = sugerirRevisaoMiro(doc, corFundo, html, paleta, nomesDasTags)
       itensConvertidos.push(criado)
       continue
     }
@@ -497,7 +593,7 @@ export function converterMiro(
         sombra: true,
         raio: 4,
       }
-      criado.revisao = sugerirRevisaoMiro(doc, corFundo, html, paleta)
+      criado.revisao = sugerirRevisaoMiro(doc, corFundo, html, paleta, nomesDasTags)
       itensConvertidos.push(criado)
       continue
     }
@@ -550,7 +646,7 @@ export function converterMiro(
         espessuraBorda: Number.isFinite(espessuraBorda) ? espessuraBorda : 2,
         tracejado,
       }
-      criado.revisao = sugerirRevisaoMiro(doc, corFundo, html, paleta)
+      criado.revisao = sugerirRevisaoMiro(doc, corFundo, html, paleta, nomesDasTags)
       itensConvertidos.push(criado)
       continue
     }
@@ -607,7 +703,7 @@ export function converterMiro(
         espessuraBorda: 2,
         raio: 6,
       }
-      criado.revisao = sugerirRevisaoMiro(doc, null, null, paleta)
+      criado.revisao = sugerirRevisaoMiro(doc, null, null, paleta, nomesDasTags)
       itensConvertidos.push(criado)
       continue
     }
@@ -643,7 +739,7 @@ export function converterMiro(
         espessuraBorda: 1,
         tracejado: 'tracejado',
       }
-      criado.revisao = sugerirRevisaoMiro(doc, null, null, paleta)
+      criado.revisao = sugerirRevisaoMiro(doc, null, null, paleta, nomesDasTags)
       itensConvertidos.push(criado)
       continue
     }
@@ -736,6 +832,20 @@ export function converterMiro(
 
     itensConvertidos.push(seta)
     mapaItensMesa.set(seta.id, seta)
+  }
+
+  // Grupos do Miro -> grupoId comum (um id novo por grupo; menos de 2 itens convertidos: ignora)
+  const itemPorId = new Map(itensConvertidos.map((it) => [it.id, it]))
+  for (const g of Array.isArray(bruto.groups) ? bruto.groups : []) {
+    const membros: Item[] = []
+    for (const miroId of idsDoGrupo(g)) {
+      const idMesa = mapaId.get(miroId)
+      const it = idMesa ? itemPorId.get(idMesa) : undefined
+      if (it && !it.grupoId && !membros.includes(it)) membros.push(it)
+    }
+    if (membros.length < 2) continue
+    const grupoId = opcoes.novoId()
+    for (const it of membros) it.grupoId = grupoId
   }
 
   // Origem e assinatura, com o item completo (posição, moldura, pontas)

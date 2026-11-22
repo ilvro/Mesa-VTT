@@ -128,3 +128,55 @@ describe('Q4b — converterMiro', () => {
     assert.deepEqual(seta.para, { itemId: shapeId, lado: 'esquerda' })
   })
 })
+
+describe('E2a — tags e grupos do Miro', () => {
+  const bruto = JSON.parse(
+    readFileSync(new URL('./fixtures/miro/tags-grupos.json', import.meta.url), 'utf8'),
+  ) as PacoteMiroBruto
+  let seq = 0
+  const converter = (b: PacoteMiroBruto) =>
+    converterMiro(b, { quadroId: 'q', agora: 1, novoId: () => `id-${++seq}` })
+  const porMiro = (res: ReturnType<typeof converter>, miro: string) =>
+    res.itens.find((i) => i.origem?.miro === miro)!
+
+  it('tag conhecida vira tipo sugerido, com motivo em português', () => {
+    const res = converter(bruto)
+    const n1 = porMiro(res, 'n1')
+    assert.equal(n1.revisao?.tipoSugerido, 'segredo')
+    assert.ok(n1.revisao?.motivos.includes('tag "Segredo"'))
+  })
+
+  it('normaliza o nome (acento, caixa, espaços) e lista tags desconhecidas', () => {
+    const n2 = porMiro(converter(bruto), 'n2')
+    assert.equal(n2.revisao?.tipoSugerido, 'teste')
+    assert.ok(n2.revisao?.motivos.includes('tags: Lysdal, Ato 2'))
+  })
+
+  it('prioridade: marcador no texto > tag > cor', () => {
+    const res = converter(bruto)
+    assert.equal(porMiro(res, 'n4').revisao?.tipoSugerido, 'segredo') // marcador vence a tag (teste)
+    const n2 = porMiro(res, 'n2')
+    assert.equal(n2.revisao?.tipoSugerido, 'teste') // tag vence a cor amarela
+    assert.equal(porMiro(res, 'n3').revisao?.tipoSugerido !== null, true)
+  })
+
+  it('grupo vira grupoId comum; grupo com menos de 2 itens é ignorado', () => {
+    const res = converter(bruto)
+    const g1 = porMiro(res, 'n1').grupoId
+    assert.ok(g1)
+    assert.equal(porMiro(res, 'n2').grupoId, g1)
+    assert.equal(porMiro(res, 'n3').grupoId, null)
+    assert.equal(porMiro(res, 'n4').grupoId, null)
+  })
+
+  it('pacote sem tags e grupos continua válido e a assinatura não muda', () => {
+    const { tags, groups, ...antigo } = bruto
+    void tags
+    void groups
+    const semTags = { ...antigo, items: bruto.items!.map(({ tagIds, ...r }) => (void tagIds, r)) }
+    const a = porMiro(converter(semTags), 'n1')
+    const b = porMiro(converter(bruto), 'n1')
+    assert.equal(a.origem?.assinatura, b.origem?.assinatura)
+    assert.equal(a.grupoId, null)
+  })
+})

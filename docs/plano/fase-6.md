@@ -82,7 +82,8 @@ Commit: `added update from miro for imported boards`
 
 ## Etapa B — Trazer melhor
 
-### E2a — Tags e grupos do Miro  ⬜
+### E2a — Tags e grupos do Miro  ✅
+Nota: pela documentação da API v2 (lida em 20/11/2026): `GET /tags` pagina por `offset`/`limit` (até 50) e devolve `{ id, title, fillColor }`; `GET /groups` pagina por `cursor` e devolve `{ id, data: { items: [ids] } }`. Os itens **não** trazem `tagIds` na listagem (a doc não mostra o campo); o script então chama `GET /items?tag_id=` por tag e grava `tagIds` em cada item do pacote. Esse caminho não foi testado contra a API real (sem token), por isso tags e grupos são opcionais no script (falha vira aviso) e o conversor tolera `tagIds` ausente, ids numéricos ou objetos `{ id }`. Prioridade marcador > tag > cor via 5º parâmetro de `sugerirRevisaoMiro`; `grupoId` só nos itens (não nas setas importadas além dos membros do grupo).
 Objetivo: o que o mestre já organizou no Miro com tags e grupos chega organizado.
 Depende de: E1c.
 Ler: `scripts/miro-baixar.mjs`, `src/dominio/miro.ts` (`sugerirRevisaoMiro`), `src/dominio/paleta.ts`, a documentação da API REST v2 do Miro para tags (`GET /v2/boards/{id}/tags`, e o campo `tagIds` dos itens) e grupos (`GET /v2/boards/{id}/groups`).

@@ -24,6 +24,13 @@ MIRO_TOKEN="seu_token_aqui" npm run miro:baixar -- "https://miro.com/app/board/u
 
 O comando baixa a descrição do quadro, todos os itens paginados, conectores e imagens anexadas, gerando o arquivo `meu-quadro.miro.zip`.
 
+### Tags e grupos
+
+O pacote leva junto as **tags** e os **grupos** do quadro (se o token puder lê-los; senão o script avisa e segue sem eles). Pacotes antigos continuam válidos.
+
+- **Grupos:** os itens de um mesmo grupo do Miro ficam agrupados na Mesa. Grupos com menos de 2 itens importados são ignorados.
+- **Tags viram tipo** na sugestão da fila de revisão (sem acento e sem diferenciar maiúsculas): `teste`, `pericia`, `percepcao` = teste; `segredo`; `loot`, `tesouro`, `item` = loot; `npc`, `fala`, `dialogo` = fala; `leitura`, `ler`, `narracao` = leitura; `evento`; `tarefa`, `todo` = tarefa; `rever`, `revisar` = rever; `titulo`. A prioridade é: marcador no texto, depois tag, depois cor. O motivo aparece como `tag "Segredo"`. Tags que não estão na lista aparecem nos motivos (`tags: Lysdal, Ato 2`).
+
 ## 4. Importar na Mesa
 
 1. Abra a **Mesa** na aba **Quadros**.

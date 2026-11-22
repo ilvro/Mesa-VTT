@@ -1,0 +1,22 @@
+{
+  "formato": "miro-bruto",
+  "versao": 1,
+  "baixadoEm": 1731580000000,
+  "board": { "id": "uXjVTAGS=", "name": "Quadro com Tags" },
+  "tags": [
+    { "id": "t1", "title": "Segredo", "fillColor": "red" },
+    { "id": "t2", "title": "  Percepção ", "fillColor": "blue" },
+    { "id": "t3", "title": "Lysdal", "fillColor": "cyan" },
+    { "id": "t4", "title": "Ato 2", "fillColor": "gray" }
+  ],
+  "groups": [
+    { "id": "g1", "type": "group", "data": { "items": ["n1", "n2"] } },
+    { "id": "g2", "type": "group", "data": { "items": ["n3", "inexistente"] } }
+  ],
+  "items": [
+    { "id": "n1", "type": "sticky_note", "position": { "x": 0, "y": 0 }, "geometry": { "width": 200, "height": 200 }, "data": { "content": "<p>Uma pista</p>" }, "style": { "fillColor": "light_yellow" }, "tagIds": ["t1"] },
+    { "id": "n2", "type": "sticky_note", "position": { "x": 300, "y": 0 }, "geometry": { "width": 200, "height": 200 }, "data": { "content": "<p>Outra</p>" }, "style": { "fillColor": "light_yellow" }, "tagIds": ["t2", "t3", "t4"] },
+    { "id": "n3", "type": "sticky_note", "position": { "x": 600, "y": 0 }, "geometry": { "width": 200, "height": 200 }, "data": { "content": "<p>Sozinha</p>" }, "style": { "fillColor": "light_yellow" } },
+    { "id": "n4", "type": "sticky_note", "position": { "x": 900, "y": 0 }, "geometry": { "width": 200, "height": 200 }, "data": { "content": "<p>Marcador [SEGREDO] aqui</p>" }, "style": { "fillColor": "light_yellow" }, "tagIds": [{ "id": "t2" }, "sumida"] }
+  ]
+}

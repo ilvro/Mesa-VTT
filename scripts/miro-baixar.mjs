@@ -79,6 +79,62 @@ async function paginarMiro(urlBase, token) {
   return acumulado
 }
 
+/** Paginação por `offset` (usada por tags e por itens filtrados por tag). */
+async function paginarMiroPorOffset(urlBase, token) {
+  const acumulado = []
+  const tamanhoPagina = 50
+  let offset = 0
+  while (true) {
+    const sep = urlBase.includes('?') ? '&' : '?'
+    const resp = await requisitarMiro(`${urlBase}${sep}limit=${tamanhoPagina}&offset=${offset}`, token)
+    const json = await resp.json()
+    const data = Array.isArray(json.data) ? json.data : []
+    acumulado.push(...data)
+    offset += data.length
+    const total = Number(json.total)
+    if (data.length === 0 || data.length < tamanhoPagina || (Number.isFinite(total) && offset >= total)) break
+  }
+  return acumulado
+}
+
+/**
+ * Baixa tags (GET /tags) e, por tag, os itens marcados (GET /items?tag_id=), anotando `tagIds` em cada item.
+ * Tags e grupos são opcionais: se falharem, o pacote sai sem eles (aviso, sem o token).
+ */
+async function baixarTags(base, items, token) {
+  try {
+    const tags = await paginarMiroPorOffset(`${base}/tags`, token)
+    const porId = new Map(items.map((i) => [String(i.id), i]))
+    for (const tag of tags) {
+      if (!tag || tag.id === undefined) continue
+      try {
+        const marcados = await paginarMiroPorOffset(`${base}/items?tag_id=${encodeURIComponent(tag.id)}`, token)
+        for (const m of marcados) {
+          const alvo = porId.get(String(m?.id))
+          if (!alvo) continue
+          const ja = (Array.isArray(alvo.tagIds) ? alvo.tagIds : []).map(String)
+          if (!ja.includes(String(tag.id))) alvo.tagIds = [...ja, String(tag.id)]
+        }
+      } catch (err) {
+        console.warn(`Aviso: falha ao buscar itens da tag ${tag.id}: ${err.message}`)
+      }
+    }
+    return tags
+  } catch (err) {
+    console.warn(`Aviso: não foi possível baixar as tags: ${err.message}`)
+    return []
+  }
+}
+
+async function baixarGrupos(base, token) {
+  try {
+    return await paginarMiro(`${base}/groups?limit=50`, token)
+  } catch (err) {
+    console.warn(`Aviso: não foi possível baixar os grupos: ${err.message}`)
+    return []
+  }
+}
+
 function extensaoPorMime(contentType, url) {
   const mime = (contentType || '').split(';')[0].trim().toLowerCase()
   if (mime === 'image/png') return 'png'
@@ -144,6 +200,8 @@ async function main() {
   const board = await boardResp.json()
   const items = await paginarMiro(`${base}/items?limit=50`, token)
   const connectors = await paginarMiro(`${base}/connectors?limit=50`, token)
+  const tags = await baixarTags(base, items, token)
+  const groups = await baixarGrupos(base, token)
 
   const contagem = {}
   for (const item of items) {
@@ -151,6 +209,8 @@ async function main() {
     contagem[t] = (contagem[t] || 0) + 1
   }
   contagem.connector = connectors.length
+  contagem.tag = tags.length
+  contagem.group = groups.length
 
   if (soContar) {
     console.log(`Quadro: ${board.name || boardId} (${boardId})`)
@@ -179,13 +239,15 @@ async function main() {
     board,
     items,
     connectors,
+    tags,
+    groups,
   }
   entradasZip['quadro.json'] = strToU8(JSON.stringify(bruto, null, 2))
 
   const zipBytes = zipSync(entradasZip)
   const nomeSaida = saida || `${boardId.replace(/[^A-Za-z0-9_-]/g, '_')}.miro.zip`
   writeFileSync(nomeSaida, zipBytes)
-  console.log(`Pacote salvo em ${nomeSaida} (${items.length} itens, ${connectors.length} conectores).`)
+  console.log(`Pacote salvo em ${nomeSaida} (${items.length} itens, ${connectors.length} conectores, ${tags.length} tags, ${groups.length} grupos).`)
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
