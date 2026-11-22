@@ -30,7 +30,7 @@ As etapas C e D são detalhadas quando a B fechar.
 | sumiu do Miro | sim | mantém e marca para revisão ("saiu do Miro") |
 | novo no Miro | — | cria, marcado para revisão como na importação |
 
-Itens criados na Mesa (sem `origem`) nunca são tocados. O que é **da Mesa** e sobrevive à atualização: `semantica`, `revisao` já resolvida, `feito`, `travado`, `soMestre`, `grupoId`, `z`, `aoFocar` e as ligações.
+Itens criados na Mesa (sem `origem`) nunca são tocados. O que é **da Mesa** e sobrevive à atualização: `semantica`, `revisao` já resolvida, `feito`, `travado`, `soMestre`, `grupoId`, `z`, `aoFocar`, os estilos (cores, fontes, bordas) e as ligações.
 
 ### E1a — Origem e assinatura no modelo e no conversor  ✅
 Nota: testes de validação e assinatura em `tests/unit/sincronia-miro.test.ts` (a E1b usará o mesmo arquivo); a origem do conversor é preenchida no fim, por mapa reverso de `mapaId`.
@@ -45,7 +45,8 @@ Como:
 Testes: validação aceita `origem` e recusa campo extra dentro dela; assinatura estável (mesmo item → mesma assinatura; mudar a cor de fundo não muda; mover 10 px muda; mudar o texto muda); conversor põe `origem` em todos os itens e setas; `idExistente` reaproveita ids e religa setas e molduras.
 Commit: `board items remember their miro origin`
 
-### E1b — Plano de atualização (puro)  ⬜
+### E1b — Plano de atualização (puro)  ✅
+Nota: `tipo` diferente entre atual e novo vira conflito; `atualizadoEm` entra nas ops (antes/depois). Na revisão do Opus, os estilos (`caixa`, `texto` e, na seta, `cor`, `espessura`, `tracejado`, `inicio`, `fim`) passaram a ser campos da Mesa: a assinatura os ignora para o mestre poder repintar, e a atualização também não desfaz a pintura.
 Objetivo: comparar o quadro atual com uma conversão nova e produzir um passo de desfazer com tudo o que muda.
 Depende de: E1a.
 Ler: `src/dominio/quadro-operacoes.ts` (`Passo`, `Operacao`), a tabela acima.
