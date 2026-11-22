@@ -1,10 +1,12 @@
 import { docParaHtml } from '../../dominio/doc-rico.ts';
 import { chaveDaCondicao, type EstadoDoMundo } from '../../dominio/estado-do-mundo.ts';
+import { classificarRef } from '../../dominio/ligacoes-quadro.ts';
 import { decorarMarcadores } from '../../dominio/paleta.ts';
 import type { DocRico } from '../../dominio/quadro.ts';
+import { lerRef } from '#mesa';
 import { abrirNoApp } from '../../app/barramento.ts';
 import { entidades } from '../../app/campanha.ts';
-import { ancorasDoItem } from '../../app/foco-do-quadro.ts';
+import { ancorasDoItem, focarRefNoQuadro } from '../../app/foco-do-quadro.ts';
 import { alternarFato } from '../../app/quadros.ts';
 import { abrirEntidade } from '../../app/rotas.ts';
 
@@ -38,6 +40,22 @@ export function aoClicarTextoDecorado(e: MouseEvent): void {
     e.stopPropagation();
     const id = elEnt.dataset.entidadeId;
     if (id) abrirEntidade(id);
+    return;
+  }
+  const elMesa = alvo.closest<HTMLElement>('a[data-mesa-ref]');
+  if (elMesa) {
+    e.preventDefault();
+    e.stopPropagation();
+    const ref = lerRef(elMesa.dataset.mesaRef ?? '');
+    if (!ref) return;
+    const classe = classificarRef(ref);
+    if (classe === 'item' || classe === 'quadro') {
+      void focarRefNoQuadro(ref, { abrirEspiar: false });
+    } else if (classe === 'entidade') {
+      abrirEntidade(ref.id);
+    } else {
+      void abrirNoApp(ref);
+    }
     return;
   }
   const elRef = alvo.closest<HTMLElement>('[data-ref-app]');
@@ -86,7 +104,7 @@ export function ConteudoDecorado({
       class={className}
       onClick={aoClicarTextoDecorado}
       onPointerDown={(e) => {
-        if ((e.target as HTMLElement | null)?.closest('[data-entidade-id],[data-ref-app],[data-condicao]')) {
+        if ((e.target as HTMLElement | null)?.closest('[data-entidade-id],[data-ref-app],[data-condicao],a[href]')) {
           e.stopPropagation();
         }
       }}

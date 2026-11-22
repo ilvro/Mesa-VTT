@@ -24,6 +24,15 @@ export function parsearRefDeItemDeQuadro(
   };
 }
 
+/** Como a Mesa abre um Ref clicado no texto: no quadro, na entidade ou em outro app. */
+export function classificarRef(ref: Ref): 'item' | 'quadro' | 'entidade' | 'externo' {
+  if (ref.app !== 'mesa') return 'externo';
+  if (ref.tipo === 'item') return parsearRefDeItemDeQuadro(ref) ? 'item' : 'externo';
+  if (ref.tipo === 'quadro') return 'quadro';
+  if (ref.tipo === 'entidade') return 'entidade';
+  return 'externo';
+}
+
 function ehDoQuadro(ref: Ref, quadroId: string): boolean {
   if (ref.app === 'mesa' && ref.tipo === 'quadro' && ref.id === quadroId) return true;
   return parsearRefDeItemDeQuadro(ref)?.quadroId === quadroId;

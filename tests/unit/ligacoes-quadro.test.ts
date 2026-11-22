@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Entidade, Ligacao, Ref } from '#mesa';
 import {
+  classificarRef,
   diferencaDeLigacoes,
   ligacoesDoQuadro,
   ligacoesOrfasDoQuadro,
@@ -106,5 +107,15 @@ describe('ligações do quadro (domínio)', () => {
         ['a', 'b'],
       );
     });
+  });
+});
+
+describe('classificarRef', () => {
+  it('classifica refs da Mesa e de outros apps', () => {
+    assert.equal(classificarRef({ app: 'mesa', tipo: 'item', id: 'q1/i1' }), 'item');
+    assert.equal(classificarRef({ app: 'mesa', tipo: 'item', id: 'solto' }), 'externo');
+    assert.equal(classificarRef({ app: 'mesa', tipo: 'quadro', id: 'q1' }), 'quadro');
+    assert.equal(classificarRef({ app: 'mesa', tipo: 'entidade', id: 'e1' }), 'entidade');
+    assert.equal(classificarRef({ app: 'atlas', tipo: 'objeto', id: 'm/o' }), 'externo');
   });
 });
