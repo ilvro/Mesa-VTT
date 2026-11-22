@@ -96,7 +96,8 @@ Como:
 Testes: fixture com tags e grupo; prioridade marcador > tag > cor; grupo vira `grupoId` comum.
 Commit: `miro import brings tags and groups`
 
-### E2b — Importar só algumas molduras  ⬜
+### E2b — Importar só algumas molduras  ✅
+Nota: código puro em `src/dominio/molduras-miro.ts` (`moldurasDoPacote`, `itensSoltosDoPacote`, `filtrarPacote`); diálogo em `src/ui/quadro/DialogoMolduras.tsx`. O filtro vai em `quadro.origem.molduras` (ids do Miro) e `soltos`; ausente = quadro inteiro, e marcar tudo também não grava filtro. O pacote é filtrado antes de guardar imagens e de converter, então `vistos` só tem os ids do pacote filtrado (um item que entre depois numa moldura escolhida é novo). Um item que sai de uma moldura escolhida no Miro deixa de vir e cai na regra "sumiu do Miro" (aceito). Conector fica se as duas pontas ficaram; ponta livre vale se cai numa moldura escolhida ou se `soltos` (e fora de qualquer moldura). Pacote sem molduras importa direto, sem diálogo. Com uma só moldura (sem soltos), o título dela nomeia o quadro. Fixture `tests/unit/fixtures/miro/molduras.json`.
 Objetivo: dividir um quadro gigante do Miro em quadros menores da Mesa (um por aventura ou arco).
 Depende de: E1c.
 Ler: `src/dominio/miro.ts`, `src/app/importar-miro.ts`, `src/ui/quadro/Quadros.tsx`.

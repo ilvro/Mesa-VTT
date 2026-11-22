@@ -443,6 +443,7 @@ test('Q4c: importar o fixture -> o quadro abre com os itens -> aceitar 2 itens n
       mimeType: 'application/zip',
       buffer: Buffer.from(zipBytes),
     });
+    await page.click('[data-testid="molduras-miro-importar"]');
 
     await page.waitForSelector('[data-testid="area-quadro"]');
     await page.waitForSelector('[data-testid="painel-fila-revisao"]');
@@ -497,6 +498,7 @@ test('E2c: aceitar em massa um tipo -> contador diminui, Ctrl+Z volta', async ()
       mimeType: 'application/zip',
       buffer: Buffer.from(zipSync({ 'quadro.json': strToU8(fixtureJson) })),
     });
+    await page.click('[data-testid="molduras-miro-importar"]');
     await page.waitForSelector('[data-testid="painel-fila-revisao"]');
     const contador = page.locator('[data-testid="contador-revisao"]');
     assert.equal(await contador.textContent(), 'faltam 4');
@@ -848,6 +850,73 @@ test('Q5e: no modo sessão os atalhos do quadro só valem depois de clicar nele'
     await itens.first().click();
     await page.keyboard.press('Delete');
     await page.waitForFunction((n) => document.querySelectorAll('[data-testid^="item-"]').length < n, antes);
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('E2b: importar só uma moldura do Miro e atualizar respeitando o filtro', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  const erros: string[] = [];
+  page.on('pageerror', (e) => erros.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') erros.push(m.text()); });
+  const pacote = Buffer.from(
+    zipSync({
+      'quadro.json': strToU8(
+        readFileSync(new URL('../unit/fixtures/miro/molduras.json', import.meta.url), 'utf8'),
+      ),
+    }),
+  );
+
+  try {
+    await page.goto(`${amb.origem}/Mesa/`);
+    await page.waitForSelector('[data-testid="campanha-select"]');
+    await page.click('[data-testid="aba-campanhas"]');
+    await page.fill('[data-testid="nova-campanha-nome"]', 'Campanha E2b');
+    await page.click('[data-testid="criar-campanha"]');
+    await page.waitForSelector('[data-testid="tela-entidades"]');
+    await page.click('[data-testid="aba-quadros"]');
+    await page.waitForSelector('[data-testid="tela-quadros"]');
+
+    await page.setInputFiles('[data-testid="importar-miro-input"]', {
+      name: 'grande.miro.zip',
+      mimeType: 'application/zip',
+      buffer: pacote,
+    });
+    await page.waitForSelector('[data-testid="dialogo-molduras-miro"]');
+    assert.equal(await page.locator('[data-testid^="moldura-miro-contagem-"]').count(), 2);
+    assert.match((await page.locator('[data-testid="moldura-miro-contagem-f-a"]').textContent()) ?? '', /2 itens/);
+
+    // Busca filtra a lista.
+    await page.fill('[data-testid="molduras-miro-busca"]', 'Ato 2');
+    assert.equal(await page.locator('[data-testid^="moldura-miro-linha-"]').count(), 1);
+    await page.fill('[data-testid="molduras-miro-busca"]', '');
+
+    // Desmarca tudo e marca só o Ato 1.
+    await page.uncheck('[data-testid="molduras-miro-todas"]');
+    assert.equal(await page.locator('[data-testid="molduras-miro-importar"]').isDisabled(), true);
+    await page.check('[data-testid="moldura-miro-f-a"]');
+    await page.click('[data-testid="molduras-miro-importar"]');
+
+    await page.waitForSelector('[data-testid="area-quadro"]');
+    assert.equal(await page.locator('[data-testid="quadro-nome"]').inputValue(), 'Ato 1 (importado)');
+    const textos = await page.locator('[data-testid^="item-"]').allTextContents();
+    assert.ok(textos.some((t) => t.includes('Nota a1')));
+    assert.ok(textos.some((t) => t.includes('Nota a2')));
+    assert.ok(!textos.some((t) => t.includes('Nota b1') || t.includes('solta')));
+
+    // Atualizar com o mesmo pacote: o filtro vale, nada volta nem some.
+    await page.setInputFiles('[data-testid="input-atualizar-miro"]', {
+      name: 'grande.miro.zip',
+      mimeType: 'application/zip',
+      buffer: pacote,
+    });
+    await page.locator('[data-testid="aviso"]', { hasText: 'Nada mudou no Miro' }).waitFor();
+    const depois = await page.locator('[data-testid^="item-"]').allTextContents();
+    assert.ok(!depois.some((t) => t.includes('Nota b1')));
+
+    assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
   } finally {
     await ctx.close();
   }

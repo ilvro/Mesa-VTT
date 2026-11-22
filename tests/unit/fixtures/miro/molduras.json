@@ -1,0 +1,171 @@
+{
+  "formato": "miro-bruto",
+  "versao": 1,
+  "baixadoEm": 1731580000000,
+  "board": {
+    "id": "uXMOLD=",
+    "name": "Quadro Grande"
+  },
+  "items": [
+    {
+      "id": "f-a",
+      "type": "frame",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "origin": "center"
+      },
+      "geometry": {
+        "width": 600,
+        "height": 400
+      },
+      "data": {
+        "title": "Ato 1"
+      }
+    },
+    {
+      "id": "f-b",
+      "type": "frame",
+      "position": {
+        "x": 1000,
+        "y": 0,
+        "origin": "center"
+      },
+      "geometry": {
+        "width": 600,
+        "height": 400
+      },
+      "data": {
+        "title": "Ato 2"
+      }
+    },
+    {
+      "id": "a1",
+      "type": "sticky_note",
+      "position": {
+        "x": 150,
+        "y": 200,
+        "origin": "center",
+        "relativeTo": "parent_top_left"
+      },
+      "geometry": {
+        "width": 100,
+        "height": 100
+      },
+      "data": {
+        "content": "<p>Nota a1</p>"
+      },
+      "style": {
+        "fillColor": "light_yellow"
+      },
+      "parent": {
+        "id": "f-a"
+      }
+    },
+    {
+      "id": "a2",
+      "type": "sticky_note",
+      "position": {
+        "x": 100,
+        "y": 0,
+        "origin": "center"
+      },
+      "geometry": {
+        "width": 100,
+        "height": 100
+      },
+      "data": {
+        "content": "<p>Nota a2 geometrica</p>"
+      },
+      "style": {
+        "fillColor": "light_yellow"
+      }
+    },
+    {
+      "id": "b1",
+      "type": "sticky_note",
+      "position": {
+        "x": 300,
+        "y": 200,
+        "origin": "center",
+        "relativeTo": "parent_top_left"
+      },
+      "geometry": {
+        "width": 100,
+        "height": 100
+      },
+      "data": {
+        "content": "<p>Nota b1</p>"
+      },
+      "style": {
+        "fillColor": "light_yellow"
+      },
+      "parent": {
+        "id": "f-b"
+      }
+    },
+    {
+      "id": "s1",
+      "type": "sticky_note",
+      "position": {
+        "x": 0,
+        "y": 1000,
+        "origin": "center"
+      },
+      "geometry": {
+        "width": 100,
+        "height": 100
+      },
+      "data": {
+        "content": "<p>Nota solta</p>"
+      },
+      "style": {
+        "fillColor": "light_yellow"
+      }
+    }
+  ],
+  "connectors": [
+    {
+      "id": "c-aa",
+      "startItem": {
+        "id": "a1"
+      },
+      "endItem": {
+        "id": "a2"
+      }
+    },
+    {
+      "id": "c-ab",
+      "startItem": {
+        "id": "a1"
+      },
+      "endItem": {
+        "id": "b1"
+      }
+    },
+    {
+      "id": "c-libre-a",
+      "startItem": {
+        "id": "a2"
+      },
+      "endItem": {
+        "position": {
+          "x": -200,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": "c-libre-fora",
+      "startItem": {
+        "id": "s1"
+      },
+      "endItem": {
+        "position": {
+          "x": 0,
+          "y": 1400
+        }
+      }
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import {
   type MetadadosImagemImportada,
   type PacoteMiroBruto,
 } from '../dominio/miro.ts'
+import { filtrarPacote, itensSoltosDoPacote, moldurasDoPacote, type FiltroMolduras, type MolduraDoPacote } from '../dominio/molduras-miro.ts'
 import { novoQuadro, type Quadro } from '../dominio/quadro.ts'
 import { criarQuadroComItens, guardarImagem, listarQuadros } from './banco-quadros.ts'
 import { campanhaAtiva } from './campanha.ts'
@@ -43,8 +44,13 @@ interface PacoteLido {
   imagensPorItemId: Map<string, MetadadosImagemImportada>
 }
 
-/** Lê o zip, valida o quadro.json e guarda as imagens no banco. */
-async function lerPacoteMiro(arquivo: File | Blob | Uint8Array): Promise<PacoteLido> {
+interface PacoteAberto {
+  bruto: PacoteMiroBruto
+  entradas: Record<string, Uint8Array>
+}
+
+/** Abre o zip e valida o quadro.json, sem tocar no banco. */
+async function abrirPacoteMiro(arquivo: File | Blob | Uint8Array): Promise<PacoteAberto> {
   const bytes =
     arquivo instanceof Uint8Array
       ? arquivo
@@ -62,7 +68,14 @@ async function lerPacoteMiro(arquivo: File | Blob | Uint8Array): Promise<PacoteL
   } catch {
     throw new Error('Pacote .miro.zip inválido: quadro.json malformado.')
   }
+  return { bruto, entradas }
+}
 
+/** Guarda no banco as imagens dos itens do pacote (já filtrado). */
+async function guardarImagensDoPacote(
+  bruto: PacoteMiroBruto,
+  entradas: Record<string, Uint8Array>,
+): Promise<Map<string, MetadadosImagemImportada>> {
   const imagensPorItemId = new Map<string, MetadadosImagemImportada>()
   const rawItems = Array.isArray(bruto.items) ? bruto.items : []
 
@@ -86,17 +99,42 @@ async function lerPacoteMiro(arquivo: File | Blob | Uint8Array): Promise<PacoteL
       })
     }
   }
-  return { bruto, imagensPorItemId }
+  return imagensPorItemId
+}
+
+/** Lê o zip, aplica o filtro de molduras (se houver) e guarda as imagens que sobraram. */
+async function lerPacoteMiro(
+  arquivo: File | Blob | Uint8Array,
+  filtro?: FiltroMolduras,
+): Promise<PacoteLido> {
+  const aberto = await abrirPacoteMiro(arquivo)
+  const bruto = filtro ? filtrarPacote(aberto.bruto, filtro) : aberto.bruto
+  return { bruto, imagensPorItemId: await guardarImagensDoPacote(bruto, aberto.entradas) }
+}
+
+export interface ExamePacoteMiro {
+  nome: string
+  molduras: MolduraDoPacote[]
+  /** Itens fora de qualquer moldura. */
+  soltos: number
+}
+
+/** Lista as molduras de um pacote para o diálogo de escolha (não grava nada). */
+export async function examinarPacoteMiro(arquivo: File | Blob | Uint8Array): Promise<ExamePacoteMiro> {
+  const { bruto } = await abrirPacoteMiro(arquivo)
+  const nome = typeof bruto.board?.name === 'string' && bruto.board.name.trim() ? bruto.board.name.trim() : 'Quadro do Miro'
+  return { nome, molduras: moldurasDoPacote(bruto), soltos: itensSoltosDoPacote(bruto) }
 }
 
 export async function importarArquivoMiro(
   arquivo: File | Blob | Uint8Array,
+  filtro?: FiltroMolduras,
 ): Promise<RelatorioImportacaoMiro> {
   const campanha = campanhaAtiva.value
   if (!campanha) {
     throw new Error('Escolha uma campanha antes de importar um quadro do Miro.')
   }
-  const { bruto, imagensPorItemId } = await lerPacoteMiro(arquivo)
+  const { bruto, imagensPorItemId } = await lerPacoteMiro(arquivo, filtro)
 
   const agora = Date.now()
   const quadroId = crypto.randomUUID()
@@ -108,10 +146,19 @@ export async function importarArquivoMiro(
     imagensPorItemId,
   })
 
-  const nomeFinal = `${convertido.nomeDoQuadro} (importado)`
+  // Com uma só moldura escolhida (e sem soltos), o título dela nomeia o quadro.
+  let nomeBase = convertido.nomeDoQuadro
+  if (filtro && filtro.molduras.length === 1 && !filtro.soltos) {
+    const m = moldurasDoPacote(bruto).find((x) => x.id === filtro.molduras[0])
+    if (m) nomeBase = m.titulo
+  }
+  const nomeFinal = `${nomeBase} (importado)`
   const quadro = novoQuadro(campanha.id, nomeFinal, agora, quadroId)
   const miroBoardId = typeof bruto.board?.id === 'string' ? bruto.board.id.trim() : ''
   if (miroBoardId) quadro.origem = { miroBoardId, sincronizadoEm: agora, vistos: idsDoMiro(convertido.itens) }
+  if (miroBoardId && filtro) {
+    quadro.origem = { ...quadro.origem!, molduras: [...filtro.molduras], soltos: filtro.soltos }
+  }
 
   await criarQuadroComItens(quadro, convertido.itens)
   await ligarItensNovos(convertido.itens)
@@ -142,11 +189,17 @@ export async function atualizarQuadroDoMiro(
   if (!quadro?.origem) {
     throw new Error('Este quadro não foi importado do Miro; importe-o de novo para poder atualizar.')
   }
-  const { bruto, imagensPorItemId } = await lerPacoteMiro(arquivo)
-  const miroBoardId = typeof bruto.board?.id === 'string' ? bruto.board.id.trim() : ''
+  // O mesmo filtro da importação: o que ficou de fora não volta.
+  const filtro: FiltroMolduras | undefined = quadro.origem.molduras
+    ? { molduras: quadro.origem.molduras, soltos: quadro.origem.soltos ?? false }
+    : undefined
+  const aberto = await abrirPacoteMiro(arquivo)
+  const miroBoardId = typeof aberto.bruto.board?.id === 'string' ? aberto.bruto.board.id.trim() : ''
   if (miroBoardId !== quadro.origem.miroBoardId) {
     throw new Error('Este pacote é de outro quadro do Miro.')
   }
+  const bruto = filtro ? filtrarPacote(aberto.bruto, filtro) : aberto.bruto
+  const imagensPorItemId = await guardarImagensDoPacote(bruto, aberto.entradas)
 
   await descarregarPendentes()
   const atuais = itens.value

@@ -1,7 +1,8 @@
 import { useSignal } from '@preact/signals';
 import { useRef } from 'preact/hooks';
+import { DialogoMolduras } from './DialogoMolduras.tsx';
 import { campanhaAtiva } from '../../app/campanha.ts';
-import { importarArquivoMiro } from '../../app/importar-miro.ts';
+import { examinarPacoteMiro, importarArquivoMiro, type ExamePacoteMiro } from '../../app/importar-miro.ts';
 import { avisar } from '../../app/toasts.ts';
 import {
   abrirQuadro,
@@ -10,12 +11,14 @@ import {
   quadros,
   renomearQuadro,
 } from '../../app/quadros.ts';
+import type { FiltroMolduras } from '../../dominio/molduras-miro.ts';
 import { navegarParaQuadro, tela } from '../../app/rotas.ts';
 
 export function Quadros() {
   const nova = useSignal('');
   const confirmando = useSignal<string | null>(null);
   const inputMiroRef = useRef<HTMLInputElement>(null);
+  const escolhendo = useSignal<{ arquivo: File; exame: ExamePacoteMiro } | null>(null);
   const c = campanhaAtiva.value;
 
   if (!c) {
@@ -51,8 +54,36 @@ export function Quadros() {
     }
   };
 
+  const importar = async (arquivo: File, filtro?: FiltroMolduras) => {
+    try {
+      const rel = await importarArquivoMiro(arquivo, filtro);
+      avisar(
+        `Quadro "${rel.quadro.nome}" importado (${rel.totalItens} itens, ${rel.paraRevisar} para revisar).`,
+      );
+      navegarParaQuadro(rel.quadro.id);
+    } catch (err) {
+      avisar(err instanceof Error ? err.message : String(err), true);
+    }
+  };
+
   return (
     <section class="pagina" data-testid="tela-quadros">
+      {escolhendo.value ? (
+        <DialogoMolduras
+          exame={escolhendo.value.exame}
+          aoCancelar={() => {
+            escolhendo.value = null;
+          }}
+          aoImportar={(filtro) => {
+            const arquivo = escolhendo.value!.arquivo;
+            const exame = escolhendo.value!.exame;
+            escolhendo.value = null;
+            // Tudo marcado = quadro inteiro, sem filtro guardado.
+            const tudo = filtro.soltos && filtro.molduras.length === exame.molduras.length;
+            void importar(arquivo, tudo ? undefined : filtro);
+          }}
+        />
+      ) : null}
       <div class="galeria-topo">
         <h1 class="faixa grande">Quadros</h1>
         <span class="selo">{c.nome}</span>
@@ -97,11 +128,12 @@ export function Quadros() {
             e.currentTarget.value = '';
             if (!f) return;
             try {
-              const rel = await importarArquivoMiro(f);
-              avisar(
-                `Quadro "${rel.quadro.nome}" importado (${rel.totalItens} itens, ${rel.paraRevisar} para revisar).`,
-              );
-              navegarParaQuadro(rel.quadro.id);
+              const exame = await examinarPacoteMiro(f);
+              if (exame.molduras.length === 0) {
+                await importar(f);
+              } else {
+                escolhendo.value = { arquivo: f, exame };
+              }
             } catch (err) {
               avisar(err instanceof Error ? err.message : String(err), true);
             }
