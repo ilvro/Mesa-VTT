@@ -29,8 +29,11 @@ As etapas C e D são detalhadas quando a B fechar.
 | sumiu do Miro | não | remove |
 | sumiu do Miro | sim | mantém e marca para revisão ("saiu do Miro") |
 | novo no Miro | — | cria, marcado para revisão como na importação |
+| continua no Miro | apagado na Mesa | não volta (o quadro guarda em `origem.vistos` os ids do Miro da última sincronização) |
 
-Itens criados na Mesa (sem `origem`) nunca são tocados. O que é **da Mesa** e sobrevive à atualização: `semantica`, `revisao` já resolvida, `feito`, `travado`, `soMestre`, `grupoId`, `z`, `aoFocar`, os estilos (cores, fontes, bordas) e as ligações.
+Itens criados na Mesa (sem `origem`) nunca são tocados. Na revisão da E1c, o Opus acrescentou a última linha: sem ela, o que o mestre apagasse na Mesa voltaria a cada atualização.
+
+O que é **da Mesa** e sobrevive à atualização: `semantica`, `revisao` já resolvida, `feito`, `travado`, `soMestre`, `grupoId`, `z`, `aoFocar`, os estilos (cores, fontes, bordas) e as ligações.
 
 ### E1a — Origem e assinatura no modelo e no conversor  ✅
 Nota: testes de validação e assinatura em `tests/unit/sincronia-miro.test.ts` (a E1b usará o mesmo arquivo); a origem do conversor é preenchida no fim, por mapa reverso de `mapaId`.

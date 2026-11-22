@@ -12,7 +12,8 @@ export interface Quadro {
   fundo: { cor: string; grade: Grade; passo: number; encaixar: boolean };
   versao: 1;
   /** Presente em quadros importados do Miro (para reimportar e atualizar). */
-  origem?: { miroBoardId: string; sincronizadoEm: number };
+  /** `vistos`: ids do Miro presentes na última sincronização; um deles sem item aqui foi apagado na Mesa e não volta. */
+  origem?: { miroBoardId: string; sincronizadoEm: number; vistos?: string[] };
   criadoEm: number;
   atualizadoEm: number;
 }
@@ -439,7 +440,7 @@ const CHAVES_QUADRO = new Set([
   'criadoEm',
   'atualizadoEm',
 ]);
-const CHAVES_ORIGEM_QUADRO = new Set(['miroBoardId', 'sincronizadoEm']);
+const CHAVES_ORIGEM_QUADRO = new Set(['miroBoardId', 'sincronizadoEm', 'vistos']);
 const CHAVES_ORIGEM_ITEM = new Set(['miro', 'assinatura']);
 const CHAVES_FUNDO = new Set(['cor', 'grade', 'passo', 'encaixar']);
 
@@ -466,6 +467,12 @@ export function validarQuadro(v: unknown, caminho = 'quadro'): asserts v is Quad
     exigirChavesPermitidas(v.origem, CHAVES_ORIGEM_QUADRO, `${caminho}.origem`);
     exigirTexto(v.origem.miroBoardId, `${caminho}.origem.miroBoardId`, true);
     exigirNumero(v.origem.sincronizadoEm, `${caminho}.origem.sincronizadoEm`);
+    if (v.origem.vistos !== undefined) {
+      if (!Array.isArray(v.origem.vistos)) falhar(`${caminho}.origem.vistos`, 'deve ser lista');
+      for (let i = 0; i < v.origem.vistos.length; i++) {
+        exigirTexto(v.origem.vistos[i], `${caminho}.origem.vistos[${i}]`, true);
+      }
+    }
   }
 }
 

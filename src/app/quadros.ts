@@ -455,12 +455,12 @@ export async function mudarFundo(parcial: Partial<Quadro['fundo']>): Promise<voi
 }
 
 /** Grava no quadro aberto a hora da última sincronização com o Miro. */
-export async function marcarSincronizadoComMiro(quando: number): Promise<void> {
+export async function marcarSincronizadoComMiro(quando: number, vistos: string[]): Promise<void> {
   const q = quadroAberto.value;
   if (!q?.origem) return;
   const atualizado: Quadro = {
     ...q,
-    origem: { ...q.origem, sincronizadoEm: quando },
+    origem: { ...q.origem, sincronizadoEm: quando, vistos },
     atualizadoEm: Math.max(Date.now(), q.atualizadoEm + 1),
   };
   quadroAberto.value = atualizado;

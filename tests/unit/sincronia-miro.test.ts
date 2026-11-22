@@ -128,11 +128,25 @@ describe('E1b — planejarAtualizacaoDoMiro', () => {
     assert.equal(res.caixa.fundo, '#ff0000')
   })
 
+  it('item apagado na Mesa que continua no Miro não volta', () => {
+    const a = item('a', 'x')
+    const b = item('b', 'y')
+    const vistos = new Set(['a', 'b'])
+    // b foi apagado na Mesa; o Miro ainda tem a e b, e trouxe c, novo.
+    const r = planejarAtualizacaoDoMiro(mapa(a), [{ ...a }, b, item('c', 'z')], 9, vistos)
+    assert.equal(r.relatorio.apagadosAqui, 1)
+    assert.equal(r.relatorio.novos, 1)
+    const criados = r.passo.ops.flatMap((op) => ('criar' in op ? op.criar : []))
+    assert.deepEqual(criados.map((i) => i.origem!.miro), ['c'])
+    // Sem a lista (quadro importado antes dela), b volta como novo.
+    assert.equal(planejarAtualizacaoDoMiro(mapa(a), [{ ...a }, b], 9).relatorio.novos, 1)
+  })
+
   it('nada muda: passo vazio', () => {
     const a = item('a', 'x')
     const r = planejarAtualizacaoDoMiro(mapa(a), [{ ...a }], 9)
     assert.equal(r.passo.ops.length, 0)
-    assert.deepEqual(r.relatorio, { novos: 0, atualizados: 0, removidos: 0, conflitos: 0, saiuDoMiro: 0 })
+    assert.deepEqual(r.relatorio, { apagadosAqui: 0, novos: 0, atualizados: 0, removidos: 0, conflitos: 0, saiuDoMiro: 0 })
   })
 
   it('Miro mudou, Mesa não: atualiza e preserva campos da Mesa', () => {

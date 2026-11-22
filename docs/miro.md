@@ -44,6 +44,7 @@ O que acontece com cada item:
 | foi apagado | você não mexeu | o item é removido |
 | foi apagado | você mexeu | o item fica e vai para a fila de revisão ("Saiu do Miro") |
 | é novo | — | é criado e vai para a fila de revisão |
+| continua lá | você apagou aqui | continua apagado (não volta) |
 
 Itens que você criou na Mesa nunca são tocados. O que é da Mesa também é mantido: tipo (semântica), "feito", travado, só mestre, grupos, ordem de empilhamento, cores e fontes, e as ligações. O pacote precisa ser do mesmo quadro do Miro; se for de outro, a Mesa avisa e não muda nada.
 

@@ -81,6 +81,8 @@ export function assinaturaDoMiro(item: Item): string {
 
 export interface RelatorioDaAtualizacao {
   novos: number
+  /** Itens que continuam no Miro mas foram apagados na Mesa: não voltam. */
+  apagadosAqui: number
   atualizados: number
   removidos: number
   conflitos: number
@@ -151,14 +153,17 @@ function alteracaoDeAtualizacao(atual: Item, novo: Item, agora: number): Alterac
 
 /**
  * Compara o quadro atual com a conversão nova do mesmo quadro do Miro.
- * Itens sem `origem` nunca são tocados. `novos` já traz os ids reaproveitados.
+ * Itens sem `origem` nunca são tocados. `vistosAntes` são os ids do Miro da
+ * sincronização anterior: um deles sem item aqui foi apagado na Mesa e não é recriado. `novos` já traz os ids reaproveitados.
  */
 export function planejarAtualizacaoDoMiro(
   atuais: ReadonlyMap<string, Item>,
   novos: readonly Item[],
   agora: number,
+  vistosAntes?: ReadonlySet<string>,
 ): { passo: Passo; relatorio: RelatorioDaAtualizacao } {
   const relatorio: RelatorioDaAtualizacao = {
+    apagadosAqui: 0,
     novos: 0,
     atualizados: 0,
     removidos: 0,
@@ -181,7 +186,9 @@ export function planejarAtualizacaoDoMiro(
     if (!novo.origem) continue
     const atual = porMiro.get(novo.origem.miro)
     if (!atual || !atual.origem) {
-      criar.push(novo)
+      // Já estava no Miro na última vez e não existe aqui: o mestre apagou na Mesa.
+      if (vistosAntes?.has(novo.origem.miro)) relatorio.apagadosAqui++
+      else criar.push(novo)
       continue
     }
     vistos.add(atual.origem.miro)
@@ -224,4 +231,11 @@ export function planejarAtualizacaoDoMiro(
   if (remover.length > 0) ops.push({ remover })
   if (criados.length > 0) ops.push({ criar: criados })
   return { passo: { rotulo: 'Atualizar do Miro', ops }, relatorio }
+}
+
+/** Os ids do Miro de uma conversão, para guardar em `quadro.origem.vistos`. */
+export function idsDoMiro(itens: readonly Item[]): string[] {
+  const ids: string[] = []
+  for (const it of itens) if (it.origem) ids.push(it.origem.miro)
+  return ids
 }

@@ -8,7 +8,7 @@ import { novoQuadro, type Quadro } from '../dominio/quadro.ts'
 import { criarQuadroComItens, guardarImagem, listarQuadros } from './banco-quadros.ts'
 import { campanhaAtiva } from './campanha.ts'
 import { ligarItensNovos } from './ligacoes-quadro.ts'
-import { planejarAtualizacaoDoMiro, type RelatorioDaAtualizacao } from '../dominio/sincronia-miro.ts'
+import { idsDoMiro, planejarAtualizacaoDoMiro, type RelatorioDaAtualizacao } from '../dominio/sincronia-miro.ts'
 import {
   abrirQuadro,
   descarregarPendentes,
@@ -111,7 +111,7 @@ export async function importarArquivoMiro(
   const nomeFinal = `${convertido.nomeDoQuadro} (importado)`
   const quadro = novoQuadro(campanha.id, nomeFinal, agora, quadroId)
   const miroBoardId = typeof bruto.board?.id === 'string' ? bruto.board.id.trim() : ''
-  if (miroBoardId) quadro.origem = { miroBoardId, sincronizadoEm: agora }
+  if (miroBoardId) quadro.origem = { miroBoardId, sincronizadoEm: agora, vistos: idsDoMiro(convertido.itens) }
 
   await criarQuadroComItens(quadro, convertido.itens)
   await ligarItensNovos(convertido.itens)
@@ -163,13 +163,14 @@ export async function atualizarQuadroDoMiro(
     idExistente: (miroId) => idPorMiro.get(miroId),
   })
 
-  const { passo, relatorio } = planejarAtualizacaoDoMiro(atuais, convertido.itens, agora)
+  const vistosAntes = quadro.origem.vistos ? new Set(quadro.origem.vistos) : undefined
+  const { passo, relatorio } = planejarAtualizacaoDoMiro(atuais, convertido.itens, agora, vistosAntes)
   const novosComRevisao = passo.ops.reduce(
     (n, op) => ('criar' in op ? n + op.criar.filter((i) => Boolean(i.revisao)).length : n),
     0,
   )
   const paraRevisar = relatorio.conflitos + relatorio.saiuDoMiro + novosComRevisao
   executar(passo)
-  await marcarSincronizadoComMiro(agora)
+  await marcarSincronizadoComMiro(agora, idsDoMiro(convertido.itens))
   return { ...relatorio, paraRevisar, avisos: convertido.avisos }
 }
