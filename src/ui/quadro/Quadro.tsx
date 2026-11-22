@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef } from 'preact/hooks';
 import {
   caixaEnvolventeDeItem,
   caixaEnvolventeTotal,
+  caixaVisivel,
   enquadrar,
   telaParaMundo,
   zoomEm,
@@ -14,7 +15,6 @@ import {
   type Tamanho,
 } from '../../dominio/camera.ts';
 import {
-  guias,
   type LinhaGuia,
 } from '../../dominio/alinhamento.ts';
 import {
@@ -24,9 +24,7 @@ import {
 import {
   caixaDe,
   encaixarNaGrade,
-  girar,
   itensNoRetangulo,
-  redimensionar,
   type Alca,
 } from '../../dominio/geometria.ts';
 import {
@@ -64,7 +62,6 @@ import {
   type LadoResolvido,
 } from '../../dominio/setas.ts';
 import {
-  escalarPontosTraco,
   normalizarTraco,
   simplificar,
   tracoToca,
@@ -105,6 +102,13 @@ import {
 } from '../../app/foco-do-quadro.ts';
 import { navegarParaQuadro, tela } from '../../app/rotas.ts';
 import { cx } from '../cx.ts';
+import {
+  alteracoesDoArrasto,
+  alteracoesDoRedimensionar,
+  caixasParaGuias,
+  deslocamentoDoArrasto,
+  rotacaoDoGiro,
+} from '../../dominio/gestos.ts';
 import {
   BarraDeFerramentas,
   type FerramentaQuadro,
@@ -158,6 +162,7 @@ type Gesto =
       chave: string;
       inicioMundo: Ponto;
       originais: Map<string, { x: number; y: number }>;
+      outros: Caixa[];
     }
   | {
       tipo: 'redimensionar';
@@ -994,6 +999,11 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
           chave,
           inicioMundo: p,
           originais,
+          outros: caixasParaGuias(
+            itens.value.values(),
+            new Set(originais.keys()),
+            caixaVisivel(camera.value, tamanhoTela.value),
+          ),
         };
       } else {
         grupoAberto.value = null;
@@ -1114,60 +1124,16 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
     }
 
     if (g.tipo === 'mover') {
-      let dx = p.x - g.inicioMundo.x;
-      let dy = p.y - g.inicioMundo.y;
-      if (e.shiftKey) {
-        if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
-        else dx = 0;
-      }
-      if (!e.altKey && !q.fundo.encaixar) {
-        let minX = Infinity,
-          minY = Infinity,
-          maxX = -Infinity,
-          maxY = -Infinity;
-        for (const [id, orig] of g.originais) {
-          const it = itens.value.get(id);
-          if (!it) continue;
-          if (orig.x + dx < minX) minX = orig.x + dx;
-          if (orig.y + dy < minY) minY = orig.y + dy;
-          if (orig.x + dx + it.largura > maxX) maxX = orig.x + dx + it.largura;
-          if (orig.y + dy + it.altura > maxY) maxY = orig.y + dy + it.altura;
-        }
-        if (Number.isFinite(minX)) {
-          const outros: Caixa[] = [];
-          for (const it of itens.value.values()) {
-            if (!g.originais.has(it.id) && it.tipo !== 'seta') {
-              outros.push({ x: it.x, y: it.y, largura: it.largura, altura: it.altura });
-            }
-          }
-          const res = guias(
-            { x: minX, y: minY, largura: maxX - minX, altura: maxY - minY },
-            outros,
-            6 / Math.max(0.05, camera.value.zoom),
-          );
-          dx += res.dx;
-          dy += res.dy;
-          linhasGuia.value = res.linhas;
-        }
-      } else {
-        linhasGuia.value = [];
-      }
-      if (q.fundo.encaixar && g.originais.size > 0) {
-        const ancora = g.originais.values().next().value!;
-        dx = encaixarNaGrade(ancora.x + dx, q.fundo.passo) - ancora.x;
-        dy = encaixarNaGrade(ancora.y + dy, q.fundo.passo) - ancora.y;
-      }
-      const agora = Date.now();
-      const alterar: { id: string; antes: Partial<Item>; depois: Partial<Item> }[] = [];
-      for (const [id, orig] of g.originais) {
-        const atual = itens.value.get(id);
-        if (!atual) continue;
-        const nx = orig.x + dx;
-        const ny = orig.y + dy;
-        if (nx !== atual.x || ny !== atual.y) {
-          alterar.push(moverItemPatch(atual, nx, ny, agora));
-        }
-      }
+      const { dx, dy, linhas } = deslocamentoDoArrasto(
+        g,
+        itens.value,
+        { dx: p.x - g.inicioMundo.x, dy: p.y - g.inicioMundo.y },
+        { shift: e.shiftKey, alt: e.altKey },
+        q.fundo,
+        6 / Math.max(0.05, camera.value.zoom),
+      );
+      linhasGuia.value = linhas;
+      const alterar = alteracoesDoArrasto(g.originais, itens.value, dx, dy, Date.now());
       if (alterar.length > 0) {
         executar({ rotulo: 'Mover', ops: [{ alterar }] }, g.chave);
       }
@@ -1175,67 +1141,14 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
     }
 
     if (g.tipo === 'redimensionar') {
-      const delta = { x: p.x - g.inicioMundo.x, y: p.y - g.inicioMundo.y };
-      const unicoId = g.originais.size === 1 ? [...g.originais.keys()][0] : undefined;
-      const unicoItem = unicoId ? itens.value.get(unicoId) : undefined;
-      const manterProporcao =
-        unicoItem?.tipo === 'imagem' ? !e.shiftKey : e.shiftKey;
-      const novaCaixa = redimensionar(g.caixaInicial, g.alca, delta, {
-        manterProporcao,
-        doCentro: e.altKey,
-        minTamanho: 20,
-      });
-      if (q.fundo.encaixar) {
-        novaCaixa.x = encaixarNaGrade(novaCaixa.x, q.fundo.passo);
-        novaCaixa.y = encaixarNaGrade(novaCaixa.y, q.fundo.passo);
-        novaCaixa.largura = Math.max(
-          20,
-          encaixarNaGrade(novaCaixa.largura, q.fundo.passo),
-        );
-        novaCaixa.altura = Math.max(
-          20,
-          encaixarNaGrade(novaCaixa.altura, q.fundo.passo),
-        );
-      }
-
-      const escalaX = novaCaixa.largura / Math.max(1, g.caixaInicial.largura);
-      const escalaY = novaCaixa.altura / Math.max(1, g.caixaInicial.altura);
-      const agora = Date.now();
-      const alterar: { id: string; antes: Partial<Item>; depois: Partial<Item> }[] = [];
-
-      for (const [id, orig] of g.originais) {
-        const atual = itens.value.get(id);
-        if (!atual) continue;
-        const nx = novaCaixa.x + (orig.x - g.caixaInicial.x) * escalaX;
-        const ny = novaCaixa.y + (orig.y - g.caixaInicial.y) * escalaY;
-        const nl = Math.max(20, orig.largura * escalaX);
-        const na = Math.max(20, orig.altura * escalaY);
-        const sxItem = nl / Math.max(1, orig.largura);
-        const syItem = na / Math.max(1, orig.altura);
-        const antes: Partial<Item> = {
-          x: atual.x,
-          y: atual.y,
-          largura: atual.largura,
-          altura: atual.altura,
-          atualizadoEm: atual.atualizadoEm,
-        };
-        const depois: Partial<Item> = {
-          x: nx,
-          y: ny,
-          largura: nl,
-          altura: na,
-          atualizadoEm: agora,
-        };
-        if (atual.tipo === 'traco' && orig.pontos) {
-          (antes as Partial<Extract<Item, { tipo: 'traco' }>>).pontos = atual.pontos;
-          (depois as Partial<Extract<Item, { tipo: 'traco' }>>).pontos = escalarPontosTraco(
-            orig.pontos,
-            sxItem,
-            syItem,
-          );
-        }
-        alterar.push({ id, antes, depois });
-      }
+      const alterar = alteracoesDoRedimensionar(
+        g,
+        itens.value,
+        { x: p.x - g.inicioMundo.x, y: p.y - g.inicioMundo.y },
+        { shift: e.shiftKey, alt: e.altKey },
+        q.fundo,
+        Date.now(),
+      );
       if (alterar.length > 0) {
         executar({ rotulo: 'Redimensionar', ops: [{ alterar }] }, g.chave);
       }
@@ -1245,12 +1158,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
     if (g.tipo === 'girar') {
       const atual = itens.value.get(g.id);
       if (!atual) return;
-      const angulo = (Math.atan2(p.y - g.centro.y, p.x - g.centro.x) * 180) / Math.PI;
-      const novaRotacao = girar(
-        atual,
-        g.rotacaoInicial + (angulo - g.anguloInicial),
-        e.shiftKey,
-      );
+      const novaRotacao = rotacaoDoGiro(atual, g, p, e.shiftKey);
       if (novaRotacao !== atual.rotacao) {
         executar(
           {

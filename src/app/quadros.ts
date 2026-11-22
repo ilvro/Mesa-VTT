@@ -35,6 +35,7 @@ import {
   pertencimentoDoPasso,
   type ItemMoldura,
 } from '../dominio/molduras.ts';
+import { moverItemPatch } from '../dominio/gestos.ts';
 import {
   alinhar,
   distribuir,
@@ -709,45 +710,7 @@ export function desagruparSelecao(): void {
   });
 }
 
-export function moverItemPatch(
-  it: Item,
-  nx: number,
-  ny: number,
-  agora: number,
-): { id: string; antes: Partial<Item>; depois: Partial<Item> } {
-  const dx = nx - it.x;
-  const dy = ny - it.y;
-  if (it.tipo === 'seta') {
-    const mudouDe = 'ponto' in it.de;
-    const mudouPara = 'ponto' in it.para;
-    return {
-      id: it.id,
-      antes: {
-        x: it.x,
-        y: it.y,
-        ...(mudouDe ? { de: it.de } : {}),
-        ...(mudouPara ? { para: it.para } : {}),
-        atualizadoEm: it.atualizadoEm,
-      },
-      depois: {
-        x: nx,
-        y: ny,
-        ...(mudouDe && 'ponto' in it.de
-          ? { de: { ponto: [it.de.ponto[0] + dx, it.de.ponto[1] + dy] } }
-          : {}),
-        ...(mudouPara && 'ponto' in it.para
-          ? { para: { ponto: [it.para.ponto[0] + dx, it.para.ponto[1] + dy] } }
-          : {}),
-        atualizadoEm: agora,
-      },
-    };
-  }
-  return {
-    id: it.id,
-    antes: { x: it.x, y: it.y, atualizadoEm: it.atualizadoEm },
-    depois: { x: nx, y: ny, atualizadoEm: agora },
-  };
-}
+export { moverItemPatch } from '../dominio/gestos.ts';
 
 export function alinharSelecao(modo: ModoAlinhamento): void {
   const lista = [...selecao.value]
