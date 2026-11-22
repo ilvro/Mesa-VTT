@@ -1,9 +1,15 @@
 import { useSignal } from '@preact/signals'
 import { entidades } from '../../app/campanha.ts'
-import { executar } from '../../app/quadros.ts'
+import { executar, paletaDaCampanha } from '../../app/quadros.ts'
 import { ordemDeLeitura, type ItemMoldura } from '../../dominio/molduras.ts'
 import { refDaEntidade, sugerirEntidades } from '../../dominio/notas.ts'
 import { NOMES_SEMANTICOS } from '../../dominio/paleta.ts'
+import {
+  ehConflitoOuSaida,
+  passoDeRevisaoEmMassa,
+  resumoDaRevisao,
+  type ResumoPorTipo,
+} from '../../dominio/revisao.ts'
 import {
   docDeTexto,
   novaRef,
@@ -44,13 +50,25 @@ export function FilaDeRevisao({ itens, onFocarItem, onFechar }: FilaDeRevisaoPro
   const ligandoItemId = useSignal<string | null>(null)
   const buscaEntidade = useSignal('')
   const pulados = useSignal<string[]>([])
+  // Filtro da lista: 'sem' = sem sugestão, 'conflitos' = conflitos e saídas do Miro.
+  const filtro = useSignal<TipoSemantico | 'sem' | 'conflitos' | null>(null)
+  const confirmandoMassa = useSignal<string | null>(null)
 
   const molduras = [...itens.values()].filter(
     (i): i is ItemMoldura => i.tipo === 'moldura',
   )
   const moldurasOrdenadas = ordemDeLeitura(molduras)
 
-  const emRevisao = [...itens.values()].filter((i) => Boolean(i.revisao))
+  const todosEmRevisao = [...itens.values()].filter((i) => Boolean(i.revisao))
+  const resumo = resumoDaRevisao(todosEmRevisao)
+  const chaveDoTipo = (r: ResumoPorTipo) => r.tipo ?? 'sem'
+  const passaNoFiltro = (i: Item): boolean => {
+    const f = filtro.value
+    if (!f) return true
+    if (ehConflitoOuSaida(i)) return f === 'conflitos'
+    return f === (i.revisao?.tipoSugerido ?? 'sem')
+  }
+  const emRevisao = todosEmRevisao.filter(passaNoFiltro)
   const grupos: GrupoRevisao[] = []
 
   for (const m of moldurasOrdenadas) {
@@ -112,8 +130,19 @@ export function FilaDeRevisao({ itens, onFocarItem, onFechar }: FilaDeRevisaoPro
     }
   }
 
+  const aceitarEmMassa = (r: ResumoPorTipo) => {
+    const passo = passoDeRevisaoEmMassa(
+      itens,
+      r.ids,
+      r.tipo,
+      r.tipo ? `Aceitar ${r.quantidade} (${NOMES_SEMANTICOS[r.tipo]})` : `Aceitar ${r.quantidade} sem tipo`,
+    )
+    if (passo.ops.length > 0) executar(passo)
+    confirmandoMassa.value = null
+  }
+
   const aceitarMoldura = (grupo: GrupoRevisao) => {
-    const alteracoes = grupo.itens.map((item) => {
+    const alteracoes = grupo.itens.filter((i) => !ehConflitoOuSaida(i)).map((item) => {
       const sugerido = item.revisao?.tipoSugerido ?? null
       if (item.tipo === 'texto' || item.tipo === 'forma') {
         return {
@@ -203,7 +232,7 @@ export function FilaDeRevisao({ itens, onFocarItem, onFechar }: FilaDeRevisaoPro
         <div>
           <strong>Fila de revisão</strong>
           <span class="meta" data-testid="contador-revisao" style={{ marginLeft: '8px' }}>
-            faltam {emRevisao.length}
+            faltam {todosEmRevisao.length}
           </span>
         </div>
         <button
@@ -217,12 +246,85 @@ export function FilaDeRevisao({ itens, onFocarItem, onFechar }: FilaDeRevisaoPro
         </button>
       </div>
 
-      {emRevisao.length === 0 ? (
+      {todosEmRevisao.length === 0 ? (
         <p class="quadro-painel-vazio" data-testid="revisao-vazia">
           Todos os itens importados foram revisados.
         </p>
       ) : (
         <div class="fila-revisao-grupos">
+          <section class="fila-revisao-massa" data-testid="revisao-massa">
+            {resumo.conflitos.length > 0 ? (
+              <div class="fila-revisao-massa-linha fila-revisao-massa-conflitos">
+                <button
+                  type="button"
+                  class={`fila-revisao-massa-filtro${filtro.value === 'conflitos' ? ' ativo' : ''}`}
+                  data-testid="revisao-filtro-conflitos"
+                  onClick={() => {
+                    filtro.value = filtro.value === 'conflitos' ? null : 'conflitos'
+                  }}
+                >
+                  Conflitos e saídas do Miro · {resumo.conflitos.length}
+                </button>
+                <span class="meta">decida um a um</span>
+              </div>
+            ) : null}
+            {resumo.porTipo.map((r) => {
+              const chave = chaveDoTipo(r)
+              const nome = r.tipo ? NOMES_SEMANTICOS[r.tipo] : 'Sem sugestão'
+              return (
+                <div class="fila-revisao-massa-linha" key={chave}>
+                  <button
+                    type="button"
+                    class={`fila-revisao-massa-filtro${filtro.value === chave ? ' ativo' : ''}`}
+                    data-testid={`revisao-filtro-${chave}`}
+                    onClick={() => {
+                      filtro.value = filtro.value === chave ? null : (chave as TipoSemantico | 'sem')
+                    }}
+                  >
+                    <span
+                      class="fila-revisao-massa-cor"
+                      style={{ background: r.tipo ? paletaDaCampanha.value[r.tipo] : 'transparent' }}
+                      aria-hidden="true"
+                    />
+                    {nome} · {r.quantidade}
+                  </button>
+                  {confirmandoMassa.value === chave ? (
+                    <span class="fila-revisao-confirmacao">
+                      <button
+                        type="button"
+                        class="botao-pilula pequeno destaque"
+                        data-testid={`revisao-massa-confirmar-${chave}`}
+                        onClick={() => aceitarEmMassa(r)}
+                      >
+                        Confirmar ({r.quantidade})
+                      </button>
+                      <button
+                        type="button"
+                        class="botao-pilula pequeno"
+                        data-testid={`revisao-massa-cancelar-${chave}`}
+                        onClick={() => {
+                          confirmandoMassa.value = null
+                        }}
+                      >
+                        Cancelar
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      class="botao-pilula pequeno"
+                      data-testid={`revisao-massa-${chave}`}
+                      onClick={() => {
+                        confirmandoMassa.value = chave
+                      }}
+                    >
+                      {r.tipo ? `Aceitar ${r.quantidade}` : `${r.quantidade} sem sugestão → sem tipo`}
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </section>
           {grupos.map((grupo) => {
             const chaveGrupo = grupo.molduraId ?? 'sem-moldura'
             return (
@@ -241,7 +343,7 @@ export function FilaDeRevisao({ itens, onFocarItem, onFechar }: FilaDeRevisaoPro
                         data-testid={`revisao-confirmar-moldura-${chaveGrupo}`}
                         onClick={() => aceitarMoldura(grupo)}
                       >
-                        Confirmar ({grupo.itens.length})
+                        Confirmar ({grupo.itens.filter((i) => !ehConflitoOuSaida(i)).length})
                       </button>
                       <button
                         type="button"

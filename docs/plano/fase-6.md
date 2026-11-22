@@ -108,7 +108,8 @@ Como:
 Testes: filtro mantém filhos e conectores internos, descarta conectores que saem; o quadro guarda o filtro e a atualização o respeita.
 Commit: `import chosen miro frames into a board`
 
-### E2c — Revisão em massa  ⬜
+### E2c — Revisão em massa  ✅
+Nota: `passoDeRevisaoEmMassa(itens, ids, tipo, rotulo?)` sem o parâmetro `agora` (não há timestamp a gravar); os textos dos motivos de conflito/saída são constantes locais em `revisao.ts` (copiadas de `sincronia-miro.ts`). "Aceitar todos desta moldura" também passou a deixar conflitos e saídas de fora. Filtro por tipo e por conflitos no topo da fila; e2e em `tests/e2e/quadro.test.ts`.
 Objetivo: revisar centenas de itens importados sem clicar um por um.
 Depende de: E1c.
 Ler: `src/ui/quadro/FilaDeRevisao.tsx` (`aplicarTipo`, `aceitarMoldura`), `src/app/quadros.ts` (`executar`).

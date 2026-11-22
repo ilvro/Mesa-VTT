@@ -1,3 +1,4 @@
+import { MOTIVO_CONFLITO_MIRO, MOTIVO_SAIU_DO_MIRO } from './revisao.ts'
 import { TIPOS_SEMANTICOS, type Item, type Ponta, type Revisao, type TipoSemantico } from './quadro.ts'
 import type { Operacao, Passo } from './quadro-operacoes.ts'
 
@@ -197,7 +198,7 @@ export function planejarAtualizacaoDoMiro(
     if (!miroMudou) continue
     if (mesaMudou || novo.tipo !== atual.tipo) {
       alterar.push(
-        marcarParaRevisao(atual, 'Mudou no Miro e aqui; ficou a versão daqui', novo.origem.assinatura, agora),
+        marcarParaRevisao(atual, MOTIVO_CONFLITO_MIRO, novo.origem.assinatura, agora),
       )
       relatorio.conflitos++
     } else {
@@ -209,7 +210,7 @@ export function planejarAtualizacaoDoMiro(
   for (const [miro, atual] of porMiro) {
     if (vistos.has(miro) || !atual.origem) continue
     if (assinaturaDoMiro(atual) !== atual.origem.assinatura) {
-      alterar.push(marcarParaRevisao(atual, 'Saiu do Miro', null, agora))
+      alterar.push(marcarParaRevisao(atual, MOTIVO_SAIU_DO_MIRO, null, agora))
       relatorio.saiuDoMiro++
     } else {
       remover.push(atual)

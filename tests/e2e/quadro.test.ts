@@ -471,6 +471,63 @@ test('Q4c: importar o fixture -> o quadro abre com os itens -> aceitar 2 itens n
   }
 });
 
+test('E2c: aceitar em massa um tipo -> contador diminui, Ctrl+Z volta', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  const erros: string[] = [];
+  page.on('pageerror', (e) => erros.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') erros.push(m.text()); });
+
+  try {
+    await page.goto(`${amb.origem}/Mesa/`);
+    await page.waitForSelector('[data-testid="campanha-select"]');
+    await page.click('[data-testid="aba-campanhas"]');
+    await page.fill('[data-testid="nova-campanha-nome"]', 'Campanha E2c');
+    await page.click('[data-testid="criar-campanha"]');
+    await page.waitForSelector('[data-testid="tela-entidades"]');
+    await page.click('[data-testid="aba-quadros"]');
+    await page.waitForSelector('[data-testid="tela-quadros"]');
+
+    const fixtureJson = readFileSync(
+      new URL('../unit/fixtures/miro/aventura-exemplo.json', import.meta.url),
+      'utf8',
+    );
+    await page.setInputFiles('[data-testid="importar-miro-input"]', {
+      name: 'castelo.miro.zip',
+      mimeType: 'application/zip',
+      buffer: Buffer.from(zipSync({ 'quadro.json': strToU8(fixtureJson) })),
+    });
+    await page.waitForSelector('[data-testid="painel-fila-revisao"]');
+    const contador = page.locator('[data-testid="contador-revisao"]');
+    assert.equal(await contador.textContent(), 'faltam 4');
+
+    const linhas = page.locator('[data-testid^="revisao-massa-"]:not([data-testid*="confirmar"]):not([data-testid*="cancelar"])');
+    const total = await linhas.count();
+    assert.ok(total >= 1);
+    const alvo = linhas.first();
+    const rotulo = (await alvo.textContent()) ?? '';
+    const n = Number(rotulo.match(/\d+/)?.[0]);
+    assert.ok(n >= 1);
+
+    // Filtrar pelo tipo reduz a lista sem mudar o contador.
+    const filtro = page.locator('[data-testid^="revisao-filtro-"]:not([data-testid="revisao-filtro-conflitos"])').first();
+    await filtro.click();
+    assert.equal(await page.locator('[data-testid^="revisao-item-"]').count(), n);
+    await filtro.click();
+
+    await alvo.click();
+    await page.locator('[data-testid^="revisao-massa-confirmar-"]').click();
+    assert.equal(await contador.textContent(), `faltam ${4 - n}`);
+
+    await page.keyboard.press('Control+z');
+    assert.equal(await contador.textContent(), 'faltam 4');
+
+    assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
+  } finally {
+    await ctx.close();
+  }
+});
+
 test('E1c: atualizar do Miro -> relatório, conflito na fila e Ctrl+Z volta tudo', async () => {
   const ctx = await amb.navegador.newContext({ viewport: { width: 1280, height: 800 } });
   const page = await ctx.newPage();

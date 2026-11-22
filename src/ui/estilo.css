@@ -19,6 +19,7 @@
   --sucesso: #6fdc9c;
   --corpo: 'Hanken Grotesk Variable', 'Hanken Grotesk', 'Segoe UI', system-ui, sans-serif;
   --linha-forte: color-mix(in srgb, var(--linha), #fff 14%);
+  --borda: var(--linha-forte);   /* usado pelos painéis do quadro */
   --acento-suave: color-mix(in srgb, var(--acento), transparent 88%);
   --acento-media: color-mix(in srgb, var(--acento), transparent 70%);
   --vidro: color-mix(in srgb, var(--fundo), transparent 6%);
@@ -1928,6 +1929,45 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   flex-direction: column;
   gap: 12px;
   padding-top: 8px;
+}
+
+.fila-revisao-massa {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fila-revisao-massa-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 0.82rem;
+}
+
+.fila-revisao-massa-filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--linha-forte);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--texto);
+  font: inherit;
+  cursor: pointer;
+}
+
+.fila-revisao-massa-filtro.ativo {
+  border-color: var(--acento);
+  font-weight: 600;
+}
+
+.fila-revisao-massa-cor {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--linha-forte);
 }
 
 .fila-revisao-grupo {
