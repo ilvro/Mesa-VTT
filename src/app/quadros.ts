@@ -55,6 +55,7 @@ import {
 import {
   removerLigacoesDoItem,
   removerLigacoesDoQuadro,
+  removerLigacoesOrfasDoQuadro,
   sincronizarLigacoesDoItem,
 } from './ligacoes-quadro.ts';
 import { avisar, mensagemDe } from './toasts.ts';
@@ -317,8 +318,20 @@ export async function restaurarPaletaPadrao(): Promise<void> {
   }
 }
 
+/** Em segundo plano: apaga ligações de itens que já não existem no quadro. */
+function limparLigacoesOrfas(quadroId: string, existentes: Iterable<string>): void {
+  const snapshot = new Set(existentes);
+  void removerLigacoesOrfasDoQuadro(quadroId, () => {
+    const q = quadroAberto.value;
+    if (q?.id !== quadroId) return snapshot;
+    return new Set([...snapshot, ...itens.value.keys()]);
+  });
+}
+
 export async function fecharQuadro(): Promise<void> {
   await descarregarPendentes();
+  const aberto = quadroAberto.value;
+  if (aberto) limparLigacoesOrfas(aberto.id, itens.value.keys());
   revogarImagensDoQuadro();
   quadroAberto.value = null;
   itens.value = new Map();
@@ -336,6 +349,11 @@ export async function abrirQuadro(id: string): Promise<Quadro | null> {
     return null;
   }
   const lista = await listarItens(q.id);
+  const anterior = quadroAberto.value;
+  if (anterior && anterior.id !== q.id) {
+    limparLigacoesOrfas(anterior.id, itens.value.keys());
+  }
+  limparLigacoesOrfas(q.id, lista.map((i) => i.id));
   quadroAberto.value = q;
   itens.value = new Map(lista.map((i) => [i.id, i]));
   selecao.value = new Set();

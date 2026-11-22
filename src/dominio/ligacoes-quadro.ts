@@ -1,4 +1,4 @@
-import type { Entidade, Ref } from '#mesa';
+import type { Entidade, Ligacao, Ref } from '#mesa';
 import { entidadePorRef } from './cenas.ts';
 import { analisarMarcadores } from './marcadores.ts';
 import { entidadePorNome, refDaEntidade, refsMencionados } from './notas.ts';
@@ -22,6 +22,34 @@ export function parsearRefDeItemDeQuadro(
     quadroId: ref.id.slice(0, idx),
     itemId: ref.id.slice(idx + 1),
   };
+}
+
+function ehDoQuadro(ref: Ref, quadroId: string): boolean {
+  if (ref.app === 'mesa' && ref.tipo === 'quadro' && ref.id === quadroId) return true;
+  return parsearRefDeItemDeQuadro(ref)?.quadroId === quadroId;
+}
+
+/** Ligações criadas pela Mesa cujo `de` é o quadro ou um item dele. */
+export function ligacoesDoQuadro(
+  ligacoes: readonly Ligacao[],
+  quadroId: string,
+): Ligacao[] {
+  return ligacoes.filter(
+    (l) => l.criadaPor === 'mesa' && ehDoQuadro(l.de, quadroId),
+  );
+}
+
+/** Ligações da Mesa de itens do quadro que não existem mais em `idsExistentes`. */
+export function ligacoesOrfasDoQuadro(
+  ligacoes: readonly Ligacao[],
+  quadroId: string,
+  idsExistentes: ReadonlySet<string>,
+): Ligacao[] {
+  return ligacoes.filter((l) => {
+    if (l.criadaPor !== 'mesa') return false;
+    const p = parsearRefDeItemDeQuadro(l.de);
+    return p !== null && p.quadroId === quadroId && !idsExistentes.has(p.itemId);
+  });
 }
 
 export function diferencaDeLigacoes(

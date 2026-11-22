@@ -1,8 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Entidade, Ref } from '#mesa';
+import type { Entidade, Ligacao, Ref } from '#mesa';
 import {
   diferencaDeLigacoes,
+  ligacoesDoQuadro,
+  ligacoesOrfasDoQuadro,
   parsearRefDeItemDeQuadro,
   refDoItemDeQuadro,
   refsDoItem,
@@ -74,5 +76,35 @@ describe('ligações do quadro (domínio)', () => {
     assert.deepEqual(refsDoItem(cartao, entidades), [
       { app: 'mesa', tipo: 'entidade', id: 'e-sindre' },
     ]);
+  });
+
+  describe('ligações do quadro apagado e órfãs', () => {
+    const alvo: Ref = { app: 'mesa', tipo: 'entidade', id: 'sindre' };
+    const lig = (
+      id: string,
+      de: Ref,
+      tipo: Ligacao['tipo'],
+      criadaPor: Ligacao['criadaPor'] = 'mesa',
+    ): Ligacao => ({ id, campanhaId: 'c1', de, para: alvo, tipo, criadaPor, criadaEm: 1 });
+    const todas = [
+      lig('a', refDoItemDeQuadro('q1', 'i1'), 'esta-em'),
+      lig('b', refDoItemDeQuadro('q1', 'i2'), 'menciona'),
+      lig('c', refDoItemDeQuadro('q1', 'i3'), 'esta-em', 'atlas'),
+      lig('d', refDoItemDeQuadro('q2', 'i1'), 'esta-em'),
+      lig('e', { app: 'mesa', tipo: 'entidade', id: 'x' }, 'menciona'),
+    ];
+
+    it('ligacoesDoQuadro pega só as da Mesa daquele quadro, de qualquer tipo', () => {
+      assert.deepEqual(ligacoesDoQuadro(todas, 'q1').map((l) => l.id), ['a', 'b']);
+    });
+
+    it('ligacoesOrfasDoQuadro ignora existentes, outro app e outro quadro', () => {
+      const orfas = ligacoesOrfasDoQuadro(todas, 'q1', new Set(['i1']));
+      assert.deepEqual(orfas.map((l) => l.id), ['b']);
+      assert.deepEqual(
+        ligacoesOrfasDoQuadro(todas, 'q1', new Set()).map((l) => l.id),
+        ['a', 'b'],
+      );
+    });
   });
 });

@@ -3,6 +3,8 @@ import { mesmaRef, type Entidade, type Ligacao } from '#mesa';
 const APP_DA_MESA = 'mesa';
 import {
   diferencaDeLigacoes,
+  ligacoesDoQuadro,
+  ligacoesOrfasDoQuadro,
   parsearRefDeItemDeQuadro,
   refDoItemDeQuadro,
   refsDoItem,
@@ -91,11 +93,7 @@ export function removerLigacoesDoQuadro(quadroId: string): Promise<void> {
       if (!c) return;
       const r = obterRepositorio();
       const todas = await r.listarLigacoes(c.id);
-      const alvo = todas.filter((l) => {
-        if (l.tipo !== 'menciona' || l.criadaPor !== APP_DA_MESA) return false;
-        const parsed = parsearRefDeItemDeQuadro(l.de);
-        return parsed?.quadroId === quadroId;
-      });
+      const alvo = ligacoesDoQuadro(todas, quadroId);
       if (alvo.length === 0) return;
       for (const l of alvo) {
         await r.removerLigacao(l.id);
@@ -104,6 +102,34 @@ export function removerLigacoesDoQuadro(quadroId: string): Promise<void> {
     })
     .catch((erro) => {
       console.warn('Mesa: erro ao remover ligações do quadro', erro);
+    });
+  return fila;
+}
+
+/**
+ * Remove ligações da Mesa de itens apagados do quadro (âncoras `esta-em`
+ * incluídas). Roda na fila, em segundo plano. `idsAtuais` é lido na hora da
+ * execução, para não confundir item criado depois com órfão.
+ */
+export function removerLigacoesOrfasDoQuadro(
+  quadroId: string,
+  idsAtuais: () => ReadonlySet<string>,
+): Promise<void> {
+  fila = fila
+    .then(async () => {
+      const c = campanhaAtiva.value;
+      if (!c) return;
+      const r = obterRepositorio();
+      const todas = await r.listarLigacoes(c.id);
+      const alvo = ligacoesOrfasDoQuadro(todas, quadroId, idsAtuais());
+      if (alvo.length === 0) return;
+      for (const l of alvo) {
+        await r.removerLigacao(l.id);
+      }
+      await atualizar();
+    })
+    .catch((erro) => {
+      console.warn('Mesa: erro ao limpar ligações órfãs do quadro', erro);
     });
   return fila;
 }
