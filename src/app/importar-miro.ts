@@ -90,6 +90,8 @@ export async function importarArquivoMiro(
 
   const nomeFinal = `${convertido.nomeDoQuadro} (importado)`
   const quadro = novoQuadro(campanha.id, nomeFinal, agora, quadroId)
+  const miroBoardId = typeof bruto.board?.id === 'string' ? bruto.board.id.trim() : ''
+  if (miroBoardId) quadro.origem = { miroBoardId, sincronizadoEm: agora }
 
   await criarQuadroComItens(quadro, convertido.itens)
   await ligarItensNovos(convertido.itens)

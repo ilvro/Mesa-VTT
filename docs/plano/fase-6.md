@@ -13,7 +13,7 @@ Regras para o executor: as mesmas da [fase-4.md](fase-4.md) (uma ficha por vez, 
 | C — Jogar | E3a–E3c | Modo leitura (roteiro), toque, projeção para os jogadores |
 | D — Plataforma | E4a–E4d | Cartões vivos dos outros apps, modelos de cena, religar `[[Nome]]`, exportar quadro |
 
-As etapas B a D são detalhadas quando a A fechar.
+As etapas C e D são detalhadas quando a B fechar.
 
 ---
 
@@ -32,13 +32,14 @@ As etapas B a D são detalhadas quando a A fechar.
 
 Itens criados na Mesa (sem `origem`) nunca são tocados. O que é **da Mesa** e sobrevive à atualização: `semantica`, `revisao` já resolvida, `feito`, `travado`, `soMestre`, `grupoId`, `z`, `aoFocar` e as ligações.
 
-### E1a — Origem e assinatura no modelo e no conversor  ⬜
+### E1a — Origem e assinatura no modelo e no conversor  ✅
+Nota: testes de validação e assinatura em `tests/unit/sincronia-miro.test.ts` (a E1b usará o mesmo arquivo); a origem do conversor é preenchida no fim, por mapa reverso de `mapaId`.
 Objetivo: todo item importado sabe de qual item do Miro veio e qual era o conteúdo.
 Ler: `src/dominio/quadro.ts` (tipos, `validarItem`, `validarQuadro`, `CHAVES_*`), `src/dominio/miro.ts` (`converterMiro`), `src/app/importar-miro.ts`, `tests/unit/miro.test.ts`.
 Arquivos: `src/dominio/quadro.ts`, `src/dominio/miro.ts`, criar `src/dominio/sincronia-miro.ts`, `src/app/importar-miro.ts`, testes.
 Como:
 1. **Modelo** (`quadro.ts`): na base do item, `origem?: { miro: string; assinatura: string }`; no `Quadro`, `origem?: { miroBoardId: string; sincronizadoEm: number }`. Validação aceita os dois campos (opcionais, textos/números) e continua recusando campo desconhecido. `VERSAO_QUADRO` não muda (campo opcional).
-2. **`sincronia-miro.ts`** (puro): `assinaturaDoMiro(item): string` = hash curto (FNV-1a 32 bits, em hex) de um JSON estável com o que vem do Miro: `tipo`, geometria arredondada a 0,5 px (`x`, `y`, `largura`, `altura`, `rotacao`) e o conteúdo do tipo (`doc` para texto e forma, mais `forma`; `titulo` da moldura; `imagemId`; `de`, `para`, `rota`, `rotulo` da seta; estilos de texto e caixa **não** entram, para o mestre poder repintar sem gerar conflito). Ordem de chaves fixa.
+2. **`sincronia-miro.ts`** (puro): `assinaturaDoMiro(item): string` = hash curto (FNV-1a 32 bits, em hex) de um JSON estável com o que vem do Miro: `tipo`, geometria arredondada a 0,5 px (`x`, `y`, `largura`, `altura`, `rotacao`) e o conteúdo do tipo (`doc` para texto e forma, mais `forma`; `titulo` da moldura; `imagemId`; `de`, `para`, `rota`, `rotulo` da seta; estilos de texto e caixa **não** entram, para o mestre poder repintar sem gerar conflito; na seta, a caixa também não entra, porque ela muda sozinha quando um item ligado se move). Ordem de chaves fixa.
 3. **Conversor:** cada item e cada seta convertidos recebem `origem = { miro: <id do item ou conector no Miro>, assinatura: assinaturaDoMiro(item) }`, calculada depois de o item estar completo (posição absoluta, `molduraId`, pontas). Nova opção `idExistente?: (miroId: string) => string | undefined`: quando devolve um id, o item convertido usa esse id em vez de `novoId()` (assim pontas de setas e `molduraId` batem com os itens que já existem na Mesa).
 4. **Importação:** o quadro novo grava `origem = { miroBoardId: bruto.board.id, sincronizadoEm: agora }` (só se o pacote tiver `board.id`).
 Testes: validação aceita `origem` e recusa campo extra dentro dela; assinatura estável (mesmo item → mesma assinatura; mudar a cor de fundo não muda; mover 10 px muda; mudar o texto muda); conversor põe `origem` em todos os itens e setas; `idExistente` reaproveita ids e religa setas e molduras.
@@ -71,3 +72,45 @@ Como:
 5. `docs/miro.md`: seção "Atualizar um quadro já importado", com a tabela de regras em linguagem simples.
 Testes: e2e com duas fixtures pequenas do mesmo quadro (`tests/unit/fixtures/miro/`, escritas à mão): importar a primeira → editar uma nota na Mesa → atualizar com a segunda (uma nota mudada no Miro, uma removida, uma nova, a nota editada também mudada no Miro) → o relatório bate, o conflito aparece na fila, Ctrl+Z volta tudo.
 Commit: `added update from miro for imported boards`
+
+---
+
+## Etapa B — Trazer melhor
+
+### E2a — Tags e grupos do Miro  ⬜
+Objetivo: o que o mestre já organizou no Miro com tags e grupos chega organizado.
+Depende de: E1c.
+Ler: `scripts/miro-baixar.mjs`, `src/dominio/miro.ts` (`sugerirRevisaoMiro`), `src/dominio/paleta.ts`, a documentação da API REST v2 do Miro para tags (`GET /v2/boards/{id}/tags`, e o campo `tagIds` dos itens) e grupos (`GET /v2/boards/{id}/groups`).
+Arquivos: `scripts/miro-baixar.mjs`, `src/dominio/miro.ts`, `src/dominio/sincronia-miro.ts` (se a assinatura precisar ignorar algo), `docs/miro.md`, testes e fixtures.
+Como:
+1. **Script:** baixa tags e grupos (paginando, como itens) e grava crus em `quadro.json` (`tags`, `groups`). `--so-contar` mostra quantas tags e grupos há. Se o formato da resposta não for o esperado, grave cru e registre na `Nota:`; não adivinhe.
+2. **Grupos:** cada grupo do Miro vira um `grupoId` (id novo por grupo) nos itens dele. Na atualização (E1b), `grupoId` é campo da Mesa e não muda.
+3. **Tags → tipo:** tabela `TAGS_PARA_TIPO` (sem acento e minúsculo): `teste`, `pericia`, `percepcao` → teste; `segredo` → segredo; `loot`, `tesouro`, `item` → loot; `npc`, `fala`, `dialogo` → fala; `leitura`, `ler`, `narracao` → leitura; `evento` → evento; `tarefa`, `todo` → tarefa; `rever`, `revisar` → rever; `titulo` → titulo. Ordem de prioridade da sugestão: marcador no texto > tag > cor. O motivo fica em português ("tag \"Segredo\"").
+4. Tags que não estão na tabela entram nos `motivos` ("tags: Lysdal, Ato 2"), para o mestre ver na fila.
+Testes: fixture com tags e grupo; prioridade marcador > tag > cor; grupo vira `grupoId` comum.
+Commit: `miro import brings tags and groups`
+
+### E2b — Importar só algumas molduras  ⬜
+Objetivo: dividir um quadro gigante do Miro em quadros menores da Mesa (um por aventura ou arco).
+Depende de: E1c.
+Ler: `src/dominio/miro.ts`, `src/app/importar-miro.ts`, `src/ui/quadro/Quadros.tsx`.
+Arquivos: `src/dominio/miro.ts` (ou um arquivo novo puro), `src/dominio/quadro.ts` (`origem.molduras`), `src/dominio/sincronia-miro.ts`, `src/app/importar-miro.ts`, `src/ui/quadro/Quadros.tsx`, `src/ui/estilo.css`, testes.
+Como:
+1. **Puro:** `moldurasDoPacote(bruto)` lista as molduras do Miro (id, título, quantos itens) em ordem de leitura; `filtrarPacote(bruto, { molduras: string[]; soltos: boolean })` mantém as molduras escolhidas, os itens filhos delas (`parent.id`, e geometricamente contidos quando não houver `parent`), os soltos se pedido, e os conectores cujas duas pontas ficaram (ou são livres e caem dentro do que ficou).
+2. **Tela:** "Importar do Miro…" abre primeiro um diálogo com a lista de molduras (caixas de marcar, busca, "marcar todas") e "itens fora de molduras". O nome do quadro novo sugere o título da moldura quando só uma for escolhida.
+3. **Sincronia:** o filtro escolhido fica em `quadro.origem.molduras` (e `soltos`), e "Atualizar do Miro" aplica o mesmo filtro, para não trazer de volta o que ficou de fora.
+Testes: filtro mantém filhos e conectores internos, descarta conectores que saem; o quadro guarda o filtro e a atualização o respeita.
+Commit: `import chosen miro frames into a board`
+
+### E2c — Revisão em massa  ⬜
+Objetivo: revisar centenas de itens importados sem clicar um por um.
+Depende de: E1c.
+Ler: `src/ui/quadro/FilaDeRevisao.tsx` (`aplicarTipo`, `aceitarMoldura`), `src/app/quadros.ts` (`executar`).
+Arquivos: criar `src/dominio/revisao.ts` + teste; mudar `FilaDeRevisao.tsx` e `estilo.css`.
+Como:
+1. **Puro:** `resumoDaRevisao(itens)` dá, por tipo sugerido (e "sem sugestão"), quantos itens e os ids; `passoDeRevisaoEmMassa(itens, ids, tipo | null, agora)` aplica o tipo (como o "Aceitar" faz hoje) e tira a `revisao` num único passo.
+2. **Topo da fila:** uma linha por tipo sugerido, com a cor da paleta e o número: "Aceitar 42 testes", "Aceitar 17 segredos"… e "31 sem sugestão → sem tipo". Cada uma pede confirmação e é **um** Ctrl+Z.
+3. **Filtro:** clicar no tipo filtra a lista abaixo para só aquele tipo (para conferir antes de aceitar em massa).
+4. Conflitos e "saiu do Miro" (E1b) **não** entram no aceite em massa; aparecem num grupo próprio no topo.
+Testes: resumo; passo em massa e desfazer; conflitos fora do aceite em massa.
+Commit: `bulk review of imported board items`

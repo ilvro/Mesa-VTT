@@ -11,6 +11,8 @@ export interface Quadro {
   nome: string;
   fundo: { cor: string; grade: Grade; passo: number; encaixar: boolean };
   versao: 1;
+  /** Presente em quadros importados do Miro (para reimportar e atualizar). */
+  origem?: { miroBoardId: string; sincronizadoEm: number };
   criadoEm: number;
   atualizadoEm: number;
 }
@@ -117,6 +119,8 @@ interface Base {
   grupoId: string | null;
   revisao?: Revisao;
   feito?: { em: number; sessaoId: string | null };
+  /** Item do Miro de onde veio e assinatura do conteúdo na última sincronização. */
+  origem?: { miro: string; assinatura: string };
   criadoEm: number;
   atualizadoEm: number;
 }
@@ -431,9 +435,12 @@ const CHAVES_QUADRO = new Set([
   'nome',
   'fundo',
   'versao',
+  'origem',
   'criadoEm',
   'atualizadoEm',
 ]);
+const CHAVES_ORIGEM_QUADRO = new Set(['miroBoardId', 'sincronizadoEm']);
+const CHAVES_ORIGEM_ITEM = new Set(['miro', 'assinatura']);
 const CHAVES_FUNDO = new Set(['cor', 'grade', 'passo', 'encaixar']);
 
 export function validarQuadro(v: unknown, caminho = 'quadro'): asserts v is Quadro {
@@ -453,6 +460,13 @@ export function validarQuadro(v: unknown, caminho = 'quadro'): asserts v is Quad
   exigirUmDe(v.fundo.grade, GRADES, `${caminho}.fundo.grade`);
   exigirNumero(v.fundo.passo, `${caminho}.fundo.passo`, 1);
   exigirBooleano(v.fundo.encaixar, `${caminho}.fundo.encaixar`);
+
+  if (v.origem !== undefined) {
+    if (!ehObjeto(v.origem)) falhar(`${caminho}.origem`, 'deve ser um objeto');
+    exigirChavesPermitidas(v.origem, CHAVES_ORIGEM_QUADRO, `${caminho}.origem`);
+    exigirTexto(v.origem.miroBoardId, `${caminho}.origem.miroBoardId`, true);
+    exigirNumero(v.origem.sincronizadoEm, `${caminho}.origem.sincronizadoEm`);
+  }
 }
 
 const CHAVES_ESTILO_TEXTO = new Set(['fonte', 'tamanho', 'cor', 'alinhamento', 'vertical']);
@@ -529,6 +543,7 @@ const CHAVES_BASE = [
   'grupoId',
   'revisao',
   'feito',
+  'origem',
   'criadoEm',
   'atualizadoEm',
 ] as const;
@@ -588,6 +603,13 @@ export function validarItem(v: unknown, caminho = 'item'): asserts v is Item {
   exigirTextoOuNulo(v.grupoId, `${caminho}.grupoId`);
   exigirNumero(v.criadoEm, `${caminho}.criadoEm`);
   exigirNumero(v.atualizadoEm, `${caminho}.atualizadoEm`);
+
+  if (v.origem !== undefined) {
+    if (!ehObjeto(v.origem)) falhar(`${caminho}.origem`, 'deve ser um objeto');
+    exigirChavesPermitidas(v.origem, CHAVES_ORIGEM_ITEM, `${caminho}.origem`);
+    exigirTexto(v.origem.miro, `${caminho}.origem.miro`, true);
+    exigirTexto(v.origem.assinatura, `${caminho}.origem.assinatura`, true);
+  }
 
   if (v.revisao !== undefined) {
     if (!ehObjeto(v.revisao)) falhar(`${caminho}.revisao`, 'deve ser um objeto');

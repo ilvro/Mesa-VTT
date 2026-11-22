@@ -28,6 +28,7 @@ import {
   type TRACEJADOS,
 } from './quadro.ts'
 import { caixaDaSeta } from './setas.ts'
+import { assinaturaDoMiro } from './sincronia-miro.ts'
 
 export const CORES_DE_NOTA_DO_MIRO: Record<string, string> = {
   gray: '#f5f6f8',
@@ -106,6 +107,8 @@ export interface OpcoesConverterMiro {
   quadroId: string
   agora: number
   novoId: () => string
+  /** Id já usado na Mesa para um item/conector do Miro (reimportação). */
+  idExistente?: (miroId: string) => string | undefined
   paleta?: PaletaDaCampanha
   imagensPorItemId?: ReadonlyMap<string, MetadadosImagemImportada>
 }
@@ -321,7 +324,8 @@ export function converterMiro(
   bruto: PacoteMiroBruto,
   opcoes: OpcoesConverterMiro,
 ): ResultadoConversaoMiro {
-  const { quadroId, agora, novoId, paleta = PALETA_PADRAO, imagensPorItemId } = opcoes
+  const { quadroId, agora, paleta = PALETA_PADRAO, imagensPorItemId } = opcoes
+  const idParaMiro = (miroId: string): string => opcoes.idExistente?.(miroId) ?? opcoes.novoId()
   const nomeDoQuadro =
     typeof bruto.board?.name === 'string' && bruto.board.name.trim()
       ? bruto.board.name.trim()
@@ -345,7 +349,7 @@ export function converterMiro(
     if (!item || typeof item.id !== 'string') continue
     if (item.type !== 'frame') continue
 
-    const idMesa = novoId()
+    const idMesa = idParaMiro(item.id)
     mapaId.set(item.id, idMesa)
 
     const largura = Math.max(40, Number(item.geometry?.width) || 640)
@@ -384,7 +388,7 @@ export function converterMiro(
     if (!item || typeof item.id !== 'string') continue
     if (item.type === 'frame') continue
 
-    const idMesa = novoId()
+    const idMesa = idParaMiro(item.id)
     mapaId.set(item.id, idMesa)
 
     const padraoLargura = item.type === 'sticky_note' ? 200 : 240
@@ -668,7 +672,7 @@ export function converterMiro(
   // 3ª passagem: converter conectores (connectors) em setas
   for (const conn of rawConnectors) {
     if (!conn || typeof conn.id !== 'string') continue
-    const idMesa = novoId()
+    const idMesa = idParaMiro(conn.id)
     mapaId.set(conn.id, idMesa)
 
     const resolverPonta = (
@@ -732,6 +736,14 @@ export function converterMiro(
 
     itensConvertidos.push(seta)
     mapaItensMesa.set(seta.id, seta)
+  }
+
+  // Origem e assinatura, com o item completo (posição, moldura, pontas)
+  const miroPorIdMesa = new Map<string, string>()
+  for (const [miroId, idMesa] of mapaId) miroPorIdMesa.set(idMesa, miroId)
+  for (const it of itensConvertidos) {
+    const miro = miroPorIdMesa.get(it.id)
+    if (miro !== undefined) it.origem = { miro, assinatura: assinaturaDoMiro(it) }
   }
 
   return {
