@@ -670,3 +670,56 @@ test('Q5d: modo sessão com painel Quadro e os três modos (Desligado, Espiar e 
     await ctx.close();
   }
 });
+
+test('Q5e: no modo sessão os atalhos do quadro só valem depois de clicar nele', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1280, height: 800 } });
+  try {
+    const page = await ctx.newPage();
+    await page.goto(`${amb.origem}/Mesa/`);
+    await page.waitForSelector('[data-testid="campanha-select"]');
+    await page.click('[data-testid="aba-campanhas"]');
+    await page.fill('[data-testid="nova-campanha-nome"]', 'Campanha Q5e');
+    await page.click('[data-testid="criar-campanha"]');
+    await page.waitForSelector('[data-testid="tela-entidades"]');
+    await page.click('[data-testid="aba-quadros"]');
+    await page.fill('[data-testid="novo-quadro-nome"]', 'Quadro Q5e');
+    await page.click('[data-testid="criar-quadro"]');
+    await page.waitForSelector('[data-testid="area-quadro"]');
+
+    await page.click('[data-testid="ferramenta-nota"]');
+    const area = await page.locator('[data-testid="area-quadro"]').boundingBox();
+    assert.ok(area);
+    await page.mouse.click(area.x + 300, area.y + 250);
+    await page.waitForSelector('[data-testid="editor-rico"]');
+    await page.keyboard.type('Nota Q5e');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-testid="editor-rico"]', { state: 'detached' });
+
+    await page.click('[data-testid="aba-sessao"]');
+    await page.waitForSelector('[data-testid="tela-sessao"]');
+    await page.click('[data-testid="abrir-menu-paineis"]');
+    await page.click('[data-testid="preset-com-quadro"]');
+    await page.waitForSelector('[data-testid="area-quadro"]');
+    const secao = page.locator('[data-testid="tela-quadro"]');
+    const itens = page.locator('[data-testid^="item-"]');
+    assert.equal(await secao.getAttribute('data-ativo'), 'false', 'começa inativo na sessão');
+    const antes = await itens.count();
+    assert.ok(antes >= 1);
+
+    // Clica no item (ativa e seleciona), depois num botão de outro painel: Delete não apaga.
+    await itens.first().click();
+    assert.equal(await secao.getAttribute('data-ativo'), 'true');
+    await page.click('[data-testid="abrir-menu-paineis"]');
+    assert.equal(await secao.getAttribute('data-ativo'), 'false');
+    await page.keyboard.press('Delete');
+    await page.waitForTimeout(200);
+    assert.equal(await itens.count(), antes, 'Delete fora do quadro não apaga');
+
+    // Clica no quadro de novo: Delete apaga.
+    await itens.first().click();
+    await page.keyboard.press('Delete');
+    await page.waitForFunction((n) => document.querySelectorAll('[data-testid^="item-"]').length < n, antes);
+  } finally {
+    await ctx.close();
+  }
+});

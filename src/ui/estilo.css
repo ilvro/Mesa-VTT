@@ -566,6 +566,8 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 
 
 /* Quadros */
+.tela-quadro.quadro-ativo { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--acento) 45%, transparent); }
+.tela-quadro.quadro-inativo { box-shadow: inset 0 0 0 1px transparent; }
 .tela-quadro {
   flex: 1;
   min-height: 0;

@@ -103,7 +103,7 @@ import {
   usuarioInteragindoNoQuadro,
   type ModoMoldurasAgem,
 } from '../../app/foco-do-quadro.ts';
-import { navegarParaQuadro } from '../../app/rotas.ts';
+import { navegarParaQuadro, tela } from '../../app/rotas.ts';
 import { cx } from '../cx.ts';
 import {
   BarraDeFerramentas,
@@ -214,6 +214,10 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
   const menuContexto = useSignal<{ x: number; y: number; pontoMundo: Ponto } | null>(null);
   const ultimoTextoCopiadoRef = useRef<string | null>(null);
   const espacoPressionado = useSignal(false);
+  // No modo sessão o quadro divide a tela com outros painéis: os atalhos e a colagem só valem com ele ativo
+  // (o último clique ou foco foi dentro dele). Fora do modo sessão, ele nasce ativo.
+  const quadroAtivo = useSignal(tela.value !== 'sessao');
+  const secaoRef = useRef<HTMLElement | null>(null);
   const modoRoda = useSignal<ModoRoda>(lerModoRoda());
   const editandoId = useSignal<string | null>(null);
   const editorAtivo = useSignal<Editor | null>(null);
@@ -296,7 +300,25 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
   };
 
   useEffect(() => {
+    const marcar = (e: Event) => {
+      const alvo = e.target;
+      const dentro = alvo instanceof Node && (
+        !!secaoRef.current?.contains(alvo) ||
+        (alvo instanceof Element ? alvo : alvo.parentElement)?.closest('[data-quadro-ui]') != null
+      );
+      quadroAtivo.value = dentro;
+    };
+    document.addEventListener('pointerdown', marcar, true);
+    document.addEventListener('focusin', marcar, true);
+    return () => {
+      document.removeEventListener('pointerdown', marcar, true);
+      document.removeEventListener('focusin', marcar, true);
+    };
+  }, []);
+
+  useEffect(() => {
     const aoColar = (e: ClipboardEvent) => {
+      if (!quadroAtivo.value) return;
       if (editandoId.value) return;
       const alvo = e.target as HTMLElement | null;
       if (alvo && (alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA' || alvo.isContentEditable)) {
@@ -463,6 +485,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
+      if (!quadroAtivo.value) return;
       if (emCampoDeTexto(e.target)) return;
 
       if (e.code === 'Space' && !e.repeat) {
@@ -621,12 +644,15 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
         espacoPressionado.value = false;
       }
     };
+    const aoDesativar = () => { espacoPressionado.value = false; };
+    window.addEventListener('blur', aoDesativar);
 
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', aoDesativar);
     };
   }, []);
 
@@ -1515,7 +1541,12 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
   };
 
   return (
-    <section class="tela-quadro" data-testid="tela-quadro">
+    <section
+      ref={secaoRef}
+      class={cx('tela-quadro', tela.value === 'sessao' && (quadroAtivo.value ? 'quadro-ativo' : 'quadro-inativo'))}
+      data-testid="tela-quadro"
+      data-ativo={quadroAtivo.value ? 'true' : 'false'}
+    >
       <div class="barra-quadro" data-testid="barra-quadro">
         <button
           type="button"
