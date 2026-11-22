@@ -104,7 +104,8 @@ export async function removerQuadrosDaCampanha(
   db?: IDBDatabase,
 ): Promise<void> {
   const banco = await obterBanco(db);
-  await transacao(banco, ['quadros', 'itens'], 'readwrite', async (tx) => {
+  await transacao(banco, ['quadros', 'itens', 'ajustes'], 'readwrite', async (tx) => {
+    await promessa(tx.objectStore('ajustes').delete(campanhaId));
     const storeQuadros = tx.objectStore('quadros');
     const storeItens = tx.objectStore('itens');
     const quadroIds = await promessa(storeQuadros.index('campanhaId').getAllKeys(campanhaId));
@@ -145,6 +146,57 @@ export async function gravarItens(
     for (const id of remover) {
       await promessa(store.delete(id));
     }
+  });
+}
+
+/** Grava um quadro novo com todos os itens numa transação só: ou entra inteiro, ou nada fica. */
+export async function criarQuadroComItens(
+  quadro: Quadro,
+  lista: readonly Item[],
+  db?: IDBDatabase,
+): Promise<void> {
+  validarQuadro(quadro);
+  for (let i = 0; i < lista.length; i++) {
+    validarItem(lista[i], `itens[${i}]`);
+  }
+  const banco = await obterBanco(db);
+  await transacao(banco, ['quadros', 'itens'], 'readwrite', async (tx) => {
+    await promessa(tx.objectStore('quadros').put(quadro));
+    const store = tx.objectStore('itens');
+    for (const item of lista) {
+      await promessa(store.put(item));
+    }
+  });
+}
+
+/**
+ * Apaga as imagens que nenhum item gravado usa. `protegidas` cobre o que ainda
+ * pode voltar sem estar no banco: itens do quadro aberto e o histórico de desfazer.
+ * Imagens guardadas há menos de `carenciaMs` ficam (uma colagem em andamento,
+ * uma importação que ainda vai gravar os itens).
+ */
+export async function removerImagensOrfas(
+  protegidas: ReadonlySet<string>,
+  agora = Date.now(),
+  carenciaMs = 10 * 60 * 1000,
+  db?: IDBDatabase,
+): Promise<number> {
+  const banco = await obterBanco(db);
+  return transacao(banco, ['itens', 'imagens'], 'readwrite', async (tx) => {
+    const usadas = new Set(protegidas);
+    const itens = await obterTudo<Item>(tx.objectStore('itens'));
+    for (const it of itens) {
+      if (it.tipo === 'imagem') usadas.add(it.imagemId);
+    }
+    const store = tx.objectStore('imagens');
+    const registros = await obterTudo<RegistroImagem>(store);
+    let removidas = 0;
+    for (const r of registros) {
+      if (usadas.has(r.id) || agora - r.criadaEm < carenciaMs) continue;
+      await promessa(store.delete(r.id));
+      removidas++;
+    }
+    return removidas;
   });
 }
 

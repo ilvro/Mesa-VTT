@@ -58,6 +58,32 @@ export function sincronizarLigacoesDoItem(item: Item): Promise<void> {
   return fila;
 }
 
+/**
+ * Cria as ligações `menciona` de itens recém-criados de uma vez (importação):
+ * eles não têm ligações antigas para comparar, e a campanha é recarregada uma vez só.
+ */
+export function ligarItensNovos(lista: readonly Item[]): Promise<void> {
+  fila = fila
+    .then(async () => {
+      const c = campanhaAtiva.value;
+      if (!c) return;
+      const r = obterRepositorio();
+      let criadas = 0;
+      for (const item of lista) {
+        const de = refDoItemDeQuadro(item.quadroId, item.id);
+        for (const para of refsDoItem(item, entidades.value)) {
+          await r.ligar({ campanhaId: c.id, de, para, tipo: 'menciona' });
+          criadas++;
+        }
+      }
+      if (criadas > 0) await atualizar();
+    })
+    .catch((erro) => {
+      console.warn('Mesa: erro ao ligar itens importados', erro);
+    });
+  return fila;
+}
+
 export function removerLigacoesDoItem(
   quadroId: string,
   itemId: string,

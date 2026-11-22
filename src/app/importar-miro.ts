@@ -5,9 +5,9 @@ import {
   type PacoteMiroBruto,
 } from '../dominio/miro.ts'
 import { novoQuadro, type Quadro } from '../dominio/quadro.ts'
-import { gravarItens, guardarImagem, listarQuadros, salvarQuadro } from './banco-quadros.ts'
+import { criarQuadroComItens, guardarImagem, listarQuadros } from './banco-quadros.ts'
 import { campanhaAtiva } from './campanha.ts'
-import { sincronizarLigacoesDoItem } from './ligacoes-quadro.ts'
+import { ligarItensNovos } from './ligacoes-quadro.ts'
 import { abrirQuadro, paletaDaCampanha, quadros } from './quadros.ts'
 
 export interface RelatorioImportacaoMiro {
@@ -91,13 +91,8 @@ export async function importarArquivoMiro(
   const nomeFinal = `${convertido.nomeDoQuadro} (importado)`
   const quadro = novoQuadro(campanha.id, nomeFinal, agora, quadroId)
 
-  await salvarQuadro(quadro)
-  if (convertido.itens.length > 0) {
-    await gravarItens(convertido.itens, [])
-  }
-  for (const item of convertido.itens) {
-    await sincronizarLigacoesDoItem(item)
-  }
+  await criarQuadroComItens(quadro, convertido.itens)
+  await ligarItensNovos(convertido.itens)
 
   quadros.value = await listarQuadros(campanha.id)
   await abrirQuadro(quadro.id)

@@ -48,6 +48,7 @@ import {
   listarItens,
   listarQuadros,
   obterQuadro,
+  removerImagensOrfas,
   removerQuadro,
   salvarAjustesQuadro,
   salvarQuadro,
@@ -428,6 +429,7 @@ export async function excluirQuadro(id: string): Promise<void> {
     }
     await removerQuadro(id);
     void removerLigacoesDoQuadro(id);
+    void coletarImagensOrfas();
     await carregarQuadros();
   } catch (erro) {
     avisar(mensagemDe(erro), true);
@@ -854,13 +856,35 @@ export function marcarFeito(ids: readonly string[], forcar?: boolean): void {
   }
 }
 
+/**
+ * Apaga do banco as imagens que nenhum quadro usa mais. Protege as do quadro
+ * aberto e as que o desfazer/refazer ainda pode trazer de volta.
+ */
+export async function coletarImagensOrfas(): Promise<void> {
+  const protegidas = new Set<string>();
+  for (const it of itens.value.values()) {
+    if (it.tipo === 'imagem') protegidas.add(it.imagemId);
+  }
+  for (const it of historico.itensGuardados()) {
+    if (it.tipo === 'imagem') protegidas.add(it.imagemId);
+  }
+  try {
+    await removerImagensOrfas(protegidas);
+  } catch (erro) {
+    console.warn('Mesa: erro ao limpar imagens sem uso', erro);
+  }
+}
+
 let ultimaCampanhaId: string | null | undefined;
 effect(() => {
   const id = campanhaAtiva.value?.id ?? null;
   if (id === ultimaCampanhaId) return;
+  const primeiraVez = ultimaCampanhaId === undefined;
   ultimaCampanhaId = id;
   if (quadroAberto.value && quadroAberto.value.campanhaId !== id) {
     void fecharQuadro();
   }
   void carregarQuadros();
+  // Trocar de campanha (ou apagar a ativa) é um bom momento para varrer imagens sem uso.
+  if (!primeiraVez) void coletarImagensOrfas();
 });

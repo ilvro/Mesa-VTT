@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import 'fake-indexeddb/auto';
 import {
   abrirBancoQuadros,
+  criarQuadroComItens,
   definirIdbQuadros,
+  lerAjustesQuadro,
+  removerImagensOrfas,
+  salvarAjustesQuadro,
   gravarItens,
   guardarImagem,
   lerImagem,
@@ -14,7 +18,7 @@ import {
   removerQuadrosDaCampanha,
   salvarQuadro,
 } from '../../src/app/banco-quadros.ts';
-import { docDeTexto, novaNotaAdesiva, novoQuadro, novoTexto } from '../../src/dominio/quadro.ts';
+import { docDeTexto, novaImagem, novaNotaAdesiva, novoQuadro, novoTexto, type Item } from '../../src/dominio/quadro.ts';
 
 describe('banco-quadros', () => {
   let db: IDBDatabase | undefined;
@@ -115,5 +119,48 @@ describe('banco-quadros', () => {
     const qCamp2 = await listarQuadros('camp-2', db);
     assert.equal(qCamp2.length, 1);
     assert.equal((await listarItens('q-3', db)).length, 1);
+  });
+
+  it('removerQuadrosDaCampanha também apaga os ajustes da campanha', async () => {
+    await salvarAjustesQuadro({ campanhaId: 'camp-1', paleta: { teste: '#123456' } }, db);
+    await salvarAjustesQuadro({ campanhaId: 'camp-2', paleta: { teste: '#654321' } }, db);
+    await removerQuadrosDaCampanha('camp-1', db);
+    assert.equal(await lerAjustesQuadro('camp-1', db), null);
+    assert.ok(await lerAjustesQuadro('camp-2', db));
+  });
+
+  it('criarQuadroComItens grava tudo ou nada', async () => {
+    const q = novoQuadro('camp-1', 'Importado', 1000, 'q-imp');
+    const bom = novoTexto({ quadroId: 'q-imp', x: 0, y: 0 }, 1000, 'i-1');
+    const ruim = { ...bom, id: 'i-2', caixa: { ...bom.caixa, opacidade: 7 } } as Item;
+    await assert.rejects(criarQuadroComItens(q, [bom, ruim], db));
+    assert.equal(await obterQuadro('q-imp', db), null);
+    assert.deepEqual(await listarItens('q-imp', db), []);
+
+    await criarQuadroComItens(q, [bom], db);
+    assert.ok(await obterQuadro('q-imp', db));
+    assert.equal((await listarItens('q-imp', db)).length, 1);
+  });
+
+  it('removerImagensOrfas apaga só imagens sem uso, fora da carência e não protegidas', async () => {
+    const img = (n: number) => new Blob([new Uint8Array([n, n, n])], { type: 'image/png' });
+    const usada = await guardarImagem(img(1), db);
+    const solta = await guardarImagem(img(2), db);
+    const protegida = await guardarImagem(img(3), db);
+    await salvarQuadro(novoQuadro('camp-1', 'Q', 1000, 'q-1'), db);
+    await gravarItens(
+      [novaImagem({ quadroId: 'q-1', x: 0, y: 0, imagemId: usada.id, larguraOriginal: 10, alturaOriginal: 10 }, 1000, 'im-1')],
+      [],
+      db,
+    );
+
+    // Dentro da carência, nada sai.
+    assert.equal(await removerImagensOrfas(new Set(), Date.now(), 60_000, db), 0);
+
+    const depois = Date.now() + 120_000;
+    assert.equal(await removerImagensOrfas(new Set([protegida.id]), depois, 60_000, db), 1);
+    assert.ok(await lerImagem(usada.id, db));
+    assert.ok(await lerImagem(protegida.id, db));
+    assert.equal(await lerImagem(solta.id, db), null);
   });
 });

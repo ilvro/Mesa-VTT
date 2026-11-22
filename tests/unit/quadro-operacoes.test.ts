@@ -162,3 +162,15 @@ test('duplicar: desloca itens e religa setas entre itens duplicados para as cóp
   assert.deepEqual(s3Copia.para, { ponto: [35, 55] });
   void ext;
 });
+
+test('Historico.itensGuardados lista o que desfazer e refazer podem trazer de volta', () => {
+  const h = new Historico();
+  const a = novoTexto({ quadroId: 'q', x: 0, y: 0 }, 1, 'a');
+  const b = novoTexto({ quadroId: 'q', x: 0, y: 0 }, 1, 'b');
+  h.registrar({ rotulo: 'criar', ops: [{ criar: [a] }] });
+  h.registrar({ rotulo: 'remover', ops: [{ remover: [b] }] });
+  h.desfazer();
+  assert.deepEqual([...h.itensGuardados()].map((i) => i.id).sort(), ['a', 'b']);
+  h.limpar();
+  assert.equal([...h.itensGuardados()].length, 0);
+});

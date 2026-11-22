@@ -153,6 +153,17 @@ export class Historico {
     return passo;
   }
 
+  /** Todo item criado ou removido por um passo guardado (para desfazer ou refazer). */
+  *itensGuardados(): Iterable<Item> {
+    const passos = [...this.passado.map((e) => e.passo), ...this.futuro];
+    for (const p of passos) {
+      for (const op of p.ops) {
+        if ('criar' in op) yield* op.criar;
+        else if ('remover' in op) yield* op.remover;
+      }
+    }
+  }
+
   limpar(): void {
     this.passado = [];
     this.futuro = [];
