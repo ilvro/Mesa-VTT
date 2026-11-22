@@ -22,3 +22,4 @@ Este diretório guarda o plano de evolução próprio da **Mesa** (`Projects/Mes
 | [melhorias-pos-fase-14.md](melhorias-pos-fase-14.md) | Concluída |
 | [fase-4.md](fase-4.md) | Detalhado — Quadro (whiteboard da campanha), etapas A a F |
 | [fase-5.md](fase-5.md) | Concluída — usabilidade: etiquetas, temas, modo sessão (U1 a U9) |
+| [fase-6.md](fase-6.md) | Em andamento — Quadro: experiência (conviver com o Miro, jogar, plataforma) |
