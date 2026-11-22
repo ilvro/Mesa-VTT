@@ -29,3 +29,22 @@ O comando baixa a descrição do quadro, todos os itens paginados, conectores e 
 1. Abra a **Mesa** na aba **Quadros**.
 2. Clique em **Importar do Miro…** e selecione o arquivo `.miro.zip`.
 3. O quadro será aberto com a **Fila de revisão** na lateral direita para confirmar ou ajustar os tipos sugeridos.
+
+## 5. Atualizar um quadro já importado
+
+Mudou algo no Miro depois da importação? Não precisa importar de novo: baixe um pacote novo do mesmo quadro (passo 3) e, com o quadro aberto na Mesa, clique em **Atualizar do Miro…** na barra do quadro. Um único Ctrl+Z desfaz a atualização inteira.
+
+O que acontece com cada item:
+
+| No Miro | Aqui na Mesa | Resultado |
+|---|---|---|
+| não mudou | tanto faz | nada |
+| mudou | você não mexeu | o item é atualizado (conteúdo e posição) |
+| mudou | você também mexeu | **conflito**: fica a sua versão e o item vai para a fila de revisão |
+| foi apagado | você não mexeu | o item é removido |
+| foi apagado | você mexeu | o item fica e vai para a fila de revisão ("Saiu do Miro") |
+| é novo | — | é criado e vai para a fila de revisão |
+
+Itens que você criou na Mesa nunca são tocados. O que é da Mesa também é mantido: tipo (semântica), "feito", travado, só mestre, grupos, ordem de empilhamento, cores e fontes, e as ligações. O pacote precisa ser do mesmo quadro do Miro; se for de outro, a Mesa avisa e não muda nada.
+
+**Importante:** quadros importados antes desta versão não sabem de qual item do Miro cada coisa veio, então o botão não aparece neles. Importe o quadro de novo uma vez; dali em diante ele pode ser atualizado.

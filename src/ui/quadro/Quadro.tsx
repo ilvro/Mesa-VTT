@@ -68,6 +68,8 @@ import {
   type PontoTraco,
 } from '../../dominio/tracos.ts';
 import { duplicarSelecao, removerSelecao } from '../../app/quadro-acoes.ts';
+import { atualizarQuadroDoMiro } from '../../app/importar-miro.ts';
+import { mensagemDe, avisar } from '../../app/toasts.ts';
 import { FORMATOS_IMAGEM_ACEITOS, importarArquivoImagem } from '../../app/imagens-quadro.ts';
 import {
   agruparSelecao,
@@ -230,6 +232,22 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
   const retanguloSelecao = useSignal<Caixa | null>(null);
   const gestoRef = useRef<Gesto | null>(null);
   const inputImagemRef = useRef<HTMLInputElement | null>(null);
+  const inputMiroRef = useRef<HTMLInputElement | null>(null);
+
+  async function atualizarDoMiro(arquivo: File): Promise<void> {
+    try {
+      const r = await atualizarQuadroDoMiro(arquivo);
+      const total = r.novos + r.atualizados + r.removidos + r.paraRevisar;
+      avisar(
+        total === 0
+          ? 'Nada mudou no Miro.'
+          : `Atualizado do Miro: ${r.novos} novos, ${r.atualizados} atualizados, ${r.removidos} removidos, ${r.paraRevisar} para revisar.`,
+      );
+      if (r.paraRevisar > 0) painelRevisaoAberto.value = true;
+    } catch (erro) {
+      avisar(mensagemDe(erro), true);
+    }
+  }
   const rafMoverRef = useRef<number | null>(null);
   const moverPendenteRef = useRef<{
     clientX: number;
@@ -1572,6 +1590,17 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
         >
           Revisão ({[...itens.value.values()].filter((i) => Boolean(i.revisao)).length})
         </button>
+        {q.origem ? (
+          <button
+            type="button"
+            class="botao-pilula"
+            data-testid="botao-atualizar-miro"
+            title="Atualizar este quadro com um novo pacote .miro.zip"
+            onClick={() => inputMiroRef.current?.click()}
+          >
+            Atualizar do Miro…
+          </button>
+        ) : null}
         <label class="molduras-agem-wrap" title="Comportamento ao focar uma moldura na sessão">
           <span>Molduras agem</span>
           <select
@@ -1783,6 +1812,18 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
           );
         })()}
 
+        <input
+          ref={inputMiroRef}
+          type="file"
+          accept=".zip"
+          style={{ display: 'none' }}
+          data-testid="input-atualizar-miro"
+          onChange={(e) => {
+            const f = e.currentTarget.files?.[0];
+            e.currentTarget.value = '';
+            if (f) void atualizarDoMiro(f);
+          }}
+        />
         <input
           ref={inputImagemRef}
           type="file"

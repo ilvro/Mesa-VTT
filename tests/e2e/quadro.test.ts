@@ -471,6 +471,78 @@ test('Q4c: importar o fixture -> o quadro abre com os itens -> aceitar 2 itens n
   }
 });
 
+test('E1c: atualizar do Miro -> relatório, conflito na fila e Ctrl+Z volta tudo', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  const erros: string[] = [];
+  page.on('pageerror', (e) => erros.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') erros.push(m.text()); });
+  const zip = (nome: string) =>
+    Buffer.from(
+      zipSync({
+        'quadro.json': strToU8(
+          readFileSync(new URL(`../unit/fixtures/miro/${nome}.json`, import.meta.url), 'utf8'),
+        ),
+      }),
+    );
+
+  try {
+    await page.goto(`${amb.origem}/Mesa/`);
+    await page.waitForSelector('[data-testid="campanha-select"]');
+    await page.click('[data-testid="aba-campanhas"]');
+    await page.fill('[data-testid="nova-campanha-nome"]', 'Campanha E1c');
+    await page.click('[data-testid="criar-campanha"]');
+    await page.waitForSelector('[data-testid="tela-entidades"]');
+    await page.click('[data-testid="aba-quadros"]');
+    await page.waitForSelector('[data-testid="tela-quadros"]');
+
+    await page.setInputFiles('[data-testid="importar-miro-input"]', {
+      name: 'vivo-v1.miro.zip',
+      mimeType: 'application/zip',
+      buffer: zip('atualizacao-v1'),
+    });
+    await page.waitForSelector('[data-testid="area-quadro"]');
+    await page.waitForSelector('[data-testid="botao-atualizar-miro"]');
+    assert.equal(await page.locator('[data-testid^="item-"]').count(), 3);
+
+    // Editar "Nota alfa" aqui (ela também muda no Miro: conflito).
+    await page.locator('[data-testid^="item-"]', { hasText: 'Nota alfa' }).dblclick();
+    await page.waitForSelector('[data-testid="editor-rico"]');
+    await page.keyboard.press('Control+a');
+    await page.keyboard.type('Alfa editada na Mesa');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-testid="editor-rico"]', { state: 'detached' });
+
+    await page.setInputFiles('[data-testid="input-atualizar-miro"]', {
+      name: 'vivo-v2.miro.zip',
+      mimeType: 'application/zip',
+      buffer: zip('atualizacao-v2'),
+    });
+    await page.locator('[data-testid="aviso"]', { hasText: 'Atualizado do Miro' }).waitFor();
+    const aviso = await page.locator('[data-testid="aviso"]').last().textContent();
+    assert.match(aviso ?? '', /1 novos, 1 atualizados, 1 removidos, 2 para revisar/);
+
+    await page.waitForSelector('[data-testid="painel-fila-revisao"]');
+    const textos = await page.locator('[data-testid^="item-"]').allTextContents();
+    assert.equal(textos.length, 3);
+    assert.ok(textos.some((t) => t.includes('Alfa editada na Mesa')));
+    assert.ok(textos.some((t) => t.includes('Nota beta revisada')));
+    assert.ok(textos.some((t) => t.includes('Nota delta')));
+    assert.ok(!textos.some((t) => t.includes('Nota gama')));
+    assert.equal(await page.locator('[data-testid="contador-revisao"]').textContent(), 'faltam 3');
+
+    await page.keyboard.press('Control+z');
+    const antes = await page.locator('[data-testid^="item-"]').allTextContents();
+    assert.ok(antes.some((t) => t.includes('Nota gama')));
+    assert.ok(antes.some((t) => t.includes('Nota beta') && !t.includes('revisada')));
+    assert.ok(!antes.some((t) => t.includes('Nota delta')));
+
+    assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
+  } finally {
+    await ctx.close();
+  }
+});
+
 test('Q5c: âncora em um cartão -> emitir mesa.focar na janela -> o painel Espiar abre com o cartão', async () => {
   const ctx = await amb.navegador.newContext({ viewport: { width: 1280, height: 800 } });
   const page = await ctx.newPage();

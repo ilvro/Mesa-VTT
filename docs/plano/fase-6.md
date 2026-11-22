@@ -60,7 +60,8 @@ Como: `planejarAtualizacaoDoMiro(atuais: ReadonlyMap<string, Item>, novos: reado
 Testes: cada linha da tabela; campos da Mesa preservados; itens sem `origem` intocados; relatório certo; `aplicar(atuais, passo)` + `inverter` volta ao estado inicial.
 Commit: `added miro update plan for imported boards`
 
-### E1c — "Atualizar do Miro…" na tela  ⬜
+### E1c — "Atualizar do Miro…" na tela  ✅
+Nota: botão só na barra do quadro (não no cartão); `lerPacoteMiro` extraída em `importar-miro.ts`; `marcarSincronizadoComMiro` em `quadros.ts`. Fixtures `atualizacao-v1/v2.json`; no e2e o contador da fila mostra "faltam 3" porque as notas importadas ainda não revisadas continuam na fila.
 Objetivo: o mestre baixa o `.miro.zip` de novo e atualiza o quadro já importado.
 Depende de: E1b.
 Ler: `src/app/importar-miro.ts`, `src/app/quadros.ts` (`executar`, `quadroAberto`, `mudarFundo` como exemplo de gravar o `Quadro`), `src/ui/quadro/Quadros.tsx` (botão de importar), `src/ui/quadro/Quadro.tsx` (barra do quadro), `src/ui/quadro/FilaDeRevisao.tsx`, `tests/e2e/quadro.test.ts`.

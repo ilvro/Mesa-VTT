@@ -1,0 +1,68 @@
+{
+  "formato": "miro-bruto",
+  "versao": 1,
+  "baixadoEm": 1731580000000,
+  "board": {
+    "id": "uXjVATUAL=",
+    "name": "Quadro Vivo"
+  },
+  "items": [
+    {
+      "id": "n-a",
+      "type": "sticky_note",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "origin": "center"
+      },
+      "geometry": {
+        "width": 200,
+        "height": 200
+      },
+      "data": {
+        "content": "<p>Nota alfa</p>"
+      },
+      "style": {
+        "fillColor": "light_yellow"
+      }
+    },
+    {
+      "id": "n-b",
+      "type": "sticky_note",
+      "position": {
+        "x": 300,
+        "y": 0,
+        "origin": "center"
+      },
+      "geometry": {
+        "width": 200,
+        "height": 200
+      },
+      "data": {
+        "content": "<p>Nota beta</p>"
+      },
+      "style": {
+        "fillColor": "light_yellow"
+      }
+    },
+    {
+      "id": "n-c",
+      "type": "sticky_note",
+      "position": {
+        "x": 600,
+        "y": 0,
+        "origin": "center"
+      },
+      "geometry": {
+        "width": 200,
+        "height": 200
+      },
+      "data": {
+        "content": "<p>Nota gama</p>"
+      },
+      "style": {
+        "fillColor": "light_yellow"
+      }
+    }
+  ]
+}

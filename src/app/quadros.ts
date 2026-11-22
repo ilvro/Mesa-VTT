@@ -454,6 +454,24 @@ export async function mudarFundo(parcial: Partial<Quadro['fundo']>): Promise<voi
   }
 }
 
+/** Grava no quadro aberto a hora da última sincronização com o Miro. */
+export async function marcarSincronizadoComMiro(quando: number): Promise<void> {
+  const q = quadroAberto.value;
+  if (!q?.origem) return;
+  const atualizado: Quadro = {
+    ...q,
+    origem: { ...q.origem, sincronizadoEm: quando },
+    atualizadoEm: Math.max(Date.now(), q.atualizadoEm + 1),
+  };
+  quadroAberto.value = atualizado;
+  quadros.value = quadros.value.map((x) => (x.id === atualizado.id ? atualizado : x));
+  try {
+    await salvarQuadro(atualizado);
+  } catch (erro) {
+    avisar(mensagemDe(erro), true);
+  }
+}
+
 function enriquecerPassoComSetas(
   itensAntes: ReadonlyMap<string, Item>,
   passo: Passo,
