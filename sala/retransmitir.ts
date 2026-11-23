@@ -23,6 +23,17 @@ export function retransmitir(
   return enviadas;
 }
 
+/** Como `retransmitir`, mas só entre conexões já identificadas (a de origem também precisa ser). */
+export function retransmitirIdentificados<C extends ConexaoLike>(
+  conexoes: readonly C[],
+  origem: C,
+  mensagem: string,
+  identificada: (c: C) => boolean,
+): number {
+  if (!identificada(origem)) return 0;
+  return retransmitir(conexoes.filter(identificada), origem, mensagem);
+}
+
 const ORIGENS_FIXAS = ['https://ilvro.github.io', 'http://127.0.0.1:5100'];
 
 /** Origens aceitas no CORS: o GitHub Pages, o dev local e qualquer https://*.discordsays.com. */

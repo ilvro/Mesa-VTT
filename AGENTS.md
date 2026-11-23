@@ -14,5 +14,7 @@ O hub da plataforma da campanha (Atlas, Ficha, Ateliê, Jukebox, Tabletop). Cont
 ## Sala (mesa online)
 
 - O Worker da mesa online fica em `sala/` (Cloudflare Worker + Durable Object SQLite; plano em `../Atlas/docs/plano/mesa-online.md`). Tem `tsconfig.json` próprio (sem DOM, com `@cloudflare/workers-types`) e fora do build do Pages: o `typecheck` roda os dois.
-- Rodar: `npm run sala:dev` (wrangler local); publicar: `npm run sala:deploy`. Os testes só importam a lógica pura de `sala/` (`retransmitir.ts`).
+- Rodar: `npm run sala:dev` (wrangler local); publicar: `npm run sala:deploy`. Os testes só importam a lógica pura de `sala/` (`retransmitir.ts`, `sessao.ts`, `discord.ts`, `ola.ts`).
 - Segredos nunca entram no git: em dev ficam em `sala/.dev.vars` (no `.gitignore`), em produção via `wrangler secret put`.
+- Login: `POST /sala/token` troca o `code` do Discord e devolve a sessão assinada (HMAC, 12 h). O WebSocket exige `{"tipo":"ola","sessao":"..."}` como primeira mensagem e fecha com 4001 se for inválida; só conexões identificadas trocam mensagens. `DISCORD_CLIENT_ID` (público) fica em `[vars]` do `wrangler.toml`.
+- Segredos (`DISCORD_CLIENT_SECRET`, `MESTRE_DISCORD_ID`, `SEGREDO_SESSAO`): em dev, `cp sala/.dev.vars.exemplo sala/.dev.vars` e edite (o `.dev.vars` é ignorado); em produção, `npx wrangler secret put <NOME> -c sala/wrangler.toml` para cada um.

@@ -1,0 +1,4 @@
+# Copie para sala/.dev.vars (ignorado pelo git) e troque pelos valores reais.
+DISCORD_CLIENT_SECRET=segredo-ficticio-do-app
+MESTRE_DISCORD_ID=111111111111111111
+SEGREDO_SESSAO=troque-por-32-bytes-aleatorios-em-base64
