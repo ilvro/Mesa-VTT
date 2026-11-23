@@ -87,7 +87,7 @@ Commit: `board map for the assistant`
 
 ## Etapa B — Calibrar com o quadro real
 
-### L1d — Comando de seções  ⬜
+### L1d — Comando de seções  ✅
 Objetivo: ver como a Mesa divide o quadro real do mestre antes de ligar a ponte, e ajustar o `vao` e o título.
 Depende de: L1c.
 Ler: `src/dominio/pacote-quadro.ts` (`lerPacote`), `scripts/miro-baixar.mjs` (estilo de script Node).
@@ -98,6 +98,7 @@ Como: `npm run quadro:secoes -- <arquivo.mesa-quadro.zip | arquivo.miro.zip> [--
 - `--html`: um arquivo com um SVG do quadro (caixas dos itens coloridas por seção, títulos por cima), para o mestre ver de olho se as ilhas batem com o que ele entende como "uma parte".
 - Nada sai da máquina; o comando não precisa de token.
 Testes: unitário só do tratamento de argumentos; validação manual com o quadro do mestre (anotar na `Nota:` o `vao` que funcionou e os tropeços do título).
+Nota: `scripts/quadro-secoes.ts` exporta `lerArgumentos`, `lerZipDoQuadro`, `svgDoQuadro`, `htmlDoQuadro`, `executar` e `main` (só roda direto). Opções: `--vao`, `--fator`, `--razao-titulo`, `--secao <id>` + `--pagina`, `--html`, `--limite`; o mapa termina com a linha `Parâmetros: …`. No `.miro.zip` as imagens viram itens `miro-img-<id>` com o tamanho do `geometry` (sem arquivo). HTML autocontido (SVG com um grupo por seção, contorno tracejado `non-scaling-stroke`, `<title>` por seção, lista lateral que realça e rola). Testado ponta a ponta com a fixture `molduras.json`. **Validação manual com o quadro real do mestre pendente** (anotar aqui o `vao` que funcionou e os tropeços do título).
 Commit: `command to inspect board sections`
 
 ---
