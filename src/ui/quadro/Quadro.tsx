@@ -7,6 +7,7 @@ import {
   caixaEnvolventeTotal,
   caixaVisivel,
   enquadrar,
+  pinca,
   telaParaMundo,
   zoomEm,
   type Caixa,
@@ -236,6 +237,15 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
   const tickEditor = useSignal(0);
   const retanguloSelecao = useSignal<Caixa | null>(null);
   const gestoRef = useRef<Gesto | null>(null);
+  // Toque: dedos ativos (pointerId -> posição na tela), pinça em andamento e toque longo.
+  const toquesRef = useRef(new Map<number, Ponto>());
+  const pincaRef = useRef<{ ids: [number, number]; camera: Camera; a: [Ponto, Ponto] } | null>(null);
+  const toqueLongoRef = useRef<{
+    timer: ReturnType<typeof setTimeout>;
+    x: number;
+    y: number;
+    alvo: HTMLElement | null;
+  } | null>(null);
   const inputImagemRef = useRef<HTMLInputElement | null>(null);
   const inputMiroRef = useRef<HTMLInputElement | null>(null);
 
@@ -1043,6 +1053,17 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
           selecao.value = new Set();
         }
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        if (e.pointerType === 'touch') {
+          // Um dedo no vazio move a câmera (o marque fica para o mouse).
+          gestoRef.current = {
+            tipo: 'pan',
+            x: e.clientX,
+            y: e.clientY,
+            camX: camera.value.x,
+            camY: camera.value.y,
+          };
+          return;
+        }
         gestoRef.current = { tipo: 'marque', inicio: p };
         retanguloSelecao.value = { x: p.x, y: p.y, largura: 0, altura: 0 };
       }
@@ -1253,6 +1274,136 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
         g.chave,
       );
     }
+  };
+
+  const cancelarToqueLongo = () => {
+    if (toqueLongoRef.current) {
+      clearTimeout(toqueLongoRef.current.timer);
+      toqueLongoRef.current = null;
+    }
+  };
+
+  // Cancela o gesto de um dedo em andamento sem criar item nem deixar passo aberto no histórico.
+  const cancelarGestoAtual = () => {
+    if (rafMoverRef.current !== null) {
+      cancelAnimationFrame(rafMoverRef.current);
+      rafMoverRef.current = null;
+    }
+    moverPendenteRef.current = null;
+    if (gestoRef.current) {
+      gestoRef.current = null;
+      tracoEmDesenho.value = null;
+      retanguloSelecao.value = null;
+      linhasGuia.value = [];
+      historico.agrupar(null);
+      usuarioInteragindoNoQuadro.value = editandoId.value !== null;
+    }
+  };
+
+  const pontoNaArea = (e: { clientX: number; clientY: number }): Ponto => {
+    const rect = areaRef.current!.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
+  const abrirMenuNoPonto = (clientX: number, clientY: number, alvoEl: HTMLElement | null) => {
+    const el = areaRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const p = pontoMundoDe({ clientX, clientY });
+    const idAlvoDom = alvoEl?.closest?.('[data-item-id]')?.getAttribute('data-item-id');
+    const alvoDom = idAlvoDom ? (itens.value.get(idAlvoDom) ?? null) : null;
+    const alvo = alvoDom ?? itemNoPonto(itens.value, p, true);
+    if (alvo && !selecao.value.has(alvo.id)) {
+      selecao.value = new Set([alvo.id]);
+    }
+    menuContexto.value = { x: clientX - rect.left, y: clientY - rect.top, pontoMundo: p };
+  };
+
+  const aoPressionarArea = (e: PointerEvent) => {
+    menuContexto.value = null;
+    if (e.pointerType !== 'touch') {
+      aoPressionar(e);
+      return;
+    }
+    const toques = toquesRef.current;
+    toques.set(e.pointerId, pontoNaArea(e));
+    if (toques.size === 1) {
+      aoPressionar(e);
+      if (ferramenta.value === 'selecionar') {
+        const alvoEl = e.target as HTMLElement | null;
+        const x = e.clientX;
+        const y = e.clientY;
+        toqueLongoRef.current = {
+          x,
+          y,
+          alvo: alvoEl,
+          timer: setTimeout(() => {
+            toqueLongoRef.current = null;
+            if (toquesRef.current.size !== 1 || pincaRef.current) return;
+            cancelarGestoAtual();
+            abrirMenuNoPonto(x, y, alvoEl);
+          }, 500),
+        };
+      }
+      return;
+    }
+    cancelarToqueLongo();
+    cancelarGestoAtual();
+    if (toques.size === 2 && !pincaRef.current) {
+      const [id1, id2] = [...toques.keys()] as [number, number];
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {
+        /* ignora */
+      }
+      pincaRef.current = {
+        ids: [id1, id2],
+        camera: camera.value,
+        a: [toques.get(id1)!, toques.get(id2)!],
+      };
+    }
+  };
+
+  const aoMoverArea = (e: PointerEvent) => {
+    if (e.pointerType !== 'touch') {
+      aoMover(e);
+      return;
+    }
+    const toques = toquesRef.current;
+    if (!toques.has(e.pointerId)) return;
+    toques.set(e.pointerId, pontoNaArea(e));
+    const longo = toqueLongoRef.current;
+    if (longo && Math.hypot(e.clientX - longo.x, e.clientY - longo.y) > 8) cancelarToqueLongo();
+    const pi = pincaRef.current;
+    if (pi) {
+      const b1 = toques.get(pi.ids[0]);
+      const b2 = toques.get(pi.ids[1]);
+      if (b1 && b2) {
+        usuarioInteragindoNoQuadro.value = true;
+        camera.value = pinca(pi.camera, pi.a[0], pi.a[1], b1, b2);
+      }
+      return;
+    }
+    aoMover(e);
+  };
+
+  const aoSoltarArea = (e: PointerEvent) => {
+    if (e.pointerType !== 'touch') {
+      aoSoltar(e);
+      return;
+    }
+    const toques = toquesRef.current;
+    toques.delete(e.pointerId);
+    cancelarToqueLongo();
+    if (pincaRef.current) {
+      // Acabou a pinça: o dedo que sobra não começa gesto novo (o gesto único já foi cancelado).
+      if (toques.size < 2) {
+        pincaRef.current = null;
+        usuarioInteragindoNoQuadro.value = editandoId.value !== null;
+      }
+      return;
+    }
+    aoSoltar(e);
   };
 
   const aoMover = (e: PointerEvent) => {
@@ -1786,33 +1937,14 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
           ...estiloGrade(q.fundo, camera.value),
           display: modoQuadro.value === 'ler' ? 'none' : undefined,
         }}
-        onPointerDown={(e) => {
-          menuContexto.value = null;
-          aoPressionar(e);
-        }}
-        onPointerMove={aoMover}
-        onPointerUp={aoSoltar}
-        onPointerCancel={aoSoltar}
+        onPointerDown={aoPressionarArea}
+        onPointerMove={aoMoverArea}
+        onPointerUp={aoSoltarArea}
+        onPointerCancel={aoSoltarArea}
         onDblClick={aoDuploClique}
         onContextMenu={(e) => {
           e.preventDefault();
-          const el = areaRef.current;
-          if (!el) return;
-          const rect = el.getBoundingClientRect();
-          const p = pontoMundoDe(e);
-          const idAlvoDom = (e.target as HTMLElement | null)
-            ?.closest?.('[data-item-id]')
-            ?.getAttribute('data-item-id');
-          const alvoDom = idAlvoDom ? (itens.value.get(idAlvoDom) ?? null) : null;
-          const alvo = alvoDom ?? itemNoPonto(itens.value, p, true);
-          if (alvo && !selecao.value.has(alvo.id)) {
-            selecao.value = new Set([alvo.id]);
-          }
-          menuContexto.value = {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top,
-            pontoMundo: p,
-          };
+          abrirMenuNoPonto(e.clientX, e.clientY, e.target as HTMLElement | null);
         }}
         onDragOver={(e) => {
           if (e.dataTransfer?.types.includes('Files')) {

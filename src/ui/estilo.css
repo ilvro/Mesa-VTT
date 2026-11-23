@@ -635,6 +635,7 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   position: relative;
   overflow: hidden;
   user-select: none;
+  touch-action: none;
 }
 .area-quadro.modo-mao {
   cursor: grab;

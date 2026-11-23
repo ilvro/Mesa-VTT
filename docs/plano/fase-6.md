@@ -153,7 +153,8 @@ Como:
 Testes: `itensParaJogadores` (segredo, só mestre, condição falsa, revisão, marcadores retirados); e2e: abrir a rota de projeção de uma moldura com um segredo e conferir que ele não aparece.
 Commit: `project a board frame to the players`
 
-### E3c — Tela de toque  ⬜
+### E3c — Tela de toque  ✅
+Nota: `pinca` em `src/dominio/camera.ts` (+ teste); em `Quadro.tsx` os handlers do toque embrulham os do mouse (`aoPressionarArea`/`aoMoverArea`/`aoSoltarArea`; mouse e caneta passam direto). Um dedo no vazio com a ferramenta Selecionar vira pan (o marque fica para o mouse); com outras ferramentas o dedo age como o mouse. Dois dedos cancelam o gesto de um dedo (`historico.agrupar(null)`, sem item novo; passos já aplicados de mover/criar continuam no histórico); o dedo que sobra depois da pinça não começa gesto. Toque longo (500 ms, 8 px) só com Selecionar; a lógica do menu de contexto foi extraída para `abrirMenuNoPonto`. `touch-action: none` em `.area-quadro`. E2e em `tests/e2e/quadro-toque.test.ts` com `PointerEvent` sintéticos (a captura de ponteiro é stubada no teste).
 Objetivo: usar o quadro num notebook com tela de toque (pinça para zoom, dois dedos para mover). Um tablet separado **não** é alvo: os dados da Mesa ficam no navegador deste computador.
 Ler: `src/ui/quadro/Quadro.tsx` (`aoPressionar`, `processarMover`, roda), `src/dominio/camera.ts`.
 Arquivos: `src/dominio/camera.ts` (`pinca(cameraInicial, p1a, p2a, p1b, p2b)`) + teste; `Quadro.tsx`.

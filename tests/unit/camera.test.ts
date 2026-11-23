@@ -5,6 +5,7 @@ import {
   enquadrar,
   itensVisiveis,
   mundoParaTela,
+  pinca,
   telaParaMundo,
   ZOOM_MAX,
   ZOOM_MIN,
@@ -64,4 +65,30 @@ test('itensVisiveis filtra por interseção considerando rotação e margem', ()
 
   const comMargem = itensVisiveis(itens, vis, 800).map((i) => i.id);
   assert.deepEqual(comMargem, ['dentro', 'fora', 'rodado']);
+});
+
+test('pinca mantém o ponto médio fixo, dobra o zoom com o dobro da distância e respeita limites', () => {
+  const cam = { x: 100, y: 50, zoom: 1 };
+  const p1a = { x: 300, y: 300 };
+  const p2a = { x: 500, y: 300 };
+  const mundoAntes = telaParaMundo(cam, { x: 400, y: 300 });
+
+  // Só afastar os dedos, com o mesmo ponto médio: zoom dobra, ponto do mundo fica sob o médio.
+  const c = pinca(cam, p1a, p2a, { x: 200, y: 300 }, { x: 600, y: 300 });
+  assert.equal(c.zoom, 2);
+  const depois = telaParaMundo(c, { x: 400, y: 300 });
+  assert.ok(Math.abs(depois.x - mundoAntes.x) < 1e-9);
+  assert.ok(Math.abs(depois.y - mundoAntes.y) < 1e-9);
+
+  // Mover os dois dedos juntos (mesma distância) só arrasta a câmera.
+  const arrasto = pinca(cam, p1a, p2a, { x: 350, y: 340 }, { x: 550, y: 340 });
+  assert.equal(arrasto.zoom, 1);
+  const sob = telaParaMundo(arrasto, { x: 450, y: 340 });
+  assert.ok(Math.abs(sob.x - mundoAntes.x) < 1e-9);
+  assert.ok(Math.abs(sob.y - mundoAntes.y) < 1e-9);
+
+  // Limites e distância inicial zero.
+  assert.equal(pinca(cam, p1a, p2a, { x: 0, y: 300 }, { x: 100000, y: 300 }).zoom, ZOOM_MAX);
+  assert.equal(pinca(cam, p1a, p2a, { x: 400, y: 300 }, { x: 400.001, y: 300 }).zoom, ZOOM_MIN);
+  assert.equal(pinca(cam, p1a, p1a, p1a, { x: 900, y: 300 }).zoom, 1);
 });

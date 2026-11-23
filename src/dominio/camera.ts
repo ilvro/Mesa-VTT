@@ -61,6 +61,30 @@ export function zoomEm(
   };
 }
 
+/**
+ * Pinça de dois dedos: (p1a, p2a) são os dedos no começo, (p1b, p2b) agora (em coordenadas da tela do quadro).
+ * O ponto do mundo que estava sob o ponto médio inicial fica sob o ponto médio atual, e o zoom
+ * é multiplicado pela razão das distâncias (dentro dos limites).
+ */
+export function pinca(
+  cameraInicial: Camera,
+  p1a: Ponto,
+  p2a: Ponto,
+  p1b: Ponto,
+  p2b: Ponto,
+  min = ZOOM_MIN,
+  max = ZOOM_MAX,
+): Camera {
+  const distA = Math.hypot(p2a.x - p1a.x, p2a.y - p1a.y);
+  const distB = Math.hypot(p2b.x - p1b.x, p2b.y - p1b.y);
+  const fator = distA > 0 && distB > 0 ? distB / distA : 1;
+  const medioA = { x: (p1a.x + p2a.x) / 2, y: (p1a.y + p2a.y) / 2 };
+  const medioB = { x: (p1b.x + p2b.x) / 2, y: (p1b.y + p2b.y) / 2 };
+  const mundo = telaParaMundo(cameraInicial, medioA);
+  const zoom = limitarZoom(cameraInicial.zoom * fator, min, max);
+  return { x: mundo.x - medioB.x / zoom, y: mundo.y - medioB.y / zoom, zoom };
+}
+
 export function enquadrar(
   caixa: Caixa,
   tamanhoTela: Tamanho,
