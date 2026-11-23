@@ -2188,3 +2188,14 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 
 /* Exportar e importar quadro */
 .cartao-rodape [data-testid^="exportar-quadro-"] { white-space: nowrap; }
+
+/* Cartões vivos */
+.item-ref-recursos { display: flex; flex-direction: column; gap: 4px; }
+.recurso { display: flex; align-items: center; gap: 6px; font-size: 0.7rem; color: var(--apagado); }
+.recurso-rotulo { width: 18px; font-weight: 700; letter-spacing: 0.04em; }
+.recurso-barra { flex: 1; height: 4px; border-radius: 2px; background: var(--linha); overflow: hidden; }
+.recurso-cheio { display: block; height: 100%; border-radius: 2px; transition: width 0.2s ease; }
+.recurso-cheio.tom-sucesso { background: var(--sucesso); }
+.recurso-cheio.tom-perigo { background: var(--perigo); }
+.recurso-cheio.tom-acento { background: var(--acento); }
+.recurso-numeros { min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }

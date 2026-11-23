@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { abrirNoApp } from '../../app/barramento.ts';
 import { entidades } from '../../app/campanha.ts';
+import { recursosDasFichas } from '../../app/recursos-das-fichas.ts';
 import { abrirEntidade } from '../../app/rotas.ts';
 import { entidadePorRef } from '../../dominio/cenas.ts';
 import {
@@ -11,6 +12,7 @@ import {
 import { ehRefDeEntidadeDaMesa } from '../../dominio/notas.ts';
 import { decorarMarcadores } from '../../dominio/paleta.ts';
 import type { Item } from '../../dominio/quadro.ts';
+import { fracao, recursosDaEntidade, tomDoPv } from '../../dominio/recursos-das-fichas.ts';
 
 interface ItemRefProps {
   item: Extract<Item, { tipo: 'ref' }>;
@@ -106,6 +108,7 @@ export function ItemRef({ item }: ItemRefProps) {
   }
 
   const refExterno = entidade.refs.find((r) => !ehRefDeEntidadeDaMesa(r));
+  const recursos = item.aparencia === 'cartao' ? recursosDaEntidade(entidade.refs, recursosDasFichas.value) : undefined;
   const resumoBruto = entidade.notas.trim();
   const resumo =
     resumoBruto.length > 220 ? `${resumoBruto.slice(0, 220)}…` : resumoBruto;
@@ -131,6 +134,31 @@ export function ItemRef({ item }: ItemRefProps) {
           <div class="meta">{ROTULO_DO_TIPO[entidade.tipo].singular}</div>
         </div>
       </div>
+
+      {recursos ? (
+        <div class="item-ref-recursos" data-testid={`recursos-${item.id}`}>
+          <div class="recurso" data-testid={`recurso-pv-${item.id}`}>
+            <span class="recurso-rotulo">PV</span>
+            <span class="recurso-barra">
+              <span
+                class={`recurso-cheio tom-${tomDoPv(fracao(recursos.pv, recursos.pvMax))}`}
+                style={{ width: `${fracao(recursos.pv, recursos.pvMax) * 100}%` }}
+              />
+            </span>
+            <span class="recurso-numeros">{recursos.pv}/{recursos.pvMax}</span>
+          </div>
+          <div class="recurso" data-testid={`recurso-pd-${item.id}`}>
+            <span class="recurso-rotulo">PD</span>
+            <span class="recurso-barra">
+              <span
+                class="recurso-cheio tom-acento"
+                style={{ width: `${fracao(recursos.pd, recursos.pdMax) * 100}%` }}
+              />
+            </span>
+            <span class="recurso-numeros">{recursos.pd}/{recursos.pdMax}</span>
+          </div>
+        </div>
+      ) : null}
 
       {entidade.tags.length > 0 ? (
         <div class="item-ref-tags">

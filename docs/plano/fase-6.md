@@ -163,7 +163,8 @@ Commit: `touch gestures on boards`
 
 ## Etapa D — Plataforma
 
-### E4a — Cartões vivos  ⬜
+### E4a — Cartões vivos  ✅
+Nota: funções puras em `src/dominio/recursos-das-fichas.ts` (+ teste); PV só tem dois tons (sucesso acima de 25%, perigo abaixo), pois o tema não tem token de aviso; só cartões de aparência `cartao` mostram as barras; e2e em `tests/e2e/quadro-cartoes.test.ts`. `npm run typecheck` falha só em `sala/` (de outra sessão).
 Objetivo: o cartão de uma personagem no quadro mostra PV e PD atuais, vindos da Ficha.
 Ler: `src/ui/quadro/ItemRef.tsx`, `src/app/barramento.ts`, o evento `ficha.recursos` (`{ ficha, pv, pvMax, pd, pdMax }`, em `vendor/mesa-core`).
 Arquivos: criar `src/app/recursos-das-fichas.ts`; mudar `ItemRef.tsx`, `src/main.tsx` (iniciar a escuta), `estilo.css`.

@@ -22,6 +22,7 @@ import { iniciarFocoDoQuadro } from './app/foco-do-quadro.ts';
 import { sondarAplicativos } from './app/inventario.ts';
 import { iniciarReligacaoDeNomes } from './app/ligacoes-quadro.ts';
 import { itens, quadroAberto } from './app/quadros.ts';
+import { iniciarRecursosDasFichas } from './app/recursos-das-fichas.ts';
 import { iniciarRotas, tela } from './app/rotas.ts';
 import { iniciarTema } from './app/tema.ts';
 import { App } from './ui/App.tsx';
@@ -29,6 +30,7 @@ import { App } from './ui/App.tsx';
 iniciarTema();
 iniciarRotas();
 iniciarFocoDoQuadro();
+iniciarRecursosDasFichas();
 iniciarReligacaoDeNomes(() => {
   const q = quadroAberto.value;
   return q ? { id: q.id, itens: itens.value.values() } : null;
