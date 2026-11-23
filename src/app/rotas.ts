@@ -2,7 +2,7 @@ import { signal } from '@preact/signals';
 import { registrarSelecaoNoHistorico, selecionadaId } from './campanha.ts';
 import { abrirQuadro, fecharQuadro, itemPendente } from './quadros.ts';
 
-export type Tela = 'entidades' | 'campanhas' | 'aplicativos' | 'sessao' | 'quadros';
+export type Tela = 'entidades' | 'campanhas' | 'aplicativos' | 'sessao' | 'quadros' | 'online';
 export const tela = signal<Tela>('entidades');
 /** `#/projecao/<quadroId>`: esta janela é a projeção para os jogadores (sem cabeçalho, só a moldura enviada). */
 export const projecaoQuadroId = signal<string | null>(null);
@@ -18,6 +18,10 @@ export function lerHash(): void {
   const pj = PROJECAO.exec(hash);
   projecaoQuadroId.value = pj ? decodeURIComponent(pj[1]!) : null;
   if (pj) return;
+  if (hash === '#/online') {
+    tela.value = 'online';
+    return;
+  }
   if (hash === '#/campanhas') {
     tela.value = 'campanhas';
     return;
