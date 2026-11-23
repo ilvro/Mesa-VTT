@@ -8,12 +8,24 @@ import { urlDoWebSocket } from '../online/config.ts';
 import { EVENTOS_DO_MESTRE, type Envelope, type Membro } from '../online/protocolo.ts';
 import { LIMITE_ESTADO_BYTES, blobIdDoEstado, comprimirEstado, type EstadoComprimidoRef } from '../online/estado-comprimido.ts';
 import { CANAL_EVENTOS } from '#mesa';
+import { barramentoDaMesa } from './barramento.ts';
 
 /** No máximo isto de mensagens de gesto (`emGesto`, `peca-gesto`) por segundo; a última sempre sai. */
 export const GESTOS_POR_SEGUNDO = 15;
 const INTERVALO_GESTO_MS = Math.ceil(1000 / GESTOS_POR_SEGUNDO);
 /** Quanto a ponte espera a resposta do `blob.tem` antes de subir o blob assim mesmo. */
 const ESPERA_BLOB_TEM_MS = 5000;
+
+/** Arquivo de som acima disto não sobe para a sala (aparece na tela). */
+export const LIMITE_SOM_BYTES = 40 * 1024 * 1024;
+/** A ponte repete `jukebox.ouvir { ligado: true }` neste intervalo (vale 30 s no Jukebox). */
+export const INTERVALO_OUVIR_MS = 10_000;
+/** Prazo da resposta do `jukebox.arquivo` (o Jukebox lê o blob e o devolve pelo barramento). */
+const PRAZO_ARQUIVO_MS = 10_000;
+/** Um som que falhou só é tentado de novo depois disto. */
+const NOVA_TENTATIVA_MS = 15_000;
+/** Um efeito cujo arquivo ainda não está na sala espera até isto; depois, o disparo se perde (tocar atrasado seria pior). */
+const ESPERA_EFEITO_MS = 10_000;
 
 /** O canal do destino remoto do publicador do Atlas (R5b): a projeção remota, só o que os jogadores já viram. */
 export const CANAL_PROJETOR_REMOTO = 'atlas:projetor:remoto';
@@ -48,7 +60,25 @@ export interface OpcoesDaPonte {
   agendar?: (f: () => void, ms: number) => () => void;
   /** SHA-256 em hex (padrão: Web Crypto). */
   hash?: (bytes: ArrayBuffer) => Promise<string>;
+  /** Pedidos ao Jukebox pelo barramento (`jukebox.ouvir`, `jukebox.arquivo`). Sem isto, a ponte não leva som à sala. */
+  pedirAoJukebox?: (tipo: 'jukebox.ouvir' | 'jukebox.arquivo', dados: unknown, prazoMs: number) => Promise<RespostaDoJukebox>;
   aoMudar?: (estado: EstadoDaPonte) => void;
+}
+
+export type RespostaDoJukebox = { ok: true; dados: unknown } | { ok: false; motivo: string };
+
+/** O que a tela mostra dos sons: os arquivos (sem `url`) que o `mix` e os efeitos citaram nesta sessão da ponte. */
+export interface EstadoDosSons {
+  /** Arquivos distintos citados. */
+  total: number;
+  /** Quantos já estão na sala. */
+  naSala: number;
+  /** Bytes dos que estão na sala (os que a ponte subiu e os que a sala já tinha). */
+  bytes: number;
+  /** Recusados por passar de 40 MB (o nome só aparece aqui, no computador do mestre). */
+  grandes: { faixaId: string; titulo: string; bytes: number }[];
+  /** Quantos falharam (Jukebox sem resposta, sala fechada); a ponte tenta de novo mais tarde. */
+  falhas: number;
 }
 
 export interface EstadoDaPonte {
@@ -57,7 +87,10 @@ export interface EstadoDaPonte {
   semNevoa: { mapa: string; nome: string }[];
   /** Há jogador na sala e a ponte pediu ao publicador do Atlas que trabalhe. */
   publicando: boolean;
+  sons: EstadoDosSons;
 }
+
+export const SONS_VAZIOS: EstadoDosSons = { total: 0, naSala: 0, bytes: 0, grandes: [], falhas: 0 };
 
 export interface Ponte {
   readonly estado: EstadoDaPonte;
@@ -92,24 +125,26 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
   const enviados = new Set<string>();
   let fila: Promise<void> = Promise.resolve();
   let fechada = false;
-  const estado: EstadoDaPonte = { membros: [], semNevoa: [], publicando: false };
+  const estado: EstadoDaPonte = { membros: [], semNevoa: [], publicando: false, sons: SONS_VAZIOS };
 
-  const mudou = () => { estado.semNevoa = [...pendentes].map(([mapa, p]) => ({ mapa, nome: p.nome })); o.aoMudar?.({ ...estado, membros: [...estado.membros] }); };
+  const mudou = () => { estado.semNevoa = [...pendentes].map(([mapa, p]) => ({ mapa, nome: p.nome })); estado.sons = resumoDosSons(); o.aoMudar?.({ ...estado, membros: [...estado.membros] }); };
 
   /** Perguntas `blob.tem` em andamento, por id. Sem resposta a tempo, vale "não tem" e o blob sobe. */
-  const perguntas = new Map<string, Promise<boolean>>();
-  const respostas = new Map<string, (tem: boolean) => void>();
-  function salaTem(id: string): Promise<boolean> {
+  const perguntas = new Map<string, Promise<{ tem: boolean; tamanho?: number }>>();
+  const respostas = new Map<string, (r: { tem: boolean; tamanho?: number }) => void>();
+  const NAO_TEM = { tem: false } as const;
+  function perguntarASala(id: string): Promise<{ tem: boolean; tamanho?: number }> {
     let p = perguntas.get(id);
     if (p) return p;
-    p = new Promise<boolean>(resolver => {
-      const cancelar = agendar(() => { respostas.delete(id); resolver(false); }, ESPERA_BLOB_TEM_MS);
-      respostas.set(id, tem => { cancelar(); respostas.delete(id); resolver(tem); });
-      if (!cliente.enviar({ tipo: 'blob.tem', id })) { cancelar(); respostas.delete(id); resolver(false); }
+    p = new Promise<{ tem: boolean; tamanho?: number }>(resolver => {
+      const cancelar = agendar(() => { respostas.delete(id); resolver(NAO_TEM); }, ESPERA_BLOB_TEM_MS);
+      respostas.set(id, r => { cancelar(); respostas.delete(id); resolver(r); });
+      if (!cliente.enviar({ tipo: 'blob.tem', id })) { cancelar(); respostas.delete(id); resolver(NAO_TEM); }
     }).finally(() => { perguntas.delete(id); });
     perguntas.set(id, p);
     return p;
   }
+  const salaTem = async (id: string): Promise<boolean> => (await perguntarASala(id)).tem;
 
   /** Sobe o blob (uma vez por conexão da ponte, e só se a sala ainda não o tem) e devolve o `{ blobId }` que o substitui. */
   async function subir(blob: Blob): Promise<{ blobId: string } | null> {
@@ -175,6 +210,142 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     mudou();
   }
 
+  // ---------- sons do Jukebox (R22) ----------
+
+  type SomEstado = 'pendente' | 'subindo' | 'na-sala' | 'grande' | 'falhou';
+  interface Som { estado: SomEstado; titulo: string; bytes: number; falhouEm: number }
+  /** Os arquivos sem `url` que o Jukebox citou, na ordem em que apareceram. */
+  const sons = new Map<string, Som>();
+  /** Os `faixaId` do `mix` mais recente: sobem primeiro. */
+  let doMixAtual: string[] = [];
+  /** O `mix` que espera as faixas dele chegarem à sala (só o mais novo; um mix com tudo pronto o substitui). */
+  let mixEsperando: Envelope | null = null;
+  let somRodando: Promise<void> | null = null;
+  const naoSobe = (s: Som | undefined): boolean => !s || s.estado === 'grande' || s.estado === 'falhou';
+
+  function resumoDosSons(): EstadoDosSons {
+    if (sons.size === 0) return SONS_VAZIOS;
+    let naSala = 0, bytes = 0, falhas = 0;
+    const grandes: EstadoDosSons['grandes'] = [];
+    for (const [faixaId, s] of sons) {
+      if (s.estado === 'na-sala') { naSala++; bytes += s.bytes; }
+      else if (s.estado === 'grande') grandes.push({ faixaId, titulo: s.titulo, bytes: s.bytes });
+      else if (s.estado === 'falhou') falhas++;
+    }
+    return { total: sons.size, naSala, bytes, grandes, falhas };
+  }
+
+  /** Anota um arquivo citado; um que falhou há mais de `NOVA_TENTATIVA_MS` volta à fila. */
+  function registrarSom(faixaId: string, titulo: string): void {
+    const s = sons.get(faixaId);
+    if (!s) sons.set(faixaId, { estado: 'pendente', titulo, bytes: 0, falhouEm: 0 });
+    else {
+      if (titulo && !s.titulo) s.titulo = titulo;
+      if (s.estado === 'falhou' && agora() - s.falhouEm >= NOVA_TENTATIVA_MS) s.estado = 'pendente';
+    }
+  }
+
+  /** O próximo a subir: os do mix atual primeiro, depois os outros, na ordem em que apareceram. */
+  function proximoSom(): string | null {
+    for (const id of doMixAtual) if (sons.get(id)?.estado === 'pendente') return id;
+    for (const [id, s] of sons) if (s.estado === 'pendente') return id;
+    return null;
+  }
+
+  async function subirSom(faixaId: string, s: Som): Promise<void> {
+    s.estado = 'subindo';
+    const falhou = () => { s.estado = 'falhou'; s.falhouEm = agora(); };
+    const pergunta = await perguntarASala(faixaId);
+    if (fechada) return;
+    if (pergunta.tem) {
+      s.estado = 'na-sala'; s.bytes = pergunta.tamanho ?? 0;
+      return;
+    }
+    const r = await pedirAoJukebox!('jukebox.arquivo', { faixaId }, PRAZO_ARQUIVO_MS).catch((): RespostaDoJukebox => ({ ok: false, motivo: 'erro' }));
+    if (fechada) return;
+    const blob = r.ok ? (r.dados as { blob?: unknown } | null)?.blob : null;
+    if (!ehBlob(blob)) return falhou();
+    if (blob.size > LIMITE_SOM_BYTES) { s.estado = 'grande'; s.bytes = blob.size; return; }
+    if (!(await cliente.enviarBlob(faixaId, blob))) return falhou();
+    s.estado = 'na-sala'; s.bytes = blob.size;
+  }
+
+  /** A fila: um arquivo por vez. Roda até não haver mais nada pendente; cada passo reavalia o `mix` que esperava. */
+  function rodarSons(): Promise<void> {
+    if (somRodando) return somRodando;
+    somRodando = (async () => {
+      try {
+        for (let id = proximoSom(); id !== null && !fechada; id = proximoSom()) {
+          try { await subirSom(id, sons.get(id)!); } catch { const s = sons.get(id)!; s.estado = 'falhou'; s.falhouEm = agora(); }
+          mudou();
+          liberarMix();
+        }
+      } finally { somRodando = null; }
+    })();
+    return somRodando;
+  }
+
+  /** Tira o que o jogador não pode saber (decisão 12): `titulo` do arquivo e `cena`. O `url` do Pages fica. */
+  function semTextos(env: Envelope): Envelope {
+    const dados = { ...(env.dados as Record<string, unknown>) };
+    delete dados.cena;
+    delete dados.titulo;
+    if (Array.isArray(dados.faixas)) dados.faixas = dados.faixas.map(f => { const { titulo: _t, ...resto } = f as Record<string, unknown>; return resto; });
+    return { ...env, dados };
+  }
+
+  const idsSemUrl = (faixas: unknown): Array<{ faixaId: string; titulo: string }> =>
+    (Array.isArray(faixas) ? faixas : []).flatMap(f => {
+      const x = f as { faixaId?: unknown; url?: unknown; titulo?: unknown };
+      return typeof x?.faixaId === 'string' && x.faixaId && typeof x.url !== 'string' ? [{ faixaId: x.faixaId, titulo: typeof x.titulo === 'string' ? x.titulo : '' }] : [];
+    });
+  const prontoParaSair = (ids: string[]): boolean => ids.every(id => { const s = sons.get(id); return s?.estado === 'na-sala' || naoSobe(s); });
+
+  /** Manda o `mix` que esperava, se as faixas dele já chegaram (ou não vão chegar: o mix sai assim mesmo). */
+  function liberarMix(): void {
+    if (!mixEsperando || fechada) return;
+    const ids = idsSemUrl((mixEsperando.dados as { faixas?: unknown }).faixas).map(x => x.faixaId);
+    if (!prontoParaSair(ids)) return;
+    const env = mixEsperando; mixEsperando = null;
+    cliente.enviar({ tipo: 'evento', envelope: semTextos(env) });
+  }
+
+  function aoMix(env: Envelope): void {
+    const faixas = idsSemUrl((env.dados as { faixas?: unknown } | undefined)?.faixas);
+    doMixAtual = faixas.map(f => f.faixaId);
+    for (const f of faixas) registrarSom(f.faixaId, f.titulo);
+    mixEsperando = env; // o mais novo substitui um que ainda esperava
+    liberarMix();
+    if (mixEsperando) { mudou(); void rodarSons(); }
+  }
+
+  function aoEfeito(env: Envelope): void {
+    const dados = env.dados as { faixaId?: unknown; titulo?: unknown; url?: unknown };
+    if (typeof dados.faixaId !== 'string' || !dados.faixaId) return;
+    const sai = () => cliente.enviar({ tipo: 'evento', envelope: semTextos(env) });
+    if (typeof dados.url === 'string') { sai(); return; } // o arquivo é do Pages: a casca baixa de lá
+    const id = dados.faixaId;
+    registrarSom(id, typeof dados.titulo === 'string' ? dados.titulo : '');
+    if (sons.get(id)?.estado === 'na-sala') { sai(); return; }
+    if (naoSobe(sons.get(id))) return;
+    // o arquivo ainda vai subir (depois dos do mix atual): o disparo espera um pouco por ele; tocar muito atrasado seria pior que perder
+    const limite = agora() + ESPERA_EFEITO_MS;
+    mudou();
+    void rodarSons().then(() => { if (!fechada && sons.get(id)?.estado === 'na-sala' && agora() <= limite) sai(); });
+  }
+
+  // ---------- jukebox.ouvir: o Jukebox só publica enquanto a ponte pede ----------
+  const pedirAoJukebox = o.pedirAoJukebox;
+  let cancelarOuvir: (() => void) | null = null;
+  function pedirParaOuvir(ligado: boolean): void {
+    void pedirAoJukebox?.('jukebox.ouvir', { ligado }, 1500).catch(() => { /* Jukebox fechado: nada a fazer */ });
+  }
+  function repetirOuvir(): void {
+    if (fechada) return;
+    pedirParaOuvir(true);
+    cancelarOuvir = agendar(repetirOuvir, INTERVALO_OUVIR_MS);
+  }
+
   const enfileirar = (data: unknown): void => { fila = fila.then(() => sairProjetor(data)).catch(() => { /* um quadro perdido não para a fila */ }); };
 
   /** Gestos (`estado` com `emGesto` e `peca-gesto`): no máximo `GESTOS_POR_SEGUNDO` por chave; o que sobra espera e só o último sai. */
@@ -214,6 +385,11 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     if (typeof e.tipo !== 'string' || typeof e.id !== 'string') return;
     if (e.autor !== undefined) return; // veio da sala: não volta para ela
     if (!EVENTOS_DO_MESTRE.includes(e.tipo)) return;
+    if (e.tipo === 'jukebox.mix' || e.tipo === 'jukebox.efeito-tocado') {
+      if (!pedirAoJukebox || !e.dados || typeof e.dados !== 'object') return;
+      if (e.tipo === 'jukebox.mix') aoMix(e); else aoEfeito(e);
+      return;
+    }
     cliente.enviar({ tipo: 'evento', envelope: e });
   };
 
@@ -236,17 +412,20 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     cliente.ouvir('bem-vindo', m => {
       if (m.config?.nome) nome = m.config.nome;
       enviados.clear(); // nova conexão: o servidor ainda guarda os blobs, mas confirmamos de novo
+      for (const som of sons.values()) if (som.estado === 'falhou') som.estado = 'pendente'; // a falha pode ter sido a conexão
+      if (proximoSom() !== null) void rodarSons();
       atualizarPresenca(m.membros, true);
     }),
-    cliente.ouvir('blob.tem', m => respostas.get(m.id)?.(m.tem)),
+    cliente.ouvir('blob.tem', m => respostas.get(m.id)?.({ tem: m.tem, ...(m.tamanho !== undefined ? { tamanho: m.tamanho } : {}) })),
     cliente.ouvir('membros', m => atualizarPresenca(m.membros, false)),
     cliente.aoMudarEstado(e => { if (e === 'caiu' && estado.publicando) { estado.publicando = false; } mudou(); }),
   );
   mudou();
+  if (pedirAoJukebox) repetirOuvir();
 
   return {
     estado,
-    esvaziar: () => fila,
+    esvaziar: async () => { await fila; while (somRodando) await somRodando; },
     confirmarSemNevoa(mapa) {
       lembrar(mapa);
       const p = pendentes.get(mapa);
@@ -258,6 +437,8 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     fechar() {
       if (fechada) return;
       if (estado.publicando) projetor.postMessage({ tipo: 'tchau' });
+      cancelarOuvir?.(); cancelarOuvir = null;
+      pedirParaOuvir(false);
       fechada = true;
       for (const f of soltar) f();
       largarGestosPendentes();
@@ -271,10 +452,18 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
 
 export type ConexaoOnline = 'desconectada' | EstadoDaSala;
 export const conexaoOnline = signal<ConexaoOnline>('desconectada');
-export const estadoDaPonte = signal<EstadoDaPonte>({ membros: [], semNevoa: [], publicando: false });
+export const estadoDaPonte = signal<EstadoDaPonte>({ membros: [], semNevoa: [], publicando: false, sons: SONS_VAZIOS });
 export const salaConectadaId = signal<string | null>(null);
 
 let atual: { cliente: ClienteDaSala; ponte: Ponte } | null = null;
+
+/** `jukebox.ouvir` e `jukebox.arquivo` pelo barramento da Mesa (o Jukebox, em outra aba, atende). */
+async function pedirAoJukeboxPeloBarramento(tipo: 'jukebox.ouvir' | 'jukebox.arquivo', dados: unknown, prazoMs: number): Promise<RespostaDoJukebox> {
+  const b = barramentoDaMesa();
+  if (!b) return { ok: false, motivo: 'sem-barramento' };
+  const r = await b.pedir(tipo, dados, { prazoMs });
+  return r.ok ? { ok: true, dados: r.resposta.dados } : { ok: false, motivo: r.detalhe ?? r.motivo };
+}
 
 /** "Abrir a mesa online": conecta a sala e liga a ponte. */
 export function abrirMesaOnline(sessao: string, salaId: string, nome?: string): void {
@@ -283,6 +472,7 @@ export function abrirMesaOnline(sessao: string, salaId: string, nome?: string): 
   const ponte = criarPonte({
     cliente,
     criarCanal: n => new BroadcastChannel(n) as unknown as CanalLocal,
+    pedirAoJukebox: pedirAoJukeboxPeloBarramento,
     ...(nome !== undefined ? { nomeDaSala: nome } : {}),
     aoMudar: e => { estadoDaPonte.value = e; },
   });
@@ -302,5 +492,5 @@ export function fecharMesaOnline(): void {
   atual = null;
   salaConectadaId.value = null;
   conexaoOnline.value = 'desconectada';
-  estadoDaPonte.value = { membros: [], semNevoa: [], publicando: false };
+  estadoDaPonte.value = { membros: [], semNevoa: [], publicando: false, sons: SONS_VAZIOS };
 }

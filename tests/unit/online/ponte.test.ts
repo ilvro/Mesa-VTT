@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { criarPonte, type CanalLocal } from '../../../src/app/online.ts';
+import { criarPonte, LIMITE_SOM_BYTES, type CanalLocal } from '../../../src/app/online.ts';
 import { descomprimirEstado } from '../../../src/online/estado-comprimido.ts';
 import type { ClienteDaSala } from '../../../src/online/cliente.ts';
 import type { MensagemDaSala, MensagemParaSala, Membro } from '../../../src/online/protocolo.ts';
@@ -21,20 +21,25 @@ function clienteFalso() {
   const blobs: Array<{ id: string; blob: Blob }> = [];
   /** Blobs que a sala "já tem" (resposta do `blob.tem`). */
   const salaTem = new Set<string>();
+  /** O tamanho que a sala diz ter de cada blob (resposta do `blob.tem`). */
+  const tamanhos = new Map<string, number>();
+  /** A ordem em que as coisas saíram: `blob:<id>` e `evento:<tipo>`. */
+  const ordem: string[] = [];
   const c = {
     estado: 'aberta' as const,
     enviar(m: MensagemParaSala) {
-      if (m.tipo === 'blob.tem') { queueMicrotask(() => emitir({ tipo: 'blob.tem', id: m.id, tem: salaTem.has(m.id) })); return true; }
+      if (m.tipo === 'blob.tem') { queueMicrotask(() => emitir({ tipo: 'blob.tem', id: m.id, tem: salaTem.has(m.id), ...(tamanhos.has(m.id) ? { tamanho: tamanhos.get(m.id)! } : {}) })); return true; }
+      if (m.tipo === 'evento') ordem.push(`evento:${m.envelope.tipo}`);
       enviadas.push(m); return true;
     },
     ouvir(tipo: string, f: (m: never) => void) { ouvintes.set(tipo, [...(ouvintes.get(tipo) ?? []), f]); return () => {}; },
     aoMudarEstado() { return () => {}; },
-    async enviarBlob(id: string, blob: Blob) { blobs.push({ id, blob }); return true; },
+    async enviarBlob(id: string, blob: Blob) { blobs.push({ id, blob }); ordem.push(`blob:${id}`); return true; },
     ouvirBlob() { return () => {}; },
     fechar() {},
   };
   const emitir = (m: MensagemDaSala) => { for (const f of ouvintes.get(m.tipo) ?? []) f(m as never); };
-  return { cliente: c as unknown as ClienteDaSala, enviadas, blobs, emitir, salaTem };
+  return { cliente: c as unknown as ClienteDaSala, enviadas, blobs, emitir, salaTem, tamanhos, ordem };
 }
 
 const eu = { discordId: '1', nome: 'Mestre', papel: 'mestre' as const };
@@ -258,4 +263,200 @@ test('blob.tem sem resposta a tempo: sobe assim mesmo', async () => {
   r.avancar(6000);
   await ponte.esvaziar();
   assert.deepEqual(f.blobs.map(b => b.id), ['h1']);
+});
+
+
+// ---------- som do Jukebox (R22) ----------
+
+const estadoDaFaixa = { volume: 1, efeitos: [], ajustes: {}, regioes: [] };
+const faixa = (faixaId: string, extra: object = {}) => ({ faixaId, titulo: `Título ${faixaId}`, loop: true, posicao: 3, taxa: 1, desde: 1000, pausada: false, estado: estadoDaFaixa, ...extra });
+let seq = 0;
+const envMix = (faixas: object[], cena: unknown = { app: 'jukebox', tipo: 'cena-sonora', id: 'Traição do rei' }) =>
+  ({ contrato: 1, app: 'jukebox', tipo: 'jukebox.mix', id: `mix${++seq}`, em: 1, campanhaId: null, dados: { cena, mestre: 1, faixas } });
+const envEfeito = (faixaId: string, extra: object = {}) =>
+  ({ contrato: 1, app: 'jukebox', tipo: 'jukebox.efeito-tocado', id: `ef${++seq}`, em: 1, campanhaId: null, dados: { faixaId, titulo: `Título ${faixaId}`, estado: estadoDaFaixa, ...extra } });
+const audio = (bytes: number) => new Blob([new Uint8Array(bytes)], { type: 'audio/mpeg' });
+
+/** Um Jukebox falso: guarda os pedidos e responde `jukebox.arquivo` com os blobs de `arquivos`, esperando `portao` se houver. */
+function jukeboxFalso(arquivos: Record<string, Blob>) {
+  const pedidos: Array<{ tipo: string; dados: unknown; prazoMs: number }> = [];
+  const subidas: string[] = [];
+  let emVoo = 0, maxEmVoo = 0;
+  let portao: Promise<void> | null = null;
+  const jukebox = {
+    pedidos, subidas,
+    segurar() { let abrir!: () => void; portao = new Promise(r => { abrir = r; }); return () => { portao = null; abrir(); }; },
+    get maxEmVoo() { return maxEmVoo; },
+    async pedir(tipo: 'jukebox.ouvir' | 'jukebox.arquivo', dados: unknown, prazoMs: number) {
+      pedidos.push({ tipo, dados, prazoMs });
+      if (tipo === 'jukebox.ouvir') return { ok: true as const, dados: undefined };
+      const id = (dados as { faixaId: string }).faixaId;
+      subidas.push(id);
+      emVoo++; maxEmVoo = Math.max(maxEmVoo, emVoo);
+      const espera = portao;
+      if (espera) await espera;
+      emVoo--;
+      const blob = arquivos[id];
+      return blob ? { ok: true as const, dados: { blob, tipo: blob.type } } : { ok: false as const, motivo: 'desconhecida' };
+    },
+  };
+  return jukebox;
+}
+const montarSom = (arquivos: Record<string, Blob>, extra: Partial<Parameters<typeof criarPonte>[0]> = {}) => {
+  const jk = jukeboxFalso(arquivos);
+  // relógio falso por padrão: o `jukebox.ouvir` se repete sozinho e um timer real seguraria o processo
+  const m = montar('teste-1', { pedirAoJukebox: jk.pedir, agendar: relogioFalso().agendar, ...extra });
+  return { ...m, jk };
+};
+const eventosEnviados = (enviadas: MensagemParaSala[], tipo: string) =>
+  enviadas.flatMap(m => (m.tipo === 'evento' && m.envelope.tipo === tipo ? [m.envelope as unknown as { dados: Record<string, any> }] : []));
+
+test('o mix sai sem titulo e sem cena, mantém o url, e uma faixa com url não é pedida nem subida', async () => {
+  const { apps, enviadas, blobs, jk, ponte } = montarSom({ aa: audio(10) });
+  apps.postMessage(envMix([faixa('aa'), faixa('bb', { url: 'sample/chuva.mp3' })]));
+  await ponte.esvaziar();
+  assert.deepEqual(jk.subidas, ['aa'], 'só a sem url vai ao Jukebox');
+  assert.deepEqual(blobs.map(b => b.id), ['aa']);
+  const [mix] = eventosEnviados(enviadas, 'jukebox.mix');
+  assert.ok(mix);
+  assert.equal('cena' in mix.dados, false);
+  assert.equal(mix.dados.faixas.some((f: Record<string, unknown>) => 'titulo' in f), false);
+  assert.equal(mix.dados.faixas[1].url, 'sample/chuva.mp3');
+  assert.equal(mix.dados.faixas[0].url, undefined);
+  assert.equal(mix.dados.faixas[0].estado.volume, 1, 'o resto da faixa segue igual');
+  assert.equal(mix.dados.mestre, 1);
+  assert.equal(JSON.stringify(mix).includes('Título'), false);
+  assert.equal(JSON.stringify(mix).includes('Traição'), false);
+});
+
+test('o efeito tocado sai sem titulo; com url sai direto, sem subir nada', async () => {
+  const { apps, enviadas, blobs, jk, ponte } = montarSom({ ef: audio(5) });
+  apps.postMessage(envEfeito('pages', { url: 'sample/trovao.mp3' }));
+  await ponte.esvaziar();
+  assert.equal(blobs.length, 0);
+  assert.deepEqual(jk.subidas, []);
+  apps.postMessage(envEfeito('ef'));
+  await ponte.esvaziar();
+  const efeitos = eventosEnviados(enviadas, 'jukebox.efeito-tocado');
+  assert.equal(efeitos.length, 2);
+  assert.equal(efeitos.some(e => 'titulo' in e.dados), false);
+  assert.equal(efeitos[0]!.dados.url, 'sample/trovao.mp3');
+  assert.deepEqual(blobs.map(b => b.id), ['ef']);
+});
+
+test('o mix sai depois do arquivo, e cada arquivo sobe uma vez', async () => {
+  const { apps, ordem, blobs, jk, ponte } = montarSom({ aa: audio(10), bb: audio(20) });
+  apps.postMessage(envMix([faixa('aa'), faixa('bb')]));
+  await ponte.esvaziar();
+  assert.deepEqual(ordem, ['blob:aa', 'blob:bb', 'evento:jukebox.mix']);
+  apps.postMessage(envMix([faixa('aa'), faixa('bb')]));
+  apps.postMessage(envMix([faixa('bb')]));
+  await ponte.esvaziar();
+  assert.deepEqual(blobs.map(b => b.id), ['aa', 'bb']);
+  assert.deepEqual(jk.subidas, ['aa', 'bb']);
+  assert.deepEqual(ordem.slice(3), ['evento:jukebox.mix', 'evento:jukebox.mix']);
+});
+
+test('o que a sala já tem não é pedido ao Jukebox nem subido, e o mix sai', async () => {
+  const { apps, enviadas, blobs, jk, ponte, salaTem, tamanhos } = montarSom({});
+  salaTem.add('aa'); tamanhos.set('aa', 1234);
+  apps.postMessage(envMix([faixa('aa')]));
+  await ponte.esvaziar();
+  assert.deepEqual(jk.subidas, []);
+  assert.equal(blobs.length, 0);
+  assert.equal(eventosEnviados(enviadas, 'jukebox.mix').length, 1);
+  assert.deepEqual(ponte.estado.sons, { total: 1, naSala: 1, bytes: 1234, grandes: [], falhas: 0 });
+});
+
+test('fila: um arquivo por vez, com as faixas do mix atual primeiro', async () => {
+  const { apps, ordem, jk, ponte } = montarSom({ a: audio(1), m1: audio(2), m2: audio(3), e1: audio(4), antigo: audio(5) });
+  const soltar = jk.segurar();
+  apps.postMessage(envMix([faixa('a')]));
+  await new Promise(r => setTimeout(r, 5)); // `a` já está em voo
+  apps.postMessage(envMix([faixa('antigo')])); // um mix velho, ainda sem arquivo
+  apps.postMessage(envEfeito('e1'));
+  apps.postMessage(envMix([faixa('m1'), faixa('m2')])); // o mix atual: sobe antes dos outros
+  await new Promise(r => setTimeout(r, 5));
+  soltar();
+  await ponte.esvaziar();
+  assert.equal(jk.maxEmVoo, 1, 'um arquivo por vez');
+  assert.deepEqual(jk.subidas, ['a', 'm1', 'm2', 'antigo', 'e1']);
+  // só o mix mais novo saiu (o que esperava foi trocado); o efeito esperou além do prazo? não: saiu depois do arquivo
+  assert.equal(ordem.filter(x => x === 'evento:jukebox.mix').length >= 1, true);
+  assert.ok(ordem.indexOf('blob:m2') < ordem.lastIndexOf('evento:jukebox.mix'));
+});
+
+test('arquivo acima de 40 MB não sobe, aparece na tela e o mix sai assim mesmo', async () => {
+  const { apps, enviadas, blobs, ponte } = montarSom({ grande: audio(LIMITE_SOM_BYTES + 1), ok: audio(100) });
+  apps.postMessage(envMix([faixa('grande', { titulo: 'Batalha final' }), faixa('ok')]));
+  await ponte.esvaziar();
+  assert.deepEqual(blobs.map(b => b.id), ['ok']);
+  assert.equal(eventosEnviados(enviadas, 'jukebox.mix').length, 1);
+  assert.deepEqual(ponte.estado.sons.grandes, [{ faixaId: 'grande', titulo: 'Batalha final', bytes: LIMITE_SOM_BYTES + 1 }]);
+  assert.equal(ponte.estado.sons.total, 2);
+  assert.equal(ponte.estado.sons.naSala, 1);
+  assert.equal(ponte.estado.sons.bytes, 100);
+  // exatamente 40 MB ainda sobe
+  const { apps: apps2, blobs: blobs2, ponte: ponte2 } = montarSom({ limite: audio(LIMITE_SOM_BYTES) });
+  apps2.postMessage(envMix([faixa('limite')]));
+  await ponte2.esvaziar();
+  assert.deepEqual(blobs2.map(b => b.id), ['limite']);
+});
+
+test('Jukebox sem resposta: o mix sai assim mesmo, o som fica como falha e volta à fila depois de 15 s', async () => {
+  const r = relogioFalso();
+  const { apps, enviadas, jk, ponte } = montarSom({}, { agora: r.agora, agendar: r.agendar });
+  apps.postMessage(envMix([faixa('sumiu')]));
+  await ponte.esvaziar();
+  assert.equal(eventosEnviados(enviadas, 'jukebox.mix').length, 1);
+  assert.equal(ponte.estado.sons.falhas, 1);
+  apps.postMessage(envMix([faixa('sumiu')]));
+  await ponte.esvaziar();
+  assert.deepEqual(jk.subidas, ['sumiu'], 'não insiste logo em seguida');
+  r.avancar(16_000);
+  apps.postMessage(envMix([faixa('sumiu')]));
+  await ponte.esvaziar();
+  assert.deepEqual(jk.subidas, ['sumiu', 'sumiu']);
+});
+
+test('um efeito cujo arquivo sobe sai depois dele; mesmo efeito de novo sai na hora', async () => {
+  const { apps, enviadas, ordem, ponte } = montarSom({ ef: audio(8) });
+  apps.postMessage(envEfeito('ef'));
+  await ponte.esvaziar();
+  assert.deepEqual(ordem, ['blob:ef', 'evento:jukebox.efeito-tocado']);
+  apps.postMessage(envEfeito('ef'));
+  assert.equal(eventosEnviados(enviadas, 'jukebox.efeito-tocado').length, 2, 'saiu sem esperar');
+});
+
+test('jukebox.ouvir: liga ao abrir, repete a cada 10 s e desliga ao fechar', async () => {
+  const r = relogioFalso();
+  const { jk, ponte } = montarSom({}, { agora: r.agora, agendar: r.agendar });
+  const ouvir = () => jk.pedidos.filter(p => p.tipo === 'jukebox.ouvir').map(p => (p.dados as { ligado: boolean }).ligado);
+  assert.deepEqual(ouvir(), [true]);
+  r.avancar(9_999);
+  assert.deepEqual(ouvir(), [true]);
+  r.avancar(10_000);
+  assert.deepEqual(ouvir(), [true, true]);
+  r.avancar(35_000);
+  assert.deepEqual(ouvir(), [true, true, true, true]);
+  ponte.fechar();
+  assert.deepEqual(ouvir(), [true, true, true, true, false]);
+  r.avancar(120_000);
+  assert.equal(ouvir().length, 5, 'fechada, não repete mais');
+  ponte.fechar();
+  assert.equal(ouvir().length, 5, 'fechar duas vezes manda um só desligar');
+});
+
+test('sem Jukebox ligado à ponte, o som não sai e nada é pedido', async () => {
+  const { apps, enviadas, ponte } = montar();
+  apps.postMessage(envMix([faixa('aa')]));
+  await ponte.esvaziar();
+  assert.deepEqual(eventosEnviados(enviadas, 'jukebox.mix'), []);
+});
+
+test('o mix que veio da sala (com autor) não volta para ela', async () => {
+  const { apps, enviadas, ponte } = montarSom({});
+  apps.postMessage({ ...envMix([faixa('aa', { url: 'sample/a.mp3' })]), autor: { discordId: '2', nome: 'x', papel: 'jogador', fichas: [] } });
+  await ponte.esvaziar();
+  assert.deepEqual(enviadas, []);
 });

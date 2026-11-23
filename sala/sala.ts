@@ -1,6 +1,6 @@
 import { lerOla, type Eu } from '../src/online/protocolo.ts';
 import { criarEstado, type Estado } from './estado.ts';
-import { bemVindo, blobsParaQuemChega, papelNaSala, saidaMembros, tratar, tratarBinario, type Destino, type Saida } from './mensagens.ts';
+import { bemVindo, blobsParaQuemChega, eventosParaQuemChega, papelNaSala, saidaMembros, tratar, tratarBinario, type Destino, type Saida } from './mensagens.ts';
 import { criarLimitador } from './permissoes.ts';
 import { verificarSessao } from './sessao.ts';
 
@@ -70,6 +70,7 @@ export class Sala implements DurableObject {
         if (!a || !quer(s.destino, c, a)) continue;
         try {
           c.send(texto);
+          for (const q of s.quadros ?? []) c.send(q);
         } catch {
           // conexão já fechada: o runtime a remove
         }
@@ -118,6 +119,10 @@ export class Sala implements DurableObject {
         ws.send(JSON.stringify(b.anuncio));
         for (const q of b.quadros) ws.send(q);
       }
+    }
+    // e o último `jukebox.mix`, para o som seguir de onde está (a casca baixa as faixas com `blob.pedir`)
+    if (novo.papel !== 'mestre') {
+      for (const msg of eventosParaQuemChega(this.estado)) ws.send(JSON.stringify(msg));
     }
     this.entregar([saidaMembros(this.estado, todos)], ws);
   }

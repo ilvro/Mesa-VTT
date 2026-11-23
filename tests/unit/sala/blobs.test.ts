@@ -27,12 +27,14 @@ test('blob.tem: protocolo, só o mestre pergunta e a sala responde ao remetente'
   assert.deepEqual(lerMensagemParaSala(j({ tipo: 'blob.tem', id: 'h' })), { tipo: 'blob.tem', id: 'h' });
   assert.equal(lerMensagemParaSala(j({ tipo: 'blob.tem' })), null);
   assert.deepEqual(lerMensagemDaSala(j({ tipo: 'blob.tem', id: 'h', tem: true })), { tipo: 'blob.tem', id: 'h', tem: true });
+  assert.deepEqual(lerMensagemDaSala(j({ tipo: 'blob.tem', id: 'h', tem: true, tamanho: 9 })), { tipo: 'blob.tem', id: 'h', tem: true, tamanho: 9 });
+  assert.equal(lerMensagemDaSala(j({ tipo: 'blob.tem', id: 'h', tem: true, tamanho: 'x' })), null);
   assert.equal(lerMensagemDaSala(j({ tipo: 'blob.tem', id: 'h' })), null);
 
   const e = sala();
   assert.deepEqual(tratar(e, mestre, j({ tipo: 'blob.tem', id: 'h' }), 1, todos), [{ destino: 'remetente', msg: { tipo: 'blob.tem', id: 'h', tem: false } }]);
   subir(e, 'h', [new Uint8Array([1]), new Uint8Array([2])]);
-  assert.deepEqual(tratar(e, mestre, j({ tipo: 'blob.tem', id: 'h' }), 1, todos)[0]!.msg, { tipo: 'blob.tem', id: 'h', tem: true });
+  assert.deepEqual(tratar(e, mestre, j({ tipo: 'blob.tem', id: 'h' }), 1, todos)[0]!.msg, { tipo: 'blob.tem', id: 'h', tem: true, tamanho: 2 });
   assert.deepEqual(tratar(e, ana, j({ tipo: 'blob.tem', id: 'h' }), 1, todos), [{ destino: 'remetente', msg: { tipo: 'erro', motivo: 'permissao', recusado: 'blob.tem' } }]);
   // incompleto não conta
   tratar(e, mestre, j({ tipo: 'blob', id: 'meio', tipoMime: 'x' }), 1, todos);

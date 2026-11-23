@@ -9,6 +9,12 @@ import './online.css';
 
 const ROTULO_DA_CONEXAO = { desconectada: 'Desconectada', conectando: 'Conectando…', aberta: 'Conectada', caiu: 'Sem conexão (tentando de novo)' } as const;
 
+/** `12,4 MB`, `830 KB`. */
+export function formatarBytes(n: number): string {
+  if (n >= 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
+  return `${Math.max(0, Math.round(n / 1024))} KB`;
+}
+
 export function MesaOnline() {
   const s = sessaoOnline.value;
   useEffect(() => { carregarSessaoOnline(); }, []);
@@ -110,6 +116,17 @@ function PainelDoMestre({ sessao }: { sessao: string }) {
           <button type="button" class="botao-pilula perigo" data-testid="online-sem-nevoa-confirmar" onClick={() => confirmarSemNevoa(x.mapa)}>Mandar assim mesmo</button>
         </div>
       ))}
+      {conexao !== 'desconectada' && ponte.sons.total > 0 && (
+        <div data-testid="online-sons">
+          <p class="meta" data-testid="online-sons-resumo">Sons: {ponte.sons.naSala} de {ponte.sons.total} na sala · {formatarBytes(ponte.sons.bytes)}</p>
+          {ponte.sons.falhas > 0 && <p class="meta">{ponte.sons.falhas} som(ns) não subiram (o Jukebox não respondeu); a Mesa tenta de novo.</p>}
+          {ponte.sons.grandes.map(g => (
+            <div key={g.faixaId} class="aviso suave" data-testid="online-som-grande">
+              <p>Este som passa de 40 MB e não vai para a sala: {g.titulo || g.faixaId.slice(0, 8)} ({formatarBytes(g.bytes)}). Os jogadores não o ouvirão.</p>
+            </div>
+          ))}
+        </div>
+      )}
       {conexao !== 'desconectada' && (
         <>
           <h3 class="faixa pequena">Conectados ({ponte.membros.length})</h3>

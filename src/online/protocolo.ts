@@ -36,7 +36,14 @@ export interface MsgBlob { tipo: 'blob'; id: string; tipoMime: string }
 
 /** O mestre pergunta se a sala já tem um blob completo (blobs persistem entre sessões); a resposta é `MsgBlobTemResposta`. */
 export interface MsgBlobTem { tipo: 'blob.tem'; id: string }
-export interface MsgBlobTemResposta { tipo: 'blob.tem'; id: string; tem: boolean }
+/** `tamanho`: bytes do blob, quando a sala o tem. */
+export interface MsgBlobTemResposta { tipo: 'blob.tem'; id: string; tem: boolean; tamanho?: number }
+
+/**
+ * Qualquer membro pede um blob; a sala responde com `blob` e os pedaços binários, só ao remetente, se o id está no último
+ * `jukebox.mix`, nos efeitos tocados há pouco ou nos blobs citados pelos últimos `canal` (R6). Senão, `erro { motivo: 'permissao' }`.
+ */
+export interface MsgBlobPedir { tipo: 'blob.pedir'; id: string }
 
 export type MensagemParaSala =
   | MsgOla
@@ -46,6 +53,7 @@ export type MensagemParaSala =
   | MsgFichaEntregar
   | MsgBlob
   | MsgBlobTem
+  | MsgBlobPedir
   | MsgMembroPersonagem
   | MsgSalaConfig;
 
@@ -86,7 +94,7 @@ export type MensagemDaSala =
   | { tipo: 'erro'; motivo: string; recusado?: string };
 
 /** O que a ponte do mestre pode repassar à sala (decisão 12). `atlas.cena-aberta` fica de fora. */
-export const EVENTOS_DO_MESTRE: readonly string[] = ['ficha.rolagem'];
+export const EVENTOS_DO_MESTRE: readonly string[] = ['ficha.rolagem', 'jukebox.mix', 'jukebox.efeito-tocado'];
 
 // ---------- validação ----------
 
@@ -116,6 +124,7 @@ export function lerMensagemParaSala(texto: string): MensagemParaSala | null {
     case 'ficha.entregar': return txt(m.fichaId) && txt(m.dono) ? { tipo: 'ficha.entregar', fichaId: m.fichaId, dono: m.dono } : null;
     case 'blob': return txt(m.id) && m.id && txt(m.tipoMime) ? { tipo: 'blob', id: m.id, tipoMime: m.tipoMime } : null;
     case 'blob.tem': return txt(m.id) && m.id ? { tipo: 'blob.tem', id: m.id } : null;
+    case 'blob.pedir': return txt(m.id) && m.id ? { tipo: 'blob.pedir', id: m.id } : null;
     case 'membro.personagem': return m.fichaId === null || txt(m.fichaId) ? { tipo: 'membro.personagem', fichaId: m.fichaId } : null;
     case 'sala.config':
       if (!txt(m.nome) || (m.capaBlobId !== undefined && !txt(m.capaBlobId))) return null;
@@ -147,7 +156,9 @@ export function lerMensagemDaSala(texto: string): MensagemDaSala | null {
       if (!ehFicha(m.ficha) || !num(m.rev) || (m.conflito !== undefined && typeof m.conflito !== 'boolean') || (m.dono !== undefined && !txt(m.dono))) return null;
       return { tipo: 'ficha.atualizada', ficha: m.ficha, rev: m.rev, ...(m.conflito !== undefined ? { conflito: m.conflito } : {}), ...(m.dono !== undefined ? { dono: m.dono } : {}) };
     case 'blob': return txt(m.id) && m.id && txt(m.tipoMime) ? { tipo: 'blob', id: m.id, tipoMime: m.tipoMime } : null;
-    case 'blob.tem': return txt(m.id) && m.id && typeof m.tem === 'boolean' ? { tipo: 'blob.tem', id: m.id, tem: m.tem } : null;
+    case 'blob.tem':
+      if (!txt(m.id) || !m.id || typeof m.tem !== 'boolean' || (m.tamanho !== undefined && !num(m.tamanho))) return null;
+      return { tipo: 'blob.tem', id: m.id, tem: m.tem, ...(m.tamanho !== undefined ? { tamanho: m.tamanho } : {}) };
     case 'erro': return txt(m.motivo) && (m.recusado === undefined || txt(m.recusado)) ? { tipo: 'erro', motivo: m.motivo, ...(m.recusado !== undefined ? { recusado: m.recusado } : {}) } : null;
     default: return null;
   }

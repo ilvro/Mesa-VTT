@@ -15,6 +15,8 @@ export interface Sql {
 export const LIMITE_FICHA_BYTES = 1.5 * 1024 * 1024;
 /** Quantas rolagens a sala lembra. */
 export const MAX_ROLAGENS = 200;
+/** Quantos efeitos tocados a sala lembra (os arquivos deles continuam pedíveis). */
+export const MAX_EFEITOS_LEMBRADOS = 50;
 /** Máximo de pedaços de um blob (128 × 512 KB = 64 MB). */
 export const MAX_PEDACOS = 128;
 
@@ -76,6 +78,16 @@ export interface Estado {
   guardarCitados(canal: string, tipo: string, ids: string[]): void;
   /** Os blobs citados pelas últimas mensagens guardadas, sem repetir. */
   blobsCitados(): string[];
+  /** Bytes de um blob completo; `null` se não existe ou está incompleto. */
+  tamanhoDoBlob(id: string): number | null;
+
+  /** Guarda o último `jukebox.mix` (o envelope já carimbado), para quem chega depois. */
+  guardarMix(envelope: Envelope): void;
+  ultimoMix(): Envelope | null;
+  /** Lembra o `faixaId` de um `jukebox.efeito-tocado` (os últimos `MAX_EFEITOS_LEMBRADOS`), para a casca poder pedir o arquivo. */
+  lembrarEfeito(faixaId: string): void;
+  /** Os blobs que `blob.pedir` entrega: os do último `mix`, os dos efeitos lembrados e os citados nos últimos `canal`. */
+  blobsPedidos(): string[];
 
   personagem(discordId: string): string | null;
   escolherPersonagem(discordId: string, fichaId: string | null): void;
@@ -93,6 +105,7 @@ export function criarEstado(sql: Sql): Estado {
   rodar('CREATE TABLE IF NOT EXISTS ultimo (canal TEXT PRIMARY KEY, json TEXT NOT NULL)');
   rodar('CREATE TABLE IF NOT EXISTS blobs (id TEXT NOT NULL, i INTEGER NOT NULL, n INTEGER NOT NULL, tipo TEXT NOT NULL, dados BLOB NOT NULL, PRIMARY KEY (id, i))');
   rodar('CREATE TABLE IF NOT EXISTS citados (canal TEXT NOT NULL, tipo TEXT NOT NULL, ids TEXT NOT NULL, PRIMARY KEY (canal, tipo))');
+  rodar('CREATE TABLE IF NOT EXISTS ultimo_evento (tipo TEXT PRIMARY KEY, json TEXT NOT NULL)');
   rodar('CREATE TABLE IF NOT EXISTS config (chave TEXT PRIMARY KEY, valor TEXT NOT NULL)');
   rodar('CREATE TABLE IF NOT EXISTS personagens (discord_id TEXT PRIMARY KEY, ficha_id TEXT NOT NULL)');
 
@@ -220,6 +233,35 @@ export function criarEstado(sql: Sql): Estado {
     blobsCitados() {
       const todos = new Set<string>();
       for (const r of rodar('SELECT ids FROM citados ORDER BY canal, tipo')) for (const id of JSON.parse(String(r.ids)) as string[]) todos.add(id);
+      return [...todos];
+    },
+
+    tamanhoDoBlob(id) {
+      if (!this.temBlob(id)) return null;
+      const r = um('SELECT SUM(LENGTH(dados)) AS t FROM blobs WHERE id = ?', id);
+      return r ? Number(r.t) : null;
+    },
+
+    guardarMix(envelope) {
+      rodar('INSERT OR REPLACE INTO ultimo_evento (tipo, json) VALUES (?, ?)', 'jukebox.mix', JSON.stringify(envelope));
+    },
+    ultimoMix() {
+      const r = um('SELECT json FROM ultimo_evento WHERE tipo = ?', 'jukebox.mix');
+      return r ? JSON.parse(String(r.json)) as Envelope : null;
+    },
+    lembrarEfeito(faixaId) {
+      const r = um('SELECT json FROM ultimo_evento WHERE tipo = ?', 'efeitos');
+      const lista = (r ? JSON.parse(String(r.json)) as string[] : []).filter(x => x !== faixaId);
+      lista.push(faixaId);
+      rodar('INSERT OR REPLACE INTO ultimo_evento (tipo, json) VALUES (?, ?)', 'efeitos', JSON.stringify(lista.slice(-MAX_EFEITOS_LEMBRADOS)));
+    },
+    blobsPedidos() {
+      const todos = new Set<string>(this.blobsCitados());
+      const mix = this.ultimoMix();
+      const faixas = (mix?.dados as { faixas?: unknown } | undefined)?.faixas;
+      if (Array.isArray(faixas)) for (const f of faixas) if (f && typeof (f as { faixaId?: unknown }).faixaId === 'string') todos.add((f as { faixaId: string }).faixaId);
+      const e = um('SELECT json FROM ultimo_evento WHERE tipo = ?', 'efeitos');
+      if (e) for (const id of JSON.parse(String(e.json)) as string[]) todos.add(id);
       return [...todos];
     },
 

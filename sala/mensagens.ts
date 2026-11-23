@@ -20,6 +20,8 @@ export type Destino = 'remetente' | 'outros' | 'todos' | { ficha: string };
 export interface Saida {
   destino: Destino;
   msg: MensagemDaSala;
+  /** Quadros binários que seguem a `msg` aos mesmos destinos (os pedaços de um blob). */
+  quadros?: ArrayBuffer[];
 }
 
 const PREFIXO_PROJETOR = 'atlas:projetor:';
@@ -53,6 +55,12 @@ export function blobsParaQuemChega(estado: Estado): BlobParaEnviar[] {
     });
   }
   return saida;
+}
+
+/** O que mandar a quem chegou depois, além dos blobs: o último `jukebox.mix` (o envelope carimbado), como um `evento` comum. */
+export function eventosParaQuemChega(estado: Estado): MensagemDaSala[] {
+  const mix = estado.ultimoMix();
+  return mix ? [{ tipo: 'evento', envelope: mix }] : [];
 }
 
 const erro = (motivo: string, recusado?: string): Saida => ({
@@ -119,6 +127,11 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
     case 'evento': {
       const envelope = carimbar(msg.envelope, eu, estado.idsDoDono(eu.discordId));
       if (envelope.tipo === 'ficha.rolagem') estado.registrarRolagem(envelope, eu.discordId, agora);
+      if (envelope.tipo === 'jukebox.mix') estado.guardarMix(envelope);
+      if (envelope.tipo === 'jukebox.efeito-tocado') {
+        const id = (envelope.dados as { faixaId?: unknown } | undefined)?.faixaId;
+        if (typeof id === 'string' && id) estado.lembrarEfeito(id);
+      }
       return [{ destino: 'outros', msg: { tipo: 'evento', envelope } }];
     }
     case 'ficha.salvar': {
@@ -144,8 +157,20 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
     case 'sala.config':
       estado.definirConfig(msg.nome, msg.capaBlobId);
       return [];
-    case 'blob.tem':
-      return [{ destino: 'remetente', msg: { tipo: 'blob.tem', id: msg.id, tem: estado.temBlob(msg.id) } }];
+    case 'blob.tem': {
+      const tamanho = estado.tamanhoDoBlob(msg.id);
+      return [{ destino: 'remetente', msg: { tipo: 'blob.tem', id: msg.id, tem: tamanho !== null, ...(tamanho !== null ? { tamanho } : {}) } }];
+    }
+    case 'blob.pedir': {
+      if (!estado.blobsPedidos().includes(msg.id)) return [erro('permissao', msg.tipo)];
+      const pedacos = estado.pedacosDoBlob(msg.id);
+      if (!pedacos || pedacos.length === 0) return [erro('inexistente', msg.tipo)];
+      return [{
+        destino: 'remetente',
+        msg: { tipo: 'blob', id: msg.id, tipoMime: pedacos[0]!.cab.tipo },
+        quadros: pedacos.map(p => codificarPedaco(p.cab, p.dados)),
+      }];
+    }
     case 'blob':
       // `estado:<mapa>:<versao>` pode voltar com outro conteúdo (a versão recomeça numa sessão nova): o novo substitui
       if (msg.id.startsWith(PREFIXO_ESTADO)) estado.apagarBlob(msg.id);
