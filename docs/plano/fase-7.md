@@ -48,7 +48,7 @@ Testes: moldura com título; duas ilhas separadas por um vão; ilha que cresce m
 Nota: `Secao.tipo` ganhou o valor `'soltos'` (além de `'moldura'` e `'ilha'`); a seção "Soltos" tem id `soltos:<cx>,<cy>` (região de 4000 px). Setas ficam fora de `itemIds`; moldura filha não entra no `itemIds` da mãe (é seção própria). `tituloDaSecao` devolve `{ titulo, itemId }`. Parâmetros em `OPCOES_PADRAO_SECOES`.
 Commit: `split boards into titled sections`
 
-### L1b — Texto compacto de uma seção (puro)  ⬜
+### L1b — Texto compacto de uma seção (puro)  ✅
 Objetivo: o conteúdo de uma seção num texto curto e fiel, com o tamanho em tokens conhecido antes de enviar.
 Depende de: L1a.
 Ler: `src/dominio/marcadores.ts`, `src/dominio/busca-quadro.ts` (`textoBuscavel`), `src/dominio/quadro.ts` (`textoPuro`).
@@ -62,10 +62,11 @@ Como:
    - imagem: `[imagem #<id curto>: <legenda ou "sem legenda">, LxA]`; cartão de entidade: `[entidade: Nome (tipo)]`; outros Refs: `[ref: mesa:…]`;
    - setas internas da seção, no fim: `A → B: rótulo`, com A e B pelo começo do texto do item;
    - itens só do mestre e segredos **entram** (é o mestre que pergunta), marcados `(só mestre)` e `(segredo)`;
-   - estado: `✓` para feito e `(se: poeira)` para condições;
+   - estado: `✓` para feito; as condições (`se:poeira`) já aparecem dentro dos marcadores, sem sufixo repetido;
    - ids curtos: os 6 primeiros caracteres do id, sem colisão dentro da seção (aumente se colidir), para o Claude poder pedir uma imagem ou citar um item.
 3. Paginação: quebra entre itens, nunca no meio de um, até `limiteTokens`; o fim diz `… página 1 de 3`.
 Testes: ordem; marcadores preservados; imagem com e sem legenda; paginação respeita o limite; `titulos` é bem menor que `completo`; ids curtos sem colisão.
+Nota: API `estimarTokens`, `idsCurtos`, `textoDaSecao(secao, itens, { nivel, pagina, limiteTokens, secoes?, entidades? }) → { texto, tokens, paginas, tokensTotais }` (`tokensTotais` é a soma das páginas, para o mapa). Linha de item: `- #<id curto> [✓] [tipo] texto (se: …) (só mestre) (segredo)`; imagem: `- [imagem #id: legenda, LxA]`; moldura filha: `§ <título> (seção <id>, N itens)`; cabeçalho `§ <título> (<tipo>, N itens)` repetido em cada página. `(segredo)` só aparece para o marcador `[SEGREDO]` no texto (o tipo `[segredo]` já diz o resto). Setas internas: as ligadas só a itens da seção, ou uma ligada e outra livre dentro da caixa; formato `"começo" #id → "começo" #id: rótulo`. Cartão de entidade usa a opção `entidades` (id → nome, tipo); sem ela, só o nome. Item maior que o limite sai sozinho na página com `(item longo)`. `legendaDaImagemMiro` está em `miro.ts`.
 Commit: `compact text view of a board section`
 
 ### L1c — Mapa do quadro (puro)  ⬜

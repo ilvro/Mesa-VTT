@@ -167,6 +167,8 @@ export type Item =
       imagemId: string;
       larguraOriginal: number;
       alturaOriginal: number;
+      /** Descrição curta da imagem (no Miro, o título do item). */
+      legenda?: string;
       caixa: EstiloDeCaixa;
     })
   | (Base & {
@@ -578,6 +580,7 @@ const CHAVES_POR_TIPO: Record<Item['tipo'], ReadonlySet<string>> = {
     'imagemId',
     'larguraOriginal',
     'alturaOriginal',
+    'legenda',
     'caixa',
   ]),
   traco: new Set([
@@ -680,6 +683,10 @@ export function validarItem(v: unknown, caminho = 'item'): asserts v is Item {
       exigirTexto(v.imagemId, `${caminho}.imagemId`, true);
       exigirNumero(v.larguraOriginal, `${caminho}.larguraOriginal`, 1);
       exigirNumero(v.alturaOriginal, `${caminho}.alturaOriginal`, 1);
+      if (v.legenda !== undefined) {
+        const legenda = exigirTexto(v.legenda, `${caminho}.legenda`, true);
+        if (legenda.length > 300) falhar(`${caminho}.legenda`, 'deve ter no máximo 300 caracteres');
+      }
       validarEstiloCaixa(v.caixa, `${caminho}.caixa`);
       break;
     }

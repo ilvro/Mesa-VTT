@@ -114,6 +114,19 @@ export interface PacoteMiroBruto {
   groups?: GrupoMiroBruto[]
 }
 
+/** Título do item `image` do Miro sem a extensão do arquivo e sem espaços extras; vazio vira `undefined`. */
+export function legendaDaImagemMiro(titulo: unknown): string | undefined {
+  if (typeof titulo !== 'string') return undefined
+  const limpo = titulo
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\.(png|jpe?g|gif|webp|bmp|svg|avif|heic|tiff?)$/i, '')
+    .trim()
+    .slice(0, 300)
+    .trim()
+  return limpo === '' ? undefined : limpo
+}
+
 export interface MetadadosImagemImportada {
   imagemId: string
   larguraOriginal: number
@@ -673,6 +686,8 @@ export function converterMiro(
       )
       criado.rotacao = rotacao
       criado.molduraId = molduraId
+      const legenda = legendaDaImagemMiro(dt.title)
+      if (legenda) criado.legenda = legenda
       itensConvertidos.push(criado)
       continue
     }
