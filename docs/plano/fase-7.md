@@ -28,7 +28,7 @@ A ponte do assistente só existe em desenvolvimento (`mesa-dev`; veja `../Atlas/
 
 ## Etapa A — Seções
 
-### L1a — Seções do quadro (puro)  ⬜
+### L1a — Seções do quadro (puro)  ✅
 Objetivo: dividir qualquer quadro em seções com título, de forma estável e rápida.
 Ler: `src/dominio/molduras.ts` (`ordemDeLeitura`, `molduraQueContem`), `src/dominio/roteiro-do-quadro.ts` (`ordemDeLeituraDeItens`), `src/dominio/quadro.ts`, `src/dominio/doc-rico.ts`.
 Arquivos: criar `src/dominio/secoes-do-quadro.ts` e `tests/unit/secoes-do-quadro.test.ts`.
@@ -45,6 +45,7 @@ Como:
 3. `ligacoesEntreSecoes(secoes, itens)`: as setas cujas pontas caem em seções diferentes dão `{ de, para, rotulo }`.
 4. Ilhas com um único item pequeno (um rabisco, uma seta solta) entram numa seção "Soltos" por região, para o mapa não virar milhares de linhas.
 Testes: moldura com título; duas ilhas separadas por um vão; ilha que cresce mantém o id; título por fonte maior, por H1, por `titulo`; molduras aninhadas; setas entre seções; 10 mil itens em menos de 300 ms.
+Nota: `Secao.tipo` ganhou o valor `'soltos'` (além de `'moldura'` e `'ilha'`); a seção "Soltos" tem id `soltos:<cx>,<cy>` (região de 4000 px). Setas ficam fora de `itemIds`; moldura filha não entra no `itemIds` da mãe (é seção própria). `tituloDaSecao` devolve `{ titulo, itemId }`. Parâmetros em `OPCOES_PADRAO_SECOES`.
 Commit: `split boards into titled sections`
 
 ### L1b — Texto compacto de uma seção (puro)  ⬜
