@@ -69,7 +69,7 @@ Testes: ordem; marcadores preservados; imagem com e sem legenda; paginação res
 Nota: API `estimarTokens`, `idsCurtos`, `textoDaSecao(secao, itens, { nivel, pagina, limiteTokens, secoes?, entidades? }) → { texto, tokens, paginas, tokensTotais }` (`tokensTotais` é a soma das páginas, para o mapa). Linha de item: `- #<id curto> [✓] [tipo] texto (se: …) (só mestre) (segredo)`; imagem: `- [imagem #id: legenda, LxA]`; moldura filha: `§ <título> (seção <id>, N itens)`; cabeçalho `§ <título> (<tipo>, N itens)` repetido em cada página. `(segredo)` só aparece para o marcador `[SEGREDO]` no texto (o tipo `[segredo]` já diz o resto). Setas internas: as ligadas só a itens da seção, ou uma ligada e outra livre dentro da caixa; formato `"começo" #id → "começo" #id: rótulo`. Cartão de entidade usa a opção `entidades` (id → nome, tipo); sem ela, só o nome. Item maior que o limite sai sozinho na página com `(item longo)`. `legendaDaImagemMiro` está em `miro.ts`.
 Commit: `compact text view of a board section`
 
-### L1c — Mapa do quadro (puro)  ⬜
+### L1c — Mapa do quadro (puro)  ✅
 Objetivo: o índice que o Claude lê primeiro.
 Depende de: L1a, L1b.
 Arquivos: criar `src/dominio/mapa-do-quadro.ts` + teste.
@@ -80,6 +80,7 @@ Como: `mapaDoQuadro(quadro, itens, resumos?) → texto`, com uma linha por seç�
 - cabeçalho com o nome do quadro, o total de seções, de itens e de tokens estimados, e quantas imagens não têm legenda nem descrição;
 - limite de 6 mil tokens: passando disso, as seções "Soltos" e as ilhas pequenas são resumidas numa linha por região.
 Testes: formato; recuo; vizinhança; corte por limite.
+Nota: API `mapaDoQuadro(quadro, itens, { resumos?, limiteTokens = 6000, opcoesSecoes? }) → { texto, tokens, secoes }` e `tokensEmPortugues`. `resumos` é `Map<string, { texto, desatualizado, autor? }>` com chave de seção ou `item:<id>` (descrição de imagem). Linha: `§ id "título" — N itens (contagens) · ~X tokens · <direção> "vizinha" · → "ligada" (rótulo)`; ligações entram nos dois sentidos (`→`/`←`), até 3 por seção; vizinha só para seções de topo. Contagens por tipo semântico, "outros" só havendo tipos, e imagens. Corte: `soltos` e ilhas com menos de 3 itens viram `· N grupos pequenos perto de "X"` e a linha final diz quantas seções foram resumidas; se ainda passar, resumos ficam só com a primeira frase. Resumo de autor `mestre` leva `(escrito pelo mestre: não troque sem pedir)`. Tokens de cada seção vêm de `tokensTotais` com uma página só.
 Commit: `board map for the assistant`
 
 ---
