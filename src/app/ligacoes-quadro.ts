@@ -1,8 +1,12 @@
 import { mesmaRef, type Entidade, type Ligacao } from '#mesa';
 
 const APP_DA_MESA = 'mesa';
+import { effect } from '@preact/signals';
 import {
+  chavesDeNomes,
   diferencaDeLigacoes,
+  itensQueCitam,
+  nomesNovos,
   ligacoesDoQuadro,
   ligacoesOrfasDoQuadro,
   parsearRefDeItemDeQuadro,
@@ -12,7 +16,7 @@ import {
 import { molduraQueContem, type ItemMoldura } from '../dominio/molduras.ts';
 import { refDaEntidade } from '../dominio/notas.ts';
 import type { Item } from '../dominio/quadro.ts';
-import { listarItens, obterQuadro } from './banco-quadros.ts';
+import { listarItens, listarQuadros, obterQuadro } from './banco-quadros.ts';
 import {
   atualizar,
   campanhaAtiva,
@@ -21,6 +25,72 @@ import {
 } from './campanha.ts';
 
 let fila: Promise<void> = Promise.resolve();
+
+const nomesPorCampanha = new Map<string, Set<string>>();
+
+/**
+ * Observa as entidades: quando nascem nomes novos na campanha ativa, religa em
+ * segundo plano os itens de todos os quadros que os citam. Iniciar uma vez.
+ * A primeira leitura de cada campanha só guarda os nomes (não há "novos").
+ */
+/** O quadro aberto agora, com os itens da memória (podem ter mudanças ainda não gravadas). */
+export type LerQuadroAberto = () => { id: string; itens: Iterable<Item> } | null;
+
+export function iniciarReligacaoDeNomes(lerAberto: LerQuadroAberto): () => void {
+  return effect(() => {
+    const c = campanhaAtiva.value;
+    if (!c) return;
+    // Logo depois de trocar de campanha, `entidades` ainda pode trazer as da anterior.
+    const lista = entidades.value.filter((e) => e.campanhaId === c.id);
+    const antes = nomesPorCampanha.get(c.id);
+    // Primeira leitura com entidades: só guarda. Uma lista vazia é tratada como
+    // "ainda carregando", para não tomar todos os nomes por novos ao abrir o app.
+    if (!antes || antes.size === 0) {
+      nomesPorCampanha.set(c.id, chavesDeNomes(lista));
+      return;
+    }
+    nomesPorCampanha.set(c.id, chavesDeNomes(lista));
+    const novos = nomesNovos(antes, lista);
+    if (novos.length === 0) return;
+    void religarItensQueCitam(c.id, novos, lerAberto);
+  });
+}
+
+function religarItensQueCitam(
+  campanhaId: string,
+  nomes: readonly string[],
+  lerAberto: LerQuadroAberto,
+): Promise<void> {
+  fila = fila
+    .then(async () => {
+      if (campanhaAtiva.value?.id !== campanhaId) return;
+      const r = obterRepositorio();
+      const todos = await listarQuadros(campanhaId);
+      for (const q of todos) {
+        const aberto = lerAberto();
+        const lista =
+          aberto && aberto.id === q.id ? [...aberto.itens] : await listarItens(q.id);
+        for (const item of itensQueCitam(nomes, lista)) {
+          const de = refDoItemDeQuadro(item.quadroId, item.id);
+          const atuais = (await r.listarLigacoes(campanhaId, de)).filter(
+            (l) => l.tipo === 'menciona' && l.criadaPor === APP_DA_MESA && mesmaRef(l.de, de),
+          );
+          const { adicionar } = diferencaDeLigacoes(
+            atuais.map((l) => l.para),
+            refsDoItem(item, entidades.value),
+          );
+          for (const para of adicionar) {
+            await r.ligar({ campanhaId, de, para, tipo: 'menciona' });
+          }
+        }
+      }
+      await atualizar();
+    })
+    .catch((erro) => {
+      console.warn('Mesa: erro ao religar nomes novos nos quadros', erro);
+    });
+  return fila;
+}
 
 export function sincronizarLigacoesDoItem(item: Item): Promise<void> {
   fila = fila

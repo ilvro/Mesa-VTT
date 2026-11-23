@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import type { Entidade, Ligacao, Ref } from '#mesa';
 import {
   classificarRef,
+  chavesDeNomes,
   diferencaDeLigacoes,
+  itensQueCitam,
+  nomesNovos,
   ligacoesDoQuadro,
   ligacoesOrfasDoQuadro,
   parsearRefDeItemDeQuadro,
@@ -117,5 +120,28 @@ describe('classificarRef', () => {
     assert.equal(classificarRef({ app: 'mesa', tipo: 'quadro', id: 'q1' }), 'quadro');
     assert.equal(classificarRef({ app: 'mesa', tipo: 'entidade', id: 'e1' }), 'entidade');
     assert.equal(classificarRef({ app: 'atlas', tipo: 'objeto', id: 'm/o' }), 'externo');
+  });
+});
+
+describe('religar nomes novos', () => {
+  const txt = (id: string, t: string) => novoTexto({ quadroId: 'q1', x: 0, y: 0, doc: docDeTexto(t) }, 1, id);
+
+  it('itensQueCitam acha [[Nome]] e falas, ignorando acento e caixa', () => {
+    const a = txt('a', 'veja [[TEODOR]] aqui');
+    const b = txt('b', '[SINDRE]: oi');
+    const c = txt('c', 'nada de [[Outro]]');
+    const d = txt('d', 'sem ligação, só Teodor');
+    const r = itensQueCitam(['Téodor', 'sindre'], [a, b, c, d]);
+    assert.deepEqual(r.map((i) => i.id), ['a', 'b']);
+  });
+
+  it('itensQueCitam sem nomes não devolve nada', () => {
+    assert.deepEqual(itensQueCitam([], [txt('a', '[[X]]')]), []);
+  });
+
+  it('nomesNovos compara pela chave sem acento nem caixa', () => {
+    const antes = chavesDeNomes([ent('1', 'Sindre')]);
+    assert.deepEqual(nomesNovos(antes, [ent('1', 'SINDRE'), ent('2', 'Téodor')]), ['Téodor']);
+    assert.deepEqual(nomesNovos(antes, [ent('1', 'Sindre')]), []);
   });
 });

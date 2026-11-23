@@ -1,7 +1,8 @@
 import type { Entidade, Ligacao, Ref } from '#mesa';
 import { entidadePorRef } from './cenas.ts';
 import { analisarMarcadores } from './marcadores.ts';
-import { entidadePorNome, refDaEntidade, refsMencionados } from './notas.ts';
+import { semAcento } from './entidades.ts';
+import { analisarNota, entidadePorNome, refDaEntidade, refsMencionados } from './notas.ts';
 import { textoPuro, type Item } from './quadro.ts';
 
 function chave(r: Ref): string {
@@ -145,4 +146,61 @@ export function refsDoItem(item: Item, entidades: readonly Entidade[]): Ref[] {
     default:
       return [];
   }
+}
+
+const chaveDeNome = (nome: string): string => semAcento(nome).replace(/\s+/g, ' ').trim();
+
+/** Os nomes de entidade em `entidades` que não estavam em `antes` (chaves sem acento nem caixa, como em `entidadePorNome`). */
+export function nomesNovos(
+  antes: ReadonlySet<string>,
+  entidades: readonly Entidade[],
+): string[] {
+  const saida = new Map<string, string>();
+  for (const e of entidades) {
+    const k = chaveDeNome(e.nome);
+    if (k && !antes.has(k) && !saida.has(k)) saida.set(k, e.nome);
+  }
+  return [...saida.values()];
+}
+
+export const chavesDeNomes = (entidades: readonly Entidade[]): Set<string> =>
+  new Set(entidades.map((e) => chaveDeNome(e.nome)).filter(Boolean));
+
+function textoCitavel(item: Item): string {
+  switch (item.tipo) {
+    case 'texto':
+    case 'forma':
+      return textoPuro(item.doc);
+    case 'moldura':
+      return item.titulo;
+    case 'seta':
+      return item.rotulo;
+    default:
+      return '';
+  }
+}
+
+/**
+ * Os itens que citam algum dos `nomes` por `[[Nome]]` ou pelas falas/rótulos
+ * (`[SINDRE]`), como `refsDoItem` resolve; acento, caixa e espaços repetidos
+ * são ignorados, como na resolução de ligações.
+ */
+export function itensQueCitam(nomes: readonly string[], itens: readonly Item[]): Item[] {
+  const alvo = new Set(nomes.map(chaveDeNome).filter(Boolean));
+  if (alvo.size === 0) return [];
+  const cita = (n: string) => alvo.has(chaveDeNome(n));
+  return itens.filter((item) => {
+    const texto = textoCitavel(item);
+    if (!texto) return false;
+    for (const t of analisarNota(texto)) {
+      if (t.tipo === 'ligacao' && t.alvo.tipo === 'nome' && cita(t.alvo.nome)) return true;
+    }
+    for (const t of analisarMarcadores(texto)) {
+      if (t.tipo !== 'marcador') continue;
+      const m = t.marcador;
+      if (m.tipo === 'fala' && (cita(m.quem) || (m.para !== undefined && cita(m.para)))) return true;
+      if (m.tipo === 'rotulo' && cita(m.texto)) return true;
+    }
+    return false;
+  });
 }

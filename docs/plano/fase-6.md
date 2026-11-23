@@ -180,7 +180,8 @@ Como: o conteúdo é o texto de `copiar(comConteudo(seleção))`; carimbar é `c
 Testes: banco com `fake-indexeddb` (abrir v1 existente e migrar para v2 sem perder nada); e2e salvar e carimbar.
 Commit: `scene templates for boards`
 
-### E4c — Religar `[[Nome]]` quando a entidade nasce  ⬜
+### E4c — Religar `[[Nome]]` quando a entidade nasce  ✅
+Nota: `itensQueCitam` cobre também falas `[SINDRE]` e rótulos (como `refsDoItem`); `nomesNovos`/`chavesDeNomes` puros no mesmo arquivo; a observação (`iniciarReligacaoDeNomes`, chamada em `main.tsx`) guarda os nomes por campanha e só adiciona ligações (não remove); `Entidade` não tem apelidos, só `nome` conta.
 Objetivo: um `[[Teodor]]` escrito antes de existir a entidade vira ligação sozinho quando ela é criada (hoje só ao editar o item de novo).
 Ler: `src/app/ligacoes-quadro.ts` (`sincronizarLigacoesDoItem`, `refsDoItem`), `src/dominio/prontidao.ts` (como acha `[[ligações]]` sem destino), `src/app/campanha.ts` (`entidades`).
 Arquivos: `src/dominio/ligacoes-quadro.ts` (`itensQueCitam(nomes, itens)`, puro) + teste; `src/app/ligacoes-quadro.ts` (observar as entidades novas e resincronizar, em segundo plano, os itens de todos os quadros da campanha que citam o nome).
