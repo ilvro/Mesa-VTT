@@ -124,6 +124,7 @@ import { MenuDoItem } from './MenuDoItem.tsx';
 import { Minimapa } from './Minimapa.tsx';
 import { Navegador } from './Navegador.tsx';
 import { PainelDaPaleta } from './PainelDaPaleta.tsx';
+import { LeituraDoQuadro } from './LeituraDoQuadro.tsx';
 import { PainelDeSegredos } from './PainelDeSegredos.tsx';
 import { PainelDoEstado } from './PainelDoEstado.tsx';
 import { PainelDoFundo, type ModoRoda } from './PainelDoFundo.tsx';
@@ -209,6 +210,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
   const indiceBusca = useSignal(0);
   const tiposFiltro = useSignal<ReadonlySet<TipoSemantico>>(new Set());
   const esconderSegredos = useSignal(false);
+  const modoQuadro = useSignal<'quadro' | 'ler'>('quadro');
   const seletorEntidade = useSignal<{ ponto: Ponto; busca: string } | null>(null);
   const navegadorAberto = useSignal(false);
   const indiceMoldura = useSignal(0);
@@ -509,6 +511,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (!quadroAtivo.value) return;
+      if (modoQuadro.value === 'ler') return;
       if (emCampoDeTexto(e.target)) return;
 
       if (e.code === 'Space' && !e.repeat) {
@@ -1503,6 +1506,32 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
           }}
         />
         <span class="espaco" />
+        <div class="chave-modo" role="group" aria-label="Modo do quadro">
+          <button
+            type="button"
+            class="botao-pilula"
+            aria-pressed={modoQuadro.value === 'quadro'}
+            data-testid="modo-quadro"
+            onClick={() => {
+              modoQuadro.value = 'quadro';
+            }}
+          >
+            Quadro
+          </button>
+          <button
+            type="button"
+            class="botao-pilula"
+            aria-pressed={modoQuadro.value === 'ler'}
+            data-testid="modo-ler"
+            title="Ler o quadro como página, moldura por moldura"
+            onClick={() => {
+              editandoId.value = null;
+              modoQuadro.value = 'ler';
+            }}
+          >
+            Ler
+          </button>
+        </div>
         <button
           type="button"
           class="botao-pilula"
@@ -1541,40 +1570,6 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
         <button
           type="button"
           class="botao-pilula"
-          aria-pressed={painelSegredosAberto.value}
-          data-testid="botao-segredos"
-          onClick={() => {
-            painelSegredosAberto.value = !painelSegredosAberto.value;
-            if (painelSegredosAberto.value) {
-              painelEstadoAberto.value = false;
-              painelPaletaAberto.value = false;
-              painelFundoAberto.value = false;
-            }
-          }}
-        >
-          Segredos
-        </button>
-        <button
-          type="button"
-          class="botao-pilula"
-          aria-pressed={painelLinhaDoTempoAberto.value}
-          data-testid="botao-linha-do-tempo"
-          onClick={() => {
-            painelLinhaDoTempoAberto.value = !painelLinhaDoTempoAberto.value;
-            if (painelLinhaDoTempoAberto.value) {
-              painelSegredosAberto.value = false;
-              painelEstadoAberto.value = false;
-              painelPaletaAberto.value = false;
-              painelFundoAberto.value = false;
-              painelRevisaoAberto.value = false;
-            }
-          }}
-        >
-          Linha do tempo
-        </button>
-        <button
-          type="button"
-          class="botao-pilula"
           aria-pressed={painelRevisaoAberto.value}
           data-testid="botao-fila-revisao"
           onClick={() => {
@@ -1590,71 +1585,118 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
         >
           Revisão ({[...itens.value.values()].filter((i) => Boolean(i.revisao)).length})
         </button>
-        {q.origem ? (
-          <button
-            type="button"
-            class="botao-pilula"
-            data-testid="botao-atualizar-miro"
-            title="Atualizar este quadro com um novo pacote .miro.zip"
-            onClick={() => inputMiroRef.current?.click()}
-          >
-            Atualizar do Miro…
-          </button>
-        ) : null}
-        <label class="molduras-agem-wrap" title="Comportamento ao focar uma moldura na sessão">
-          <span>Molduras agem</span>
-          <select
-            class="campo molduras-agem-select"
-            data-testid="select-molduras-agem"
-            value={modoMoldurasAgem.value}
-            onChange={(e) => {
-              modoMoldurasAgem.value = e.currentTarget.value as ModoMoldurasAgem;
+        <details class="menu-paineis-quadro" data-testid="menu-paineis-quadro">
+          <summary class="botao-pilula" data-testid="botao-paineis-quadro">Painéis</summary>
+          <div
+            class="menu-paineis-lista"
+            onClick={(e) => {
+              // Escolher um painel fecha o menu; o seletor "Molduras agem" não.
+              if ((e.target as HTMLElement).closest('button')) {
+                (e.currentTarget.parentElement as HTMLDetailsElement).open = false;
+              }
             }}
           >
-            <option value="sim">sim</option>
-            <option value="perguntar">perguntar</option>
-            <option value="nao">não</option>
-          </select>
-        </label>
-        <button
-          type="button"
-          class="botao-pilula"
-          aria-pressed={painelEstadoAberto.value}
-          data-testid="botao-estado"
-          onClick={() => {
-            painelEstadoAberto.value = !painelEstadoAberto.value;
-            if (painelEstadoAberto.value) {
-              painelPaletaAberto.value = false;
-              painelFundoAberto.value = false;
-            }
-          }}
-        >
-          Estado
-        </button>
-        <button
-          type="button"
-          class="botao-pilula"
-          aria-pressed={painelPaletaAberto.value}
-          data-testid="botao-paleta"
-          onClick={() => {
-            painelPaletaAberto.value = !painelPaletaAberto.value;
-            if (painelPaletaAberto.value) painelFundoAberto.value = false;
-          }}
-        >
-          Paleta
-        </button>
-        <button
-          type="button"
-          class="botao-pilula"
-          aria-pressed={painelFundoAberto.value}
-          data-testid="botao-fundo"
-          onClick={() => {
-            painelFundoAberto.value = !painelFundoAberto.value;
-            if (painelFundoAberto.value) painelPaletaAberto.value = false;
-          }}
-        >
-          Fundo e grade
-        </button>
+            <button
+              type="button"
+              class="botao-pilula"
+              aria-pressed={painelSegredosAberto.value}
+              data-testid="botao-segredos"
+              onClick={() => {
+                painelSegredosAberto.value = !painelSegredosAberto.value;
+                if (painelSegredosAberto.value) {
+                  painelEstadoAberto.value = false;
+                  painelPaletaAberto.value = false;
+                  painelFundoAberto.value = false;
+                }
+              }}
+            >
+              Segredos
+            </button>
+            <button
+              type="button"
+              class="botao-pilula"
+              aria-pressed={painelLinhaDoTempoAberto.value}
+              data-testid="botao-linha-do-tempo"
+              onClick={() => {
+                painelLinhaDoTempoAberto.value = !painelLinhaDoTempoAberto.value;
+                if (painelLinhaDoTempoAberto.value) {
+                  painelSegredosAberto.value = false;
+                  painelEstadoAberto.value = false;
+                  painelPaletaAberto.value = false;
+                  painelFundoAberto.value = false;
+                  painelRevisaoAberto.value = false;
+                }
+              }}
+            >
+              Linha do tempo
+            </button>
+            {q.origem ? (
+              <button
+                type="button"
+                class="botao-pilula"
+                data-testid="botao-atualizar-miro"
+                title="Atualizar este quadro com um novo pacote .miro.zip"
+                onClick={() => inputMiroRef.current?.click()}
+              >
+                Atualizar do Miro…
+              </button>
+            ) : null}
+            <label class="molduras-agem-wrap" title="Comportamento ao focar uma moldura na sessão">
+              <span>Molduras agem</span>
+              <select
+                class="campo molduras-agem-select"
+                data-testid="select-molduras-agem"
+                value={modoMoldurasAgem.value}
+                onChange={(e) => {
+                  modoMoldurasAgem.value = e.currentTarget.value as ModoMoldurasAgem;
+                }}
+              >
+                <option value="sim">sim</option>
+                <option value="perguntar">perguntar</option>
+                <option value="nao">não</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              class="botao-pilula"
+              aria-pressed={painelEstadoAberto.value}
+              data-testid="botao-estado"
+              onClick={() => {
+                painelEstadoAberto.value = !painelEstadoAberto.value;
+                if (painelEstadoAberto.value) {
+                  painelPaletaAberto.value = false;
+                  painelFundoAberto.value = false;
+                }
+              }}
+            >
+              Estado
+            </button>
+            <button
+              type="button"
+              class="botao-pilula"
+              aria-pressed={painelPaletaAberto.value}
+              data-testid="botao-paleta"
+              onClick={() => {
+                painelPaletaAberto.value = !painelPaletaAberto.value;
+                if (painelPaletaAberto.value) painelFundoAberto.value = false;
+              }}
+            >
+              Paleta
+            </button>
+            <button
+              type="button"
+              class="botao-pilula"
+              aria-pressed={painelFundoAberto.value}
+              data-testid="botao-fundo"
+              onClick={() => {
+                painelFundoAberto.value = !painelFundoAberto.value;
+                if (painelFundoAberto.value) painelPaletaAberto.value = false;
+              }}
+            >
+              Fundo e grade
+            </button>
+          </div>
+        </details>
         <button
           type="button"
           class="selo"
@@ -1721,7 +1763,10 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
           (ferramenta.value === 'texto' || ferramenta.value === 'nota') && 'modo-criar',
         )}
         data-testid="area-quadro"
-        style={estiloGrade(q.fundo, camera.value)}
+        style={{
+          ...estiloGrade(q.fundo, camera.value),
+          display: modoQuadro.value === 'ler' ? 'none' : undefined,
+        }}
         onPointerDown={(e) => {
           menuContexto.value = null;
           aoPressionar(e);
@@ -1776,6 +1821,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
           void inserirImagens(imagens, ponto);
         }}
       >
+        {modoQuadro.value === 'quadro' ? (
         <Mundo
           camera={camera.value}
           tamanhoTela={tamanhoTela.value}
@@ -1798,6 +1844,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
           onIniciarConector={iniciarConector}
           onIniciarPontaSeta={iniciarPontaSeta}
         />
+        ) : null}
 
         {(() => {
           void tickEditor.value;
@@ -2123,6 +2170,17 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
           </div>
         ) : null}
       </div>
+      {modoQuadro.value === 'ler' ? (
+        <LeituraDoQuadro
+          itens={itens.value}
+          esconderSegredos={esconderSegredos.value}
+          aoVerNoQuadro={(alvo) => {
+            modoQuadro.value = 'quadro';
+            camera.value = enquadrar(caixaEnvolventeDeItem(alvo), tamanhoTela.value, 80);
+            selecao.value = new Set([alvo.id]);
+          }}
+        />
+      ) : null}
     </section>
   );
 }

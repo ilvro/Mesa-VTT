@@ -127,7 +127,7 @@ Commit: `bulk review of imported board items`
 
 ## Etapa C — Jogar
 
-### E3a — Modo leitura (roteiro do quadro)  ⬜
+### E3a — Modo leitura (roteiro do quadro)  ✅
 Objetivo: durante o jogo, ler o quadro como uma página contínua, moldura por moldura, sem caçar com zoom. É a parte "nota do Obsidian" do quadro.
 Ler: `src/dominio/molduras.ts` (`ordemDeLeitura`, `filhos`), `src/ui/quadro/TextoDecorado.tsx` (`ConteudoDecorado`, `aoClicarTextoDecorado`), `src/ui/quadro/Item.tsx` (condições, feito), `src/app/foco-do-quadro.ts` (`aoFocarMoldura`, `ultimaMolduraFocada`), `src/ui/ModoSessao.tsx`.
 Arquivos: criar `src/dominio/roteiro-do-quadro.ts` + teste e `src/ui/quadro/LeituraDoQuadro.tsx`; mudar `Quadro.tsx` (chave "Quadro | Ler" na barra) e `estilo.css`.
@@ -138,6 +138,7 @@ Como:
 4. Itens `soMestre` e segredos aparecem (o mestre lê); o filtro "esconder segredos" do quadro vale aqui também.
 Testes: `roteiroDoQuadro` (aninhamento, ordem dentro da moldura, soltos, setas fora); e2e: alternar para Ler, clicar numa moldura do índice, voltar ao quadro com "ver no quadro".
 Commit: `added reading mode for boards`
+Nota: `roteiro-do-quadro.ts` não existia; foi criado (com `nivel` em cada seção e `ordemDeLeituraDeItens`). No modo Ler o `Mundo` não é desenhado e o atalho de teclado do quadro fica desligado. A coluna tem folga embaixo para a última moldura chegar ao topo; o disparo de `aoFocarMoldura` só vale depois de o usuário rolar ou clicar no índice (nada dispara ao abrir a leitura).
 
 ### E3b — Projeção do quadro para os jogadores  ⬜
 Objetivo: mostrar aos jogadores uma moldura (um handout, um mapa desenhado, uma pista) na TV ou no segundo monitor, sem nada do mestre.

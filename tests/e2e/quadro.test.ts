@@ -561,7 +561,7 @@ test('E1c: atualizar do Miro -> relatório, conflito na fila e Ctrl+Z volta tudo
       buffer: zip('atualizacao-v1'),
     });
     await page.waitForSelector('[data-testid="area-quadro"]');
-    await page.waitForSelector('[data-testid="botao-atualizar-miro"]');
+    await page.waitForSelector('[data-testid="botao-atualizar-miro"]', { state: 'attached' });
     assert.equal(await page.locator('[data-testid^="item-"]').count(), 3);
 
     // Editar "Nota alfa" aqui (ela também muda no Miro: conflito).
@@ -915,6 +915,79 @@ test('E2b: importar só uma moldura do Miro e atualizar respeitando o filtro', a
     await page.locator('[data-testid="aviso"]', { hasText: 'Nada mudou no Miro' }).waitFor();
     const depois = await page.locator('[data-testid^="item-"]').allTextContents();
     assert.ok(!depois.some((t) => t.includes('Nota b1')));
+
+    assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('E3a: alternar para Ler, clicar numa moldura do índice e voltar ao quadro com "ver no quadro"', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  const erros: string[] = [];
+  page.on('pageerror', (e) => erros.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') erros.push(m.text()); });
+  const pacote = Buffer.from(
+    zipSync({
+      'quadro.json': strToU8(
+        readFileSync(new URL('../unit/fixtures/miro/molduras.json', import.meta.url), 'utf8'),
+      ),
+    }),
+  );
+
+  try {
+    await page.goto(`${amb.origem}/Mesa/`);
+    await page.waitForSelector('[data-testid="campanha-select"]');
+    await page.click('[data-testid="aba-campanhas"]');
+    await page.fill('[data-testid="nova-campanha-nome"]', 'Campanha E3a');
+    await page.click('[data-testid="criar-campanha"]');
+    await page.waitForSelector('[data-testid="tela-entidades"]');
+    await page.click('[data-testid="aba-quadros"]');
+    await page.waitForSelector('[data-testid="tela-quadros"]');
+    await page.setInputFiles('[data-testid="importar-miro-input"]', {
+      name: 'grande.miro.zip',
+      mimeType: 'application/zip',
+      buffer: pacote,
+    });
+    await page.waitForSelector('[data-testid="dialogo-molduras-miro"]');
+    await page.click('[data-testid="molduras-miro-importar"]');
+    await page.waitForSelector('[data-testid="area-quadro"]');
+
+    // Quadro -> Ler: a página contínua com as duas molduras e o índice.
+    assert.equal(await page.locator('[data-testid="leitura-quadro"]').count(), 0);
+    await page.click('[data-testid="modo-ler"]');
+    await page.waitForSelector('[data-testid="leitura-quadro"]');
+    assert.equal(await page.locator('[data-testid="area-quadro"]').isVisible(), false);
+    assert.equal(await page.locator('[data-testid="barra-quadro"]').isVisible(), true);
+    const titulos = await page.locator('.leitura-titulo').allTextContents();
+    assert.deepEqual(titulos.slice(0, 2), ['Ato 1', 'Ato 2']);
+    assert.equal(await page.locator('[data-testid^="leitura-indice-"]').count(), 2);
+    const textoLeitura = (await page.locator('[data-testid="leitura-rolagem"]').textContent()) ?? '';
+    assert.ok(textoLeitura.includes('Nota a1'));
+    assert.ok(textoLeitura.includes('Nota b1'));
+
+    // Índice: clicar na segunda moldura rola até ela.
+    await page.locator('[data-testid^="leitura-indice-"]').nth(1).click();
+    await page.waitForFunction(() => {
+      const h = document.querySelectorAll('.leitura-titulo')[1];
+      const c = document.querySelector('[data-testid="leitura-rolagem"]');
+      if (!h || !c) return false;
+      return Math.abs(h.getBoundingClientRect().top - c.getBoundingClientRect().top) < 80;
+    });
+    await page.waitForFunction(() =>
+      document.querySelectorAll('[data-testid^="leitura-indice-"]')[1]?.classList.contains('ativo'),
+    );
+
+    // "ver no quadro" volta ao modo Quadro com o item selecionado.
+    const itemB1 = page.locator('[data-testid^="leitura-item-"]', { hasText: 'Nota b1' }).first();
+    await itemB1.hover();
+    await itemB1.locator('[data-testid^="ver-no-quadro-"]').click();
+    await page.waitForSelector('[data-testid="area-quadro"]');
+    assert.equal(await page.locator('[data-testid="leitura-quadro"]').count(), 0);
+    const alvo = page.locator('[data-testid^="item-"]', { hasText: 'Nota b1' }).first();
+    await alvo.waitFor();
+    assert.equal(await alvo.isVisible(), true);
 
     assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
   } finally {

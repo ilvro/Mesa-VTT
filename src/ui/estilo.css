@@ -596,6 +596,32 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   border-radius: var(--raio);
   min-width: 180px;
 }
+.barra-quadro .botao-pilula { white-space: nowrap; flex: none; }
+/* O nome encolhe com reticências, mas nunca some (a regra geral dos campos zera o min-width). */
+.barra-quadro input.quadro-nome-input { flex: 0 1 300px; min-width: 120px; text-overflow: ellipsis; }
+.menu-paineis-quadro { position: relative; flex: none; }
+.menu-paineis-quadro > summary { list-style: none; cursor: pointer; }
+.menu-paineis-quadro > summary::-webkit-details-marker { display: none; }
+.menu-paineis-quadro > summary::after { content: '▾'; font-size: 10px; margin-left: 2px; }
+.menu-paineis-quadro[open] > summary { border-color: var(--acento); color: var(--acento); background: var(--acento-suave); }
+.menu-paineis-lista {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 220px;
+  padding: 10px;
+  background: var(--painel);
+  border: 1px solid var(--linha-forte);
+  border-radius: var(--raio);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+.menu-paineis-lista .botao-pilula { justify-content: flex-start; }
+.menu-paineis-lista .molduras-agem-wrap { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 2px 0; border-top: 1px solid var(--linha); margin-top: 2px; }
 .quadro-nome-input:hover {
   border-color: var(--linha);
 }
@@ -2185,6 +2211,102 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .miro-molduras-linha input[type='checkbox'] { accent-color: var(--acento); }
 .miro-molduras-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .miro-molduras-rodape { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* Modo leitura do quadro */
+.chave-modo { display: inline-flex; gap: 0; }
+.chave-modo .botao-pilula { border-radius: 0; }
+.chave-modo .botao-pilula:first-child { border-radius: var(--raio) 0 0 var(--raio); }
+.chave-modo .botao-pilula:last-child { border-radius: 0 var(--raio) var(--raio) 0; margin-left: -1px; }
+.leitura-quadro {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  background: var(--fundo);
+}
+.leitura-indice {
+  flex: none;
+  width: 220px;
+  overflow-y: auto;
+  padding: 14px 0;
+  border-right: 1px solid var(--borda);
+  background: var(--superficie);
+  display: flex;
+  flex-direction: column;
+}
+.leitura-indice-item {
+  text-align: left;
+  padding: 7px 10px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--apagado);
+  font: 600 13px var(--corpo);
+  cursor: pointer;
+}
+.leitura-indice-item:hover { color: var(--texto); background: var(--acento-suave); }
+.leitura-indice-item.ativo { color: var(--acento); border-left-color: var(--acento); }
+.leitura-rolagem {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 32px 24px 96px;
+}
+.leitura-coluna {
+  max-width: 70ch;
+  margin: 0 auto;
+  padding-bottom: 60vh; /* a última moldura também chega ao topo */
+  font: 400 16px/1.7 var(--corpo);
+  color: var(--texto);
+}
+.leitura-secao + .leitura-secao { margin-top: 40px; }
+.leitura-titulo {
+  margin: 0 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--linha-forte);
+  font: 700 24px/1.3 var(--titulo);
+  color: var(--texto);
+}
+.leitura-titulo.nivel-1 { font-size: 19px; color: var(--acento); border-bottom-color: var(--borda); }
+.leitura-titulo.nivel-2 { font-size: 16px; color: var(--apagado); border-bottom: 0; }
+.leitura-titulo.soltos { color: var(--apagado); }
+.leitura-item {
+  position: relative;
+  margin: 0 0 12px;
+  border-radius: var(--raio);
+}
+.leitura-item-texto { padding: 12px 40px 12px 16px; }
+.leitura-item.feito { opacity: 0.6; }
+.leitura-item:hover .item-feito-btn { opacity: 1; }
+.leitura-texto { line-height: 1.7; }
+.leitura-imagem { display: block; width: 100%; height: auto; border-radius: var(--raio); }
+.leitura-ref {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+}
+.leitura-ref strong { flex: 1; font-family: var(--titulo); }
+.leitura-ver-no-quadro {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  padding: 1px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--superficie), transparent 15%);
+  color: var(--apagado);
+  font: 600 11px var(--corpo);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.leitura-item:hover .leitura-ver-no-quadro,
+.leitura-ver-no-quadro:focus-visible { opacity: 1; }
+.leitura-ver-no-quadro:hover { color: var(--acento); }
+.leitura-vazio { margin: 48px auto; }
 
 /* Exportar e importar quadro */
 .cartao-rodape [data-testid^="exportar-quadro-"] { white-space: nowrap; }
