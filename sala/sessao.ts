@@ -1,13 +1,11 @@
 /** Sessão assinada da sala: sem tipos do Workers, só Web Crypto (Node 22 e Workers). */
 
-import type { Papel } from '../src/online/protocolo.ts';
-export type { Papel };
-
 export interface Sessao {
   discordId: string;
   nome: string;
   avatar: string | null;
-  papel: Papel;
+  /** Pode criar salas (está em `MESTRES_DISCORD_IDS`). O papel dentro de uma sala vem do dono dela. */
+  podeMestrar: boolean;
   /** Instante de vencimento, em ms desde a época. */
   exp: number;
 }
@@ -76,16 +74,17 @@ export async function verificarSessao(token: unknown, segredo: string, agora: nu
     typeof d.discordId !== 'string' ||
     typeof d.nome !== 'string' ||
     !(d.avatar === null || typeof d.avatar === 'string') ||
-    (d.papel !== 'mestre' && d.papel !== 'jogador') ||
+    typeof d.podeMestrar !== 'boolean' ||
     typeof d.exp !== 'number' ||
     !(d.exp > agora)
   ) {
     return null;
   }
-  return { discordId: d.discordId, nome: d.nome, avatar: d.avatar, papel: d.papel, exp: d.exp };
+  return { discordId: d.discordId, nome: d.nome, avatar: d.avatar, podeMestrar: d.podeMestrar, exp: d.exp };
 }
 
-/** `mestre` só para o id configurado. */
-export function papelDe(discordId: string, mestreId: string | undefined): Papel {
-  return mestreId && discordId === mestreId ? 'mestre' : 'jogador';
+/** `discordId` está na lista de ids separados por vírgula (`MESTRES_DISCORD_IDS`)? */
+export function podeMestrar(discordId: string, lista: string | undefined): boolean {
+  if (!discordId || !lista) return false;
+  return lista.split(',').some(id => id.trim() === discordId);
 }

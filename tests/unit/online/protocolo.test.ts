@@ -67,3 +67,14 @@ test('codificarPedaco e decodificarPedaco são inversos; quadros inválidos vira
   assert.equal(decodificarPedaco(codificarPedaco({ id: 'h', i: 3, n: 3, tipo: 't' }, dados)), null);
   assert.equal(TAMANHO_PEDACO, 512 * 1024);
 });
+
+test('bem-vindo aceita config, revs e donos; erro guarda o tipo recusado', () => {
+  const eu = { discordId: '1', nome: 'A', papel: 'mestre' };
+  const base = { tipo: 'bem-vindo', eu, membros: [], fichas: [], ultimoEstado: {} };
+  const completo = { ...base, config: { nome: 'C', dono: '1' }, revs: { f: 2 }, donos: { f: '1' } };
+  assert.deepEqual(lerMensagemDaSala(JSON.stringify(completo)), completo);
+  assert.equal(lerMensagemDaSala(JSON.stringify({ ...base, revs: { f: 'x' } })), null);
+  assert.equal(lerMensagemDaSala(JSON.stringify({ ...base, config: {} })), null);
+  assert.deepEqual(lerMensagemDaSala('{"tipo":"erro","motivo":"permissao","recusado":"canal"}'), { tipo: 'erro', motivo: 'permissao', recusado: 'canal' });
+  assert.deepEqual(lerMensagemDaSala('{"tipo":"ficha.atualizada","ficha":{"id":"f"},"rev":1,"dono":"9"}'), { tipo: 'ficha.atualizada', ficha: { id: 'f' }, rev: 1, dono: '9' });
+});

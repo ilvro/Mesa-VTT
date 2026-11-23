@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assinarSessao, papelDe, venceEm, verificarSessao, SESSAO_DURACAO_MS, type Sessao } from '../../../sala/sessao.ts';
+import { assinarSessao, podeMestrar, venceEm, verificarSessao, SESSAO_DURACAO_MS, type Sessao } from '../../../sala/sessao.ts';
 import { lerOla } from '../../../src/online/protocolo.ts';
 import { retransmitirIdentificados } from '../../../sala/retransmitir.ts';
 
 const SEGREDO = 'segredo-de-teste';
 const AGORA = 1_000_000;
-const dados: Sessao = { discordId: '42', nome: 'Ana', avatar: null, papel: 'jogador', exp: venceEm(AGORA) };
+const dados: Sessao = { discordId: '42', nome: 'Ana', avatar: null, podeMestrar: false, exp: venceEm(AGORA) };
 
 test('assina e verifica', async () => {
   const t = await assinarSessao(dados, SEGREDO);
@@ -25,7 +25,7 @@ test('outro segredo, corpo ou assinatura adulterados são rejeitados', async () 
   const t = await assinarSessao(dados, SEGREDO);
   const [corpo, assin] = t.split('.') as [string, string];
   assert.equal(await verificarSessao(t, 'outro', AGORA), null);
-  const falso = Buffer.from(JSON.stringify({ ...dados, papel: 'mestre' })).toString('base64url');
+  const falso = Buffer.from(JSON.stringify({ ...dados, podeMestrar: true })).toString('base64url');
   assert.equal(await verificarSessao(`${falso}.${assin}`, SEGREDO, AGORA), null);
   const trocada = assin.slice(0, -2) + (assin.endsWith('AA') ? 'BB' : 'AA');
   assert.equal(await verificarSessao(`${corpo}.${trocada}`, SEGREDO, AGORA), null);
@@ -35,15 +35,19 @@ test('outro segredo, corpo ou assinatura adulterados são rejeitados', async () 
 });
 
 test('assinatura válida de corpo malformado é rejeitada', async () => {
-  const t = await assinarSessao({ ...dados, papel: 'deus' } as unknown as Sessao, SEGREDO);
+  const t = await assinarSessao({ ...dados, podeMestrar: 'sim' } as unknown as Sessao, SEGREDO);
   assert.equal(await verificarSessao(t, SEGREDO, AGORA), null);
 });
 
-test('papelDe só dá mestre para o id configurado', () => {
-  assert.equal(papelDe('1', '1'), 'mestre');
-  assert.equal(papelDe('2', '1'), 'jogador');
-  assert.equal(papelDe('1', undefined), 'jogador');
-  assert.equal(papelDe('', ''), 'jogador');
+test('podeMestrar aceita uma lista de ids separados por vírgula', () => {
+  assert.equal(podeMestrar('1', '1'), true);
+  assert.equal(podeMestrar('2', '1,2, 3'), true);
+  assert.equal(podeMestrar('3', '1,2, 3'), true);
+  assert.equal(podeMestrar('4', '1,2,3'), false);
+  assert.equal(podeMestrar('12', '1,2'), false);
+  assert.equal(podeMestrar('1', undefined), false);
+  assert.equal(podeMestrar('1', ''), false);
+  assert.equal(podeMestrar('', ''), false);
 });
 
 test('lerOla aceita só ola com sessão em texto', () => {

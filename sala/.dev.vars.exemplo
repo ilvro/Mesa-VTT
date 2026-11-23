@@ -1,4 +1,5 @@
 # Copie para sala/.dev.vars (ignorado pelo git) e troque pelos valores reais.
+# MESTRES_DISCORD_IDS: ids do Discord (separados por vírgula) de quem pode criar salas; cada sala tem o próprio mestre (o dono).
 DISCORD_CLIENT_SECRET=segredo-ficticio-do-app
-MESTRE_DISCORD_ID=111111111111111111
+MESTRES_DISCORD_IDS=111111111111111111,222222222222222222
 SEGREDO_SESSAO=troque-por-32-bytes-aleatorios-em-base64

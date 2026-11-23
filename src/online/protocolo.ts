@@ -44,13 +44,29 @@ export type MensagemParaSala =
   | MsgMembroPersonagem
   | MsgSalaConfig;
 
+/** Nome, capa e dono da sala, guardados no `config` dela. */
+export interface ConfigSala {
+  nome: string;
+  capaBlobId?: string;
+  /** `discordId` do mestre da sala. */
+  dono?: string;
+  campanhaId?: string;
+}
+
 export interface MsgBemVindo {
   tipo: 'bem-vindo';
+  /** Quem é a conexão, com o papel efetivo nesta sala. */
   eu: Eu;
   membros: Membro[];
+  /** Todas as fichas, para o mestre; só as do próprio jogador, para os outros. */
   fichas: FichaDaSala[];
   /** Último `estado` de cada canal (`atlas:projetor:*`), pelo nome do canal. */
   ultimoEstado: Record<string, unknown>;
+  config?: ConfigSala;
+  /** `rev` atual de cada ficha enviada, pelo id; é a base do próximo `ficha.salvar`. */
+  revs?: Record<string, number>;
+  /** Dono (`discordId`) de cada ficha enviada, pelo id. */
+  donos?: Record<string, string>;
 }
 
 export type MensagemDaSala =
@@ -58,9 +74,10 @@ export type MensagemDaSala =
   | { tipo: 'membros'; membros: Membro[] }
   | { tipo: 'canal'; nome: string; msg: unknown }
   | { tipo: 'evento'; envelope: Envelope }
-  | { tipo: 'ficha.atualizada'; ficha: FichaDaSala; rev: number; conflito?: boolean }
+  | { tipo: 'ficha.atualizada'; ficha: FichaDaSala; rev: number; conflito?: boolean; dono?: string }
   | MsgBlob
-  | { tipo: 'erro'; motivo: string };
+  /** `recusado`: o `tipo` da mensagem recusada (o campo `tipo` já é o discriminante `'erro'`). */
+  | { tipo: 'erro'; motivo: string; recusado?: string };
 
 /** O que a ponte do mestre pode repassar à sala (decisão 12). `atlas.cena-aberta` fica de fora. */
 export const EVENTOS_DO_MESTRE: readonly string[] = ['ficha.rolagem'];
@@ -106,16 +123,24 @@ export function lerMensagemDaSala(texto: string): MensagemDaSala | null {
   if (!ehObj(m)) return null;
   switch (m.tipo) {
     case 'bem-vindo':
-      return ehEu(m.eu) && listaDe(m.membros, ehMembro) && listaDe(m.fichas, ehFicha) && ehObj(m.ultimoEstado)
-        ? { tipo: 'bem-vindo', eu: m.eu, membros: m.membros, fichas: m.fichas, ultimoEstado: m.ultimoEstado } : null;
+      if (!ehEu(m.eu) || !listaDe(m.membros, ehMembro) || !listaDe(m.fichas, ehFicha) || !ehObj(m.ultimoEstado)) return null;
+      if (m.config !== undefined && !(ehObj(m.config) && txt(m.config.nome))) return null;
+      if (m.revs !== undefined && !(ehObj(m.revs) && Object.values(m.revs).every(num))) return null;
+      if (m.donos !== undefined && !(ehObj(m.donos) && Object.values(m.donos).every(txt))) return null;
+      return {
+        tipo: 'bem-vindo', eu: m.eu, membros: m.membros, fichas: m.fichas, ultimoEstado: m.ultimoEstado,
+        ...(m.config !== undefined ? { config: m.config as unknown as ConfigSala } : {}),
+        ...(m.revs !== undefined ? { revs: m.revs as Record<string, number> } : {}),
+        ...(m.donos !== undefined ? { donos: m.donos as Record<string, string> } : {}),
+      };
     case 'membros': return listaDe(m.membros, ehMembro) ? { tipo: 'membros', membros: m.membros } : null;
     case 'canal': return txt(m.nome) && 'msg' in m ? { tipo: 'canal', nome: m.nome, msg: m.msg } : null;
     case 'evento': return ehEnvelope(m.envelope) ? { tipo: 'evento', envelope: m.envelope } : null;
     case 'ficha.atualizada':
-      if (!ehFicha(m.ficha) || !num(m.rev) || (m.conflito !== undefined && typeof m.conflito !== 'boolean')) return null;
-      return { tipo: 'ficha.atualizada', ficha: m.ficha, rev: m.rev, ...(m.conflito !== undefined ? { conflito: m.conflito } : {}) };
+      if (!ehFicha(m.ficha) || !num(m.rev) || (m.conflito !== undefined && typeof m.conflito !== 'boolean') || (m.dono !== undefined && !txt(m.dono))) return null;
+      return { tipo: 'ficha.atualizada', ficha: m.ficha, rev: m.rev, ...(m.conflito !== undefined ? { conflito: m.conflito } : {}), ...(m.dono !== undefined ? { dono: m.dono } : {}) };
     case 'blob': return txt(m.id) && m.id && txt(m.tipoMime) ? { tipo: 'blob', id: m.id, tipoMime: m.tipoMime } : null;
-    case 'erro': return txt(m.motivo) ? { tipo: 'erro', motivo: m.motivo } : null;
+    case 'erro': return txt(m.motivo) && (m.recusado === undefined || txt(m.recusado)) ? { tipo: 'erro', motivo: m.motivo, ...(m.recusado !== undefined ? { recusado: m.recusado } : {}) } : null;
     default: return null;
   }
 }
