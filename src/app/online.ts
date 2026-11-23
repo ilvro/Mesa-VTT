@@ -8,8 +8,10 @@ import { urlDoWebSocket } from '../online/config.ts';
 import { EVENTOS_DO_MESTRE, type Envelope, type Membro } from '../online/protocolo.ts';
 import { CANAL_EVENTOS } from '#mesa';
 
-export const CANAL_PROJETOR_ATIVO = 'atlas:projetor:ativo';
-export const CHAVE_PERMITIR_MAPA_INTEIRO = 'mesa:online-permitir-mapa-inteiro';
+/** O canal do destino remoto do publicador do Atlas (R5b): a projeção remota, só o que os jogadores já viram. */
+export const CANAL_PROJETOR_REMOTO = 'atlas:projetor:remoto';
+/** A confirmação "mandar assim mesmo" de um mapa sem névoa, lembrada por mapa. */
+export const chaveSemNevoa = (mapa: string): string => `mesa:online-sem-nevoa:${mapa}`;
 
 /** O pedaço do `BroadcastChannel` que a ponte usa. */
 export interface CanalLocal {
@@ -29,8 +31,10 @@ export interface OpcoesDaPonte {
   criarCanal: (nome: string) => CanalLocal;
   /** Nome da sala, quando já se sabe (o `bem-vindo` traz o definitivo). */
   nomeDaSala?: string;
-  /** Lido a cada mensagem. Até a R5b, só `true` libera o mapa inteiro numa sala que não é de teste. */
-  permitirMapaInteiro?: () => boolean;
+  /** O mestre já confirmou mandar este mapa sem névoa? (padrão: `localStorage`, com `try/catch`). */
+  semNevoaConfirmado?: (mapa: string) => boolean;
+  /** Guarda a confirmação (padrão: `localStorage`). */
+  lembrarSemNevoa?: (mapa: string) => void;
   /** SHA-256 em hex (padrão: Web Crypto). */
   hash?: (bytes: ArrayBuffer) => Promise<string>;
   aoMudar?: (estado: EstadoDaPonte) => void;
@@ -38,8 +42,8 @@ export interface OpcoesDaPonte {
 
 export interface EstadoDaPonte {
   membros: Membro[];
-  /** `true`: a trava da R5 está segurando o mapa (nada de `canal` sai). */
-  bloqueada: boolean;
+  /** Mapas sem névoa à espera da confirmação do mestre: o `estado` deles não sai até lá. */
+  semNevoa: { mapa: string; nome: string }[];
   /** Há jogador na sala e a ponte pediu ao publicador do Atlas que trabalhe. */
   publicando: boolean;
 }
@@ -48,6 +52,8 @@ export interface Ponte {
   readonly estado: EstadoDaPonte;
   /** Resolve quando tudo o que estava na fila de saída foi tratado. */
   esvaziar(): Promise<void>;
+  /** "Mandar assim mesmo": libera (e lembra) o mapa sem névoa. */
+  confirmarSemNevoa(mapa: string): void;
   fechar(): void;
 }
 
@@ -58,22 +64,24 @@ export async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
 
 const ehBlob = (v: unknown): v is Blob => typeof Blob !== 'undefined' && v instanceof Blob;
 
-/** Salas de teste (nome começando por `teste`) podem receber o mapa inteiro até a R5b. */
-export const ehSalaDeTeste = (nome: string | undefined): boolean => (nome ?? '').trim().toLowerCase().startsWith('teste');
+const lerConfirmacao = (mapa: string): boolean => { try { return localStorage.getItem(chaveSemNevoa(mapa)) === '1'; } catch { return false; } };
+const gravarConfirmacao = (mapa: string): void => { try { localStorage.setItem(chaveSemNevoa(mapa), '1'); } catch { /* sem armazenamento: pergunta de novo */ } };
 
 export function criarPonte(o: OpcoesDaPonte): Ponte {
   const { cliente } = o;
-  const projetor = o.criarCanal(CANAL_PROJETOR_ATIVO);
+  const projetor = o.criarCanal(CANAL_PROJETOR_REMOTO);
+  const confirmado = o.semNevoaConfirmado ?? lerConfirmacao, lembrar = o.lembrarSemNevoa ?? gravarConfirmacao;
   const eventos = o.criarCanal(CANAL_EVENTOS);
   const hash = o.hash ?? sha256Hex;
   let nome = o.nomeDaSala;
+  /** Mapas sem névoa à espera, com o último `estado` retido de cada um. */
+  const pendentes = new Map<string, { nome: string; retido: Record<string, unknown> | null }>();
   const enviados = new Set<string>();
   let fila: Promise<void> = Promise.resolve();
   let fechada = false;
-  const estado: EstadoDaPonte = { membros: [], bloqueada: false, publicando: false };
+  const estado: EstadoDaPonte = { membros: [], semNevoa: [], publicando: false };
 
-  const bloqueada = () => !(ehSalaDeTeste(nome) || o.permitirMapaInteiro?.() === true);
-  const mudou = () => { estado.bloqueada = bloqueada(); o.aoMudar?.({ ...estado, membros: [...estado.membros] }); };
+  const mudou = () => { estado.semNevoa = [...pendentes].map(([mapa, p]) => ({ mapa, nome: p.nome })); o.aoMudar?.({ ...estado, membros: [...estado.membros] }); };
 
   /** Sobe o blob (uma vez por conexão da ponte) e devolve o `{ blobId }` que o substitui. */
   async function subir(blob: Blob): Promise<{ blobId: string } | null> {
@@ -104,13 +112,32 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     if (fechada || !data || typeof data !== 'object') return;
     const msg = data as Record<string, unknown>;
     if (typeof msg.tipo !== 'string' || !TIPOS_DO_MESTRE.has(msg.tipo)) return;
-    if (bloqueada()) return;
+    if (msg.tipo === 'estado') {
+      const doc = msg.doc as { id?: unknown; session?: { explored?: unknown } } | undefined;
+      const mapa = typeof doc?.id === 'string' ? doc.id : null;
+      const p = mapa ? pendentes.get(mapa) : undefined;
+      if (mapa && p) {
+        // Com névoa de novo, o estado já vem cortado: não há mais o que confirmar.
+        if (doc?.session?.explored !== null && doc?.session?.explored !== undefined) { pendentes.delete(mapa); mudou(); }
+        else { p.retido = msg; return; }
+      }
+    }
     const pronta = await semBlobs(msg);
     if (!pronta || fechada) return;
-    cliente.enviar({ tipo: 'canal', nome: CANAL_PROJETOR_ATIVO, msg: pronta });
+    cliente.enviar({ tipo: 'canal', nome: CANAL_PROJETOR_REMOTO, msg: pronta });
   }
 
-  projetor.onmessage = ({ data }) => { fila = fila.then(() => sairProjetor(data)).catch(() => { /* um quadro perdido não para a fila */ }); };
+  function aoAviso(msg: Record<string, unknown>): void {
+    const mapa = msg.mapa;
+    if (typeof mapa !== 'string' || confirmado(mapa) || pendentes.has(mapa)) return;
+    pendentes.set(mapa, { nome: typeof msg.nome === 'string' ? msg.nome : mapa, retido: null });
+    mudou();
+  }
+
+  projetor.onmessage = ({ data }) => {
+    if (data && typeof data === 'object' && (data as { tipo?: unknown }).tipo === 'aviso-sem-nevoa') { if (!fechada) aoAviso(data as Record<string, unknown>); return; }
+    fila = fila.then(() => sairProjetor(data)).catch(() => { /* um quadro perdido não para a fila */ });
+  };
 
   eventos.onmessage = ({ data }) => {
     if (fechada || !data || typeof data !== 'object') return;
@@ -126,10 +153,10 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     cliente.ouvir('evento', m => { if (!fechada) eventos.postMessage(m.envelope); }),
   ];
 
-  /** Acorda o publicador do Atlas enquanto houver jogador (o `remoto` é lido pela R5b; hoje o projetor ignora o campo). */
+  /** Acorda o publicador do Atlas enquanto houver jogador (o `remoto: true` liga o destino remoto do publicador, separado do projetor local). */
   function atualizarPresenca(membros: Membro[], forcar: boolean): void {
     estado.membros = membros;
-    const querPublicar = membros.some(m => m.papel === 'jogador') && !bloqueada();
+    const querPublicar = membros.some(m => m.papel === 'jogador');
     if (querPublicar && (!estado.publicando || forcar)) projetor.postMessage({ tipo: 'ola', largura: 1920, altura: 1080, remoto: true });
     else if (!querPublicar && estado.publicando) projetor.postMessage({ tipo: 'tchau' });
     estado.publicando = querPublicar;
@@ -150,6 +177,14 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
   return {
     estado,
     esvaziar: () => fila,
+    confirmarSemNevoa(mapa) {
+      lembrar(mapa);
+      const p = pendentes.get(mapa);
+      if (!p) return;
+      pendentes.delete(mapa);
+      mudou();
+      if (p.retido) { const retido = p.retido; fila = fila.then(() => sairProjetor(retido)).catch(() => { /* idem */ }); }
+    },
     fechar() {
       if (fechada) return;
       if (estado.publicando) projetor.postMessage({ tipo: 'tchau' });
@@ -165,14 +200,10 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
 
 export type ConexaoOnline = 'desconectada' | EstadoDaSala;
 export const conexaoOnline = signal<ConexaoOnline>('desconectada');
-export const estadoDaPonte = signal<EstadoDaPonte>({ membros: [], bloqueada: false, publicando: false });
+export const estadoDaPonte = signal<EstadoDaPonte>({ membros: [], semNevoa: [], publicando: false });
 export const salaConectadaId = signal<string | null>(null);
 
 let atual: { cliente: ClienteDaSala; ponte: Ponte } | null = null;
-
-function lerPermissao(): boolean {
-  try { return localStorage.getItem(CHAVE_PERMITIR_MAPA_INTEIRO) === '1'; } catch { return false; }
-}
 
 /** "Abrir a mesa online": conecta a sala e liga a ponte. */
 export function abrirMesaOnline(sessao: string, salaId: string, nome?: string): void {
@@ -182,7 +213,6 @@ export function abrirMesaOnline(sessao: string, salaId: string, nome?: string): 
     cliente,
     criarCanal: n => new BroadcastChannel(n) as unknown as CanalLocal,
     ...(nome !== undefined ? { nomeDaSala: nome } : {}),
-    permitirMapaInteiro: lerPermissao,
     aoMudar: e => { estadoDaPonte.value = e; },
   });
   cliente.aoMudarEstado(e => { conexaoOnline.value = e; });
@@ -191,6 +221,9 @@ export function abrirMesaOnline(sessao: string, salaId: string, nome?: string): 
   conexaoOnline.value = cliente.estado;
 }
 
+/** "Mandar assim mesmo" para um mapa sem névoa (a tela da mesa online). */
+export function confirmarSemNevoa(mapa: string): void { atual?.ponte.confirmarSemNevoa(mapa); }
+
 export function fecharMesaOnline(): void {
   if (!atual) return;
   atual.ponte.fechar();
@@ -198,5 +231,5 @@ export function fecharMesaOnline(): void {
   atual = null;
   salaConectadaId.value = null;
   conexaoOnline.value = 'desconectada';
-  estadoDaPonte.value = { membros: [], bloqueada: false, publicando: false };
+  estadoDaPonte.value = { membros: [], semNevoa: [], publicando: false };
 }

@@ -39,7 +39,7 @@ function montar(nome = 'teste-1', extra: Partial<Parameters<typeof criarPonte>[0
   Canal.todos.clear();
   const f = clienteFalso();
   const ponte = criarPonte({ cliente: f.cliente, criarCanal: n => new Canal(n), nomeDaSala: nome, hash: async b => `h${b.byteLength}`, ...extra });
-  const atlas = new Canal('atlas:projetor:ativo');
+  const atlas = new Canal('atlas:projetor:remoto');
   const apps = new Canal('mesa:eventos');
   return { ...f, ponte, atlas, apps };
 }
@@ -89,19 +89,45 @@ test('a ponte repassa canal com o nome do canal e ignora as mensagens do projeto
   atlas.postMessage({ tipo: 'ola', largura: 1, altura: 1 });
   atlas.postMessage({ tipo: 'tchau' });
   await ponte.esvaziar();
-  assert.deepEqual(enviadas, [{ tipo: 'canal', nome: 'atlas:projetor:ativo', msg: { tipo: 'estado', doc: { id: 'm' }, versao: 1 } }]);
+  assert.deepEqual(enviadas, [{ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'estado', doc: { id: 'm' }, versao: 1 } }]);
 });
 
-test('trava: fora de sala de teste, canal não sai (a menos que o localStorage permita)', async () => {
-  let permitir = false;
-  const { atlas, enviadas, ponte, emitir } = montar('Campanha real', { permitirMapaInteiro: () => permitir });
-  emitir(bemVindo([membro('2', 'jogador')], 'Campanha real'));
-  atlas.postMessage({ tipo: 'estado', doc: {}, versao: 1 });
+test('o aviso sem névoa segura o estado do mapa até a confirmação; depois o último sai e a confirmação é lembrada', async () => {
+  const lembrados = new Set<string>();
+  const { atlas, enviadas, ponte } = montar('teste-1', { semNevoaConfirmado: m => lembrados.has(m), lembrarSemNevoa: m => { lembrados.add(m); } });
+  const doc = (id: string, explorado: unknown) => ({ id, session: { explored: explorado } });
+  atlas.postMessage({ tipo: 'aviso-sem-nevoa', mapa: 'm1', nome: 'Cripta' });
+  assert.deepEqual(ponte.estado.semNevoa, [{ mapa: 'm1', nome: 'Cripta' }]);
+  atlas.postMessage({ tipo: 'estado', doc: doc('m1', null), versao: 1 });
+  atlas.postMessage({ tipo: 'estado', doc: doc('m1', null), versao: 2 });
+  atlas.postMessage({ tipo: 'estado', doc: doc('outro', null), versao: 1 });
   await ponte.esvaziar();
-  assert.equal(enviadas.length, 0);
-  assert.equal(ponte.estado.bloqueada, true);
-  permitir = true;
-  atlas.postMessage({ tipo: 'estado', doc: {}, versao: 2 });
+  assert.deepEqual(enviadas.map(m => (m as { msg: { doc: { id: string } } }).msg.doc.id), ['outro'], 'só o outro mapa sai; o aviso não vai à sala');
+  ponte.confirmarSemNevoa('m1');
+  await ponte.esvaziar();
+  assert.equal(enviadas.length, 2);
+  assert.equal((enviadas[1] as { msg: { versao: number } }).msg.versao, 2, 'sai o último estado retido');
+  assert.deepEqual(ponte.estado.semNevoa, []);
+  assert.ok(lembrados.has('m1'));
+  atlas.postMessage({ tipo: 'estado', doc: doc('m1', null), versao: 3 });
+  atlas.postMessage({ tipo: 'aviso-sem-nevoa', mapa: 'm1', nome: 'Cripta' });
+  await ponte.esvaziar();
+  assert.equal(enviadas.length, 3, 'depois de confirmado, o estado passa direto');
+  assert.deepEqual(ponte.estado.semNevoa, [], 'e não pergunta de novo');
+});
+
+test('com névoa de volta, o estado do mapa pendente sai sem confirmação', async () => {
+  const { atlas, enviadas, ponte } = montar('teste-1', { semNevoaConfirmado: () => false, lembrarSemNevoa: () => {} });
+  atlas.postMessage({ tipo: 'aviso-sem-nevoa', mapa: 'm1', nome: 'Cripta' });
+  atlas.postMessage({ tipo: 'estado', doc: { id: 'm1', session: { explored: { res: 0.5, cells: [] } } }, versao: 1 });
+  await ponte.esvaziar();
+  assert.equal(enviadas.length, 1);
+  assert.deepEqual(ponte.estado.semNevoa, []);
+});
+
+test('a sala comum recebe o canal remoto sem trava, mesmo fora de sala de teste', async () => {
+  const { atlas, enviadas, ponte } = montar('Campanha real');
+  atlas.postMessage({ tipo: 'estado', doc: { id: 'm', session: { explored: { res: 0.5, cells: [] } } }, versao: 1 });
   await ponte.esvaziar();
   assert.equal(enviadas.length, 1);
 });
@@ -109,7 +135,7 @@ test('trava: fora de sala de teste, canal não sai (a menos que o localStorage p
 test('ola e tchau seguem a presença dos jogadores', () => {
   const { emitir, atlas, ponte } = montar();
   const vistos: unknown[] = [];
-  const espiao = new Canal('atlas:projetor:ativo');
+  const espiao = new Canal('atlas:projetor:remoto');
   espiao.onmessage = ({ data }) => vistos.push(data);
   emitir(bemVindo([membro('1', 'mestre')]));
   assert.deepEqual(vistos, []);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { campanhaAtiva } from '../app/campanha.ts';
-import { abrirMesaOnline, conexaoOnline, estadoDaPonte, fecharMesaOnline, salaConectadaId } from '../app/online.ts';
+import { abrirMesaOnline, confirmarSemNevoa, conexaoOnline, estadoDaPonte, fecharMesaOnline, salaConectadaId } from '../app/online.ts';
 import { carregarSessaoOnline, erroDoLogin, iniciarLogin, sairDoOnline, sessaoOnline } from '../app/online-login.ts';
 import { criarSala, ligarAoServidor, listarMinhasSalas, salaDaCampanha, type SalaDoMestre } from '../app/online-salas.ts';
 import { avisar, mensagemDe } from '../app/toasts.ts';
@@ -103,9 +103,13 @@ function PainelDoMestre({ sessao }: { sessao: string }) {
         <span class={`online-estado ${conexao}`} data-testid="online-conexao">{ROTULO_DA_CONEXAO[conexao]}</span>
       </div>
       <p class="meta">Servidor da sala: {urlDaSala()}</p>
-      {conexao !== 'desconectada' && ponte.bloqueada && (
-        <div class="aviso suave" data-testid="online-trava">A projeção para jogadores online chega na próxima etapa. Por enquanto o mapa não sai; eventos e membros funcionam.</div>
-      )}
+      {conexao !== 'desconectada' && ponte.semNevoa.map(x => (
+        <div key={x.mapa} class="aviso suave" data-testid="online-sem-nevoa">
+          <p>Este mapa está sem névoa: os jogadores vão receber o mapa inteiro.</p>
+          <p class="meta">{x.nome}</p>
+          <button type="button" class="botao-pilula perigo" data-testid="online-sem-nevoa-confirmar" onClick={() => confirmarSemNevoa(x.mapa)}>Mandar assim mesmo</button>
+        </div>
+      ))}
       {conexao !== 'desconectada' && (
         <>
           <h3 class="faixa pequena">Conectados ({ponte.membros.length})</h3>
