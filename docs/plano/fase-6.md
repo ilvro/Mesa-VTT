@@ -189,7 +189,8 @@ Como: ao mudar `entidades`, comparar com o conjunto anterior de nomes (e apelido
 Testes: puro de `itensQueCitam` (acento e caixa ignorados, como na resolução de ligações).
 Commit: `board links follow newly created entities`
 
-### E4d — Exportar e importar um quadro  ⬜
+### E4d — Exportar e importar um quadro  ✅
+Nota: os ids novos vêm de `colar` (reaproveitado, com deslocamento zero; os `z` são renumerados na mesma ordem); quadro importado ganha " (cópia)" se o nome já existe; imagens ausentes no pacote só geram aviso; e2e em `tests/e2e/quadro-pacote.test.ts`. `npm run typecheck` falha só em `sala/sala.ts` (erasableSyntaxOnly), fora desta ficha.
 Objetivo: guardar uma cópia de um quadro (ou mandar para outra campanha ou outro computador) num arquivo só.
 Ler: `src/app/banco-quadros.ts`, `src/app/importar-miro.ts` (leitura de zip com `fflate`), `src/dominio/area-de-transferencia.ts` (ids novos e religação).
 Arquivos: criar `src/dominio/pacote-quadro.ts` + teste e `src/app/exportar-quadro.ts`; mudar `Quadros.tsx` (menu do cartão: "Exportar…"; botão "Importar quadro…"), `estilo.css`.

@@ -2185,3 +2185,6 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .miro-molduras-linha input[type='checkbox'] { accent-color: var(--acento); }
 .miro-molduras-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .miro-molduras-rodape { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* Exportar e importar quadro */
+.cartao-rodape [data-testid^="exportar-quadro-"] { white-space: nowrap; }
