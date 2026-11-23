@@ -4,6 +4,9 @@ import { abrirQuadro, fecharQuadro, itemPendente } from './quadros.ts';
 
 export type Tela = 'entidades' | 'campanhas' | 'aplicativos' | 'sessao' | 'quadros';
 export const tela = signal<Tela>('entidades');
+/** `#/projecao/<quadroId>`: esta janela é a projeção para os jogadores (sem cabeçalho, só a moldura enviada). */
+export const projecaoQuadroId = signal<string | null>(null);
+const PROJECAO = /^#\/projecao\/([^/]+)$/;
 
 /** `#/entidade/<id>` é o link profundo do manifesto (`mesa.json`). */
 const ENTIDADE = /^#\/entidade\/(.+)$/;
@@ -12,6 +15,9 @@ const QUADRO = /^#\/quadro\/(.+)$/;
 
 export function lerHash(): void {
   const hash = location.hash;
+  const pj = PROJECAO.exec(hash);
+  projecaoQuadroId.value = pj ? decodeURIComponent(pj[1]!) : null;
+  if (pj) return;
   if (hash === '#/campanhas') {
     tela.value = 'campanhas';
     return;

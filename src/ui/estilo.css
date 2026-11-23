@@ -2321,3 +2321,11 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .recurso-cheio.tom-perigo { background: var(--perigo); }
 .recurso-cheio.tom-acento { background: var(--acento); }
 .recurso-numeros { min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Projeção */
+.projecao { position: fixed; inset: 0; overflow: hidden; background: var(--fundo); pointer-events: none; user-select: none; cursor: none; }
+.projecao-preta { background: color-mix(in srgb, var(--fundo) 0%, black); }
+.projecao-moldura { position: absolute; box-sizing: border-box; }
+.projecao-ref { background: var(--superficie); color: var(--texto); }
+.selo-projecao { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 2px 10px; border: 1px solid var(--acento); border-radius: 999px; color: var(--acento); font: 600 12px var(--corpo); }
+.selo-projecao .botao-pilula { color: var(--texto); }

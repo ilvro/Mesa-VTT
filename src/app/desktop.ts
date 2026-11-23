@@ -54,14 +54,25 @@ export async function abrirProjetorNoSegundoMonitor(
   opcoes: OpcoesAberturaProjetor = {}
 ): Promise<ResultadoAberturaProjetor> {
   const base = opcoes.baseAtlas ?? (typeof location !== 'undefined' ? baseDoApp('atlas', location.href) : '../Atlas/');
-  const url = urlDoProjetor(base, mapaId);
+  return abrirJanelaNoSegundoMonitor(urlDoProjetor(base, mapaId), 'atlas-projetor', opcoes);
+}
+
+/**
+ * Abre qualquer URL numa janela própria no segundo monitor (a base de `abrirProjetorNoSegundoMonitor`).
+ * `nomeJanela` é o alvo do `window.open`: reabrir com o mesmo nome reaproveita a janela.
+ */
+export async function abrirJanelaNoSegundoMonitor(
+  url: string,
+  nomeJanela: string,
+  opcoes: OpcoesAberturaProjetor = {}
+): Promise<ResultadoAberturaProjetor> {
 
   // 1. Caminho Tauri Desktop nativo
   const invokeTauri = opcoes.invoke ?? (typeof window !== 'undefined' ? window.__TAURI__?.core?.invoke : undefined);
   if (ehAmbienteDesktop() || opcoes.invoke) {
     if (invokeTauri) {
       try {
-        const res = await invokeTauri('abrir_projetor_segundo_monitor', { url });
+        const res = await invokeTauri('abrir_projetor_segundo_monitor', { url, nome: nomeJanela });
         return { ok: true, metodo: 'tauri', detalhe: String(res) };
       } catch (erro) {
         console.warn('Falha ao abrir Projetor via Tauri, tentando fallback no navegador:', erro);
@@ -97,7 +108,7 @@ export async function abrirProjetorNoSegundoMonitor(
           : null;
         const monitorAlvo = escolherMonitorParaProjetor(monitores, atualId);
         const features = opcoesJanelaMonitor(monitorAlvo);
-        openFn(url, 'atlas-projetor', features);
+        openFn(url, nomeJanela, features);
         return { ok: true, metodo: 'multi-screen', detalhe: monitorAlvo?.nome ?? 'Monitor secundário' };
       }
     } catch {
@@ -106,6 +117,6 @@ export async function abrirProjetorNoSegundoMonitor(
   }
 
   // 3. Fallback: janela popup comum para ser arrastada à outra tela
-  openFn(url, 'atlas-projetor', 'popup,width=1280,height=720');
+  openFn(url, nomeJanela, 'popup,width=1280,height=720');
   return { ok: true, metodo: 'popup', detalhe: 'Janela aberta (arraste para a TV ou 2º monitor)' };
 }

@@ -40,7 +40,7 @@ interface ItemProps {
   onEditorPronto?: (editor: Editor | null) => void;
 }
 
-function estiloCaixaCss(
+export function estiloCaixaCss(
   item: Extract<ItemModelo, { tipo: 'texto' }>,
   paleta: PaletaDaCampanha,
 ) {

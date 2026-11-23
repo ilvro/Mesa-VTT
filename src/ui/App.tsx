@@ -1,7 +1,7 @@
 import { useEffect } from 'preact/hooks';
 import { repositorio } from '../app/campanha.ts';
 import { avisar } from '../app/toasts.ts';
-import { tela } from '../app/rotas.ts';
+import { projecaoQuadroId, tela } from '../app/rotas.ts';
 import { Aplicativos } from './Aplicativos.tsx';
 import { Avisos } from './Avisos.tsx';
 import { Cabecalho } from './Cabecalho.tsx';
@@ -12,8 +12,14 @@ import { BuscaRapida, buscaRapidaAberta } from './BuscaRapida.tsx';
 import { quadroAberto } from '../app/quadros.ts';
 import { Quadro } from './quadro/Quadro.tsx';
 import { Quadros } from './quadro/Quadros.tsx';
+import { ProjecaoDoQuadro } from './quadro/ProjecaoDoQuadro.tsx';
 
+/** A janela de projeção é a própria Mesa numa rota: sem cabeçalho, avisos nem atalhos do mestre. */
 export function App() {
+  return projecaoQuadroId.value ? <ProjecaoDoQuadro /> : <AppDoMestre />;
+}
+
+function AppDoMestre() {
   const r = repositorio.value;
 
   useEffect(() => {

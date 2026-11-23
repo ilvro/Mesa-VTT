@@ -69,6 +69,7 @@ import {
 } from '../../dominio/tracos.ts';
 import { duplicarSelecao, removerSelecao } from '../../app/quadro-acoes.ts';
 import { atualizarQuadroDoMiro } from '../../app/importar-miro.ts';
+import { pararProjecao, projetando } from '../../app/projecao.ts';
 import { mensagemDe, avisar } from '../../app/toasts.ts';
 import { FORMATOS_IMAGEM_ACEITOS, importarArquivoImagem } from '../../app/imagens-quadro.ts';
 import {
@@ -1506,6 +1507,14 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
           }}
         />
         <span class="espaco" />
+        {projetando.value ? (
+          <span class="selo-projecao" data-testid="selo-projecao">
+            Projetando: {projetando.value.titulo || 'Moldura'}
+            <button type="button" class="botao-pilula" data-testid="parar-projecao" onClick={pararProjecao}>
+              Parar
+            </button>
+          </span>
+        ) : null}
         <div class="chave-modo" role="group" aria-label="Modo do quadro">
           <button
             type="button"

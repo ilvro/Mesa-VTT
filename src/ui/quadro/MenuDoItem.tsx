@@ -10,6 +10,7 @@ import {
   ancorasDoItem,
   desancorarItemDeRef,
 } from '../../app/foco-do-quadro.ts';
+import { mostrarAosJogadores } from '../../app/projecao.ts';
 import { adicionarAoRoteiro, sessaoAtiva } from '../../app/registro.ts';
 import {
   agruparSelecao,
@@ -361,6 +362,20 @@ export function MenuDoItem({
                 </button>
               </div>
             </div>
+          ) : null}
+          {selecionados.length === 1 && primeiro?.tipo === 'moldura' && !primeiro.soMestre ? (
+            <button
+              type="button"
+              class="menu-contexto-btn"
+              data-testid="menu-mostrar-aos-jogadores"
+              title="Projeta esta moldura numa janela para os jogadores (sem nada do mestre)"
+              onClick={() => {
+                mostrarAosJogadores(quadroId, primeiro.id, primeiro.titulo);
+                onFechar();
+              }}
+            >
+              Mostrar aos jogadores
+            </button>
           ) : null}
           {selecionados.length === 1 && primeiro?.tipo === 'moldura' && sessaoAtiva.value ? (
             <button

@@ -7,12 +7,27 @@ use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 pub async fn abrir_projetor_segundo_monitor(
     app: AppHandle,
     url: Option<String>,
+    nome: Option<String>,
 ) -> Result<String, String> {
     let target_url = url.unwrap_or_else(|| "../Atlas/#projetor".to_string());
-    let window_label = "atlas-projetor";
+    // O rótulo vem de quem chama (o projetor do Atlas ou a projeção do quadro da Mesa),
+    // limpo para os caracteres que o Tauri aceita; sem nome, o do Atlas, como antes.
+    let window_label: String = nome
+        .map(|n| {
+            n.chars()
+                .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+                .collect::<String>()
+        })
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| "atlas-projetor".to_string());
+    let titulo = if window_label == "atlas-projetor" {
+        "Atlas — Modo Projetor (Mesa)"
+    } else {
+        "Mesa — Projeção para os jogadores"
+    };
 
     // Se a janela já existe, foca e traz para frente
-    if let Some(existing_window) = app.get_webview_window(window_label) {
+    if let Some(existing_window) = app.get_webview_window(&window_label) {
         let _ = existing_window.show();
         let _ = existing_window.set_focus();
         return Ok(format!("Janela existente focada: {}", window_label));
@@ -49,8 +64,8 @@ pub async fn abrir_projetor_segundo_monitor(
         WebviewUrl::App(target_url.into())
     };
 
-    let mut builder = WebviewWindowBuilder::new(&app, window_label, webview_url)
-        .title("Atlas — Modo Projetor (Mesa)")
+    let mut builder = WebviewWindowBuilder::new(&app, window_label.clone(), webview_url)
+        .title(titulo)
         .resizable(true);
 
     if let Some(monitor) = target_monitor {
