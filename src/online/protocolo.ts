@@ -34,6 +34,10 @@ export type MsgSalaConfig = { tipo: 'sala.config'; nome: string; capaBlobId?: st
 /** Anúncio de um blob; os pedaços seguem em quadros binários (ver `codificarPedaco`). */
 export interface MsgBlob { tipo: 'blob'; id: string; tipoMime: string }
 
+/** O mestre pergunta se a sala já tem um blob completo (blobs persistem entre sessões); a resposta é `MsgBlobTemResposta`. */
+export interface MsgBlobTem { tipo: 'blob.tem'; id: string }
+export interface MsgBlobTemResposta { tipo: 'blob.tem'; id: string; tem: boolean }
+
 export type MensagemParaSala =
   | MsgOla
   | MsgCanalParaSala
@@ -41,6 +45,7 @@ export type MensagemParaSala =
   | MsgFichaSalvar
   | MsgFichaEntregar
   | MsgBlob
+  | MsgBlobTem
   | MsgMembroPersonagem
   | MsgSalaConfig;
 
@@ -76,6 +81,7 @@ export type MensagemDaSala =
   | { tipo: 'evento'; envelope: Envelope }
   | { tipo: 'ficha.atualizada'; ficha: FichaDaSala; rev: number; conflito?: boolean; dono?: string }
   | MsgBlob
+  | MsgBlobTemResposta
   /** `recusado`: o `tipo` da mensagem recusada (o campo `tipo` já é o discriminante `'erro'`). */
   | { tipo: 'erro'; motivo: string; recusado?: string };
 
@@ -109,6 +115,7 @@ export function lerMensagemParaSala(texto: string): MensagemParaSala | null {
     case 'ficha.salvar': return ehFicha(m.ficha) && num(m.rev) ? { tipo: 'ficha.salvar', ficha: m.ficha, rev: m.rev } : null;
     case 'ficha.entregar': return txt(m.fichaId) && txt(m.dono) ? { tipo: 'ficha.entregar', fichaId: m.fichaId, dono: m.dono } : null;
     case 'blob': return txt(m.id) && m.id && txt(m.tipoMime) ? { tipo: 'blob', id: m.id, tipoMime: m.tipoMime } : null;
+    case 'blob.tem': return txt(m.id) && m.id ? { tipo: 'blob.tem', id: m.id } : null;
     case 'membro.personagem': return m.fichaId === null || txt(m.fichaId) ? { tipo: 'membro.personagem', fichaId: m.fichaId } : null;
     case 'sala.config':
       if (!txt(m.nome) || (m.capaBlobId !== undefined && !txt(m.capaBlobId))) return null;
@@ -140,6 +147,7 @@ export function lerMensagemDaSala(texto: string): MensagemDaSala | null {
       if (!ehFicha(m.ficha) || !num(m.rev) || (m.conflito !== undefined && typeof m.conflito !== 'boolean') || (m.dono !== undefined && !txt(m.dono))) return null;
       return { tipo: 'ficha.atualizada', ficha: m.ficha, rev: m.rev, ...(m.conflito !== undefined ? { conflito: m.conflito } : {}), ...(m.dono !== undefined ? { dono: m.dono } : {}) };
     case 'blob': return txt(m.id) && m.id && txt(m.tipoMime) ? { tipo: 'blob', id: m.id, tipoMime: m.tipoMime } : null;
+    case 'blob.tem': return txt(m.id) && m.id && typeof m.tem === 'boolean' ? { tipo: 'blob.tem', id: m.id, tem: m.tem } : null;
     case 'erro': return txt(m.motivo) && (m.recusado === undefined || txt(m.recusado)) ? { tipo: 'erro', motivo: m.motivo, ...(m.recusado !== undefined ? { recusado: m.recusado } : {}) } : null;
     default: return null;
   }

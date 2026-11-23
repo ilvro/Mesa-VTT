@@ -6,7 +6,14 @@ import { signal } from '@preact/signals';
 import { conectarSala, type ClienteDaSala, type EstadoDaSala } from '../online/cliente.ts';
 import { urlDoWebSocket } from '../online/config.ts';
 import { EVENTOS_DO_MESTRE, type Envelope, type Membro } from '../online/protocolo.ts';
+import { LIMITE_ESTADO_BYTES, blobIdDoEstado, comprimirEstado, type EstadoComprimidoRef } from '../online/estado-comprimido.ts';
 import { CANAL_EVENTOS } from '#mesa';
+
+/** No máximo isto de mensagens de gesto (`emGesto`, `peca-gesto`) por segundo; a última sempre sai. */
+export const GESTOS_POR_SEGUNDO = 15;
+const INTERVALO_GESTO_MS = Math.ceil(1000 / GESTOS_POR_SEGUNDO);
+/** Quanto a ponte espera a resposta do `blob.tem` antes de subir o blob assim mesmo. */
+const ESPERA_BLOB_TEM_MS = 5000;
 
 /** O canal do destino remoto do publicador do Atlas (R5b): a projeção remota, só o que os jogadores já viram. */
 export const CANAL_PROJETOR_REMOTO = 'atlas:projetor:remoto';
@@ -35,6 +42,10 @@ export interface OpcoesDaPonte {
   semNevoaConfirmado?: (mapa: string) => boolean;
   /** Guarda a confirmação (padrão: `localStorage`). */
   lembrarSemNevoa?: (mapa: string) => void;
+  /** Relógio em ms (padrão: `Date.now`). Para testes do limite de gestos. */
+  agora?: () => number;
+  /** Agenda uma espera e devolve o cancelamento (padrão: `setTimeout`). Para testes. */
+  agendar?: (f: () => void, ms: number) => () => void;
   /** SHA-256 em hex (padrão: Web Crypto). */
   hash?: (bytes: ArrayBuffer) => Promise<string>;
   aoMudar?: (estado: EstadoDaPonte) => void;
@@ -73,6 +84,8 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
   const confirmado = o.semNevoaConfirmado ?? lerConfirmacao, lembrar = o.lembrarSemNevoa ?? gravarConfirmacao;
   const eventos = o.criarCanal(CANAL_EVENTOS);
   const hash = o.hash ?? sha256Hex;
+  const agora = o.agora ?? Date.now;
+  const agendar = o.agendar ?? ((f, ms) => { const t = setTimeout(f, ms); return () => clearTimeout(t); });
   let nome = o.nomeDaSala;
   /** Mapas sem névoa à espera, com o último `estado` retido de cada um. */
   const pendentes = new Map<string, { nome: string; retido: Record<string, unknown> | null }>();
@@ -83,14 +96,41 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
 
   const mudou = () => { estado.semNevoa = [...pendentes].map(([mapa, p]) => ({ mapa, nome: p.nome })); o.aoMudar?.({ ...estado, membros: [...estado.membros] }); };
 
-  /** Sobe o blob (uma vez por conexão da ponte) e devolve o `{ blobId }` que o substitui. */
+  /** Perguntas `blob.tem` em andamento, por id. Sem resposta a tempo, vale "não tem" e o blob sobe. */
+  const perguntas = new Map<string, Promise<boolean>>();
+  const respostas = new Map<string, (tem: boolean) => void>();
+  function salaTem(id: string): Promise<boolean> {
+    let p = perguntas.get(id);
+    if (p) return p;
+    p = new Promise<boolean>(resolver => {
+      const cancelar = agendar(() => { respostas.delete(id); resolver(false); }, ESPERA_BLOB_TEM_MS);
+      respostas.set(id, tem => { cancelar(); respostas.delete(id); resolver(tem); });
+      if (!cliente.enviar({ tipo: 'blob.tem', id })) { cancelar(); respostas.delete(id); resolver(false); }
+    }).finally(() => { perguntas.delete(id); });
+    perguntas.set(id, p);
+    return p;
+  }
+
+  /** Sobe o blob (uma vez por conexão da ponte, e só se a sala ainda não o tem) e devolve o `{ blobId }` que o substitui. */
   async function subir(blob: Blob): Promise<{ blobId: string } | null> {
     const id = await hash(await blob.arrayBuffer());
     if (!enviados.has(id)) {
-      if (!(await cliente.enviarBlob(id, blob))) return null;
+      if (!(await salaTem(id))) { if (!(await cliente.enviarBlob(id, blob))) return null; }
       enviados.add(id);
     }
     return { blobId: id };
+  }
+
+  /** O `estado` acima do limite vira um blob gzip `estado:<mapa>:<versao>` e o `canal` leva só a referência. */
+  async function comprimirSeGrande(msg: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    if (msg.tipo !== 'estado' || msg.emGesto === true) return msg;
+    const doc = msg.doc as { id?: unknown } | undefined;
+    if (typeof doc?.id !== 'string' || typeof msg.versao !== 'number') return msg;
+    if (JSON.stringify(msg).length <= LIMITE_ESTADO_BYTES) return msg;
+    const blobId = blobIdDoEstado(doc.id, msg.versao);
+    // o id se repete entre sessões (a versão recomeça): sobe sempre, e a sala troca o conteúdo
+    if (!(await cliente.enviarBlob(blobId, await comprimirEstado(msg)))) return null;
+    return { tipo: 'estado', blobId, versao: msg.versao, comprimido: true } satisfies EstadoComprimidoRef;
   }
 
   /** Troca os `Blob` da mensagem por `{ blobId }`; `null` se algum não pôde subir. */
@@ -122,7 +162,8 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
         else { p.retido = msg; return; }
       }
     }
-    const pronta = await semBlobs(msg);
+    const comBlobs = await semBlobs(msg);
+    const pronta = comBlobs && await comprimirSeGrande(comBlobs);
     if (!pronta || fechada) return;
     cliente.enviar({ tipo: 'canal', nome: CANAL_PROJETOR_REMOTO, msg: pronta });
   }
@@ -134,9 +175,37 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     mudou();
   }
 
+  const enfileirar = (data: unknown): void => { fila = fila.then(() => sairProjetor(data)).catch(() => { /* um quadro perdido não para a fila */ }); };
+
+  /** Gestos (`estado` com `emGesto` e `peca-gesto`): no máximo `GESTOS_POR_SEGUNDO` por chave; o que sobra espera e só o último sai. */
+  const gestos = new Map<string, { ultimo: number; pendente: unknown; cancelar: (() => void) | null }>();
+  const chaveDoGesto = (m: { tipo?: unknown; emGesto?: unknown; id?: unknown }): string | null =>
+    m.tipo === 'estado' && m.emGesto === true ? 'estado' : m.tipo === 'peca-gesto' ? `peca:${String(m.id)}` : null;
+  function gesto(chave: string, data: unknown): void {
+    const g = gestos.get(chave) ?? { ultimo: -Infinity, pendente: undefined, cancelar: null };
+    gestos.set(chave, g);
+    const espera = g.ultimo + INTERVALO_GESTO_MS - agora();
+    if (espera <= 0 && !g.cancelar) { g.ultimo = agora(); enfileirar(data); return; }
+    g.pendente = data; // o mais novo substitui o que esperava
+    if (g.cancelar) return;
+    g.cancelar = agendar(() => {
+      g.cancelar = null;
+      const p = g.pendente; g.pendente = undefined;
+      if (p === undefined || fechada) return;
+      g.ultimo = agora();
+      enfileirar(p);
+    }, Math.max(espera, 0));
+  }
+  /** Um `estado` firme (fora de gesto) já traz a posição final: o gesto que esperava perde a vez. */
+  function largarGestosPendentes(): void { for (const g of gestos.values()) { g.cancelar?.(); g.cancelar = null; g.pendente = undefined; } }
+
   projetor.onmessage = ({ data }) => {
     if (data && typeof data === 'object' && (data as { tipo?: unknown }).tipo === 'aviso-sem-nevoa') { if (!fechada) aoAviso(data as Record<string, unknown>); return; }
-    fila = fila.then(() => sairProjetor(data)).catch(() => { /* um quadro perdido não para a fila */ });
+    const m = data as { tipo?: unknown; emGesto?: unknown; id?: unknown } | null;
+    const chave = m && typeof m === 'object' ? chaveDoGesto(m) : null;
+    if (chave) { if (!fechada) gesto(chave, data); return; }
+    if (m && typeof m === 'object' && m.tipo === 'estado') largarGestosPendentes();
+    enfileirar(data);
   };
 
   eventos.onmessage = ({ data }) => {
@@ -169,6 +238,7 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
       enviados.clear(); // nova conexão: o servidor ainda guarda os blobs, mas confirmamos de novo
       atualizarPresenca(m.membros, true);
     }),
+    cliente.ouvir('blob.tem', m => respostas.get(m.id)?.(m.tem)),
     cliente.ouvir('membros', m => atualizarPresenca(m.membros, false)),
     cliente.aoMudarEstado(e => { if (e === 'caiu' && estado.publicando) { estado.publicando = false; } mudou(); }),
   );
@@ -190,6 +260,7 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
       if (estado.publicando) projetor.postMessage({ tipo: 'tchau' });
       fechada = true;
       for (const f of soltar) f();
+      largarGestosPendentes();
       projetor.onmessage = null; eventos.onmessage = null;
       projetor.close(); eventos.close();
     },

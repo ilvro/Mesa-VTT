@@ -4,8 +4,8 @@
  */
 
 import {
-  decodificarPedaco, lerMensagemParaSala,
-  type Eu, type MensagemDaSala, type MsgBemVindo,
+  codificarPedaco, decodificarPedaco, lerMensagemParaSala,
+  type Eu, type MensagemDaSala, type MsgBemVindo, type MsgBlob,
 } from '../src/online/protocolo.ts';
 import { ErroEstado, montarMembros, type Estado } from './estado.ts';
 import { carimbar, envelopeInvalido, permitido } from './permissoes.ts';
@@ -23,6 +23,37 @@ export interface Saida {
 }
 
 const PREFIXO_PROJETOR = 'atlas:projetor:';
+/** Prefixo dos blobs de `estado` comprimido (`estado:<mapa>:<versao>`): o id se repete entre sessões, então vale o mais novo. */
+const PREFIXO_ESTADO = 'estado:';
+
+const ehObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+const blobIdDe = (v: unknown): string[] => (ehObj(v) && typeof v.blobId === 'string' && v.blobId ? [v.blobId] : []);
+
+/** Os `blobId` que uma mensagem de canal cita: o `estado` comprimido, o `retrato` e a `inspecao`. */
+export function blobsCitadosPor(msg: unknown): string[] {
+  if (!ehObj(msg)) return [];
+  if (msg.tipo === 'estado') return msg.comprimido === true && typeof msg.blobId === 'string' && msg.blobId ? [msg.blobId] : [];
+  if (msg.tipo === 'retrato') return blobIdDe(msg.blob);
+  if (msg.tipo === 'inspecao') return [...blobIdDe(msg.normal), ...blobIdDe(msg.uv)];
+  return [];
+}
+
+/** Quadros de um blob completo, na ordem em que o mestre os mandou: o anúncio e os pedaços binários. */
+export interface BlobParaEnviar { anuncio: MsgBlob; quadros: ArrayBuffer[] }
+
+/** O que mandar a quem chegou depois do `bem-vindo`: os blobs citados nos últimos `canal` guardados. Os incompletos são pulados. */
+export function blobsParaQuemChega(estado: Estado): BlobParaEnviar[] {
+  const saida: BlobParaEnviar[] = [];
+  for (const id of estado.blobsCitados()) {
+    const pedacos = estado.pedacosDoBlob(id);
+    if (!pedacos || pedacos.length === 0) continue;
+    saida.push({
+      anuncio: { tipo: 'blob', id, tipoMime: pedacos[0]!.cab.tipo },
+      quadros: pedacos.map(p => codificarPedaco(p.cab, p.dados)),
+    });
+  }
+  return saida;
+}
 
 const erro = (motivo: string, recusado?: string): Saida => ({
   destino: 'remetente',
@@ -76,6 +107,13 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
       if (!msg.nome.startsWith(PREFIXO_PROJETOR)) return [erro('invalido', 'canal')];
       const dentro = msg.msg as { tipo?: unknown } | null;
       if (dentro && typeof dentro === 'object' && dentro.tipo === 'estado') estado.guardarUltimo(msg.nome, msg.msg);
+      if (dentro && typeof dentro === 'object' && (dentro.tipo === 'estado' || dentro.tipo === 'retrato' || dentro.tipo === 'inspecao')) {
+        const ids = blobsCitadosPor(msg.msg);
+        estado.guardarCitados(msg.nome, dentro.tipo, ids);
+        // chegou uma versão nova do estado: a antiga do mesmo mapa não serve mais
+        const nova = dentro.tipo === 'estado' ? ids[0] : undefined;
+        if (nova?.startsWith(PREFIXO_ESTADO)) estado.apagarBlobsComPrefixo(nova.slice(0, nova.lastIndexOf(':') + 1), nova);
+      }
       return [{ destino: 'outros', msg: { tipo: 'canal', nome: msg.nome, msg: msg.msg } }];
     }
     case 'evento': {
@@ -106,7 +144,11 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
     case 'sala.config':
       estado.definirConfig(msg.nome, msg.capaBlobId);
       return [];
+    case 'blob.tem':
+      return [{ destino: 'remetente', msg: { tipo: 'blob.tem', id: msg.id, tem: estado.temBlob(msg.id) } }];
     case 'blob':
+      // `estado:<mapa>:<versao>` pode voltar com outro conteúdo (a versão recomeça numa sessão nova): o novo substitui
+      if (msg.id.startsWith(PREFIXO_ESTADO)) estado.apagarBlob(msg.id);
       // o id não se repete: se já está completo, o anúncio é ignorado
       return estado.temBlob(msg.id) ? [] : [{ destino: 'outros', msg: { tipo: 'blob', id: msg.id, tipoMime: msg.tipoMime } }];
   }

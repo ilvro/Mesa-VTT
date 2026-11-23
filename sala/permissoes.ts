@@ -48,7 +48,8 @@ export function permitido(msg: MensagemParaSala, autor: Eu, ctx: ContextoPermiss
     }
     case 'ficha.entregar':
     case 'sala.config':
-    case 'blob': return mestre;
+    case 'blob':
+    case 'blob.tem': return mestre;
     case 'membro.personagem':
       return msg.fichaId === null || ctx.donoDaFicha(msg.fichaId) === autor.discordId;
   }

@@ -66,6 +66,17 @@ export interface Estado {
   /** O blob existe e todos os pedaços chegaram. */
   temBlob(id: string): boolean;
 
+  /** Apaga um blob (todos os pedaços). */
+  apagarBlob(id: string): void;
+  /** Apaga os blobs de `prefixo` que não são `manter` (as versões antigas de `estado:<mapa>:`). Devolve quantos ids saíram. */
+  apagarBlobsComPrefixo(prefixo: string, manter: string): number;
+  /** Os pedaços de um blob completo, em ordem; `null` se não existe ou está incompleto. */
+  pedacosDoBlob(id: string): Array<{ cab: CabecalhoPedaco; dados: Uint8Array }> | null;
+  /** Guarda os `blobId` citados pela última mensagem `tipo` do `canal` (`estado` comprimido, `retrato`, `inspecao`). */
+  guardarCitados(canal: string, tipo: string, ids: string[]): void;
+  /** Os blobs citados pelas últimas mensagens guardadas, sem repetir. */
+  blobsCitados(): string[];
+
   personagem(discordId: string): string | null;
   escolherPersonagem(discordId: string, fichaId: string | null): void;
 }
@@ -81,6 +92,7 @@ export function criarEstado(sql: Sql): Estado {
   rodar('CREATE TABLE IF NOT EXISTS rolagens (id TEXT PRIMARY KEY, em INTEGER NOT NULL, autor TEXT NOT NULL, json TEXT NOT NULL)');
   rodar('CREATE TABLE IF NOT EXISTS ultimo (canal TEXT PRIMARY KEY, json TEXT NOT NULL)');
   rodar('CREATE TABLE IF NOT EXISTS blobs (id TEXT NOT NULL, i INTEGER NOT NULL, n INTEGER NOT NULL, tipo TEXT NOT NULL, dados BLOB NOT NULL, PRIMARY KEY (id, i))');
+  rodar('CREATE TABLE IF NOT EXISTS citados (canal TEXT NOT NULL, tipo TEXT NOT NULL, ids TEXT NOT NULL, PRIMARY KEY (canal, tipo))');
   rodar('CREATE TABLE IF NOT EXISTS config (chave TEXT PRIMARY KEY, valor TEXT NOT NULL)');
   rodar('CREATE TABLE IF NOT EXISTS personagens (discord_id TEXT PRIMARY KEY, ficha_id TEXT NOT NULL)');
 
@@ -186,6 +198,29 @@ export function criarEstado(sql: Sql): Estado {
     temBlob(id) {
       const r = um('SELECT COUNT(*) AS c, MAX(n) AS n FROM blobs WHERE id = ?', id);
       return !!r && Number(r.c) > 0 && Number(r.c) === Number(r.n);
+    },
+
+    apagarBlob(id) { rodar('DELETE FROM blobs WHERE id = ?', id); },
+    apagarBlobsComPrefixo(prefixo, manter) {
+      const ids = rodar('SELECT DISTINCT id FROM blobs WHERE substr(id, 1, ?) = ? AND id != ?', prefixo.length, prefixo, manter);
+      for (const r of ids) rodar('DELETE FROM blobs WHERE id = ?', String(r.id));
+      return ids.length;
+    },
+    pedacosDoBlob(id) {
+      if (!this.temBlob(id)) return null;
+      return rodar('SELECT i, n, tipo, dados FROM blobs WHERE id = ? ORDER BY i', id).map(r => ({
+        cab: { id, i: Number(r.i), n: Number(r.n), tipo: String(r.tipo) },
+        dados: new Uint8Array(r.dados as ArrayBuffer | Uint8Array),
+      }));
+    },
+    guardarCitados(canal, tipo, ids) {
+      if (ids.length === 0) rodar('DELETE FROM citados WHERE canal = ? AND tipo = ?', canal, tipo);
+      else rodar('INSERT OR REPLACE INTO citados (canal, tipo, ids) VALUES (?, ?, ?)', canal, tipo, JSON.stringify(ids));
+    },
+    blobsCitados() {
+      const todos = new Set<string>();
+      for (const r of rodar('SELECT ids FROM citados ORDER BY canal, tipo')) for (const id of JSON.parse(String(r.ids)) as string[]) todos.add(id);
+      return [...todos];
     },
 
     personagem(discordId) {

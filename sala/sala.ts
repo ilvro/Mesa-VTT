@@ -1,6 +1,6 @@
 import { lerOla, type Eu } from '../src/online/protocolo.ts';
 import { criarEstado, type Estado } from './estado.ts';
-import { bemVindo, papelNaSala, saidaMembros, tratar, tratarBinario, type Destino, type Saida } from './mensagens.ts';
+import { bemVindo, blobsParaQuemChega, papelNaSala, saidaMembros, tratar, tratarBinario, type Destino, type Saida } from './mensagens.ts';
 import { criarLimitador } from './permissoes.ts';
 import { verificarSessao } from './sessao.ts';
 
@@ -112,6 +112,13 @@ export class Sala implements DurableObject {
     ws.serializeAttachment(novo satisfies Anexo);
     const todos = this.conectados();
     ws.send(JSON.stringify(bemVindo(this.estado, novo, todos)));
+    // quem chega depois não viu os blobs que o mestre mandou: manda os citados nos últimos `canal` (o mestre já os tem)
+    if (novo.papel !== 'mestre') {
+      for (const b of blobsParaQuemChega(this.estado)) {
+        ws.send(JSON.stringify(b.anuncio));
+        for (const q of b.quadros) ws.send(q);
+      }
+    }
     this.entregar([saidaMembros(this.estado, todos)], ws);
   }
 
