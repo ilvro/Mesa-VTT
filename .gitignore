@@ -8,3 +8,5 @@ test-results/
 
 dist-desktop-app/
 *.miro.zip
+.dev.vars
+.wrangler/

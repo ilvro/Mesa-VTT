@@ -10,3 +10,9 @@ O hub da plataforma da campanha (Atlas, Ficha, Ateliê, Jukebox, Tabletop). Cont
 - A Mesa é `app: 'mesa'` no banco da campanha: quem criou a entidade altera tudo; as entidades de outros aplicativos são só leitura aqui (a Mesa só mexeria nas próprias referências). O repositório do `mesa-core` aplica a regra e a Mesa a espelha na tela.
 - A Mesa **liga**, não centraliza: não guarda dados de outro aplicativo, só `Ref`. Abrir algo de outro aplicativo é sempre pelo manifesto (`mesa.json`) dele.
 - Não altere Atlas, Ficha, Ateliê, Jukebox ou Tabletop sem autorização do usuário, um projeto por vez.
+
+## Sala (mesa online)
+
+- O Worker da mesa online fica em `sala/` (Cloudflare Worker + Durable Object SQLite; plano em `../Atlas/docs/plano/mesa-online.md`). Tem `tsconfig.json` próprio (sem DOM, com `@cloudflare/workers-types`) e fora do build do Pages: o `typecheck` roda os dois.
+- Rodar: `npm run sala:dev` (wrangler local); publicar: `npm run sala:deploy`. Os testes só importam a lógica pura de `sala/` (`retransmitir.ts`).
+- Segredos nunca entram no git: em dev ficam em `sala/.dev.vars` (no `.gitignore`), em produção via `wrangler secret put`.
