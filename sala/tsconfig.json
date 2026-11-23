@@ -6,5 +6,5 @@
     "jsx": "preserve",
     "jsxImportSource": null
   },
-  "include": ["./*.ts"]
+  "include": ["./*.ts", "../src/online/protocolo.ts"]
 }

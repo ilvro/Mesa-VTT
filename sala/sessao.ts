@@ -1,6 +1,7 @@
 /** Sessão assinada da sala: sem tipos do Workers, só Web Crypto (Node 22 e Workers). */
 
-export type Papel = 'mestre' | 'jogador';
+import type { Papel } from '../src/online/protocolo.ts';
+export type { Papel };
 
 export interface Sessao {
   discordId: string;

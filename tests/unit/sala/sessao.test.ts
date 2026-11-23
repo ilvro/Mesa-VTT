@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assinarSessao, papelDe, venceEm, verificarSessao, SESSAO_DURACAO_MS, type Sessao } from '../../../sala/sessao.ts';
-import { lerOla } from '../../../sala/ola.ts';
+import { lerOla } from '../../../src/online/protocolo.ts';
 import { retransmitirIdentificados } from '../../../sala/retransmitir.ts';
 
 const SEGREDO = 'segredo-de-teste';

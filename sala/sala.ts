@@ -1,4 +1,4 @@
-import { lerOla, type Eu, type MsgBemVindo } from './ola.ts';
+import { lerOla, type Eu, type MsgBemVindo } from '../src/online/protocolo.ts';
 import { retransmitirIdentificados } from './retransmitir.ts';
 import { verificarSessao } from './sessao.ts';
 
@@ -48,7 +48,7 @@ export class Sala implements DurableObject {
     }
     const eu: Eu = { discordId: sessao.discordId, nome: sessao.nome, papel: sessao.papel };
     ws.serializeAttachment(eu satisfies Anexo);
-    ws.send(JSON.stringify({ tipo: 'bem-vindo', eu } satisfies MsgBemVindo));
+    ws.send(JSON.stringify({ tipo: 'bem-vindo', eu, membros: [], fichas: [], ultimoEstado: {} } satisfies MsgBemVindo));
   }
 
   webSocketClose(ws: WebSocket, codigo: number): void {
