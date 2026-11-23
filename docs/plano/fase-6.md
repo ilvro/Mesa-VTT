@@ -13,7 +13,7 @@ Regras para o executor: as mesmas da [fase-4.md](fase-4.md) (uma ficha por vez, 
 | C — Jogar | E3a–E3c | Modo leitura (roteiro), toque, projeção para os jogadores |
 | D — Plataforma | E4a–E4d | Cartões vivos dos outros apps, modelos de cena, religar `[[Nome]]`, exportar quadro |
 
-As etapas C e D são detalhadas quando a B fechar.
+
 
 ---
 
@@ -122,3 +122,76 @@ Como:
 4. Conflitos e "saiu do Miro" (E1b) **não** entram no aceite em massa; aparecem num grupo próprio no topo.
 Testes: resumo; passo em massa e desfazer; conflitos fora do aceite em massa.
 Commit: `bulk review of imported board items`
+
+---
+
+## Etapa C — Jogar
+
+### E3a — Modo leitura (roteiro do quadro)  ⬜
+Objetivo: durante o jogo, ler o quadro como uma página contínua, moldura por moldura, sem caçar com zoom. É a parte "nota do Obsidian" do quadro.
+Ler: `src/dominio/molduras.ts` (`ordemDeLeitura`, `filhos`), `src/ui/quadro/TextoDecorado.tsx` (`ConteudoDecorado`, `aoClicarTextoDecorado`), `src/ui/quadro/Item.tsx` (condições, feito), `src/app/foco-do-quadro.ts` (`aoFocarMoldura`, `ultimaMolduraFocada`), `src/ui/ModoSessao.tsx`.
+Arquivos: criar `src/dominio/roteiro-do-quadro.ts` + teste e `src/ui/quadro/LeituraDoQuadro.tsx`; mudar `Quadro.tsx` (chave "Quadro | Ler" na barra) e `estilo.css`.
+Como:
+1. **Puro:** `roteiroDoQuadro(itens): { moldura: ItemMoldura | null; itens: Item[] }[]`: molduras em ordem de leitura (aninhadas logo depois da mãe, com nível), itens de cada moldura em ordem de leitura (linhas por `y` com tolerância de 1/3 da altura, depois `x`), soltos no fim. Entram texto, forma, ref e imagem; setas e traços ficam de fora.
+2. **Tela:** coluna de leitura (largura confortável, ~70 caracteres), título da moldura como cabeçalho, cada item com o fundo da sua cor (paleta), chips, condições e ✓ clicável como no quadro; imagens em largura total; cartões de entidade compactos. Índice lateral com as molduras; clicar rola até ela.
+3. **Ligação com o quadro:** "ver no quadro" em cada item enquadra o item no modo Quadro; ao rolar a leitura, a moldura que está no topo dispara `aoFocarMoldura` (mesma regra do `PageDown`, inclusive "Molduras agem"); no modo Seguir da sessão, a leitura rola até a moldura focada.
+4. Itens `soMestre` e segredos aparecem (o mestre lê); o filtro "esconder segredos" do quadro vale aqui também.
+Testes: `roteiroDoQuadro` (aninhamento, ordem dentro da moldura, soltos, setas fora); e2e: alternar para Ler, clicar numa moldura do índice, voltar ao quadro com "ver no quadro".
+Commit: `added reading mode for boards`
+
+### E3b — Projeção do quadro para os jogadores  ⬜
+Objetivo: mostrar aos jogadores uma moldura (um handout, um mapa desenhado, uma pista) na TV ou no segundo monitor, sem nada do mestre.
+Ler: `src/app/desktop.ts` (`abrirProjetorNoSegundoMonitor`, que já abre o projetor do Atlas no segundo monitor), `src/app/rotas.ts`, `src/app/barramento.ts`, `src/dominio/busca-quadro.ts` (`itemEhSecreto`), `src/ui/quadro/Mundo.tsx`.
+Arquivos: criar `src/dominio/projecao.ts` + teste e `src/ui/quadro/ProjecaoDoQuadro.tsx`; mudar `src/app/desktop.ts` (aceitar a URL do projetor como parâmetro em vez de só a do Atlas, sem mudar o comportamento do Atlas), `src/app/rotas.ts` (rota `#/projecao/{quadroId}`), `src/ui/App.tsx`, `MenuDoItem.tsx` (moldura: "Mostrar aos jogadores"), `estilo.css`.
+Como:
+1. **Puro:** `itensParaJogadores(itens, molduraId)`: só os itens da moldura (com `comConteudo`), sem `soMestre`, sem `segredo`, sem itens com condição falsa, sem `revisao` pendente; marcadores de teste (`[PERCEPÇÃO 13]`) e chips do mestre **não** aparecem (o texto é desenhado sem `decorar`, e os trechos-marcador são retirados).
+2. **Janela de projeção:** a rota `#/projecao/{quadroId}` desenha só a moldura escolhida, enquadrada na tela inteira, sem barra, sem seleção, fundo do quadro. Ela lê os itens do banco e escuta um canal próprio (`BroadcastChannel('mesa:projecao')`) com `{ quadroId, molduraId }` e com "atualizar" quando o mestre muda algo na moldura projetada.
+3. **No quadro do mestre:** "Mostrar aos jogadores" no menu da moldura abre (ou reaproveita) a janela no segundo monitor e manda a moldura; um selo "Projetando: <moldura>" na barra, com "Parar" (tela preta).
+4. Segurança: a janela de projeção nunca recebe nada fora de `itensParaJogadores`; teste isso.
+Testes: `itensParaJogadores` (segredo, só mestre, condição falsa, revisão, marcadores retirados); e2e: abrir a rota de projeção de uma moldura com um segredo e conferir que ele não aparece.
+Commit: `project a board frame to the players`
+
+### E3c — Tela de toque  ⬜
+Objetivo: usar o quadro num notebook com tela de toque (pinça para zoom, dois dedos para mover). Um tablet separado **não** é alvo: os dados da Mesa ficam no navegador deste computador.
+Ler: `src/ui/quadro/Quadro.tsx` (`aoPressionar`, `processarMover`, roda), `src/dominio/camera.ts`.
+Arquivos: `src/dominio/camera.ts` (`pinca(cameraInicial, p1a, p2a, p1b, p2b)`) + teste; `Quadro.tsx`.
+Como: com `pointerType === 'touch'`, dois dedos = pinça (zoom no ponto médio) e arrasto da câmera; um dedo no vazio = mover a câmera (como no Miro em toque), um dedo num item = selecionar e mover; toque longo = menu do item. Caneta (`pen`) continua desenhando com pressão.
+Testes: `pinca` mantém o ponto médio fixo.
+Commit: `touch gestures on boards`
+
+---
+
+## Etapa D — Plataforma
+
+### E4a — Cartões vivos  ⬜
+Objetivo: o cartão de uma personagem no quadro mostra PV e PD atuais, vindos da Ficha.
+Ler: `src/ui/quadro/ItemRef.tsx`, `src/app/barramento.ts`, o evento `ficha.recursos` (`{ ficha, pv, pvMax, pd, pdMax }`, em `vendor/mesa-core`).
+Arquivos: criar `src/app/recursos-das-fichas.ts`; mudar `ItemRef.tsx`, `src/main.tsx` (iniciar a escuta), `estilo.css`.
+Como: guardar em memória (signal) o último `ficha.recursos` por Ref de ficha, durante a sessão do app; o cartão da entidade que tem esse Ref mostra duas barras finas (PV, PD) com os números. Sem dado, nada aparece.
+**Fora desta ficha:** miniatura do mapa do Atlas no cartão. Precisa de mudança no Atlas (oferecer a miniatura pelo contrato) e da autorização do mestre.
+Testes: e2e simulando `ficha.recursos` no barramento e conferindo as barras.
+Commit: `live hit points on character cards`
+
+### E4b — Modelos de cena  ⬜
+Objetivo: guardar uma seleção (por exemplo, a moldura padrão com leitura, testes, segredo e loot) e carimbá-la com um clique.
+Ler: `src/dominio/area-de-transferencia.ts` (`copiar`, `colar`), `src/app/banco-quadros.ts` (versão do banco e stores), `src/ui/quadro/BarraDeFerramentas.tsx`, `MenuDoItem.tsx`.
+Arquivos: `src/app/banco-quadros.ts` (versão 2, store `modelos` com `{ id, nome, campanhaId | null, conteudo: string, criadoEm }`; a migração só cria a store), `src/app/modelos.ts`, `MenuDoItem.tsx` ("Salvar como modelo…"), `BarraDeFerramentas.tsx` (ferramenta Modelo, com a lista; clicar no quadro carimba no ponto), `estilo.css`, testes.
+Como: o conteúdo é o texto de `copiar(comConteudo(seleção))`; carimbar é `colar` no ponto clicado. Modelos são da campanha ou "de todas as campanhas" (escolha ao salvar). Renomear e apagar na lista.
+Testes: banco com `fake-indexeddb` (abrir v1 existente e migrar para v2 sem perder nada); e2e salvar e carimbar.
+Commit: `scene templates for boards`
+
+### E4c — Religar `[[Nome]]` quando a entidade nasce  ⬜
+Objetivo: um `[[Teodor]]` escrito antes de existir a entidade vira ligação sozinho quando ela é criada (hoje só ao editar o item de novo).
+Ler: `src/app/ligacoes-quadro.ts` (`sincronizarLigacoesDoItem`, `refsDoItem`), `src/dominio/prontidao.ts` (como acha `[[ligações]]` sem destino), `src/app/campanha.ts` (`entidades`).
+Arquivos: `src/dominio/ligacoes-quadro.ts` (`itensQueCitam(nomes, itens)`, puro) + teste; `src/app/ligacoes-quadro.ts` (observar as entidades novas e resincronizar, em segundo plano, os itens de todos os quadros da campanha que citam o nome).
+Como: ao mudar `entidades`, comparar com o conjunto anterior de nomes (e apelidos, se houver); para os nomes novos, ler os itens dos quadros (o aberto da memória) e chamar a sincronização só nos que citam. Sem nomes novos, nada é lido.
+Testes: puro de `itensQueCitam` (acento e caixa ignorados, como na resolução de ligações).
+Commit: `board links follow newly created entities`
+
+### E4d — Exportar e importar um quadro  ⬜
+Objetivo: guardar uma cópia de um quadro (ou mandar para outra campanha ou outro computador) num arquivo só.
+Ler: `src/app/banco-quadros.ts`, `src/app/importar-miro.ts` (leitura de zip com `fflate`), `src/dominio/area-de-transferencia.ts` (ids novos e religação).
+Arquivos: criar `src/dominio/pacote-quadro.ts` + teste e `src/app/exportar-quadro.ts`; mudar `Quadros.tsx` (menu do cartão: "Exportar…"; botão "Importar quadro…"), `estilo.css`.
+Como: `.mesa-quadro.zip` com `quadro.json` (`{ formato: 'mesa-quadro', versao: 1, quadro, itens }`) e `imagens/<id>`. Importar cria um quadro novo na campanha ativa com ids novos (setas, molduras e grupos religados), revalidando cada item; `origem` do Miro é mantida (o quadro continua atualizável). As ligações com entidades não vão no pacote: são recriadas pela sincronização se os nomes existirem.
+Testes: exportar → importar dá o mesmo quadro com ids novos; pacote inválido é recusado com mensagem clara.
+Commit: `export and import a board as a file`
