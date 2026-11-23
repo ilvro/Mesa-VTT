@@ -26,6 +26,8 @@ export interface OpcoesDoCliente {
   WebSocket?: WebSocketCtor;
   /** Agenda uma espera e devolve o cancelamento. Padrão: `setTimeout`. Para testes. */
   agendar?: (f: () => void, ms: number) => () => void;
+  /** Chamado com o código de cada fechamento do socket (4001 = sessão inválida, 4004 = sala inexistente). */
+  aoFechar?: (codigo: number | undefined) => void;
 }
 
 type Tipo = MensagemDaSala['tipo'];
@@ -49,6 +51,8 @@ export const ESPERA_MAXIMA_MS = 30_000;
 const ABERTO = 1;
 /** A sala fecha com 4001 se a sessão é inválida; reconectar não adianta. */
 const FECHAMENTO_SESSAO_INVALIDA = 4001;
+/** A sala não existe (ou não tem dono); reconectar também não adianta. */
+const FECHAMENTO_SALA_INEXISTENTE = 4004;
 
 export function conectarSala(opcoes: OpcoesDoCliente): ClienteDaSala {
   const Ctor = opcoes.WebSocket ?? (globalThis.WebSocket as unknown as WebSocketCtor);
@@ -112,7 +116,8 @@ export function conectarSala(opcoes: OpcoesDoCliente): ClienteDaSala {
       ws = null;
       montando.clear();
       mudar('caiu');
-      if (encerrado || e.code === FECHAMENTO_SESSAO_INVALIDA) return;
+      opcoes.aoFechar?.(e.code);
+      if (encerrado || e.code === FECHAMENTO_SESSAO_INVALIDA || e.code === FECHAMENTO_SALA_INEXISTENTE) return;
       const ms = espera;
       espera = Math.min(espera * 2, ESPERA_MAXIMA_MS);
       cancelarEspera = agendar(() => { cancelarEspera = null; if (!encerrado) conectar(); }, ms);

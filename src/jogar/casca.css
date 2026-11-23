@@ -1,0 +1,27 @@
+/* Casca do jogador (`#/jogar/<sala>`): tela cheia, só tokens do tema da Mesa (estilo.css). */
+.casca { position: fixed; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; background: var(--fundo-mapa, #000); color: var(--texto); }
+.casca-mapa { position: relative; min-width: 0; min-height: 0; background: #000; }
+.casca-iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+.casca-ficha { background: var(--painel); border-left: 1px solid var(--linha); padding: 18px; overflow: auto; display: flex; align-items: flex-start; justify-content: center; }
+.casca-abas { display: none; }
+.casca-sobre { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; text-align: center; gap: 6px; background: color-mix(in srgb, var(--fundo), transparent 12%); pointer-events: none; font: 700 13px var(--corpo); letter-spacing: 0.14em; text-transform: uppercase; color: var(--apagado); padding: 24px; }
+.casca-sobre p { margin: 0; }
+.casca-sobre.aviso-grande { pointer-events: auto; text-transform: none; letter-spacing: 0; color: var(--texto); font-weight: 500; }
+.casca-selo { position: absolute; left: 14px; bottom: 14px; padding: 4px 11px; border-radius: 999px; background: var(--vidro); border: 1px solid var(--linha); font: 700 11px var(--corpo); letter-spacing: 0.1em; text-transform: uppercase; color: var(--apagado); pointer-events: none; }
+.casca-selo.aberta { color: var(--sucesso); }
+.casca-selo.caiu { color: var(--perigo); }
+.casca-entrar { display: grid; place-items: center; grid-template-columns: 1fr; padding: 24px; background: var(--fundo); }
+.casca-cartao { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; max-width: 420px; padding: 22px; background: var(--superficie); border: 1px solid var(--linha); border-radius: 8px; }
+.casca-cartao h1 { margin: 0; font-size: 20px; }
+
+/* Tela estreita na vertical: abas embaixo (Mapa | Ficha). */
+@media (max-width: 760px) and (orientation: portrait) {
+  .casca { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) 48px; }
+  .casca-ficha { border-left: 0; }
+  .casca[data-aba='mapa'] .casca-ficha { display: none; }
+  .casca[data-aba='ficha'] .casca-mapa { display: none; }
+  .casca-ficha, .casca-mapa { grid-row: 1; grid-column: 1; }
+  .casca-abas { grid-row: 2; display: grid; grid-template-columns: 1fr 1fr; background: var(--painel); border-top: 1px solid var(--linha); }
+  .casca-abas button { background: transparent; border: 0; color: var(--apagado); font: 700 12px var(--corpo); letter-spacing: 0.1em; text-transform: uppercase; }
+  .casca-abas button[aria-selected='true'] { color: var(--acento); background: var(--acento-suave); }
+}

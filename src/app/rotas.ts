@@ -7,6 +7,9 @@ export const tela = signal<Tela>('entidades');
 /** `#/projecao/<quadroId>`: esta janela é a projeção para os jogadores (sem cabeçalho, só a moldura enviada). */
 export const projecaoQuadroId = signal<string | null>(null);
 const PROJECAO = /^#\/projecao\/([^/]+)$/;
+/** `#/jogar/<salaId>`: a casca do jogador (tela cheia, sem a navegação da Mesa). */
+export const jogarSalaId = signal<string | null>(null);
+const JOGAR = /^#\/jogar\/([A-Za-z0-9_-]{1,64})$/;
 
 /** `#/entidade/<id>` é o link profundo do manifesto (`mesa.json`). */
 const ENTIDADE = /^#\/entidade\/(.+)$/;
@@ -15,6 +18,9 @@ const QUADRO = /^#\/quadro\/(.+)$/;
 
 export function lerHash(): void {
   const hash = location.hash;
+  const jg = JOGAR.exec(hash);
+  jogarSalaId.value = jg ? jg[1]! : null;
+  if (jg) return;
   const pj = PROJECAO.exec(hash);
   projecaoQuadroId.value = pj ? decodeURIComponent(pj[1]!) : null;
   if (pj) return;

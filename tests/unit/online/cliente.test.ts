@@ -115,3 +115,13 @@ test('um blob de 1,3 MB é dividido em pedaços de 512 KB e remontado igual', as
   assert.equal(feitos[0]!.blob.type, 'image/png');
   assert.deepEqual(new Uint8Array(await feitos[0]!.blob.arrayBuffer()), bytes);
 });
+
+test('sala inexistente (4004) não reconecta, e aoFechar recebe o código', () => {
+  Falso.todos = [];
+  const esperas: number[] = [];
+  const codigos: Array<number | undefined> = [];
+  conectarSala({ url: 'wss://x/sala', sessao: 'tok', WebSocket: Falso, agendar: (_f, ms) => { esperas.push(ms); return () => {}; }, aoFechar: c => codigos.push(c) });
+  Falso.todos[0]!.abrir(); Falso.todos[0]!.cair(4004);
+  assert.deepEqual(esperas, []);
+  assert.deepEqual(codigos, [4004]);
+});

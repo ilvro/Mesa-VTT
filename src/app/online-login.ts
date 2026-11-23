@@ -4,6 +4,9 @@ import { DISCORD_CLIENT_ID, redirectUri, urlDaSala } from '../online/config.ts';
 
 export const CHAVE_SESSAO = 'mesa:online-sessao';
 export const CHAVE_STATE = 'mesa:online-state';
+/** O hash para onde voltar depois do login do jogador (`#/jogar/<sala>`), guardado no `sessionStorage` antes de ir ao Discord. */
+export const CHAVE_VOLTA = 'mesa:online-volta';
+const HASH_DE_VOLTA = /^#\/jogar\/[A-Za-z0-9_-]{1,64}$/;
 export const URL_AUTORIZACAO = 'https://discord.com/oauth2/authorize';
 
 export interface EuOnline { discordId: string; nome: string; avatar: string | null; podeMestrar: boolean }
@@ -56,8 +59,8 @@ export function sairDoOnline(storage: Armazem | undefined = armazemLocal()): voi
 }
 
 /** A URL de `discord.com/oauth2/authorize` para este `state`. */
-export function urlDeAutorizacao(state: string, redirect: string = redirectUri()): string {
-  const p = new URLSearchParams({ client_id: DISCORD_CLIENT_ID, response_type: 'code', scope: 'identify guilds', redirect_uri: redirect, state });
+export function urlDeAutorizacao(state: string, redirect: string = redirectUri(), scope: string = 'identify guilds'): string {
+  const p = new URLSearchParams({ client_id: DISCORD_CLIENT_ID, response_type: 'code', scope, redirect_uri: redirect, state });
   return `${URL_AUTORIZACAO}?${p.toString()}`;
 }
 
@@ -67,10 +70,21 @@ export function novoState(): string {
 }
 
 /** Guarda um `state` novo no `sessionStorage` e devolve a URL para onde mandar o navegador. */
-export function iniciarLogin(opcoes: { sessionStorage?: Armazem | undefined; redirect?: string; state?: string } = {}): string {
+export function iniciarLogin(opcoes: { sessionStorage?: Armazem | undefined; redirect?: string; state?: string; scope?: string; voltarPara?: string } = {}): string {
   const state = opcoes.state ?? novoState();
-  try { (opcoes.sessionStorage ?? armazemDaAba())?.setItem(CHAVE_STATE, state); } catch { /* sem sessionStorage o retorno falha na conferência */ }
-  return urlDeAutorizacao(state, opcoes.redirect);
+  const aba = opcoes.sessionStorage ?? armazemDaAba();
+  try { aba?.setItem(CHAVE_STATE, state); } catch { /* sem sessionStorage o retorno falha na conferência */ }
+  try { if (opcoes.voltarPara && HASH_DE_VOLTA.test(opcoes.voltarPara)) aba?.setItem(CHAVE_VOLTA, opcoes.voltarPara); else aba?.removeItem(CHAVE_VOLTA); } catch { /* volta para #/online */ }
+  return urlDeAutorizacao(state, opcoes.redirect, opcoes.scope);
+}
+
+/** O hash para onde o login volta: o guardado por `iniciarLogin({ voltarPara })` (e apagado), ou `#/online`. */
+export function hashDeVolta(storage: Armazem | undefined = armazemDaAba()): string {
+  try {
+    const h = storage?.getItem(CHAVE_VOLTA) ?? null;
+    storage?.removeItem(CHAVE_VOLTA);
+    return h && HASH_DE_VOLTA.test(h) ? h : '#/online';
+  } catch { return '#/online'; }
 }
 
 export type ResultadoDoRetorno = 'sem-codigo' | 'ok' | 'state-invalido' | 'recusado' | 'erro';
@@ -128,7 +142,7 @@ export async function iniciarOnline(): Promise<void> {
   const search = location.search;
   if (!new URLSearchParams(search).has('code') && !new URLSearchParams(search).has('error')) return;
   const r = await concluirLogin({ search });
-  try { history.replaceState(null, '', `${location.pathname}${queryLimpa(search)}#/online`); } catch { /* ignora */ }
+  try { history.replaceState(null, '', `${location.pathname}${queryLimpa(search)}${hashDeVolta()}`); } catch { /* ignora */ }
   erroDoLogin.value = r === 'ok' || r === 'sem-codigo' ? null : MENSAGEM_DO_ERRO[r];
   window.dispatchEvent(new HashChangeEvent('hashchange'));
 }

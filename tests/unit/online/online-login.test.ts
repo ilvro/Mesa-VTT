@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CHAVE_SESSAO, CHAVE_STATE, concluirLogin, expDaSessao, iniciarLogin, lerSessaoGuardada, queryLimpa, sessaoOnline, urlDeAutorizacao,
+  CHAVE_SESSAO, CHAVE_STATE, CHAVE_VOLTA, concluirLogin, expDaSessao, hashDeVolta, iniciarLogin, lerSessaoGuardada, queryLimpa, sessaoOnline, urlDeAutorizacao,
 } from '../../../src/app/online-login.ts';
 import { DISCORD_CLIENT_ID, REDIRECT_DEV, REDIRECT_PAGES, redirectUri, urlDaSala, urlDoWebSocket, URL_SALA_PRODUCAO } from '../../../src/online/config.ts';
 
@@ -97,4 +97,23 @@ test('config: urlDaSala, redirectUri e a URL do WebSocket', () => {
   assert.equal(redirectUri({ hostname: '127.0.0.1' }), REDIRECT_DEV);
   assert.equal(urlDoWebSocket('abc', 'http://127.0.0.1:8787'), 'ws://127.0.0.1:8787/sala/abc/ws');
   assert.equal(urlDoWebSocket('abc', 'https://s.workers.dev'), 'wss://s.workers.dev/sala/abc/ws');
+});
+
+test('login do jogador: scope identify e o hash de volta guardado, lido uma vez', () => {
+  const aba = new Armazem();
+  const u = new URL(iniciarLogin({ sessionStorage: aba, redirect: REDIRECT_DEV, state: 's1', scope: 'identify', voltarPara: '#/jogar/abc123' }));
+  assert.equal(u.searchParams.get('scope'), 'identify');
+  assert.equal(aba.getItem(CHAVE_VOLTA), '#/jogar/abc123');
+  assert.equal(hashDeVolta(aba), '#/jogar/abc123');
+  assert.equal(aba.getItem(CHAVE_VOLTA), null);
+  assert.equal(hashDeVolta(aba), '#/online');
+});
+
+test('o hash de volta só aceita #/jogar/<sala>; o login do mestre volta a #/online', () => {
+  const aba = new Armazem();
+  iniciarLogin({ sessionStorage: aba, voltarPara: '#/outra/coisa' });
+  assert.equal(hashDeVolta(aba), '#/online');
+  iniciarLogin({ sessionStorage: aba, voltarPara: '#/jogar/abc' });
+  iniciarLogin({ sessionStorage: aba });
+  assert.equal(hashDeVolta(aba), '#/online');
 });
