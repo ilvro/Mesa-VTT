@@ -49,7 +49,7 @@ test('Q2k: quadro com 3000 itens mantém quadros abaixo de 50 ms ao ver tudo e d
       );
 
       const db = await new Promise<IDBDatabase>((resolve, reject) => {
-        const req = indexedDB.open('mesa-quadros-v1', 1);
+        const req = indexedDB.open('mesa-quadros-v1');
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
       });

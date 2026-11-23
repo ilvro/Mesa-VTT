@@ -14,7 +14,8 @@ export type FerramentaQuadro =
   | 'borracha'
   | 'imagem'
   | 'moldura'
-  | 'entidade';
+  | 'entidade'
+  | 'modelo';
 
 interface DefinicaoFerramenta {
   id: FerramentaQuadro;
@@ -37,6 +38,7 @@ const FERRAMENTAS: readonly DefinicaoFerramenta[] = [
   { id: 'imagem', rotulo: 'Imagem', icone: '🖼', habilitada: true },
   { id: 'moldura', rotulo: 'Moldura', atalho: 'F', icone: '#', habilitada: true },
   { id: 'entidade', rotulo: 'Entidade', icone: '◆', habilitada: true },
+  { id: 'modelo', rotulo: 'Modelo de cena', icone: '❖', habilitada: true },
 ];
 
 const ROTULO_FORMA: Record<Forma, string> = {

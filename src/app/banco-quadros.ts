@@ -1,4 +1,5 @@
 import { abrirBanco, obterTudo, promessa, transacao, type DefinicaoStore } from '#mesa';
+import { imagensDoModelo, validarModelo, type ModeloDeCena } from '../dominio/modelos.ts';
 import type { EstadoDoMundo } from '../dominio/estado-do-mundo.ts';
 import {
   validarItem,
@@ -9,7 +10,8 @@ import {
 } from '../dominio/quadro.ts';
 
 export const NOME_BANCO_QUADROS = 'mesa-quadros-v1';
-export const VERSAO_BANCO_QUADROS = 1;
+/** v2: acrescenta a store `modelos` (a migração só cria o que falta). */
+export const VERSAO_BANCO_QUADROS = 2;
 
 export interface RegistroImagem {
   id: string;
@@ -38,6 +40,11 @@ const STORES: DefinicaoStore[] = [
   {
     nome: 'ajustes',
     chave: 'campanhaId',
+  },
+  {
+    // `campanhaId` pode ser null (modelo de todas as campanhas), que o IndexedDB não indexa: filtra-se em memória.
+    nome: 'modelos',
+    chave: 'id',
   },
 ];
 
@@ -104,8 +111,12 @@ export async function removerQuadrosDaCampanha(
   db?: IDBDatabase,
 ): Promise<void> {
   const banco = await obterBanco(db);
-  await transacao(banco, ['quadros', 'itens', 'ajustes'], 'readwrite', async (tx) => {
+  await transacao(banco, ['quadros', 'itens', 'ajustes', 'modelos'], 'readwrite', async (tx) => {
     await promessa(tx.objectStore('ajustes').delete(campanhaId));
+    const storeModelos = tx.objectStore('modelos');
+    for (const m of await obterTudo<ModeloDeCena>(storeModelos)) {
+      if (m.campanhaId === campanhaId) await promessa(storeModelos.delete(m.id));
+    }
     const storeQuadros = tx.objectStore('quadros');
     const storeItens = tx.objectStore('itens');
     const quadroIds = await promessa(storeQuadros.index('campanhaId').getAllKeys(campanhaId));
@@ -182,8 +193,11 @@ export async function removerImagensOrfas(
   db?: IDBDatabase,
 ): Promise<number> {
   const banco = await obterBanco(db);
-  return transacao(banco, ['itens', 'imagens'], 'readwrite', async (tx) => {
+  return transacao(banco, ['itens', 'imagens', 'modelos'], 'readwrite', async (tx) => {
     const usadas = new Set(protegidas);
+    for (const m of await obterTudo<ModeloDeCena>(tx.objectStore('modelos'))) {
+      for (const id of imagensDoModelo(m.conteudo)) usadas.add(id);
+    }
     const itens = await obterTudo<Item>(tx.objectStore('itens'));
     for (const it of itens) {
       if (it.tipo === 'imagem') usadas.add(it.imagemId);
@@ -197,6 +211,28 @@ export async function removerImagensOrfas(
       removidas++;
     }
     return removidas;
+  });
+}
+
+export async function listarModelos(db?: IDBDatabase): Promise<ModeloDeCena[]> {
+  const banco = await obterBanco(db);
+  return transacao(banco, ['modelos'], 'readonly', (tx) =>
+    obterTudo<ModeloDeCena>(tx.objectStore('modelos')),
+  );
+}
+
+export async function salvarModelo(modelo: ModeloDeCena, db?: IDBDatabase): Promise<void> {
+  validarModelo(modelo);
+  const banco = await obterBanco(db);
+  await transacao(banco, ['modelos'], 'readwrite', async (tx) => {
+    await promessa(tx.objectStore('modelos').put(modelo));
+  });
+}
+
+export async function removerModelo(id: string, db?: IDBDatabase): Promise<void> {
+  const banco = await obterBanco(db);
+  await transacao(banco, ['modelos'], 'readwrite', async (tx) => {
+    await promessa(tx.objectStore('modelos').delete(id));
   });
 }
 

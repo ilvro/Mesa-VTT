@@ -122,6 +122,8 @@ import { FilaDeRevisao } from './FilaDeRevisao.tsx';
 import { LinhaDoTempo } from './LinhaDoTempo.tsx';
 import { Mundo, type TracoPreview } from './Mundo.tsx';
 import { MenuDoItem } from './MenuDoItem.tsx';
+import { PainelDeModelos } from './PainelDeModelos.tsx';
+import { carimbarModeloNoQuadro, modeloEscolhidoId } from '../../app/modelos.ts';
 import { Minimapa } from './Minimapa.tsx';
 import { Navegador } from './Navegador.tsx';
 import { PainelDaPaleta } from './PainelDaPaleta.tsx';
@@ -823,6 +825,14 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
       const x = encaixar ? encaixarNaGrade(p.x, passoGrade) : Math.round(p.x);
       const y = encaixar ? encaixarNaGrade(p.y, passoGrade) : Math.round(p.y);
       seletorEntidade.value = { ponto: { x, y }, busca: '' };
+      return;
+    }
+
+    if (ferramenta.value === 'modelo') {
+      // Fica na ferramenta para carimbar de novo; o painel diz qual modelo está escolhido.
+      if (modeloEscolhidoId.value) {
+        carimbarModeloNoQuadro(modeloEscolhidoId.value, p, novoIdItem);
+      }
       return;
     }
 
@@ -2003,6 +2013,8 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
             }}
           />
         ) : null}
+
+        {ferramenta.value === 'modelo' ? <PainelDeModelos /> : null}
 
         {seletorEntidade.value ? (
           <aside

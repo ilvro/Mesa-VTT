@@ -11,6 +11,7 @@ import {
   desancorarItemDeRef,
 } from '../../app/foco-do-quadro.ts';
 import { mostrarAosJogadores } from '../../app/projecao.ts';
+import { salvarSelecaoComoModelo } from '../../app/modelos.ts';
 import { adicionarAoRoteiro, sessaoAtiva } from '../../app/registro.ts';
 import {
   agruparSelecao,
@@ -58,6 +59,9 @@ export function MenuDoItem({
   const [fatoChave, setFatoChave] = useState('');
   const [fatoValor, setFatoValor] = useState<'true' | 'false'>('true');
   const [abrindoAncora, setAbrindoAncora] = useState(false);
+  const [salvandoModelo, setSalvandoModelo] = useState(false);
+  const [nomeModelo, setNomeModelo] = useState('');
+  const [escopoModelo, setEscopoModelo] = useState<'campanha' | 'todas'>('campanha');
   const [textoAncora, setTextoAncora] = useState('');
   const ancorasPrimeiro = primeiro ? ancorasDoItem(quadroId, primeiro.id) : [];
 
@@ -73,6 +77,11 @@ export function MenuDoItem({
   const atualizarAoFocar = (novo: AoFocar) => {
     if (!primeiro || primeiro.tipo !== 'moldura') return;
     atualizarAoFocarMoldura(primeiro.id, novo);
+  };
+
+  const guardarModelo = async () => {
+    const salvo = await salvarSelecaoComoModelo(nomeModelo, escopoModelo);
+    if (salvo) onFechar();
   };
 
   const copiarLink = async () => {
@@ -142,6 +151,55 @@ export function MenuDoItem({
           >
             {selecionados.every((i) => i.feito) ? 'Desmarcar feito' : 'Marcar feito'}
           </button>
+          {salvandoModelo ? (
+            <div class="menu-modelo-form" data-testid="modelo-form">
+              <input
+                type="text"
+                data-testid="modelo-nome"
+                placeholder="Nome do modelo"
+                value={nomeModelo}
+                maxLength={80}
+                autoFocus
+                onInput={(e) => setNomeModelo(e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') void guardarModelo();
+                  if (e.key === 'Escape') setSalvandoModelo(false);
+                }}
+              />
+              <select
+                data-testid="modelo-escopo"
+                value={escopoModelo}
+                onChange={(e) => setEscopoModelo(e.currentTarget.value as 'campanha' | 'todas')}
+              >
+                <option value="campanha">Esta campanha</option>
+                <option value="todas">Todas as campanhas</option>
+              </select>
+              <div class="menu-modelo-acoes">
+                <button
+                  type="button"
+                  class="botao-pilula"
+                  data-testid="modelo-salvar"
+                  disabled={nomeModelo.trim() === ''}
+                  onClick={() => void guardarModelo()}
+                >
+                  Salvar
+                </button>
+                <button type="button" class="botao-pilula" onClick={() => setSalvandoModelo(false)}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              class="menu-contexto-btn"
+              data-testid="menu-salvar-modelo"
+              onClick={() => setSalvandoModelo(true)}
+            >
+              Salvar como modelo…
+            </button>
+          )}
           <hr class="menu-contexto-sep" />
           <button
             type="button"
