@@ -18,6 +18,7 @@ import {
   textoPuro,
   type CABECAS_SETA,
   type DocRico,
+  type NoRico,
   type Forma,
   type Item,
   type LADOS_PONTA,
@@ -422,6 +423,57 @@ function docDeCardMiro(data: Record<string, unknown> | undefined): DocRico {
   return htmlParaDocRico(partesHtml.join(''))
 }
 
+const BLOCOS_DE_TEXTO = new Set(['paragraph', 'heading'])
+const FATOR_CABECALHO: Record<number, number> = { 1: 1.6, 2: 1.35, 3: 1.15 }
+
+function textoDoBloco(no: NoRico): string {
+  if (no.type === 'text') return no.text ?? ''
+  if (no.type === 'hardBreak') return '\n'
+  return (no.content ?? []).map(textoDoBloco).join('')
+}
+
+function maiorFonteDoBloco(no: NoRico): number {
+  let maior = 0
+  for (const m of no.marks ?? []) {
+    if (m.type === 'textStyle') {
+      const n = parseFloat(String(m.attrs?.fontSize ?? ''))
+      if (Number.isFinite(n) && n > maior) maior = n
+    }
+  }
+  for (const f of no.content ?? []) maior = Math.max(maior, maiorFonteDoBloco(f))
+  return maior
+}
+
+function blocosDeTexto(nos: NoRico[], saida: NoRico[]): void {
+  for (const no of nos) {
+    if (BLOCOS_DE_TEXTO.has(no.type)) saida.push(no)
+    else if (no.content) blocosDeTexto(no.content, saida)
+  }
+}
+
+/**
+ * Estima a altura (px do quadro) de um texto do Miro, que a API entrega sem
+ * `geometry.height`. Heurística: ~0,52 em de largura por caractere, 1,4 de
+ * entrelinha, 16 px de margem.
+ */
+export function alturaEstimadaDoTexto(doc: DocRico, largura: number, tamanhoFonte: number): number {
+  const blocos: NoRico[] = []
+  blocosDeTexto(doc.content ?? [], blocos)
+  let soma = 0
+  for (const b of blocos) {
+    let tam = maiorFonteDoBloco(b)
+    if (tam <= 0) {
+      const nivel = Number(b.attrs?.level)
+      tam = tamanhoFonte * (b.type === 'heading' ? (FATOR_CABECALHO[nivel] ?? 1) : 1)
+    }
+    const porLinha = Math.max(1, Math.floor(largura / (tam * 0.52)))
+    const linhas = Math.max(1, Math.ceil(textoDoBloco(b).length / porLinha))
+    soma += linhas * tam * 1.4
+  }
+  if (blocos.length === 0) soma = tamanhoFonte * 1.4
+  return soma + 16
+}
+
 export function converterMiro(
   bruto: PacoteMiroBruto,
   opcoes: OpcoesConverterMiro,
@@ -502,7 +554,16 @@ export function converterMiro(
     const padraoLargura = item.type === 'sticky_note' ? 200 : 240
     const padraoAltura = item.type === 'sticky_note' ? 200 : 120
     const largura = Math.max(20, Number(item.geometry?.width) || padraoLargura)
-    const altura = Math.max(20, Number(item.geometry?.height) || padraoAltura)
+    const alturaMiro = Number(item.geometry?.height)
+    const docDoTexto =
+      item.type === 'text'
+        ? htmlParaDocRico(typeof item.data?.content === 'string' ? item.data.content : '')
+        : null
+    const alturaDoTexto =
+      docDoTexto && !alturaMiro
+        ? alturaEstimadaDoTexto(docDoTexto, largura, Number(item.style?.fontSize) || 16)
+        : 0
+    const altura = Math.max(20, alturaMiro || alturaDoTexto || padraoAltura)
     const rotacao = Number(item.geometry?.rotation) || 0
 
     let cx = Number(item.position?.x) || 0
@@ -526,8 +587,7 @@ export function converterMiro(
     const nomesDasTags = nomesDasTagsDoItem(item, tagsPorId)
 
     if (item.type === 'text') {
-      const html = typeof dt.content === 'string' ? dt.content : ''
-      const doc = htmlParaDocRico(html)
+      const doc = docDoTexto!
       const corFundo = resolverCorMiro(st.fillColor)
       const opacidade = st.fillOpacity !== undefined ? Math.min(1, Math.max(0, Number(st.fillOpacity))) : 1
       const corTexto = resolverCorMiro(st.color) || '#e8efe9'
@@ -563,7 +623,7 @@ export function converterMiro(
         fundo: corFundo,
         opacidade: Number.isFinite(opacidade) ? opacidade : 1,
       }
-      criado.revisao = sugerirRevisaoMiro(doc, corFundo, html, paleta, nomesDasTags)
+      criado.revisao = sugerirRevisaoMiro(doc, corFundo, typeof dt.content === 'string' ? dt.content : '', paleta, nomesDasTags)
       itensConvertidos.push(criado)
       continue
     }
