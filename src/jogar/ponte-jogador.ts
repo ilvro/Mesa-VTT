@@ -4,10 +4,15 @@
  *
  * Os canais locais têm o prefixo da sala (`sala:<id>:…`) e nunca são os do mestre (`atlas:projetor:*`, `mesa:eventos`): abrir o link do
  * jogador no navegador do mestre não cria eco nem mistura eventos que não passaram pela sala. `abrir` recusa qualquer nome fora do prefixo.
+ *
+ * Fichas (R11): no canal `sala:<id>:mesa:eventos`, a ponte atende os pedidos do Dossiê em modo jogador pelo barramento normal:
+ * `sala.fichas` (as fichas do `bem-vindo` e das atualizações) e `sala.salvar-ficha` (vira `ficha.salvar` na sala, com o `rev` mais recente
+ * que a ponte conhece). Cada `ficha.atualizada` da sala vira o fato `sala.ficha-atualizada` no canal local, com o `autor`.
  */
+import { CONTRATO, criarBarramento, validarEvento } from '#mesa';
 import type { ClienteDaSala } from '../online/cliente.ts';
 import { descomprimirEstado } from '../online/estado-comprimido.ts';
-import type { Envelope } from '../online/protocolo.ts';
+import type { Envelope, Eu, FichaDaSala, Membro } from '../online/protocolo.ts';
 
 /** Os eventos que o jogador pode mandar à sala (a sala confere de novo e carimba o autor). */
 export const EVENTOS_DO_JOGADOR: readonly string[] = ['ficha.rolagem', 'ficha.recursos', 'atlas.mover-peca'];
@@ -66,6 +71,16 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
   };
   const projetor = abrir(canalProjetorDaSala(salaId));
   const eventos = abrir(canalEventosDaSala(salaId));
+
+  // Fichas do jogador: o que a sala tem (o `bem-vindo` e as `ficha.atualizada`), o `rev` de cada uma e quem sou eu.
+  const fichas = new Map<string, FichaDaSala>();
+  const revs = new Map<string, number>();
+  let eu: Eu | null = null, membros: Membro[] = [];
+  let abriu: () => void = () => {};
+  const aberta = new Promise<void>(r => { abriu = r; });
+  /** O JSON das fichas que mandei e cujo eco (`ficha.atualizada`) ainda não voltou: o eco é meu; o resto veio do mestre. */
+  const mandadas: string[] = [];
+  const barramento = criarBarramento({ app: 'mesa', campanhaId: null, criarCanal: () => abrir(canalEventosDaSala(salaId)), aviso: avisar });
 
   const blobs = new Map<string, Blob>();
   const esperando = new Map<string, Set<(b: Blob | null) => void>>();
@@ -127,7 +142,47 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
 
   eventos.onmessage = ({ data }) => { if (eventoPodeSair(data)) cliente.enviar({ tipo: 'evento', envelope: data }); };
 
+  barramento.atender('sala.fichas', async () => {
+    await aberta;
+    const minhas = [...fichas.values()].filter(f => !donos.has(f.id) || !eu || donos.get(f.id) === eu.discordId);
+    return { ok: true, fichas: minhas, revs: Object.fromEntries(minhas.filter(f => revs.has(f.id)).map(f => [f.id, revs.get(f.id)])), ...(eu ? { eu: { discordId: eu.discordId, nome: eu.nome } } : {}) };
+  });
+  barramento.atender('sala.salvar-ficha', dados => {
+    const { ficha, rev } = dados as { ficha: FichaDaSala; rev?: number };
+    const revAtual = revs.get(ficha.id) ?? (typeof rev === 'number' ? rev : 0);
+    if (!cliente.enviar({ tipo: 'ficha.salvar', ficha, rev: revAtual })) return { ok: false, motivo: 'A sala não está conectada.' };
+    fichas.set(ficha.id, ficha);
+    mandadas.push(JSON.stringify(ficha));
+    if (mandadas.length > 20) mandadas.shift();
+    return { ok: true, rev: revAtual };
+  });
+  const donos = new Map<string, string>();
+  const autorDe = (minha: boolean) => {
+    if (minha && eu) return { discordId: eu.discordId, nome: eu.nome, papel: eu.papel, fichas: [...fichas.keys()] };
+    // A sala só deixa o dono e o mestre gravarem uma ficha: quem não fui eu foi o mestre.
+    const m = membros.find(x => x.papel === 'mestre');
+    return { discordId: m?.discordId ?? 'mestre', nome: m?.nome ?? 'Mestre', papel: 'mestre' as const, fichas: [] as string[] };
+  };
+
   const soltar = [
+    cliente.ouvir('bem-vindo', m => {
+      eu = m.eu; membros = m.membros;
+      fichas.clear(); revs.clear(); donos.clear();
+      for (const f of m.fichas) fichas.set(f.id, f);
+      for (const [id, r] of Object.entries(m.revs ?? {})) revs.set(id, r);
+      for (const [id, d] of Object.entries(m.donos ?? {})) donos.set(id, d);
+      abriu();
+    }),
+    cliente.ouvir('membros', m => { membros = m.membros; }),
+    cliente.ouvir('ficha.atualizada', m => {
+      if (fechada) return;
+      const json = JSON.stringify(m.ficha), i = mandadas.indexOf(json);
+      if (i >= 0) mandadas.splice(i, 1);
+      fichas.set(m.ficha.id, m.ficha); revs.set(m.ficha.id, m.rev);
+      if (m.dono) donos.set(m.ficha.id, m.dono);
+      const envelope = { contrato: CONTRATO, app: 'mesa', tipo: 'sala.ficha-atualizada', id: crypto.randomUUID(), em: Date.now(), campanhaId: null, dados: { ficha: m.ficha, rev: m.rev, ...(m.conflito ? { conflito: true } : {}) }, autor: autorDe(i >= 0) };
+      if (validarEvento(envelope).ok) eventos.postMessage(envelope);
+    }),
     cliente.ouvir('canal', m => { if (m.nome.startsWith('atlas:projetor:')) enfileirar(m.msg); }),
     cliente.ouvir('evento', m => { if (!fechada) eventos.postMessage(m.envelope); }),
     cliente.ouvir('bem-vindo', m => { for (const [nome, msg] of Object.entries(m.ultimoEstado ?? {})) if (nome.startsWith('atlas:projetor:')) enfileirar(msg); }),
@@ -145,6 +200,7 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
       for (const f of soltar) f();
       for (const fs of [...esperando.values()]) for (const f of [...fs]) f(null);
       projetor.onmessage = null; eventos.onmessage = null;
+      barramento.fechar();
       projetor.close(); eventos.close();
     },
   };

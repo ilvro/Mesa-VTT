@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { criarPonte } from '../../../src/app/online.ts';
 import { PRAZO_DO_BLOB_MS, criarPonteDoJogador, eventoPodeSair, type CanalLocal } from '../../../src/jogar/ponte-jogador.ts';
+import { criarBarramento } from '#mesa';
 import { comprimirEstado } from '../../../src/online/estado-comprimido.ts';
 import type { ClienteDaSala } from '../../../src/online/cliente.ts';
 import type { MensagemDaSala, MensagemParaSala } from '../../../src/online/protocolo.ts';
@@ -194,4 +195,82 @@ test('sem eco: com a ponte do mestre e a casca na mesma origem, nada do que a ca
   assert.equal(mestre.enviadas.length, 1);
   assert.equal(jogador.enviadas.length, 0);
   pm.fechar(); pj.fechar();
+});
+
+// ---------- fichas (R11) ----------
+
+const mestre = { discordId: '1', nome: 'Mestre', papel: 'mestre' as const };
+const ficha = (id: string, extra: Record<string, unknown> = {}) => ({ id, name: id.toUpperCase(), ...extra });
+
+/** O Dossiê em modo jogador: um barramento `ficha` no mesmo canal local da sala. */
+function comDossie() {
+  const m = montar();
+  const dossie = criarBarramento({ app: 'ficha', campanhaId: null, criarCanal: () => new Canal(`sala:${SALA}:mesa:eventos`) });
+  const fatos: Array<Record<string, any>> = [];
+  dossie.ouvir('sala.ficha-atualizada', e => { fatos.push(e as unknown as Record<string, any>); });
+  return { ...m, dossie, fatos };
+}
+const bemVindo = (fichas: unknown[], extra: Record<string, unknown> = {}) => ({ tipo: 'bem-vindo' as const, eu, membros: [{ ...mestre, personagem: null }], fichas, ultimoEstado: {}, ...extra }) as unknown as MensagemDaSala;
+
+test('sala.fichas responde com as fichas do bem-vindo, os revs e quem é o jogador, mesmo se o pedido chega antes', async () => {
+  const { dossie, emitir, ponte } = comDossie();
+  const cedo = dossie.pedir('sala.fichas', {}, { prazoMs: 2000 });
+  await new Promise(r => setTimeout(r, 5));
+  emitir(bemVindo([ficha('a'), ficha('b')], { revs: { a: 3, b: 1 }, donos: { a: '2', b: '2' } }));
+  const r = await cedo;
+  assert.equal(r.ok, true);
+  const d = (r as { resposta: any }).resposta;
+  assert.deepEqual(d.fichas.map((f: { id: string }) => f.id), ['a', 'b']);
+  assert.deepEqual(d.revs, { a: 3, b: 1 });
+  assert.deepEqual(d.eu, { discordId: '2', nome: 'Ana' });
+  const de_novo = await dossie.pedir('sala.fichas', {});
+  assert.equal(de_novo.ok, true);
+  ponte.fechar();
+});
+
+test('sala.salvar-ficha vira ficha.salvar com o rev mais recente que a ponte conhece', async () => {
+  const { dossie, emitir, enviadas, ponte } = comDossie();
+  emitir(bemVindo([ficha('a')], { revs: { a: 3 }, donos: { a: '2' } }));
+  const r1 = await dossie.pedir('sala.salvar-ficha', { ficha: ficha('a', { pv: 1 }), rev: 0 });
+  assert.equal(r1.ok, true);
+  assert.deepEqual(enviadas, [{ tipo: 'ficha.salvar', ficha: ficha('a', { pv: 1 }), rev: 3 }], 'o rev do bem-vindo vale mais que o do Dossiê');
+  emitir({ tipo: 'ficha.atualizada', ficha: ficha('a', { pv: 1 }), rev: 4, dono: '2' });
+  await dossie.pedir('sala.salvar-ficha', { ficha: ficha('a', { pv: 2 }), rev: 0 });
+  assert.equal((enviadas[1] as { rev: number }).rev, 4, 'o rev da ficha.atualizada');
+  await dossie.pedir('sala.salvar-ficha', { ficha: ficha('nova'), rev: 0 });
+  assert.equal((enviadas[2] as { rev: number }).rev, 0, 'ficha nova, rev 0');
+  ponte.fechar();
+});
+
+test('ficha.atualizada da sala vira sala.ficha-atualizada no canal local, com o autor: o mestre, ou o próprio jogador no eco', async () => {
+  const { dossie, emitir, fatos, ponte } = comDossie();
+  emitir({ ...bemVindo([ficha('a', { pv: 5 })], { donos: { a: '2' } }) } as MensagemDaSala);
+  emitir({ tipo: 'ficha.atualizada', ficha: ficha('a', { pv: 2 }), rev: 2, dono: '2' });
+  assert.equal(fatos.length, 1);
+  assert.equal(fatos[0]!.app, 'mesa');
+  assert.deepEqual(fatos[0]!.dados, { ficha: ficha('a', { pv: 2 }), rev: 2 });
+  assert.equal(fatos[0]!.autor.papel, 'mestre');
+  assert.equal(fatos[0]!.autor.discordId, '1');
+  // o eco da própria gravação: a ponte mandou essa ficha, então o autor é o jogador
+  await dossie.pedir('sala.salvar-ficha', { ficha: ficha('a', { pv: 1 }), rev: 2 });
+  emitir({ tipo: 'ficha.atualizada', ficha: ficha('a', { pv: 1 }), rev: 3, dono: '2', conflito: true });
+  assert.equal(fatos[1]!.autor.discordId, '2');
+  assert.equal(fatos[1]!.autor.papel, 'jogador');
+  assert.deepEqual(fatos[1]!.autor.fichas, ['a']);
+  assert.equal(fatos[1]!.dados.conflito, true);
+  ponte.fechar();
+});
+
+test('os pedidos de ficha e as respostas ficam só no canal da sala, e nada disso vai para a sala', async () => {
+  const { dossie, emitir, enviadas, ponte } = comDossie();
+  emitir(bemVindo([ficha('a')], { donos: { a: '2' } }));
+  await dossie.pedir('sala.fichas', {});
+  emitir({ tipo: 'ficha.atualizada', ficha: ficha('a', { pv: 9 }), rev: 2, dono: '2' });
+  assert.ok(Canal.escritos.every(n => n.startsWith(`sala:${SALA}:`)), [...new Set(Canal.escritos)].join());
+  assert.deepEqual(enviadas, [], 'só o sala.salvar-ficha vira ficha.salvar');
+  // uma rolagem do Dossiê continua saindo
+  dossie.emitir('ficha.rolagem', { ficha: { app: 'ficha', tipo: 'ficha', id: 'a' }, titulo: 'Luta', total: 12 });
+  assert.equal(enviadas.length, 1);
+  assert.equal((enviadas[0] as unknown as { tipo: string }).tipo, 'evento');
+  ponte.fechar();
 });
