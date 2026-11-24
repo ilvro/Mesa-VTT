@@ -200,6 +200,8 @@ test('sem eco: com a ponte do mestre e a casca na mesma origem, nada do que a ca
 // ---------- fichas (R11) ----------
 
 const mestre = { discordId: '1', nome: 'Mestre', papel: 'mestre' as const };
+const autorMestre = { ...mestre, fichas: [] as string[] };
+const autorAna = { discordId: '2', nome: 'Ana', papel: 'jogador' as const, fichas: ['a'] };
 const ficha = (id: string, extra: Record<string, unknown> = {}) => ({ id, name: id.toUpperCase(), ...extra });
 
 /** O Dossiê em modo jogador: um barramento `ficha` no mesmo canal local da sala. */
@@ -234,7 +236,7 @@ test('sala.salvar-ficha vira ficha.salvar com o rev mais recente que a ponte con
   const r1 = await dossie.pedir('sala.salvar-ficha', { ficha: ficha('a', { pv: 1 }), rev: 0 });
   assert.equal(r1.ok, true);
   assert.deepEqual(enviadas, [{ tipo: 'ficha.salvar', ficha: ficha('a', { pv: 1 }), rev: 3 }], 'o rev do bem-vindo vale mais que o do Dossiê');
-  emitir({ tipo: 'ficha.atualizada', ficha: ficha('a', { pv: 1 }), rev: 4, dono: '2' });
+  emitir({ tipo: 'ficha.atualizada', ficha: ficha('a', { pv: 1 }), rev: 4, autor: autorAna, dono: '2' });
   await dossie.pedir('sala.salvar-ficha', { ficha: ficha('a', { pv: 2 }), rev: 0 });
   assert.equal((enviadas[1] as { rev: number }).rev, 4, 'o rev da ficha.atualizada');
   await dossie.pedir('sala.salvar-ficha', { ficha: ficha('nova'), rev: 0 });
@@ -242,18 +244,17 @@ test('sala.salvar-ficha vira ficha.salvar com o rev mais recente que a ponte con
   ponte.fechar();
 });
 
-test('ficha.atualizada da sala vira sala.ficha-atualizada no canal local, com o autor: o mestre, ou o próprio jogador no eco', async () => {
+test('ficha.atualizada da sala vira sala.ficha-atualizada no canal local, com o autor carimbado pela sala', async () => {
   const { dossie, emitir, fatos, ponte } = comDossie();
   emitir({ ...bemVindo([ficha('a', { pv: 5 })], { donos: { a: '2' } }) } as MensagemDaSala);
-  emitir({ tipo: 'ficha.atualizada', ficha: ficha('a', { pv: 2 }), rev: 2, dono: '2' });
+  emitir({ tipo: 'ficha.atualizada', ficha: ficha('a', { pv: 2 }), rev: 2, autor: autorMestre, dono: '2' });
   assert.equal(fatos.length, 1);
   assert.equal(fatos[0]!.app, 'mesa');
   assert.deepEqual(fatos[0]!.dados, { ficha: ficha('a', { pv: 2 }), rev: 2 });
   assert.equal(fatos[0]!.autor.papel, 'mestre');
   assert.equal(fatos[0]!.autor.discordId, '1');
-  // o eco da própria gravação: a ponte mandou essa ficha, então o autor é o jogador
-  await dossie.pedir('sala.salvar-ficha', { ficha: ficha('a', { pv: 1 }), rev: 2 });
-  emitir({ tipo: 'ficha.atualizada', ficha: ficha('a', { pv: 1 }), rev: 3, dono: '2', conflito: true });
+  // o eco da própria gravação: o autor é o carimbo que a sala pôs (o jogador)
+  emitir({ tipo: 'ficha.atualizada', ficha: ficha('a', { pv: 1 }), rev: 3, autor: autorAna, dono: '2', conflito: true });
   assert.equal(fatos[1]!.autor.discordId, '2');
   assert.equal(fatos[1]!.autor.papel, 'jogador');
   assert.deepEqual(fatos[1]!.autor.fichas, ['a']);
@@ -261,11 +262,24 @@ test('ficha.atualizada da sala vira sala.ficha-atualizada no canal local, com o 
   ponte.fechar();
 });
 
+test('ficha.removida (entregue a outro jogador): a ponte esquece a ficha e avisa o Dossiê com sala.ficha-removida', async () => {
+  const { dossie, emitir, ponte } = comDossie();
+  const tiradas: string[] = [];
+  dossie.ouvir('sala.ficha-removida', e => { tiradas.push((e.dados as { id: string }).id); });
+  emitir(bemVindo([ficha('a'), ficha('b')], { revs: { a: 3, b: 1 }, donos: { a: '2', b: '2' } }));
+  emitir({ tipo: 'ficha.removida', id: 'a' });
+  assert.deepEqual(tiradas, ['a']);
+  const r = await dossie.pedir('sala.fichas', {}) as unknown as { resposta: { fichas: Array<{ id: string }>; revs: object } };
+  assert.deepEqual(r.resposta.fichas.map(f => f.id), ['b']);
+  assert.deepEqual(r.resposta.revs, { b: 1 });
+  ponte.fechar();
+});
+
 test('os pedidos de ficha e as respostas ficam só no canal da sala, e nada disso vai para a sala', async () => {
   const { dossie, emitir, enviadas, ponte } = comDossie();
   emitir(bemVindo([ficha('a')], { donos: { a: '2' } }));
   await dossie.pedir('sala.fichas', {});
-  emitir({ tipo: 'ficha.atualizada', ficha: ficha('a', { pv: 9 }), rev: 2, dono: '2' });
+  emitir({ tipo: 'ficha.atualizada', ficha: ficha('a', { pv: 9 }), rev: 2, autor: autorMestre, dono: '2' });
   assert.ok(Canal.escritos.every(n => n.startsWith(`sala:${SALA}:`)), [...new Set(Canal.escritos)].join());
   assert.deepEqual(enviadas, [], 'só o sala.salvar-ficha vira ficha.salvar');
   // uma rolagem do Dossiê continua saindo

@@ -7,12 +7,13 @@
  *
  * Fichas (R11): no canal `sala:<id>:mesa:eventos`, a ponte atende os pedidos do Dossiê em modo jogador pelo barramento normal:
  * `sala.fichas` (as fichas do `bem-vindo` e das atualizações) e `sala.salvar-ficha` (vira `ficha.salvar` na sala, com o `rev` mais recente
- * que a ponte conhece). Cada `ficha.atualizada` da sala vira o fato `sala.ficha-atualizada` no canal local, com o `autor`.
+ * que a ponte conhece). Cada `ficha.atualizada` da sala vira o fato `sala.ficha-atualizada` no canal local, com o `autor` que a sala carimbou (R13),
+ * e `ficha.removida` (a ficha foi entregue a outro jogador) vira `sala.ficha-removida`: a ponte a esquece e o Dossiê a tira da lista.
  */
 import { CONTRATO, criarBarramento, validarEvento } from '#mesa';
 import type { ClienteDaSala } from '../online/cliente.ts';
 import { descomprimirEstado } from '../online/estado-comprimido.ts';
-import type { Envelope, Eu, FichaDaSala, Membro } from '../online/protocolo.ts';
+import type { Envelope, Eu, FichaDaSala } from '../online/protocolo.ts';
 
 /** Os eventos que o jogador pode mandar à sala (a sala confere de novo e carimba o autor). */
 export const EVENTOS_DO_JOGADOR: readonly string[] = ['ficha.rolagem', 'ficha.recursos', 'atlas.mover-peca'];
@@ -75,11 +76,9 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
   // Fichas do jogador: o que a sala tem (o `bem-vindo` e as `ficha.atualizada`), o `rev` de cada uma e quem sou eu.
   const fichas = new Map<string, FichaDaSala>();
   const revs = new Map<string, number>();
-  let eu: Eu | null = null, membros: Membro[] = [];
+  let eu: Eu | null = null;
   let abriu: () => void = () => {};
   const aberta = new Promise<void>(r => { abriu = r; });
-  /** O JSON das fichas que mandei e cujo eco (`ficha.atualizada`) ainda não voltou: o eco é meu; o resto veio do mestre. */
-  const mandadas: string[] = [];
   const barramento = criarBarramento({ app: 'mesa', campanhaId: null, criarCanal: () => abrir(canalEventosDaSala(salaId)), aviso: avisar });
 
   const blobs = new Map<string, Blob>();
@@ -152,35 +151,29 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
     const revAtual = revs.get(ficha.id) ?? (typeof rev === 'number' ? rev : 0);
     if (!cliente.enviar({ tipo: 'ficha.salvar', ficha, rev: revAtual })) return { ok: false, motivo: 'A sala não está conectada.' };
     fichas.set(ficha.id, ficha);
-    mandadas.push(JSON.stringify(ficha));
-    if (mandadas.length > 20) mandadas.shift();
     return { ok: true, rev: revAtual };
   });
   const donos = new Map<string, string>();
-  const autorDe = (minha: boolean) => {
-    if (minha && eu) return { discordId: eu.discordId, nome: eu.nome, papel: eu.papel, fichas: [...fichas.keys()] };
-    // A sala só deixa o dono e o mestre gravarem uma ficha: quem não fui eu foi o mestre.
-    const m = membros.find(x => x.papel === 'mestre');
-    return { discordId: m?.discordId ?? 'mestre', nome: m?.nome ?? 'Mestre', papel: 'mestre' as const, fichas: [] as string[] };
-  };
-
   const soltar = [
     cliente.ouvir('bem-vindo', m => {
-      eu = m.eu; membros = m.membros;
+      eu = m.eu;
       fichas.clear(); revs.clear(); donos.clear();
       for (const f of m.fichas) fichas.set(f.id, f);
       for (const [id, r] of Object.entries(m.revs ?? {})) revs.set(id, r);
       for (const [id, d] of Object.entries(m.donos ?? {})) donos.set(id, d);
       abriu();
     }),
-    cliente.ouvir('membros', m => { membros = m.membros; }),
     cliente.ouvir('ficha.atualizada', m => {
       if (fechada) return;
-      const json = JSON.stringify(m.ficha), i = mandadas.indexOf(json);
-      if (i >= 0) mandadas.splice(i, 1);
       fichas.set(m.ficha.id, m.ficha); revs.set(m.ficha.id, m.rev);
       if (m.dono) donos.set(m.ficha.id, m.dono);
-      const envelope = { contrato: CONTRATO, app: 'mesa', tipo: 'sala.ficha-atualizada', id: crypto.randomUUID(), em: Date.now(), campanhaId: null, dados: { ficha: m.ficha, rev: m.rev, ...(m.conflito ? { conflito: true } : {}) }, autor: autorDe(i >= 0) };
+      const envelope = { contrato: CONTRATO, app: 'mesa', tipo: 'sala.ficha-atualizada', id: crypto.randomUUID(), em: Date.now(), campanhaId: null, dados: { ficha: m.ficha, rev: m.rev, ...(m.conflito ? { conflito: true } : {}) }, autor: m.autor };
+      if (validarEvento(envelope).ok) eventos.postMessage(envelope);
+    }),
+    cliente.ouvir('ficha.removida', m => {
+      if (fechada) return;
+      fichas.delete(m.id); revs.delete(m.id); donos.delete(m.id);
+      const envelope = { contrato: CONTRATO, app: 'mesa', tipo: 'sala.ficha-removida', id: crypto.randomUUID(), em: Date.now(), campanhaId: null, dados: { id: m.id } };
       if (validarEvento(envelope).ok) eventos.postMessage(envelope);
     }),
     cliente.ouvir('canal', m => { if (m.nome.startsWith('atlas:projetor:')) enfileirar(m.msg); }),

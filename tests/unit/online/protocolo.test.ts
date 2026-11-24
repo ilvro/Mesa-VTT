@@ -41,14 +41,17 @@ test('lerMensagemDaSala aceita as válidas e recusa lixo', () => {
     { tipo: 'membros', membros: [{ ...membro, personagem: 'f1' }] },
     { tipo: 'canal', nome: 'c', msg: 1 },
     { tipo: 'evento', envelope: env },
-    { tipo: 'ficha.atualizada', ficha, rev: 3 },
-    { tipo: 'ficha.atualizada', ficha, rev: 3, conflito: true },
+    { tipo: 'ficha.atualizada', ficha, rev: 3, autor: { ...eu, fichas: ['f1'] } },
+    { tipo: 'ficha.atualizada', ficha, rev: 3, autor: { ...eu, fichas: [] }, conflito: true },
+    { tipo: 'ficha.removida', id: 'f1' },
     { tipo: 'blob', id: 'h', tipoMime: 'audio/ogg' },
     { tipo: 'erro', motivo: 'sem permissão' },
   ];
   for (const m of validas) assert.deepEqual(lerMensagemDaSala(j(m)), m);
   const ruins = ['nada', j({ tipo: 'bem-vindo', eu }), j({ tipo: 'bem-vindo', eu: { ...eu, papel: 'rei' }, membros: [], fichas: [], ultimoEstado: {} }),
-    j({ tipo: 'membros', membros: [eu] }), j({ tipo: 'membros', membros: 'x' }), j({ tipo: 'ficha.atualizada', ficha, rev: 1, conflito: 'sim' }),
+    j({ tipo: 'membros', membros: [eu] }), j({ tipo: 'membros', membros: 'x' }), j({ tipo: 'ficha.atualizada', ficha, rev: 1, autor: { ...eu, fichas: [] }, conflito: 'sim' }),
+    j({ tipo: 'ficha.atualizada', ficha, rev: 3 }), j({ tipo: 'ficha.atualizada', ficha, rev: 3, autor: { ...eu, fichas: [1] } }),
+    j({ tipo: 'ficha.removida' }), j({ tipo: 'ficha.removida', id: '' }),
     j({ tipo: 'erro' }), j({ tipo: 'ola', sessao: 'a' }), j({ tipo: 'blob', id: 'h' })];
   for (const t of ruins) assert.equal(lerMensagemDaSala(t), null, t);
 });
@@ -76,5 +79,5 @@ test('bem-vindo aceita config, revs e donos; erro guarda o tipo recusado', () =>
   assert.equal(lerMensagemDaSala(JSON.stringify({ ...base, revs: { f: 'x' } })), null);
   assert.equal(lerMensagemDaSala(JSON.stringify({ ...base, config: {} })), null);
   assert.deepEqual(lerMensagemDaSala('{"tipo":"erro","motivo":"permissao","recusado":"canal"}'), { tipo: 'erro', motivo: 'permissao', recusado: 'canal' });
-  assert.deepEqual(lerMensagemDaSala('{"tipo":"ficha.atualizada","ficha":{"id":"f"},"rev":1,"dono":"9"}'), { tipo: 'ficha.atualizada', ficha: { id: 'f' }, rev: 1, dono: '9' });
+  assert.deepEqual(lerMensagemDaSala('{"tipo":"ficha.atualizada","ficha":{"id":"f"},"rev":1,"dono":"9","autor":{"discordId":"1","nome":"M","papel":"mestre","fichas":[]}}'), { tipo: 'ficha.atualizada', ficha: { id: 'f' }, rev: 1, autor: { discordId: '1', nome: 'M', papel: 'mestre', fichas: [] }, dono: '9' });
 });

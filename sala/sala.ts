@@ -61,6 +61,7 @@ export class Sala implements DurableObject {
       if (d === 'todos') return true;
       if (d === 'remetente') return c === origem;
       if (d === 'outros') return c !== origem;
+      if ('para' in d) return a.discordId === d.para;
       return a.papel === 'mestre' || a.discordId === d.ficha;
     };
     for (const s of saidas) {

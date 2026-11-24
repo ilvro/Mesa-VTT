@@ -5,9 +5,9 @@
 import { signal } from '@preact/signals';
 import { conectarSala, type ClienteDaSala, type EstadoDaSala } from '../online/cliente.ts';
 import { urlDoWebSocket } from '../online/config.ts';
-import { EVENTOS_DO_MESTRE, type Envelope, type Membro } from '../online/protocolo.ts';
+import { EVENTOS_DO_MESTRE, type Envelope, type Eu, type FichaDaSala, type Membro } from '../online/protocolo.ts';
 import { LIMITE_ESTADO_BYTES, blobIdDoEstado, comprimirEstado, type EstadoComprimidoRef } from '../online/estado-comprimido.ts';
-import { CANAL_EVENTOS, type Entidade } from '#mesa';
+import { CANAL_EVENTOS, CONTRATO, criarBarramento, validarEvento, type Entidade } from '#mesa';
 import { barramentoDaMesa } from './barramento.ts';
 import { entidades } from './campanha.ts';
 
@@ -413,6 +413,44 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     cliente.ouvir('evento', m => { if (!fechada) eventos.postMessage(m.envelope); }),
   ];
 
+  // ---------- fichas da sala no Dossiê do mestre (R13) ----------
+  // O Dossiê do mestre pede pelo barramento local (`mesa:eventos`): `sala.fichas` (as da sala, os `revs`, os donos, os membros e quem sou eu),
+  // `sala.salvar-ficha` (vira `ficha.salvar`) e `sala.entregar-ficha` (vira `ficha.entregar`). A volta é o fato `sala.ficha-atualizada`, com o
+  // `autor` que a sala carimbou, e `sala.conexao` quando a sala abre ou cai (o Dossiê então pede as fichas de novo).
+  const dossie = criarBarramento({ app: 'mesa', campanhaId: null, criarCanal: () => o.criarCanal(CANAL_EVENTOS), aviso: () => { /* o canal é compartilhado */ } });
+  const fichasDaSala = new Map<string, FichaDaSala>(), revsDaSala = new Map<string, number>(), donosDaSala = new Map<string, string>();
+  /** Quem já apareceu na sala nesta conexão (o `discordId` → nome), para rotular o dono de uma ficha mesmo com o jogador ausente. */
+  const nomes = new Map<string, string>();
+  let euMesmo: Eu | null = null, conectada = false;
+  const fato = (tipo: string, dados: unknown, autor?: unknown): void => {
+    const envelope = { contrato: CONTRATO, app: 'mesa', tipo, id: crypto.randomUUID(), em: Date.now(), campanhaId: null, dados, ...(autor !== undefined ? { autor } : {}) };
+    if (validarEvento(envelope).ok) eventos.postMessage(envelope);
+  };
+  const lembrarNomes = (membros: readonly Membro[]): void => { for (const m of membros) nomes.set(m.discordId, m.nome); };
+  const avisarConexao = (): void => { fato('sala.conexao', { conectada, ...(conectada && nome ? { nome } : {}) }); };
+
+  dossie.atender('sala.fichas', () => {
+    if (!conectada) return { ok: false, motivo: 'A sala não está conectada.' };
+    return {
+      ok: true, nome: nome ?? 'Sala', ...(euMesmo ? { eu: { discordId: euMesmo.discordId, nome: euMesmo.nome } } : {}),
+      fichas: [...fichasDaSala.values()], revs: Object.fromEntries(revsDaSala), donos: Object.fromEntries(donosDaSala),
+      membros: estado.membros.map(m => ({ discordId: m.discordId, nome: m.nome, papel: m.papel })), nomes: Object.fromEntries(nomes),
+    };
+  });
+  dossie.atender('sala.salvar-ficha', dados => {
+    const { ficha, rev } = dados as { ficha: FichaDaSala; rev?: number };
+    const revAtual = revsDaSala.get(ficha.id) ?? (typeof rev === 'number' ? rev : 0);
+    if (!conectada || !cliente.enviar({ tipo: 'ficha.salvar', ficha, rev: revAtual })) return { ok: false, motivo: 'A sala não está conectada.' };
+    fichasDaSala.set(ficha.id, ficha);
+    return { ok: true, rev: revAtual };
+  });
+  dossie.atender('sala.entregar-ficha', dados => {
+    const { fichaId, dono } = dados as { fichaId: string; dono: string };
+    if (!conectada || !cliente.enviar({ tipo: 'ficha.entregar', fichaId, dono })) return { ok: false, motivo: 'A sala não está conectada.' };
+    donosDaSala.set(fichaId, dono);
+    return { ok: true };
+  });
+
   /** Acorda o publicador do Atlas enquanto houver jogador (o `remoto: true` liga o destino remoto do publicador, separado do projetor local). */
   function atualizarPresenca(membros: Membro[], forcar: boolean): void {
     estado.membros = membros;
@@ -426,14 +464,32 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
   soltar.push(
     cliente.ouvir('bem-vindo', m => {
       if (m.config?.nome) nome = m.config.nome;
+      euMesmo = m.eu; conectada = true;
+      fichasDaSala.clear(); revsDaSala.clear(); donosDaSala.clear();
+      for (const f of m.fichas) fichasDaSala.set(f.id, f);
+      for (const [id, r] of Object.entries(m.revs ?? {})) revsDaSala.set(id, r);
+      for (const [id, d] of Object.entries(m.donos ?? {})) donosDaSala.set(id, d);
+      lembrarNomes(m.membros);
+      avisarConexao();
       enviados.clear(); // nova conexão: o servidor ainda guarda os blobs, mas confirmamos de novo
       for (const som of sons.values()) if (som.estado === 'falhou') som.estado = 'pendente'; // a falha pode ter sido a conexão
       if (proximoSom() !== null) void rodarSons();
       atualizarPresenca(m.membros, true);
     }),
     cliente.ouvir('blob.tem', m => respostas.get(m.id)?.({ tem: m.tem, ...(m.tamanho !== undefined ? { tamanho: m.tamanho } : {}) })),
-    cliente.ouvir('membros', m => atualizarPresenca(m.membros, false)),
-    cliente.aoMudarEstado(e => { if (e === 'caiu' && estado.publicando) { estado.publicando = false; } mudou(); }),
+    cliente.ouvir('membros', m => { lembrarNomes(m.membros); atualizarPresenca(m.membros, false); }),
+    cliente.ouvir('ficha.atualizada', m => {
+      if (fechada) return;
+      fichasDaSala.set(m.ficha.id, m.ficha); revsDaSala.set(m.ficha.id, m.rev);
+      if (m.dono) donosDaSala.set(m.ficha.id, m.dono);
+      nomes.set(m.autor.discordId, m.autor.nome);
+      fato('sala.ficha-atualizada', { ficha: m.ficha, rev: m.rev, ...(m.conflito ? { conflito: true } : {}), ...(m.dono ? { dono: m.dono } : {}) }, m.autor);
+    }),
+    cliente.aoMudarEstado(e => {
+      if (e === 'caiu' && estado.publicando) { estado.publicando = false; }
+      if (e === 'caiu' && conectada) { conectada = false; avisarConexao(); }
+      mudou();
+    }),
   );
   mudou();
   if (pedirAoJukebox) repetirOuvir();
@@ -454,8 +510,10 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
       if (estado.publicando) projetor.postMessage({ tipo: 'tchau' });
       cancelarOuvir?.(); cancelarOuvir = null;
       pedirParaOuvir(false);
+      if (conectada) { conectada = false; avisarConexao(); }
       fechada = true;
       for (const f of soltar) f();
+      dossie.fechar();
       largarGestosPendentes();
       projetor.onmessage = null; eventos.onmessage = null;
       projetor.close(); eventos.close();

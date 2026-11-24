@@ -86,8 +86,10 @@ function Sala({ salaId, sessao, nome, aoSessaoInvalida }: { salaId: string; sess
       for (const f of m.fichas) if (typeof f.tokenImage === 'string' && f.tokenImage) por[f.id] = f.tokenImage;
       setRetratos(por);
     });
+    // a ficha foi entregue a outro jogador (R13): sai da lista de retratos, e a ponte avisa o Dossiê
+    const sairRemovida = cliente.ouvir('ficha.removida', m => setRetratos(r => { const { [m.id]: _tirada, ...resto } = r; return resto; }));
     const ponte = criarPonteDoJogador({ cliente, salaId, criarCanal: n => new BroadcastChannel(n) as unknown as CanalLocal, aoTerMapa: () => setTemMapa(true) });
-    return () => { sairEstado(); sairBemVindo(); ponte.fechar(); cliente?.fechar(); };
+    return () => { sairEstado(); sairBemVindo(); sairRemovida(); ponte.fechar(); cliente?.fechar(); };
   }, [salaId, sessao]);
 
   // Pedido do card ("Ficha completa"): só do `iframe` do Dossiê, na mesma origem.

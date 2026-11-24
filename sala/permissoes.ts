@@ -1,6 +1,6 @@
 /** Permissões da sala (puro): quem pode mandar o quê, conforme a tabela "Protocolo da sala" do plano. */
 
-import { EVENTOS_DO_MESTRE, type Envelope, type Eu, type MensagemParaSala } from '../src/online/protocolo.ts';
+import { EVENTOS_DO_MESTRE, type Autor, type Envelope, type Eu, type MensagemParaSala } from '../src/online/protocolo.ts';
 import { validarEvento } from '../vendor/mesa-core/eventos.js';
 
 /** O que as permissões precisam saber das fichas da sala. */
@@ -58,9 +58,14 @@ export function permitido(msg: MensagemParaSala, autor: Eu, ctx: ContextoPermiss
   }
 }
 
+/** O carimbo da sala para `autor`: o `Eu` e os ids das fichas que ele tem. */
+export function autorCarimbado(autor: Eu, fichas: string[]): Autor {
+  return { discordId: autor.discordId, nome: autor.nome, papel: autor.papel, fichas };
+}
+
 /** Sobrescreve o `autor` do envelope: a sala é a única que carimba, e ignora o que o cliente mandou. */
 export function carimbar(envelope: Envelope, autor: Eu, fichas: string[]): Envelope {
-  return { ...envelope, autor: { discordId: autor.discordId, nome: autor.nome, papel: autor.papel, fichas } };
+  return { ...envelope, autor: autorCarimbado(autor, fichas) };
 }
 
 /** Limite de mensagens por conexão: janela fixa de `janelaMs`. Puro; a chave é qualquer objeto. */

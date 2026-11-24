@@ -12,6 +12,11 @@ export interface Eu {
   papel: Papel;
 }
 
+/** O carimbo que a sala põe em tudo o que repassa (o `autor` do mesa-core): quem fez, e as fichas que ele tem. */
+export interface Autor extends Eu {
+  fichas: string[];
+}
+
 /** Um participante conectado, com o personagem escolhido (id de ficha) ou `null`. */
 export interface Membro extends Eu {
   personagem: string | null;
@@ -95,7 +100,10 @@ export type MensagemDaSala =
   | { tipo: 'membros'; membros: Membro[] }
   | { tipo: 'canal'; nome: string; msg: unknown }
   | { tipo: 'evento'; envelope: Envelope }
-  | { tipo: 'ficha.atualizada'; ficha: FichaDaSala; rev: number; conflito?: boolean; dono?: string }
+  /** `autor`: quem gravou (carimbado pela sala, R13): o dono, o mestre, ou o mestre numa entrega. */
+  | { tipo: 'ficha.atualizada'; ficha: FichaDaSala; rev: number; autor: Autor; conflito?: boolean; dono?: string }
+  /** Só a quem perdeu a ficha numa entrega (R13): a casca a tira da lista. */
+  | { tipo: 'ficha.removida'; id: string }
   /** Resposta a `rolagens.historico`: as rolagens da sala (até 200), da mais antiga à mais nova. */
   | { tipo: 'rolagens.historico'; rolagens: Envelope[] }
   | MsgBlob
@@ -115,6 +123,7 @@ const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinit
 const ehEnvelope = (v: unknown): v is Envelope => ehObj(v) && txt(v.tipo) && txt(v.id);
 const ehFicha = (v: unknown): v is FichaDaSala => ehObj(v) && txt(v.id);
 const ehEu = (v: unknown): v is Eu => ehObj(v) && txt(v.discordId) && txt(v.nome) && (v.papel === 'mestre' || v.papel === 'jogador');
+const ehAutor = (v: unknown): v is Autor => ehObj(v) && ehEu(v) && Array.isArray(v.fichas) && v.fichas.every(txt);
 const ehMembro = (v: unknown): v is Membro => ehObj(v) && ehEu(v) && (v.personagem === null || txt(v.personagem));
 const listaDe = <T>(v: unknown, ok: (x: unknown) => x is T): v is T[] => Array.isArray(v) && v.every(ok);
 
@@ -166,8 +175,9 @@ export function lerMensagemDaSala(texto: string): MensagemDaSala | null {
     case 'canal': return txt(m.nome) && 'msg' in m ? { tipo: 'canal', nome: m.nome, msg: m.msg } : null;
     case 'evento': return ehEnvelope(m.envelope) ? { tipo: 'evento', envelope: m.envelope } : null;
     case 'ficha.atualizada':
-      if (!ehFicha(m.ficha) || !num(m.rev) || (m.conflito !== undefined && typeof m.conflito !== 'boolean') || (m.dono !== undefined && !txt(m.dono))) return null;
-      return { tipo: 'ficha.atualizada', ficha: m.ficha, rev: m.rev, ...(m.conflito !== undefined ? { conflito: m.conflito } : {}), ...(m.dono !== undefined ? { dono: m.dono } : {}) };
+      if (!ehFicha(m.ficha) || !num(m.rev) || !ehAutor(m.autor) || (m.conflito !== undefined && typeof m.conflito !== 'boolean') || (m.dono !== undefined && !txt(m.dono))) return null;
+      return { tipo: 'ficha.atualizada', ficha: m.ficha, rev: m.rev, autor: m.autor, ...(m.conflito !== undefined ? { conflito: m.conflito } : {}), ...(m.dono !== undefined ? { dono: m.dono } : {}) };
+    case 'ficha.removida': return txt(m.id) && m.id ? { tipo: 'ficha.removida', id: m.id } : null;
     case 'rolagens.historico': return listaDe(m.rolagens, ehEnvelope) ? { tipo: 'rolagens.historico', rolagens: m.rolagens } : null;
     case 'blob': return txt(m.id) && m.id && txt(m.tipoMime) ? { tipo: 'blob', id: m.id, tipoMime: m.tipoMime } : null;
     case 'blob.tem':

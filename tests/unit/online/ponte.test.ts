@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { criarPonte, fichaEhAmeaca, LIMITE_SOM_BYTES, type CanalLocal } from '../../../src/app/online.ts';
 import { descomprimirEstado } from '../../../src/online/estado-comprimido.ts';
+import { criarBarramento } from '#mesa';
 import type { ClienteDaSala } from '../../../src/online/cliente.ts';
 import type { MensagemDaSala, MensagemParaSala, Membro } from '../../../src/online/protocolo.ts';
 
@@ -477,4 +478,73 @@ test('o mix que veio da sala (com autor) não volta para ela', async () => {
   apps.postMessage({ ...envMix([faixa('aa', { url: 'sample/a.mp3' })]), autor: { discordId: '2', nome: 'x', papel: 'jogador', fichas: [] } });
   await ponte.esvaziar();
   assert.deepEqual(enviadas, []);
+});
+
+// ---------- fichas da sala no Dossiê do mestre (R13) ----------
+
+const autorMestre = { ...eu, fichas: [] as string[] };
+const fichaX = (id: string, extra: Record<string, unknown> = {}) => ({ id, name: id.toUpperCase(), ...extra });
+/** O Dossiê do mestre: um barramento `ficha` no `mesa:eventos`, depois da ponte (montar limpa os canais). */
+function comDossie() {
+  const m = montar();
+  const dossie = criarBarramento({ app: 'ficha', campanhaId: null, criarCanal: () => new Canal('mesa:eventos'), aviso: () => {} });
+  const fatos: Array<Record<string, any>> = [];
+  dossie.ouvir('sala.ficha-atualizada', e => { fatos.push(e as unknown as Record<string, any>); });
+  const conexoes: boolean[] = [];
+  dossie.ouvir('sala.conexao', e => { conexoes.push((e.dados as { conectada: boolean }).conectada); });
+  return { ...m, dossie, fatos, conexoes };
+}
+
+test('sala.fichas: sem a sala conectada é recusada; depois do bem-vindo traz fichas, revs, donos, membros e quem sou eu', async () => {
+  const { dossie, emitir, conexoes, ponte } = comDossie();
+  const antes = await dossie.pedir('sala.fichas', {}, { prazoMs: 100 });
+  assert.equal(antes.ok, false);
+  emitir({ ...bemVindo([membro('1', 'mestre'), membro('2', 'jogador')]), fichas: [fichaX('a'), fichaX('b')], revs: { a: 2, b: 1 }, donos: { a: '2', b: '1' } } as MensagemDaSala);
+  assert.deepEqual(conexoes, [true], 'a Mesa avisa que a sala abriu');
+  const r = await dossie.pedir('sala.fichas', {}) as unknown as { ok: boolean; resposta: Record<string, any> };
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.resposta.fichas.map((f: { id: string }) => f.id), ['a', 'b']);
+  assert.deepEqual(r.resposta.revs, { a: 2, b: 1 });
+  assert.deepEqual(r.resposta.donos, { a: '2', b: '1' });
+  assert.deepEqual(r.resposta.eu, { discordId: '1', nome: 'Mestre' });
+  assert.equal(r.resposta.nome, 'teste-1');
+  assert.deepEqual(r.resposta.membros.map((m: { discordId: string }) => m.discordId), ['1', '2']);
+  assert.equal(r.resposta.nomes['2'], '2');
+  ponte.fechar();
+  assert.deepEqual(conexoes, [true, false], 'fechar a ponte avisa que a sala saiu');
+});
+
+test('sala.salvar-ficha vira ficha.salvar com o rev da sala; ficha nova vai com rev 0; sem conexão, recusa', async () => {
+  const { dossie, emitir, enviadas, ponte } = comDossie();
+  assert.equal((await dossie.pedir('sala.salvar-ficha', { ficha: fichaX('a'), rev: 0 }, { prazoMs: 100 })).ok, false);
+  emitir({ ...bemVindo([membro('1', 'mestre')]), fichas: [fichaX('a')], revs: { a: 3 }, donos: { a: '2' } } as MensagemDaSala);
+  assert.equal((await dossie.pedir('sala.salvar-ficha', { ficha: fichaX('a', { pv: 1 }), rev: 0 })).ok, true);
+  assert.deepEqual(enviadas, [{ tipo: 'ficha.salvar', ficha: fichaX('a', { pv: 1 }), rev: 3 }]);
+  await dossie.pedir('sala.salvar-ficha', { ficha: fichaX('nova'), rev: 0 });
+  assert.equal((enviadas[1] as { rev: number }).rev, 0);
+  ponte.fechar();
+});
+
+test('sala.entregar-ficha vira ficha.entregar', async () => {
+  const { dossie, emitir, enviadas, ponte } = comDossie();
+  emitir({ ...bemVindo([membro('1', 'mestre'), membro('2', 'jogador')]), fichas: [fichaX('a')] } as MensagemDaSala);
+  assert.equal((await dossie.pedir('sala.entregar-ficha', { fichaId: 'a', dono: '2' })).ok, true);
+  assert.deepEqual(enviadas, [{ tipo: 'ficha.entregar', fichaId: 'a', dono: '2' }]);
+  ponte.fechar();
+});
+
+test('ficha.atualizada da sala vira sala.ficha-atualizada com o autor da sala, e a ponte guarda o rev e o dono', async () => {
+  const { dossie, emitir, fatos, ponte } = comDossie();
+  emitir(bemVindo([membro('1', 'mestre'), membro('2', 'jogador')]));
+  emitir({ tipo: 'ficha.atualizada', ficha: fichaX('a', { pv: 4 }), rev: 5, autor: { discordId: '2', nome: 'Ana', papel: 'jogador', fichas: ['a'] }, dono: '2', conflito: true });
+  assert.equal(fatos.length, 1);
+  assert.equal(fatos[0]!.app, 'mesa');
+  assert.deepEqual(fatos[0]!.dados, { ficha: fichaX('a', { pv: 4 }), rev: 5, conflito: true, dono: '2' });
+  assert.equal(fatos[0]!.autor.nome, 'Ana');
+  emitir({ tipo: 'ficha.atualizada', ficha: fichaX('b'), rev: 1, autor: autorMestre, dono: '2' });
+  const r = await dossie.pedir('sala.fichas', {}) as unknown as { resposta: Record<string, any> };
+  assert.deepEqual(r.resposta.revs, { a: 5, b: 1 });
+  assert.deepEqual(r.resposta.donos, { a: '2', b: '2' });
+  assert.equal(r.resposta.nomes['2'], 'Ana');
+  ponte.fechar();
 });

@@ -8,14 +8,14 @@ import {
   type Eu, type MensagemDaSala, type MsgBemVindo, type MsgBlob,
 } from '../src/online/protocolo.ts';
 import { ErroEstado, montarMembros, type Estado } from './estado.ts';
-import { carimbar, envelopeInvalido, permitido } from './permissoes.ts';
+import { autorCarimbado, carimbar, envelopeInvalido, permitido } from './permissoes.ts';
 
 /**
  * Destino de uma saída:
- * `remetente` (quem mandou), `outros` (todos menos o remetente), `todos`, ou `{ ficha: dono }`
- * (o mestre e o dono da ficha, inclusive o remetente).
+ * `remetente` (quem mandou), `outros` (todos menos o remetente), `todos`, `{ ficha: dono }`
+ * (o mestre e o dono da ficha, inclusive o remetente) ou `{ para: discordId }` (só as conexões dessa pessoa).
  */
-export type Destino = 'remetente' | 'outros' | 'todos' | { ficha: string };
+export type Destino = 'remetente' | 'outros' | 'todos' | { ficha: string } | { para: string };
 
 export interface Saida {
   destino: Destino;
@@ -140,7 +140,7 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
         const r = estado.salvarFicha(msg.ficha, eu.discordId, msg.rev, agora);
         return [{
           destino: { ficha: r.dono },
-          msg: { tipo: 'ficha.atualizada', ficha: msg.ficha, rev: r.rev, dono: r.dono, ...(r.conflito ? { conflito: true } : {}) },
+          msg: { tipo: 'ficha.atualizada', ficha: msg.ficha, rev: r.rev, autor: autorCarimbado(eu, estado.idsDoDono(eu.discordId)), dono: r.dono, ...(r.conflito ? { conflito: true } : {}) },
         }];
       } catch (e) {
         if (e instanceof ErroEstado) return [erro(e.codigo, msg.tipo)];
@@ -148,9 +148,18 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
       }
     }
     case 'ficha.entregar': {
+      const antigo = estado.donoDaFicha(msg.fichaId);
       const f = estado.entregarFicha(msg.fichaId, msg.dono);
       if (!f) return [erro('inexistente', msg.tipo)];
-      return [{ destino: { ficha: f.dono }, msg: { tipo: 'ficha.atualizada', ficha: f.ficha, rev: f.rev, dono: f.dono } }];
+      const saidas: Saida[] = [{
+        destino: { ficha: f.dono },
+        msg: { tipo: 'ficha.atualizada', ficha: f.ficha, rev: f.rev, autor: autorCarimbado(eu, estado.idsDoDono(eu.discordId)), dono: f.dono },
+      }];
+      // quem perdeu a ficha (um jogador, não o mestre) a tira da lista; e deixa de tê-la como personagem
+      if (antigo !== null && antigo !== f.dono && antigo !== eu.discordId) {
+        saidas.push({ destino: { para: antigo }, msg: { tipo: 'ficha.removida', id: msg.fichaId } }, saidaMembros(estado, conectados));
+      }
+      return saidas;
     }
     case 'rolagens.historico':
       return [{ destino: 'remetente', msg: { tipo: 'rolagens.historico', rolagens: estado.rolagens() } }];

@@ -45,10 +45,10 @@ test('um jogador cria uma ficha nova e vira dono dela; rev velha grava e marca c
   const s1 = tratar(e, ana, j({ tipo: 'ficha.salvar', ficha: { id: 'f1', nome: 'A' }, rev: 0 }), 1, todos);
   assert.deepEqual(s1[0]?.destino, { ficha: 'A' });
   assert.equal(e.donoDaFicha('f1'), 'A');
-  assert.deepEqual(s1[0]?.msg, { tipo: 'ficha.atualizada', ficha: { id: 'f1', nome: 'A' }, rev: 1, dono: 'A' });
+  assert.deepEqual(s1[0]?.msg, { tipo: 'ficha.atualizada', ficha: { id: 'f1', nome: 'A' }, rev: 1, autor: { discordId: 'A', nome: 'Ana', papel: 'jogador', fichas: ['f1'] }, dono: 'A' });
   tratar(e, ana, j({ tipo: 'ficha.salvar', ficha: { id: 'f1', nome: 'A2' }, rev: 1 }), 2, todos);
   const s3 = tratar(e, ana, j({ tipo: 'ficha.salvar', ficha: { id: 'f1', nome: 'A3' }, rev: 1 }), 3, todos);
-  assert.deepEqual(s3[0]?.msg, { tipo: 'ficha.atualizada', ficha: { id: 'f1', nome: 'A3' }, rev: 3, dono: 'A', conflito: true });
+  assert.deepEqual(s3[0]?.msg, { tipo: 'ficha.atualizada', ficha: { id: 'f1', nome: 'A3' }, rev: 3, autor: { discordId: 'A', nome: 'Ana', papel: 'jogador', fichas: ['f1'] }, dono: 'A', conflito: true });
   assert.equal(e.ficha('f1')?.ficha.nome, 'A3');
   // Bia não toma a ficha de Ana
   assert.equal(erros(tratar(e, bia, j({ tipo: 'ficha.salvar', ficha: { id: 'f1' }, rev: 3 }), 4, todos)).length, 1);
@@ -77,7 +77,36 @@ test('entregar e sala.config são só do mestre; membro.personagem só com ficha
   assert.equal(e.donoDaFicha('f1'), 'B');
   assert.equal(e.personagem('A'), null);
   assert.deepEqual(ent[0]?.destino, { ficha: 'B' });
+  assert.equal((ent[0]?.msg as { autor?: { papel: string } }).autor?.papel, 'mestre', 'o mestre carimba a entrega');
   assert.equal(erros(tratar(e, mestre, j({ tipo: 'ficha.entregar', fichaId: 'nada', dono: 'B' }), 1, todos))[0]?.tipo, 'erro');
+});
+
+test('o mestre grava a ficha de um jogador: o carimbo é o do mestre, e o dono não muda', () => {
+  const e = sala();
+  e.salvarFicha({ id: 'f1', pv: 5 }, 'A', 0, 1);
+  const s = tratar(e, mestre, j({ tipo: 'ficha.salvar', ficha: { id: 'f1', pv: 9 }, rev: 1 }), 2, todos);
+  assert.deepEqual(s[0]?.destino, { ficha: 'A' });
+  assert.deepEqual(s[0]?.msg, { tipo: 'ficha.atualizada', ficha: { id: 'f1', pv: 9 }, rev: 2, autor: { discordId: 'M', nome: 'Mestre', papel: 'mestre', fichas: [] }, dono: 'A' });
+});
+
+test('entregar uma ficha de jogador a outro: quem perdeu recebe ficha.removida só ele, e deixa de tê-la como personagem', () => {
+  const e = sala();
+  e.salvarFicha({ id: 'f1' }, 'A', 0, 1);
+  tratar(e, ana, j({ tipo: 'membro.personagem', fichaId: 'f1' }), 1, todos);
+  const s = tratar(e, mestre, j({ tipo: 'ficha.entregar', fichaId: 'f1', dono: 'B' }), 2, todos);
+  assert.equal(e.donoDaFicha('f1'), 'B');
+  const rem = s.find(x => x.msg.tipo === 'ficha.removida');
+  assert.deepEqual(rem, { destino: { para: 'A' }, msg: { tipo: 'ficha.removida', id: 'f1' } });
+  const mem = s.find(x => x.msg.tipo === 'membros');
+  assert.equal((mem?.msg as { membros: Array<{ discordId: string; personagem: string | null }> }).membros.find(m => m.discordId === 'A')?.personagem, null);
+});
+
+test('entregar uma ficha do próprio mestre, ou ao mesmo dono, não manda ficha.removida', () => {
+  const e = sala();
+  e.salvarFicha({ id: 'f1' }, 'M', 0, 1);
+  e.salvarFicha({ id: 'f2' }, 'A', 0, 1);
+  assert.equal(tratar(e, mestre, j({ tipo: 'ficha.entregar', fichaId: 'f1', dono: 'A' }), 2, todos).some(x => x.msg.tipo === 'ficha.removida'), false);
+  assert.equal(tratar(e, mestre, j({ tipo: 'ficha.entregar', fichaId: 'f2', dono: 'A' }), 2, todos).some(x => x.msg.tipo === 'ficha.removida'), false);
 });
 
 test('eventos: jogador só rola e muda recursos de ficha dele, e move peça; mestre só a lista', () => {
