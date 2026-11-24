@@ -126,6 +126,12 @@ test('catálogo: cada ferramenta com menos de 4,5 KB e todas só de leitura', ()
     if (n === 'quadro_resumir' || n === 'quadro_descrever_imagem' || n === 'quadro_propor') assert.equal(t.anotacoes?.destrutiva, false);
     else assert.ok(t.anotacoes?.leitura);
     assert.ok(JSON.stringify({ nome: t.nome, descricao: t.descricao, esquema: t.esquema }).length < 4500, n);
+    // Os mesmos limites que o teste do catálogo do Atlas confere (tests/unit/ponte-mcp.test.ts).
+    assert.ok(t.descricao.length <= 400, `${n}: descrição com ${t.descricao.length} caracteres`);
+    const props = (t.esquema as { properties?: Record<string, { description?: string }> }).properties ?? {};
+    for (const [campo, def] of Object.entries(props)) {
+      assert.ok((def.description ?? '').length <= 80, `${n}.${campo}: ${(def.description ?? '').length} caracteres`);
+    }
   }
 });
 

@@ -282,7 +282,7 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
     },
     {
       nome: 'quadro_propor',
-      descricao: `Propõe notas num quadro: cria uma moldura "✦ <titulo>" no primeiro espaço livre à direita (ou abaixo) da seção \"perto\", com as notas dentro (até ${MAX_NOTAS_POR_PROPOSTA}, cada uma até ${MAX_TEXTO_DA_NOTA} caracteres, tipo opcional: ${TIPOS_SEMANTICOS.join(', ')}). Tudo entra na fila de revisão do mestre, marcado como do assistente; nada se mistura ao material dele sem aceite. No quadro aberto na tela, um Ctrl+Z desfaz; em outro quadro grava direto, sem histórico. Devolve o id da moldura e o total de notas.`,
+      descricao: `Propõe notas num quadro: cria a moldura "✦ <titulo>" num espaço livre ao lado da seção "perto", com até ${MAX_NOTAS_POR_PROPOSTA} notas {texto, tipo?} (tipo semântico opcional). Tudo entra na fila de revisão do mestre como do assistente. No quadro aberto, um Ctrl+Z desfaz; em outro, grava direto, sem histórico. Devolve o id da moldura e o total de notas.`,
       esquema: {
         type: 'object',
         properties: {
@@ -299,7 +299,7 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
               additionalProperties: false,
             },
           },
-          perto: { type: 'string', description: 'Id ou título da seção (do quadro_mapa) ao lado da qual propor; omita para pôr à direita de tudo.' },
+          perto: { type: 'string', description: 'Seção (id ou título) ao lado da qual propor; sem ela, à direita de tudo.' },
         },
         required: ['quadro', 'titulo', 'notas'],
         additionalProperties: false,
