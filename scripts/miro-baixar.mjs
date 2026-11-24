@@ -147,6 +147,34 @@ function extensaoPorMime(contentType, url) {
   return 'png'
 }
 
+/**
+ * Troca o parâmetro `format` da URL de uma imagem do Miro (`preview`, `original`...),
+ * mantendo os demais parâmetros (como `redirect=false`). URL inválida volta como veio.
+ * @param {string} url
+ * @param {string} formato
+ * @returns {string}
+ */
+export function urlDaImagemNoFormato(url, formato) {
+  try {
+    const u = new URL(url)
+    u.searchParams.set('format', formato)
+    return u.toString()
+  } catch {
+    return url
+  }
+}
+
+/** Baixa a imagem no formato pedido; se `original` falhar, tenta `preview` (aviso sem o token). */
+async function baixarImagemDoItem(imageUrl, token, soMiniaturas, idItem) {
+  if (soMiniaturas) return baixarBinarioImagem(urlDaImagemNoFormato(imageUrl, 'preview'), token)
+  try {
+    return await baixarBinarioImagem(urlDaImagemNoFormato(imageUrl, 'original'), token)
+  } catch (err) {
+    console.warn(`\nAviso: imagem do item ${idItem} indisponível em tamanho original (${err.message}); usando a miniatura.`)
+    return baixarBinarioImagem(urlDaImagemNoFormato(imageUrl, 'preview'), token)
+  }
+}
+
 async function baixarBinarioImagem(imageUrl, token) {
   const resp = await requisitarMiro(imageUrl, token, { headers: { Accept: '*/*' } })
   const ct = resp.headers.get('content-type') || ''
@@ -168,23 +196,26 @@ function analisarArgumentos(argv) {
   let urlOuId = null
   let saida = null
   let soContar = false
+  let soMiniaturas = false
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--so-contar') {
       soContar = true
+    } else if (arg === '--miniaturas') {
+      soMiniaturas = true
     } else if (arg === '--saida' && i + 1 < argv.length) {
       saida = argv[++i]
     } else if (!arg.startsWith('--') && !urlOuId) {
       urlOuId = arg
     }
   }
-  return { urlOuId, saida, soContar }
+  return { urlOuId, saida, soContar, soMiniaturas }
 }
 
 async function main() {
-  const { urlOuId, saida, soContar } = analisarArgumentos(process.argv.slice(2))
+  const { urlOuId, saida, soContar, soMiniaturas } = analisarArgumentos(process.argv.slice(2))
   if (!urlOuId) {
-    console.error('Uso: MIRO_TOKEN=... node scripts/miro-baixar.mjs <url-ou-id> [--saida arquivo.miro.zip] [--so-contar]')
+    console.error('Uso: MIRO_TOKEN=... node scripts/miro-baixar.mjs <url-ou-id> [--saida arquivo.miro.zip] [--so-contar] [--miniaturas]')
     process.exit(1)
   }
   const token = process.env.MIRO_TOKEN
@@ -219,18 +250,23 @@ async function main() {
   }
 
   const entradasZip = {}
-  for (const item of items) {
-    if (item.type === 'image' && item.data?.imageUrl) {
-      try {
-        const { bytes, ext } = await baixarBinarioImagem(item.data.imageUrl, token)
-        const caminhoArquivo = `imagens/${item.id}.${ext}`
-        entradasZip[caminhoArquivo] = bytes
-        item.arquivoLocal = caminhoArquivo
-      } catch (err) {
-        console.warn(`Aviso: falha ao baixar imagem do item ${item.id}: ${err.message}`)
-      }
+  const comImagem = items.filter((i) => i.type === 'image' && i.data?.imageUrl)
+  const terminal = Boolean(process.stdout.isTTY)
+  let feitas = 0
+  for (const item of comImagem) {
+    try {
+      const { bytes, ext } = await baixarImagemDoItem(item.data.imageUrl, token, soMiniaturas, item.id)
+      const caminhoArquivo = `imagens/${item.id}.${ext}`
+      entradasZip[caminhoArquivo] = bytes
+      item.arquivoLocal = caminhoArquivo
+    } catch (err) {
+      console.warn(`\nAviso: falha ao baixar imagem do item ${item.id}: ${err.message}`)
     }
+    feitas++
+    if (terminal) process.stdout.write(`\rimagens: ${feitas}/${comImagem.length}`)
+    else if (feitas % 50 === 0 || feitas === comImagem.length) console.log(`imagens: ${feitas}/${comImagem.length}`)
   }
+  if (terminal && comImagem.length > 0) process.stdout.write('\n')
 
   const bruto = {
     formato: 'miro-bruto',

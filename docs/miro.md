@@ -24,6 +24,8 @@ MIRO_TOKEN="seu_token_aqui" npm run miro:baixar -- "https://miro.com/app/board/u
 
 O comando baixa a descrição do quadro, todos os itens paginados, conectores e imagens anexadas, gerando o arquivo `meu-quadro.miro.zip`.
 
+As imagens vêm no **tamanho original** (legíveis, mesmo handouts com texto), então o pacote pode ficar grande. Se a API recusar o original de alguma imagem, o script avisa e usa a miniatura. Para um pacote pequeno, com miniaturas, acrescente `--miniaturas`. O progresso aparece como `imagens: 120/524`.
+
 ### Tags e grupos
 
 O pacote leva junto as **tags** e os **grupos** do quadro (se o token puder lê-los; senão o script avisa e segue sem eles). Pacotes antigos continuam válidos.
