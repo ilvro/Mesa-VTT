@@ -59,7 +59,7 @@ export function ItemForma({
 
   return (
     <div
-      class={`item-quadro item-forma ${item.revisao ? 'em-revisao' : ''}`}
+      class={`item-quadro item-forma ${item.revisao ? (item.revisao.origem === 'assistente' ? 'em-revisao em-revisao-assistente' : 'em-revisao') : ''}`}
       data-testid={`item-${item.id}`}
       data-item-id={item.id}
       data-semantica={item.semantica ?? undefined}

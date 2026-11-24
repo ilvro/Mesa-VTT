@@ -6,6 +6,7 @@ import { refDaEntidade, sugerirEntidades } from '../../dominio/notas.ts'
 import { NOMES_SEMANTICOS } from '../../dominio/paleta.ts'
 import {
   ehConflitoOuSaida,
+  ehDoAssistente,
   passoDeRevisaoEmMassa,
   resumoDaRevisao,
   type ResumoPorTipo,
@@ -52,6 +53,7 @@ export function FilaDeRevisao({ itens, onFocarItem, onFechar }: FilaDeRevisaoPro
   const pulados = useSignal<string[]>([])
   // Filtro da lista: 'sem' = sem sugestão, 'conflitos' = conflitos e saídas do Miro.
   const filtro = useSignal<TipoSemantico | 'sem' | 'conflitos' | null>(null)
+  const confirmandoDescarte = useSignal(false)
   const confirmandoMassa = useSignal<string | null>(null)
 
   const molduras = [...itens.values()].filter(
@@ -68,7 +70,8 @@ export function FilaDeRevisao({ itens, onFocarItem, onFechar }: FilaDeRevisaoPro
     if (ehConflitoOuSaida(i)) return f === 'conflitos'
     return f === (i.revisao?.tipoSugerido ?? 'sem')
   }
-  const emRevisao = todosEmRevisao.filter(passaNoFiltro)
+  const doAssistente = ordenarItensEmLeitura(todosEmRevisao.filter(ehDoAssistente))
+  const emRevisao = todosEmRevisao.filter((i) => !ehDoAssistente(i) && passaNoFiltro(i))
   const grupos: GrupoRevisao[] = []
 
   for (const m of moldurasOrdenadas) {
@@ -94,6 +97,13 @@ export function FilaDeRevisao({ itens, onFocarItem, onFechar }: FilaDeRevisaoPro
       titulo: 'Fora de molduras',
       itens: semMoldura,
     })
+  }
+
+  const descartarDoAssistente = () => {
+    if (doAssistente.length > 0) {
+      executar({ rotulo: `Descartar ${doAssistente.length} do assistente`, ops: [{ remover: doAssistente }] })
+    }
+    confirmandoDescarte.value = false
   }
 
   const aplicarTipo = (item: Item, novoTipo: TipoSemantico | null, rotulo: string) => {
@@ -167,7 +177,7 @@ export function FilaDeRevisao({ itens, onFocarItem, onFechar }: FilaDeRevisaoPro
   }
 
   const pularItem = (item: Item) => {
-    const todosOrdenados = grupos.flatMap((g) => g.itens)
+    const todosOrdenados = [...doAssistente, ...grupos.flatMap((g) => g.itens)]
     const idx = todosOrdenados.findIndex((i) => i.id === item.id)
     const proximo =
       idx >= 0 && todosOrdenados.length > 1
@@ -221,156 +231,7 @@ export function FilaDeRevisao({ itens, onFocarItem, onFechar }: FilaDeRevisaoPro
     ligandoItemId.value = null
   }
 
-  return (
-    <aside
-      class="painel-fundo fila-de-revisao"
-      data-testid="painel-fila-revisao"
-      onPointerDown={(e) => e.stopPropagation()}
-      onDblClick={(e) => e.stopPropagation()}
-    >
-      <div class="painel-fundo-topo">
-        <div>
-          <strong>Fila de revisão</strong>
-          <span class="meta" data-testid="contador-revisao" style={{ marginLeft: '8px' }}>
-            faltam {todosEmRevisao.length}
-          </span>
-        </div>
-        <button
-          type="button"
-          class="botao-pilula"
-          data-testid="fechar-fila-revisao"
-          onClick={onFechar}
-          aria-label="Fechar fila de revisão"
-        >
-          Fechar
-        </button>
-      </div>
-
-      {todosEmRevisao.length === 0 ? (
-        <p class="quadro-painel-vazio" data-testid="revisao-vazia">
-          Todos os itens importados foram revisados.
-        </p>
-      ) : (
-        <div class="fila-revisao-grupos">
-          <section class="fila-revisao-massa" data-testid="revisao-massa">
-            {resumo.conflitos.length > 0 ? (
-              <div class="fila-revisao-massa-linha fila-revisao-massa-conflitos">
-                <button
-                  type="button"
-                  class={`fila-revisao-massa-filtro${filtro.value === 'conflitos' ? ' ativo' : ''}`}
-                  data-testid="revisao-filtro-conflitos"
-                  onClick={() => {
-                    filtro.value = filtro.value === 'conflitos' ? null : 'conflitos'
-                  }}
-                >
-                  Conflitos e saídas do Miro · {resumo.conflitos.length}
-                </button>
-                <span class="meta">decida um a um</span>
-              </div>
-            ) : null}
-            {resumo.porTipo.map((r) => {
-              const chave = chaveDoTipo(r)
-              const nome = r.tipo ? NOMES_SEMANTICOS[r.tipo] : 'Sem sugestão'
-              return (
-                <div class="fila-revisao-massa-linha" key={chave}>
-                  <button
-                    type="button"
-                    class={`fila-revisao-massa-filtro${filtro.value === chave ? ' ativo' : ''}`}
-                    data-testid={`revisao-filtro-${chave}`}
-                    onClick={() => {
-                      filtro.value = filtro.value === chave ? null : (chave as TipoSemantico | 'sem')
-                    }}
-                  >
-                    <span
-                      class="fila-revisao-massa-cor"
-                      style={{ background: r.tipo ? paletaDaCampanha.value[r.tipo] : 'transparent' }}
-                      aria-hidden="true"
-                    />
-                    {nome} · {r.quantidade}
-                  </button>
-                  {confirmandoMassa.value === chave ? (
-                    <span class="fila-revisao-confirmacao">
-                      <button
-                        type="button"
-                        class="botao-pilula pequeno destaque"
-                        data-testid={`revisao-massa-confirmar-${chave}`}
-                        onClick={() => aceitarEmMassa(r)}
-                      >
-                        Confirmar ({r.quantidade})
-                      </button>
-                      <button
-                        type="button"
-                        class="botao-pilula pequeno"
-                        data-testid={`revisao-massa-cancelar-${chave}`}
-                        onClick={() => {
-                          confirmandoMassa.value = null
-                        }}
-                      >
-                        Cancelar
-                      </button>
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      class="botao-pilula pequeno"
-                      data-testid={`revisao-massa-${chave}`}
-                      onClick={() => {
-                        confirmandoMassa.value = chave
-                      }}
-                    >
-                      {r.tipo ? `Aceitar ${r.quantidade}` : `${r.quantidade} sem sugestão → sem tipo`}
-                    </button>
-                  )}
-                </div>
-              )
-            })}
-          </section>
-          {grupos.map((grupo) => {
-            const chaveGrupo = grupo.molduraId ?? 'sem-moldura'
-            return (
-              <section
-                key={chaveGrupo}
-                class="fila-revisao-grupo"
-                data-testid={`revisao-grupo-${chaveGrupo}`}
-              >
-                <header class="fila-revisao-grupo-topo">
-                  <strong>{grupo.titulo}</strong>
-                  {confirmandoMolduraId.value === chaveGrupo ? (
-                    <span class="fila-revisao-confirmacao">
-                      <button
-                        type="button"
-                        class="botao-pilula pequeno destaque"
-                        data-testid={`revisao-confirmar-moldura-${chaveGrupo}`}
-                        onClick={() => aceitarMoldura(grupo)}
-                      >
-                        Confirmar ({grupo.itens.filter((i) => !ehConflitoOuSaida(i)).length})
-                      </button>
-                      <button
-                        type="button"
-                        class="botao-pilula pequeno"
-                        onClick={() => {
-                          confirmandoMolduraId.value = null
-                        }}
-                      >
-                        Cancelar
-                      </button>
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      class="botao-pilula pequeno"
-                      data-testid={`revisao-aceitar-moldura-${chaveGrupo}`}
-                      onClick={() => {
-                        confirmandoMolduraId.value = chaveGrupo
-                      }}
-                    >
-                      Aceitar todos desta moldura
-                    </button>
-                  )}
-                </header>
-
-                <ul class="fila-revisao-lista">
-                  {grupo.itens.map((item) => {
+  const renderItem = (item: Item) => {
                     const rev = item.revisao!
                     const sugerido = rev.tipoSugerido
                     return (
@@ -502,7 +363,208 @@ export function FilaDeRevisao({ itens, onFocarItem, onFechar }: FilaDeRevisaoPro
                         ) : null}
                       </li>
                     )
-                  })}
+  }
+
+  return (
+    <aside
+      class="painel-fundo fila-de-revisao"
+      data-testid="painel-fila-revisao"
+      onPointerDown={(e) => e.stopPropagation()}
+      onDblClick={(e) => e.stopPropagation()}
+    >
+      <div class="painel-fundo-topo">
+        <div>
+          <strong>Fila de revisão</strong>
+          <span class="meta" data-testid="contador-revisao" style={{ marginLeft: '8px' }}>
+            faltam {todosEmRevisao.length}
+          </span>
+        </div>
+        <button
+          type="button"
+          class="botao-pilula"
+          data-testid="fechar-fila-revisao"
+          onClick={onFechar}
+          aria-label="Fechar fila de revisão"
+        >
+          Fechar
+        </button>
+      </div>
+
+      {todosEmRevisao.length === 0 ? (
+        <p class="quadro-painel-vazio" data-testid="revisao-vazia">
+          Todos os itens importados foram revisados.
+        </p>
+      ) : (
+        <div class="fila-revisao-grupos">
+          <section class="fila-revisao-massa" data-testid="revisao-massa">
+            {resumo.conflitos.length > 0 ? (
+              <div class="fila-revisao-massa-linha fila-revisao-massa-conflitos">
+                <button
+                  type="button"
+                  class={`fila-revisao-massa-filtro${filtro.value === 'conflitos' ? ' ativo' : ''}`}
+                  data-testid="revisao-filtro-conflitos"
+                  onClick={() => {
+                    filtro.value = filtro.value === 'conflitos' ? null : 'conflitos'
+                  }}
+                >
+                  Conflitos e saídas do Miro · {resumo.conflitos.length}
+                </button>
+                <span class="meta">decida um a um</span>
+              </div>
+            ) : null}
+            {resumo.porTipo.map((r) => {
+              const chave = chaveDoTipo(r)
+              const nome = r.tipo ? NOMES_SEMANTICOS[r.tipo] : 'Sem sugestão'
+              return (
+                <div class="fila-revisao-massa-linha" key={chave}>
+                  <button
+                    type="button"
+                    class={`fila-revisao-massa-filtro${filtro.value === chave ? ' ativo' : ''}`}
+                    data-testid={`revisao-filtro-${chave}`}
+                    onClick={() => {
+                      filtro.value = filtro.value === chave ? null : (chave as TipoSemantico | 'sem')
+                    }}
+                  >
+                    <span
+                      class="fila-revisao-massa-cor"
+                      style={{ background: r.tipo ? paletaDaCampanha.value[r.tipo] : 'transparent' }}
+                      aria-hidden="true"
+                    />
+                    {nome} · {r.quantidade}
+                  </button>
+                  {confirmandoMassa.value === chave ? (
+                    <span class="fila-revisao-confirmacao">
+                      <button
+                        type="button"
+                        class="botao-pilula pequeno destaque"
+                        data-testid={`revisao-massa-confirmar-${chave}`}
+                        onClick={() => aceitarEmMassa(r)}
+                      >
+                        Confirmar ({r.quantidade})
+                      </button>
+                      <button
+                        type="button"
+                        class="botao-pilula pequeno"
+                        data-testid={`revisao-massa-cancelar-${chave}`}
+                        onClick={() => {
+                          confirmandoMassa.value = null
+                        }}
+                      >
+                        Cancelar
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      class="botao-pilula pequeno"
+                      data-testid={`revisao-massa-${chave}`}
+                      onClick={() => {
+                        confirmandoMassa.value = chave
+                      }}
+                    >
+                      {r.tipo ? `Aceitar ${r.quantidade}` : `${r.quantidade} sem sugestão → sem tipo`}
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </section>
+          {doAssistente.length > 0 ? (
+            <section class="fila-revisao-grupo fila-revisao-assistente" data-testid="revisao-grupo-assistente">
+              <header class="fila-revisao-grupo-topo">
+                <strong>Do assistente · {doAssistente.length}</strong>
+                {confirmandoDescarte.value ? (
+                  <span class="fila-revisao-confirmacao">
+                    <button
+                      type="button"
+                      class="botao-pilula pequeno destaque"
+                      data-testid="revisao-assistente-descartar-confirmar"
+                      onClick={descartarDoAssistente}
+                    >
+                      Confirmar descarte ({doAssistente.length})
+                    </button>
+                    <button
+                      type="button"
+                      class="botao-pilula pequeno"
+                      onClick={() => {
+                        confirmandoDescarte.value = false
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </span>
+                ) : (
+                  <span class="fila-revisao-confirmacao">
+                    <button
+                      type="button"
+                      class="botao-pilula pequeno"
+                      data-testid="revisao-assistente-aceitar"
+                      onClick={() => aceitarMoldura({ molduraId: null, titulo: 'Do assistente', itens: doAssistente })}
+                    >
+                      Aceitar todas do assistente
+                    </button>
+                    <button
+                      type="button"
+                      class="botao-pilula pequeno"
+                      data-testid="revisao-assistente-descartar"
+                      onClick={() => {
+                        confirmandoDescarte.value = true
+                      }}
+                    >
+                      Descartar todas
+                    </button>
+                  </span>
+                )}
+              </header>
+              <ul class="fila-revisao-lista">{doAssistente.map(renderItem)}</ul>
+            </section>
+          ) : null}
+          {grupos.map((grupo) => {
+            const chaveGrupo = grupo.molduraId ?? 'sem-moldura'
+            return (
+              <section
+                key={chaveGrupo}
+                class="fila-revisao-grupo"
+                data-testid={`revisao-grupo-${chaveGrupo}`}
+              >
+                <header class="fila-revisao-grupo-topo">
+                  <strong>{grupo.titulo}</strong>
+                  {confirmandoMolduraId.value === chaveGrupo ? (
+                    <span class="fila-revisao-confirmacao">
+                      <button
+                        type="button"
+                        class="botao-pilula pequeno destaque"
+                        data-testid={`revisao-confirmar-moldura-${chaveGrupo}`}
+                        onClick={() => aceitarMoldura(grupo)}
+                      >
+                        Confirmar ({grupo.itens.filter((i) => !ehConflitoOuSaida(i)).length})
+                      </button>
+                      <button
+                        type="button"
+                        class="botao-pilula pequeno"
+                        onClick={() => {
+                          confirmandoMolduraId.value = null
+                        }}
+                      >
+                        Cancelar
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      class="botao-pilula pequeno"
+                      data-testid={`revisao-aceitar-moldura-${chaveGrupo}`}
+                      onClick={() => {
+                        confirmandoMolduraId.value = chaveGrupo
+                      }}
+                    >
+                      Aceitar todos desta moldura
+                    </button>
+                  )}
+                </header>
+
+                <ul class="fila-revisao-lista">
+                  {grupo.itens.map(renderItem)}
                 </ul>
               </section>
             )

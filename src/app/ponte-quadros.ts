@@ -4,7 +4,9 @@ import { imagem, json, texto, type FerramentaDaPonte } from '#mesa/ponte';
 import { semAcento } from '../dominio/entidades.ts';
 import { textoBuscavel } from '../dominio/busca-quadro.ts';
 import { mapaDoQuadro } from '../dominio/mapa-do-quadro.ts';
-import type { Item, Quadro } from '../dominio/quadro.ts';
+import type { PaletaDaCampanha } from '../dominio/paleta.ts';
+import { MAX_NOTAS_POR_PROPOSTA, MAX_TEXTO_DA_NOTA, montarProposta, posicaoLivre, tamanhoDaProposta } from '../dominio/proposta-quadro.ts';
+import { TIPOS_SEMANTICOS, type Item, type Quadro } from '../dominio/quadro.ts';
 import {
   alvoDaImagem,
   assinaturaDaImagem,
@@ -30,6 +32,10 @@ export interface ContextoDeQuadros {
   /** Resumos e descrições gravados do quadro (lê do banco na hora). */
   resumos(quadroId: string): Promise<RegistroResumo[]>;
   salvarResumo(resumo: RegistroResumo): Promise<void>;
+  /** Cria os itens no quadro: no aberto, num único passo de desfazer; nos outros, direto no banco. */
+  criarItens(quadroId: string, itens: Item[], rotulo: string): Promise<void>;
+  /** Paleta da campanha (cores por tipo); padrão se ausente. */
+  paleta?(): PaletaDaCampanha;
 }
 
 export const LADO_PADRAO_IMAGEM = 768;
@@ -272,6 +278,51 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
         const item = imagemPor(c, args.item);
         await gravar(c, alvoDaImagem(item.id), args.texto, MAX_DESCRICAO_DA_IMAGEM, assinaturaDaImagem(item), 'da descrição');
         return [texto(`Descrição da imagem #${item.id.slice(0, 6)} gravada.`)];
+      },
+    },
+    {
+      nome: 'quadro_propor',
+      descricao: `Propõe notas num quadro: cria uma moldura "✦ <titulo>" no primeiro espaço livre à direita (ou abaixo) da seção \"perto\", com as notas dentro (até ${MAX_NOTAS_POR_PROPOSTA}, cada uma até ${MAX_TEXTO_DA_NOTA} caracteres, tipo opcional: ${TIPOS_SEMANTICOS.join(', ')}). Tudo entra na fila de revisão do mestre, marcado como do assistente; nada se mistura ao material dele sem aceite. No quadro aberto na tela, um Ctrl+Z desfaz; em outro quadro grava direto, sem histórico. Devolve o id da moldura e o total de notas.`,
+      esquema: {
+        type: 'object',
+        properties: {
+          quadro: quadroEsquema,
+          titulo: { type: 'string', description: 'Título da moldura (o "✦ " é acrescentado).' },
+          notas: {
+            type: 'array',
+            minItems: 1,
+            maxItems: MAX_NOTAS_POR_PROPOSTA,
+            items: {
+              type: 'object',
+              properties: { texto: { type: 'string' }, tipo: { type: 'string', enum: [...TIPOS_SEMANTICOS], description: 'Tipo semântico (cor); opcional.' } },
+              required: ['texto'],
+              additionalProperties: false,
+            },
+          },
+          perto: { type: 'string', description: 'Id ou título da seção (do quadro_mapa) ao lado da qual propor; omita para pôr à direita de tudo.' },
+        },
+        required: ['quadro', 'titulo', 'notas'],
+        additionalProperties: false,
+      },
+      anotacoes: { destrutiva: false, idempotente: false },
+      async executar(args) {
+        const c = await quadroPor(args.quadro);
+        const perto = textoDe(args.perto) ? secaoPor(c, args.perto) : null;
+        const lista = Array.isArray(args.notas) ? (args.notas as { texto: string; tipo?: string | null }[]) : [];
+        const tam = tamanhoDaProposta(Math.max(1, lista.length));
+        const pos = posicaoLivre(tam, c.itens, perto ? perto.caixa : null);
+        const paleta = ctx.paleta?.();
+        const proposta = montarProposta(String(args.titulo ?? ''), lista, {
+          quadroId: c.quadro.id,
+          x: pos.x,
+          y: pos.y,
+          agora: Date.now(),
+          novoId: () => crypto.randomUUID(),
+          ...(paleta ? { paleta } : {}),
+        });
+        await ctx.criarItens(c.quadro.id, proposta.itens, `Proposta do assistente: ${proposta.moldura.titulo}`);
+        const naTela = ctx.aberto()?.quadro.id === c.quadro.id;
+        return [json({ moldura: proposta.moldura.id, notas: proposta.notas.length, quadro: c.quadro.nome, ondeFicou: { x: Math.round(pos.x), y: Math.round(pos.y) }, desfazer: naTela ? 'Ctrl+Z na tela do quadro' : 'sem histórico (quadro fechado); o mestre apaga pela fila de revisão' })];
       },
     },
   ];

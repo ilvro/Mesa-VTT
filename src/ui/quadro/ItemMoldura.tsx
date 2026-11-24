@@ -33,7 +33,8 @@ export function ItemMoldura({
   const c = item.caixa;
   return (
     <div
-      class="item-quadro item-moldura"
+      class={`item-quadro item-moldura${item.revisao?.origem === 'assistente' ? ' em-revisao em-revisao-assistente' : ''}`}
+      data-em-revisao={item.revisao ? 'true' : undefined}
       data-testid={`item-${item.id}`}
       data-item-id={item.id}
       style={{

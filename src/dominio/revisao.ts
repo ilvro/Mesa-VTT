@@ -24,21 +24,29 @@ export interface ResumoDaRevisao {
   porTipo: ResumoPorTipo[];
   /** Conflitos e "saiu do Miro": fora do aceite em massa. */
   conflitos: string[];
+  /** Propostas do assistente (também contadas em `porTipo`). */
+  assistente: string[];
 }
 
 const ORDEM_TIPOS: readonly TipoSemantico[] = [
   'leitura', 'teste', 'segredo', 'loot', 'evento', 'fala', 'tarefa', 'rever', 'titulo',
 ];
 
+export function ehDoAssistente(item: Item): boolean {
+  return item.revisao?.origem === 'assistente';
+}
+
 export function resumoDaRevisao(itens: Iterable<Item>): ResumoDaRevisao {
   const mapa = new Map<TipoSemantico | null, string[]>();
   const conflitos: string[] = [];
+  const assistente: string[] = [];
   for (const item of itens) {
     if (!item.revisao) continue;
     if (ehConflitoOuSaida(item)) {
       conflitos.push(item.id);
       continue;
     }
+    if (ehDoAssistente(item)) assistente.push(item.id);
     const tipo = item.revisao.tipoSugerido ?? null;
     const lista = mapa.get(tipo);
     if (lista) lista.push(item.id);
@@ -49,7 +57,7 @@ export function resumoDaRevisao(itens: Iterable<Item>): ResumoDaRevisao {
     const ids = mapa.get(tipo);
     if (ids) porTipo.push({ tipo, quantidade: ids.length, ids });
   }
-  return { porTipo, conflitos };
+  return { porTipo, conflitos, assistente };
 }
 
 /**

@@ -110,7 +110,7 @@ export interface DocRico {
 export interface Revisao {
   tipoSugerido: TipoSemantico | null;
   motivos: string[];
-  origem: 'miro';
+  origem: 'miro' | 'assistente';
 }
 
 interface Base {
@@ -648,7 +648,9 @@ export function validarItem(v: unknown, caminho = 'item'): asserts v is Item {
     for (let i = 0; i < v.revisao.motivos.length; i++) {
       exigirTexto(v.revisao.motivos[i], `${caminho}.revisao.motivos[${i}]`);
     }
-    if (v.revisao.origem !== 'miro') falhar(`${caminho}.revisao.origem`, 'deve ser "miro"');
+    if (v.revisao.origem !== 'miro' && v.revisao.origem !== 'assistente') {
+      falhar(`${caminho}.revisao.origem`, 'deve ser "miro" ou "assistente"');
+    }
   }
 
   if (v.feito !== undefined) {

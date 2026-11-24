@@ -153,11 +153,12 @@ Commit: `assistant summaries for board sections`
 
 ## Etapa E — Escrever com revisão
 
-### L4a — O Claude cria notas no quadro  ⬜
+### L4a — O Claude cria notas no quadro  ✅
 Objetivo: o Claude propõe ideias dentro do quadro, sem misturar com o material do mestre.
 Depende de: L2a.
 Ler: `src/dominio/quadro.ts` (`revisao`), `src/ui/quadro/FilaDeRevisao.tsx`, `src/dominio/revisao.ts`, `src/app/ponte-escrita.ts`.
 Arquivos: `src/dominio/quadro.ts` (`revisao.origem` aceita `'assistente'`), `src/app/ponte-quadros.ts`, `FilaDeRevisao.tsx` (grupo "Do assistente"), testes.
 Como: `quadro_propor(quadro, perto?: secao, titulo, notas: { texto, tipo? }[])` cria uma moldura "✦ <título>" ao lado da seção indicada (no primeiro espaço livre à direita ou abaixo) com as notas dentro, todas com `revisao: { origem: 'assistente', … }`, num único passo de desfazer. O mestre aceita, edita ou apaga pela fila. No máximo 30 notas por chamada.
 Testes: posição livre (não sobrepõe nada); revisão marcada; desfazer.
+Nota: domínio novo `src/dominio/proposta-quadro.ts` (`posicaoLivre(desejada, itens, perto)`, `tamanhoDaProposta`, `montarProposta`; limites 30 notas / 2000 caracteres). `revisao.origem` aceita `'assistente'` (tipo e validação); `resumoDaRevisao` ganhou `assistente: string[]` e `ehDoAssistente`. A ordem dos argumentos de `quadro_propor` é `(quadro, titulo, notas, perto?)` (a ficha listava `perto` antes). Tipo inválido numa nota é erro legível (não é ignorado). `ContextoDeQuadros` ganhou `criarItens(quadroId, itens, rotulo)` (aberto: um `executar`, um Ctrl+Z; fechado: `gravarItens`, sem histórico) e `paleta?()`. Fila: grupo "Do assistente" separado (a moldura e as notas), com "Aceitar todas do assistente" e "Descartar todas" (confirmação inline, um passo só); os itens do assistente continuam contados no aceite em massa por tipo. Contorno tracejado no `--acento` (classe `em-revisao-assistente`, bloco `/* Propostas do assistente */` no fim do `estilo.css`). Itens em revisão já ficam fora da projeção aos jogadores. Falta no Atlas: `npm run ponte:catalogo` (1 ferramenta nova, `quadro_propor`) e o guia `quadros.md`. e2e: `tests/e2e/quadro-propostas.test.ts` (a criação é pela camada app, sem a ponte).
 Commit: `assistant proposes notes on boards for review`

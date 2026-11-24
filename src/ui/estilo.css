@@ -2439,3 +2439,16 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .resumo-editor:focus {
   outline: 1px solid var(--acento);
 }
+
+/* Propostas do assistente */
+.item-quadro.em-revisao.em-revisao-assistente {
+  outline: 2px dashed var(--acento);
+  outline-offset: 3px;
+}
+.fila-revisao-grupo.fila-revisao-assistente {
+  border-top-color: var(--acento);
+}
+.fila-revisao-assistente .fila-revisao-grupo-topo {
+  flex-wrap: wrap;
+  gap: 6px;
+}

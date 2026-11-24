@@ -22,6 +22,7 @@ function montar(opcoes: { campanha?: boolean; aberto?: boolean; semArquivo?: boo
   ];
   const itens2: Item[] = [nota('q2bbbb', 'n3zzzzzz', 0, 0, 'Corredor com armadilhas e a coroa verdadeira')];
   const chamadas: { id: string; lado: number }[] = [];
+  const criados: { quadroId: string; itens: Item[]; rotulo: string }[] = [];
   const ctx: ContextoDeQuadros = {
     campanha: async () => (opcoes.campanha === false ? null : { id: 'c1', nome: 'C' }),
     quadros: async () => [q1, q2],
@@ -29,10 +30,11 @@ function montar(opcoes: { campanha?: boolean; aberto?: boolean; semArquivo?: boo
     aberto: () => (opcoes.aberto ? { quadro: q1, itens: [...itens1, nota('q1aaaa', 'n9nnnnnn', 600, 400, 'Nota só na memória', 'm1')] } : null),
     async imagem(id, lado) { chamadas.push({ id, lado }); return opcoes.semArquivo ? null : 'data:image/jpeg;base64,QUJD'; },
     resumos: async id => guardados.filter(r => r.quadroId === id),
+    async criarItens(quadroId, novos, rotulo) { criados.push({ quadroId, itens: novos, rotulo }); },
     async salvarResumo(r) { const i = guardados.findIndex(x => x.quadroId === r.quadroId && x.alvo === r.alvo); if (i >= 0) guardados[i] = r; else guardados.push(r); },
   };
   const f = Object.fromEntries(ferramentasDeQuadros(ctx).map(t => [t.nome, t]));
-  return { f, chamadas, guardados };
+  return { f, chamadas, guardados, criados };
 }
 const lerJson = async (p: Promise<{ tipo: string; texto?: string }[]>) => JSON.parse((await p)[0]!.texto!);
 const lerTexto = async (p: Promise<{ tipo: string; texto?: string }[]>) => (await p)[0]!.texto!;
@@ -79,7 +81,7 @@ test('quadro_buscar: no máximo 20 ocorrências e trecho de até 120 caracteres'
   const q: Quadro = novoQuadro('c1', 'Grande', 1, 'qg');
   const itens = Array.from({ length: 30 }, (_, i) => nota('qg', `n${String(i).padStart(7, '0')}`, i * 10, 0, `${'a'.repeat(200)} dragão ${'b'.repeat(200)}`));
   const f = Object.fromEntries(ferramentasDeQuadros({
-    campanha: async () => ({ id: 'c1', nome: 'C' }), quadros: async () => [q], itens: async () => itens, aberto: () => null, imagem: async () => null, resumos: async () => [], salvarResumo: async () => {},
+    campanha: async () => ({ id: 'c1', nome: 'C' }), quadros: async () => [q], itens: async () => itens, aberto: () => null, imagem: async () => null, resumos: async () => [], salvarResumo: async () => {}, criarItens: async () => {},
   }).map(t => [t.nome, t]));
   const r = await lerJson(f.quadro_buscar!.executar({ termo: 'dragao' }));
   assert.equal(r.total, 30);
@@ -117,11 +119,11 @@ test('erros legíveis: quadro, seção e imagem inexistentes, sem campanha, sem 
 
 test('catálogo: cada ferramenta com menos de 4,5 KB e todas só de leitura', () => {
   const ferramentas = ferramentasDaMesa(Object.fromEntries(['repositorio', 'sessoes', 'entidades', 'campanhas', 'cenas', 'elenco', 'quadros'].map(k => [k, {}])) as never);
-  const nomes = ['quadros_listar', 'quadro_mapa', 'quadro_secao', 'quadro_buscar', 'quadro_imagem', 'quadro_resumir', 'quadro_descrever_imagem'];
+  const nomes = ['quadros_listar', 'quadro_mapa', 'quadro_secao', 'quadro_buscar', 'quadro_imagem', 'quadro_resumir', 'quadro_descrever_imagem', 'quadro_propor'];
   for (const n of nomes) {
     const t = ferramentas.find(x => x.nome === n);
     assert.ok(t, n);
-    if (n === 'quadro_resumir' || n === 'quadro_descrever_imagem') assert.equal(t.anotacoes?.destrutiva, false);
+    if (n === 'quadro_resumir' || n === 'quadro_descrever_imagem' || n === 'quadro_propor') assert.equal(t.anotacoes?.destrutiva, false);
     else assert.ok(t.anotacoes?.leitura);
     assert.ok(JSON.stringify({ nome: t.nome, descricao: t.descricao, esquema: t.esquema }).length < 4500, n);
   }
@@ -162,4 +164,29 @@ test('quadro_descrever_imagem: só imagem, limite de 600, aparece no lugar da le
   const t = await lerTexto(f.quadro_secao!.executar({ quadro: 'Reino', secao: 'm1' }));
   assert.match(t, /\[imagem #i1yyyy: Mapa com a estrada do norte, 800x600\]/);
   assert.doesNotMatch(t, /Mapa do reino/);
+});
+
+test('quadro_propor: moldura ao lado da seção, notas dentro, revisão do assistente; quadro aberto e fechado', async () => {
+  const { f, criados } = montar({ aberto: true });
+  const r = await lerJson(f.quadro_propor!.executar({ quadro: 'Reino', titulo: 'Ganchos', notas: [{ texto: 'Um', tipo: 'leitura' }, { texto: 'Dois' }], perto: 'm1' }));
+  assert.equal(r.notas, 2);
+  assert.equal(criados.length, 1);
+  assert.equal(criados[0]!.quadroId, 'q1aaaa');
+  const moldura = criados[0]!.itens[0]!;
+  assert.equal(r.moldura, moldura.id);
+  assert.equal(moldura.tipo === 'moldura' && moldura.titulo, '✦ Ganchos');
+  assert.ok(moldura.x >= 900 + 80);
+  assert.match(r.desfazer, /Ctrl\+Z/);
+  assert.ok(criados[0]!.itens.every(i => i.revisao?.origem === 'assistente'));
+  const fechado = await lerJson(montar().f.quadro_propor!.executar({ quadro: 'Masmorra', titulo: 'X', notas: [{ texto: 'a' }] }));
+  assert.match(fechado.desfazer, /sem histórico/);
+});
+
+test('quadro_propor: erros legíveis', async () => {
+  const { f, criados } = montar();
+  await assert.rejects(f.quadro_propor!.executar({ quadro: 'Reino', titulo: 'T', notas: [] }), /ao menos uma nota/);
+  await assert.rejects(f.quadro_propor!.executar({ quadro: 'Reino', titulo: 'T', notas: Array.from({ length: 31 }, () => ({ texto: 'a' })) }), /máximo por chamada é 30/);
+  await assert.rejects(f.quadro_propor!.executar({ quadro: 'Reino', titulo: 'T', notas: [{ texto: 'a', tipo: 'xyz' }] }), /inválido/);
+  await assert.rejects(f.quadro_propor!.executar({ quadro: 'Reino', titulo: 'T', notas: [{ texto: 'a' }], perto: 'nao existe' }), /não encontrada/);
+  assert.equal(criados.length, 0);
 });
