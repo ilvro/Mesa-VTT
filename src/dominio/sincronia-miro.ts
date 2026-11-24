@@ -10,7 +10,7 @@ function meio(n: number): number {
 }
 
 /** JSON com chaves em ordem alfabética em qualquer profundidade. */
-function jsonEstavel(v: unknown): string {
+export function jsonEstavel(v: unknown): string {
   if (v === null || typeof v !== 'object') return JSON.stringify(v) ?? 'null'
   if (Array.isArray(v)) return `[${v.map(jsonEstavel).join(',')}]`
   const obj = v as Record<string, unknown>
@@ -27,7 +27,7 @@ function ponta(p: Ponta): unknown {
   return { ponto: [meio(p.ponto[0]), meio(p.ponto[1])] }
 }
 
-function fnv1a(texto: string): string {
+export function fnv1a(texto: string): string {
   let h = 0x811c9dc5
   for (let i = 0; i < texto.length; i++) {
     h ^= texto.charCodeAt(i)

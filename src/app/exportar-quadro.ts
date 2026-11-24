@@ -7,7 +7,7 @@ import {
   prepararImportacao,
 } from '../dominio/pacote-quadro.ts';
 import type { Quadro } from '../dominio/quadro.ts';
-import { criarQuadroComItens, guardarImagem, lerImagem, listarItens, listarQuadros, obterQuadro } from './banco-quadros.ts';
+import { criarQuadroComItens, guardarImagem, lerImagem, listarItens, listarQuadros, listarResumos, obterQuadro } from './banco-quadros.ts';
 import { campanhaAtiva } from './campanha.ts';
 import { ligarItensNovos } from './ligacoes-quadro.ts';
 import { carregarQuadros, descarregarPendentes, quadroAberto } from './quadros.ts';
@@ -18,7 +18,7 @@ export async function montarArquivoDoQuadro(quadroId: string): Promise<{ nome: s
   const quadro = await obterQuadro(quadroId);
   if (!quadro) throw new Error('Quadro não encontrado.');
   const itens = await listarItens(quadroId);
-  const arquivos: Zippable = { 'quadro.json': strToU8(montarPacote(quadro, itens)) };
+  const arquivos: Zippable = { 'quadro.json': strToU8(montarPacote(quadro, itens, await listarResumos(quadroId))) };
   for (const id of imagensDoPacote(itens)) {
     const img = await lerImagem(id);
     if (!img) continue;
@@ -76,13 +76,13 @@ export async function importarPacoteDeQuadro(arquivo: Blob | Uint8Array): Promis
   }
 
   const existentes = (await listarQuadros(campanha.id)).map((q) => q.nome);
-  const { quadro, itens } = prepararImportacao(pacote, {
+  const { quadro, itens, resumos } = prepararImportacao(pacote, {
     campanhaId: campanha.id,
     nomesExistentes: existentes,
     novoId: () => crypto.randomUUID(),
     agora: Date.now(),
   });
-  await criarQuadroComItens(quadro, itens);
+  await criarQuadroComItens(quadro, itens, undefined, resumos);
   await ligarItensNovos(itens);
   await carregarQuadros();
   return { quadro, totalItens: itens.length, imagensFaltando };

@@ -5,7 +5,15 @@ import { semAcento } from '../dominio/entidades.ts';
 import { textoBuscavel } from '../dominio/busca-quadro.ts';
 import { mapaDoQuadro } from '../dominio/mapa-do-quadro.ts';
 import type { Item, Quadro } from '../dominio/quadro.ts';
-import { secoesDoQuadro, type Secao } from '../dominio/secoes-do-quadro.ts';
+import {
+  alvoDaImagem,
+  assinaturaDaImagem,
+  MAX_DESCRICAO_DA_IMAGEM,
+  MAX_RESUMO_DA_SECAO,
+  resumosParaOMapa,
+  type RegistroResumo,
+} from '../dominio/resumos-do-quadro.ts';
+import { assinaturaDaSecao, secoesDoQuadro, type Secao } from '../dominio/secoes-do-quadro.ts';
 import { LIMITE_TOKENS_PADRAO, textoDaSecao } from '../dominio/texto-da-secao.ts';
 
 export interface ContextoDeQuadros {
@@ -19,6 +27,9 @@ export interface ContextoDeQuadros {
   entidades?(): Promise<ReadonlyMap<string, { nome: string; tipo: string }>>;
   /** A imagem reduzida (lado maior ≤ `lado`, JPEG 0,8) como data URL, ou null se não há arquivo. */
   imagem(imagemId: string, lado: number): Promise<string | null>;
+  /** Resumos e descrições gravados do quadro (lê do banco na hora). */
+  resumos(quadroId: string): Promise<RegistroResumo[]>;
+  salvarResumo(resumo: RegistroResumo): Promise<void>;
 }
 
 export const LADO_PADRAO_IMAGEM = 768;
@@ -71,6 +82,30 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
     if (!k) throw new Error('Informe a seção (id ou título). Use quadro_mapa para ver as seções.');
     return escolher(c.secoes, k, s => s.id, s => s.titulo, 'Seção', () => `Veja os ids no quadro_mapa (${c.secoes.length} seções).`);
   }
+  /** O item de imagem pelo #id curto (ou id completo); erro legível se não for imagem. */
+  function imagemPor(c: QuadroCarregado, chave: unknown): Extract<Item, { tipo: 'imagem' }> {
+    const id = textoDe(chave).replace(/^#/, '');
+    if (!id) throw new Error('Informe o item (o #id curto da imagem).');
+    const imagens = c.itens.filter((i): i is Extract<Item, { tipo: 'imagem' }> => i.tipo === 'imagem');
+    const achadas = imagens.filter(i => i.id.startsWith(id));
+    if (achadas.length === 0) {
+      const outro = c.itens.find(i => i.id.startsWith(id));
+      throw new Error(outro ? `O item #${id} não é uma imagem (é ${outro.tipo}).` : `Imagem #${id} não encontrada em \"${c.quadro.nome}\". Veja os ids em quadro_secao.`);
+    }
+    if (achadas.length > 1) throw new Error(`#${id} é ambíguo: ${achadas.slice(0, 8).map(i => i.id.slice(0, 10)).join(', ')}. Use mais caracteres do id.`);
+    return achadas[0]!;
+  }
+  /** Grava (sem sobrescrever o que o mestre escreveu); o texto passa do limite → erro legível. */
+  async function gravar(c: QuadroCarregado, alvo: string, textoBruto: unknown, limite: number, assinatura: string, rotulo: string): Promise<RegistroResumo> {
+    const t = textoDe(textoBruto);
+    if (!t) throw new Error(`Informe o texto ${rotulo}.`);
+    if (t.length > limite) throw new Error(`O texto ${rotulo} tem ${t.length} caracteres; o máximo é ${limite}. Encurte e tente de novo.`);
+    const anterior = (await ctx.resumos(c.quadro.id)).find(r => r.alvo === alvo);
+    if (anterior?.autor === 'mestre') throw new Error(`Este texto foi escrito pelo mestre e não pode ser trocado sem pedido. Peça ao mestre para liberar (ele pode apagar ou editar no navegador de molduras) e tente de novo.`);
+    const registro: RegistroResumo = { quadroId: c.quadro.id, alvo, texto: t, assinatura, autor: 'assistente', em: Date.now() };
+    await ctx.salvarResumo(registro);
+    return registro;
+  }
   const quadroEsquema = { type: 'string', description: 'Nome ou id do quadro.' };
 
   return [
@@ -98,7 +133,8 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
       anotacoes: { leitura: true, idempotente: true },
       async executar(args) {
         const c = await quadroPor(args.quadro);
-        return [texto(mapaDoQuadro(c.quadro, c.itens).texto)];
+        const { resumos } = resumosParaOMapa(await ctx.resumos(c.quadro.id), c.secoes, c.itens);
+        return [texto(mapaDoQuadro(c.quadro, c.itens, { resumos }).texto)];
       },
     },
     {
@@ -124,8 +160,11 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
         const pagina = args.pagina === undefined ? 1 : Number(args.pagina);
         if (!Number.isInteger(pagina) || pagina < 1) throw new Error('pagina deve ser um inteiro a partir de 1.');
         const entidades = ctx.entidades ? await ctx.entidades() : undefined;
-        const r = textoDaSecao(s, c.itens, { nivel, pagina, limiteTokens: LIMITE_TOKENS_PADRAO, secoes: c.secoes, ...(entidades ? { entidades } : {}) });
-        return [texto(r.texto)];
+        const { resumos, descricoes } = resumosParaOMapa(await ctx.resumos(c.quadro.id), c.secoes, c.itens);
+        const r = textoDaSecao(s, c.itens, { nivel, pagina, limiteTokens: LIMITE_TOKENS_PADRAO, secoes: c.secoes, descricoes, ...(entidades ? { entidades } : {}) });
+        const resumo = resumos.get(s.id);
+        const topo = resumo ? `Resumo${resumo.desatualizado ? ' (desatualizado)' : ''}${resumo.autor === 'mestre' ? ' (escrito pelo mestre)' : ''}: ${resumo.texto}\n\n` : '';
+        return [texto(topo + r.texto)];
       },
     },
     {
@@ -182,22 +221,57 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
       anotacoes: { leitura: true, idempotente: true },
       async executar(args) {
         const c = await quadroPor(args.quadro);
-        const id = textoDe(args.item).replace(/^#/, '');
-        if (!id) throw new Error('Informe o item (o #id curto da imagem).');
+        const item = imagemPor(c, args.item);
+        const id = item.id.slice(0, 6);
         const lado = args.lado === undefined ? LADO_PADRAO_IMAGEM : Number(args.lado);
         if (!Number.isFinite(lado) || lado < 64) throw new Error('lado deve ser um número a partir de 64.');
-        const imagens = c.itens.filter((i): i is Extract<Item, { tipo: 'imagem' }> => i.tipo === 'imagem');
-        const achadas = imagens.filter(i => i.id.startsWith(id));
-        if (achadas.length === 0) {
-          const outro = c.itens.find(i => i.id.startsWith(id));
-          throw new Error(outro ? `O item #${id} não é uma imagem (é ${outro.tipo}).` : `Imagem #${id} não encontrada em \"${c.quadro.nome}\". Veja os ids em quadro_secao.`);
-        }
-        if (achadas.length > 1) throw new Error(`#${id} é ambíguo: ${achadas.slice(0, 8).map(i => i.id.slice(0, 10)).join(', ')}. Use mais caracteres do id.`);
-        const item = achadas[0]!;
         const dataUrl = await ctx.imagem(item.imagemId, Math.min(LADO_MAXIMO_IMAGEM, Math.round(lado)));
         if (!dataUrl) throw new Error(`A imagem #${id} não tem arquivo guardado na Mesa${item.imagemId.startsWith('miro-img-') ? ' (veio do Miro sem o arquivo)' : ''}.`);
-        const legenda = item.legenda?.trim() || 'sem legenda';
+        const descricao = (await ctx.resumos(c.quadro.id)).find(r => r.alvo === alvoDaImagem(item.id))?.texto;
+        const legenda = descricao || item.legenda?.trim() || 'sem legenda';
         return [imagem(dataUrl), texto(`[imagem #${item.id.slice(0, 6)}: ${legenda}, ${Math.round(item.larguraOriginal)}x${Math.round(item.alturaOriginal)}]`)];
+      },
+    },
+    {
+      nome: 'quadro_resumir',
+      descricao: `Grava o resumo de uma seção (até ${MAX_RESUMO_DA_SECAO} caracteres, duas ou três linhas) depois de lê-la a fundo. Aparece no quadro_mapa nas próximas conversas e é marcado como desatualizado se a seção mudar. Não troca um resumo escrito pelo mestre.`,
+      esquema: {
+        type: 'object',
+        properties: {
+          quadro: quadroEsquema,
+          secao: { type: 'string', description: 'Id da seção (do quadro_mapa) ou o título.' },
+          texto: { type: 'string', description: `O resumo, até ${MAX_RESUMO_DA_SECAO} caracteres.` },
+        },
+        required: ['quadro', 'secao', 'texto'],
+        additionalProperties: false,
+      },
+      anotacoes: { destrutiva: false, idempotente: true },
+      async executar(args) {
+        const c = await quadroPor(args.quadro);
+        const s = secaoPor(c, args.secao);
+        await gravar(c, s.id, args.texto, MAX_RESUMO_DA_SECAO, assinaturaDaSecao(s, c.itens), 'do resumo');
+        return [texto(`Resumo da seção "${s.titulo}" (${s.id}) gravado.`)];
+      },
+    },
+    {
+      nome: 'quadro_descrever_imagem',
+      descricao: `Grava a descrição em texto de uma imagem do quadro (até ${MAX_DESCRICAO_DA_IMAGEM} caracteres), depois de vê-la com quadro_imagem. Passa a aparecer no lugar da legenda em quadro_secao. Só aceita item que seja imagem; não troca uma descrição escrita pelo mestre.`,
+      esquema: {
+        type: 'object',
+        properties: {
+          quadro: quadroEsquema,
+          item: { type: 'string', description: 'O #id curto (ou id completo) da imagem.' },
+          texto: { type: 'string', description: `A descrição, até ${MAX_DESCRICAO_DA_IMAGEM} caracteres.` },
+        },
+        required: ['quadro', 'item', 'texto'],
+        additionalProperties: false,
+      },
+      anotacoes: { destrutiva: false, idempotente: true },
+      async executar(args) {
+        const c = await quadroPor(args.quadro);
+        const item = imagemPor(c, args.item);
+        await gravar(c, alvoDaImagem(item.id), args.texto, MAX_DESCRICAO_DA_IMAGEM, assinaturaDaImagem(item), 'da descrição');
+        return [texto(`Descrição da imagem #${item.id.slice(0, 6)} gravada.`)];
       },
     },
   ];

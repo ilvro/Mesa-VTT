@@ -134,7 +134,7 @@ Commit no Atlas: `guide for reading mesa boards`
 
 ## Etapa D — Resumos
 
-### L3a — Resumos e descrições guardados  ⬜
+### L3a — Resumos e descrições guardados  ✅
 Objetivo: cada seção é lida a fundo uma vez só, e as imagens importantes ganham uma descrição em texto.
 Depende de: L2a.
 Ler: `src/app/banco-quadros.ts` (versão 2, stores), `src/dominio/sincronia-miro.ts` (`assinaturaDoMiro`, o mesmo hash).
@@ -146,6 +146,7 @@ Como:
 - O mestre vê e corrige os resumos no navegador de molduras; um resumo editado pelo mestre fica `autor: 'mestre'` e o Claude é avisado no mapa de que ele não deve ser trocado sem pedir.
 - Exportar o quadro (E4d) leva os resumos junto.
 Testes: banco v2 → v3 sem perda; assinatura muda quando o texto muda e não muda quando só a posição muda; ferramentas.
+Nota: banco v3 (`listarResumos`, `salvarResumo`, `removerResumo`, `removerResumosDoQuadro`; apagados na mesma transação de `removerQuadro` e `removerQuadrosDaCampanha`; `criarQuadroComItens` ganhou o 4º parâmetro `resumos`). Domínio novo `src/dominio/resumos-do-quadro.ts` (tipos, limites 400/600, `assinaturaDoAlvo`, `resumosParaOMapa`, leitura tolerante do pacote); `assinaturaDaSecao` em `secoes-do-quadro.ts` (hash dos ids em ordem + texto/título/rótulo/legenda/`imagemId`, mais o título da moldura; setas e posição ficam fora); `fnv1a` e `jsonEstavel` agora exportados de `sincronia-miro.ts`. Descrição de imagem: assinatura = `imagemId`; `textoDaSecao` aceita `descricoes` (id do item → texto) e a mostra no lugar da legenda; `quadro_imagem` também devolve a descrição. `ContextoDeQuadros` ganhou `resumos(quadroId)` e `salvarResumo(r)` (obrigatórios; `ponte.ts` liga a `src/app/resumos-quadro.ts`, que também atualiza o navegador aberto). `quadro_secao` põe `Resumo [(desatualizado)]: …` no topo. Pacote: `resumos` opcional; na importação os alvos (`item:`, moldura, `ilha:`) são remapeados e a assinatura de quem estava em dia é recalculada com os ids novos (quem já estava velho continua velho; `soltos:` fica como está). **Desvios:** as ferramentas novas não registram `Efeito` (não há como desfazer pela atividade do assistente; o mestre edita ou apaga o texto no navegador e, vazio, o resumo some); não estão em `FERRAMENTAS_DE_ESCRITA`. Texto vazio no editor do navegador apaga o resumo. O mapa não leva as descrições de imagem para a estimativa de tokens. Falta no Atlas: `npm run ponte:catalogo` (2 ferramentas novas) e ajustar `guia/quadros.md` ("só quando a L3a estiver pronta").
 Commit: `assistant summaries for board sections`
 
 ---

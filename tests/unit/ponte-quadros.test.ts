@@ -3,13 +3,15 @@ import { test } from 'node:test';
 import { ferramentasDaMesa } from '../../src/app/ponte-ferramentas.ts';
 import { ferramentasDeQuadros, type ContextoDeQuadros } from '../../src/app/ponte-quadros.ts';
 import type { DocRico, Item, Quadro } from '../../src/dominio/quadro.ts';
+import type { RegistroResumo } from '../../src/dominio/resumos-do-quadro.ts';
 import { novaImagem, novaMoldura, novaNotaAdesiva, novoQuadro } from '../../src/dominio/quadro.ts';
 
 const doc = (...linhas: string[]): DocRico => ({ type: 'doc', content: linhas.map(t => ({ type: 'paragraph', content: [{ type: 'text', text: t }] })) });
 const nota = (qid: string, id: string, x: number, y: number, texto: string, mae: string | null = null) =>
   ({ ...novaNotaAdesiva({ quadroId: qid, x, y, largura: 200, altura: 100, doc: doc(texto) }, 1, id), molduraId: mae }) as Item;
 
-function montar(opcoes: { campanha?: boolean; aberto?: boolean; semArquivo?: boolean } = {}) {
+function montar(opcoes: { campanha?: boolean; aberto?: boolean; semArquivo?: boolean; resumos?: RegistroResumo[] } = {}) {
+  const guardados: RegistroResumo[] = opcoes.resumos ?? [];
   const q1: Quadro = novoQuadro('c1', 'Reino Vermelho', 1, 'q1aaaa');
   const q2: Quadro = novoQuadro('c1', 'Masmorra', 1, 'q2bbbb');
   const itens1: Item[] = [
@@ -26,9 +28,11 @@ function montar(opcoes: { campanha?: boolean; aberto?: boolean; semArquivo?: boo
     itens: async id => (id === 'q1aaaa' ? itens1 : itens2),
     aberto: () => (opcoes.aberto ? { quadro: q1, itens: [...itens1, nota('q1aaaa', 'n9nnnnnn', 600, 400, 'Nota só na memória', 'm1')] } : null),
     async imagem(id, lado) { chamadas.push({ id, lado }); return opcoes.semArquivo ? null : 'data:image/jpeg;base64,QUJD'; },
+    resumos: async id => guardados.filter(r => r.quadroId === id),
+    async salvarResumo(r) { const i = guardados.findIndex(x => x.quadroId === r.quadroId && x.alvo === r.alvo); if (i >= 0) guardados[i] = r; else guardados.push(r); },
   };
   const f = Object.fromEntries(ferramentasDeQuadros(ctx).map(t => [t.nome, t]));
-  return { f, chamadas };
+  return { f, chamadas, guardados };
 }
 const lerJson = async (p: Promise<{ tipo: string; texto?: string }[]>) => JSON.parse((await p)[0]!.texto!);
 const lerTexto = async (p: Promise<{ tipo: string; texto?: string }[]>) => (await p)[0]!.texto!;
@@ -75,7 +79,7 @@ test('quadro_buscar: no máximo 20 ocorrências e trecho de até 120 caracteres'
   const q: Quadro = novoQuadro('c1', 'Grande', 1, 'qg');
   const itens = Array.from({ length: 30 }, (_, i) => nota('qg', `n${String(i).padStart(7, '0')}`, i * 10, 0, `${'a'.repeat(200)} dragão ${'b'.repeat(200)}`));
   const f = Object.fromEntries(ferramentasDeQuadros({
-    campanha: async () => ({ id: 'c1', nome: 'C' }), quadros: async () => [q], itens: async () => itens, aberto: () => null, imagem: async () => null,
+    campanha: async () => ({ id: 'c1', nome: 'C' }), quadros: async () => [q], itens: async () => itens, aberto: () => null, imagem: async () => null, resumos: async () => [], salvarResumo: async () => {},
   }).map(t => [t.nome, t]));
   const r = await lerJson(f.quadro_buscar!.executar({ termo: 'dragao' }));
   assert.equal(r.total, 30);
@@ -113,11 +117,49 @@ test('erros legíveis: quadro, seção e imagem inexistentes, sem campanha, sem 
 
 test('catálogo: cada ferramenta com menos de 4,5 KB e todas só de leitura', () => {
   const ferramentas = ferramentasDaMesa(Object.fromEntries(['repositorio', 'sessoes', 'entidades', 'campanhas', 'cenas', 'elenco', 'quadros'].map(k => [k, {}])) as never);
-  const nomes = ['quadros_listar', 'quadro_mapa', 'quadro_secao', 'quadro_buscar', 'quadro_imagem'];
+  const nomes = ['quadros_listar', 'quadro_mapa', 'quadro_secao', 'quadro_buscar', 'quadro_imagem', 'quadro_resumir', 'quadro_descrever_imagem'];
   for (const n of nomes) {
     const t = ferramentas.find(x => x.nome === n);
     assert.ok(t, n);
-    assert.ok(t.anotacoes?.leitura);
+    if (n === 'quadro_resumir' || n === 'quadro_descrever_imagem') assert.equal(t.anotacoes?.destrutiva, false);
+    else assert.ok(t.anotacoes?.leitura);
     assert.ok(JSON.stringify({ nome: t.nome, descricao: t.descricao, esquema: t.esquema }).length < 4500, n);
   }
+});
+
+test('quadro_resumir: grava com a assinatura, aparece no mapa e na seção, e fica desatualizado quando o texto muda', async () => {
+  const { f, guardados } = montar();
+  await f.quadro_resumir!.executar({ quadro: 'Reino', secao: 'm1', texto: 'O rei esconde uma coroa falsa.' });
+  assert.equal(guardados.length, 1);
+  assert.equal(guardados[0]!.autor, 'assistente');
+  assert.equal(guardados[0]!.alvo, 'm1');
+  const mapa = await lerTexto(f.quadro_mapa!.executar({ quadro: 'Reino' }));
+  assert.match(mapa, /O rei esconde uma coroa falsa\./);
+  assert.doesNotMatch(mapa, /desatualizado/);
+  assert.match(await lerTexto(f.quadro_secao!.executar({ quadro: 'Reino', secao: 'm1' })), /^Resumo: O rei esconde/);
+  guardados[0]!.assinatura = 'velha';
+  assert.match(await lerTexto(f.quadro_mapa!.executar({ quadro: 'Reino' })), /\(resumo desatualizado\)/);
+  assert.match(await lerTexto(f.quadro_secao!.executar({ quadro: 'Reino', secao: 'm1' })), /^Resumo \(desatualizado\)/);
+});
+
+test('quadro_resumir: limite de 400, mestre não é sobrescrito, seção inexistente', async () => {
+  const { f, guardados } = montar();
+  await assert.rejects(f.quadro_resumir!.executar({ quadro: 'Reino', secao: 'm1', texto: 'x'.repeat(401) }), /401 caracteres.*400/);
+  await assert.rejects(f.quadro_resumir!.executar({ quadro: 'Reino', secao: 'zzz', texto: 'a' }), /não encontrada/);
+  await assert.rejects(f.quadro_resumir!.executar({ quadro: 'Reino', secao: 'm1', texto: '  ' }), /Informe o texto/);
+  guardados.push({ quadroId: 'q1aaaa', alvo: 'm1', texto: 'Do mestre', assinatura: 'x', autor: 'mestre', em: 1 });
+  await assert.rejects(f.quadro_resumir!.executar({ quadro: 'Reino', secao: 'm1', texto: 'Novo' }), /escrito pelo mestre.*pedido/);
+  assert.equal(guardados[0]!.texto, 'Do mestre');
+});
+
+test('quadro_descrever_imagem: só imagem, limite de 600, aparece no lugar da legenda', async () => {
+  const { f, guardados } = montar();
+  await assert.rejects(f.quadro_descrever_imagem!.executar({ quadro: 'Reino', item: 'n1xxxx', texto: 'a' }), /não é uma imagem/);
+  await assert.rejects(f.quadro_descrever_imagem!.executar({ quadro: 'Reino', item: 'i1yyyy', texto: 'x'.repeat(601) }), /601 caracteres.*600/);
+  await f.quadro_descrever_imagem!.executar({ quadro: 'Reino', item: 'i1yyyy', texto: 'Mapa com a estrada do norte' });
+  assert.equal(guardados[0]!.alvo, 'item:i1yyyyyy');
+  assert.equal(guardados[0]!.assinatura, 'img1');
+  const t = await lerTexto(f.quadro_secao!.executar({ quadro: 'Reino', secao: 'm1' }));
+  assert.match(t, /\[imagem #i1yyyy: Mapa com a estrada do norte, 800x600\]/);
+  assert.doesNotMatch(t, /Mapa do reino/);
 });

@@ -1,6 +1,8 @@
 import { caixaEnvolventeDeItem, caixaEnvolventeTotal, type Caixa } from './camera.ts';
 import { molduraQueContem, type ItemMoldura } from './molduras.ts';
 import type { Item, NoRico } from './quadro.ts';
+import { textoPuro } from './quadro.ts';
+import { fnv1a, jsonEstavel } from './sincronia-miro.ts';
 
 /**
  * Seções do quadro: cada moldura é uma seção; o que está fora de molduras é agrupado
@@ -490,4 +492,38 @@ export function ligacoesEntreSecoes(
     resultado.push({ de, para, rotulo: it.rotulo });
   }
   return resultado;
+}
+
+// ---------------------------------------------------------------------------
+// Assinatura (para saber se um resumo ficou velho)
+// ---------------------------------------------------------------------------
+
+function conteudoParaAssinatura(item: Item): unknown {
+  switch (item.tipo) {
+    case 'texto':
+    case 'forma':
+      return [item.id, item.tipo, textoPuro(item.doc)];
+    case 'moldura':
+      return [item.id, item.tipo, item.titulo];
+    case 'ref':
+      return [item.id, item.tipo, item.rotulo];
+    case 'imagem':
+      return [item.id, item.tipo, item.imagemId, item.legenda ?? ''];
+    default:
+      return [item.id, item.tipo];
+  }
+}
+
+/**
+ * Hash dos ids e dos textos (texto puro, títulos, rótulos, legendas, `imagemId`) dos itens da
+ * seção, em ordem estável (por id). Posição, tamanho e estilo não entram. Setas ficam de fora.
+ */
+export function assinaturaDaSecao(secao: Secao, itens: readonly Item[]): string {
+  const porId = new Map(itens.map((i) => [i.id, i]));
+  const partes: unknown[] = [secao.tipo === 'moldura' ? secao.titulo : ''];
+  for (const id of [...secao.itemIds].sort()) {
+    const it = porId.get(id);
+    if (it && it.tipo !== 'seta') partes.push(conteudoParaAssinatura(it));
+  }
+  return fnv1a(jsonEstavel(partes));
 }

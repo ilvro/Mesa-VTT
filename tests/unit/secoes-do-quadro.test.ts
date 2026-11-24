@@ -231,3 +231,22 @@ test('10 mil itens em menos de 300 ms', () => {
   assert.ok(ms < 300, `levou ${ms} ms`);
   assert.equal(new Set(s.map((x) => x.id)).size, s.length);
 });
+
+test('assinaturaDaSecao: muda com o texto, não muda com a posição nem com o estilo', async () => {
+  const { assinaturaDaSecao } = await import('../../src/dominio/secoes-do-quadro.ts');
+  const m = { ...novaMoldura({ quadroId: Q, x: 0, y: 0, largura: 800, altura: 600, titulo: 'Cap' }, 1, 'm1'), molduraId: null } as Item;
+  const n1 = { ...nota('n1', 10, 10, 'A estalagem'), molduraId: 'm1' } as Item;
+  const n2 = { ...nota('n2', 300, 10, 'O porão'), molduraId: 'm1' } as Item;
+  const base = [m, n1, n2];
+  const sec = (itens: Item[]) => secoesDoQuadro(itens).find((s) => s.id === 'm1')!;
+  const a = assinaturaDaSecao(sec(base), base);
+  const movido = [m, { ...n1, x: 500, y: 90 } as Item, n2];
+  assert.equal(assinaturaDaSecao(sec(movido), movido), a);
+  assert.equal(assinaturaDaSecao(sec([n2, n1, m]), [n2, n1, m]), a); // ordem do vetor não importa
+  const editado = [m, { ...n1, doc: doc('A estalagem queimou') } as Item, n2];
+  assert.notEqual(assinaturaDaSecao(sec(editado), editado), a);
+  const semUm = [m, n1];
+  assert.notEqual(assinaturaDaSecao(sec(semUm), semUm), a);
+  const renomeada = [{ ...m, titulo: 'Outro' } as Item, n1, n2];
+  assert.notEqual(assinaturaDaSecao(sec(renomeada), renomeada), a);
+});

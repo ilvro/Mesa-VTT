@@ -2393,3 +2393,49 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   display: flex;
   gap: 6px;
 }
+
+/* Resumos do assistente */
+.navegador-bloco {
+  display: flex;
+  flex-direction: column;
+}
+.resumo-texto {
+  margin: 0 8px 4px;
+  padding: 2px 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--apagado);
+  font: inherit;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  text-align: left;
+  cursor: text;
+  white-space: pre-wrap;
+}
+.resumo-texto:hover {
+  background: var(--superficie-2);
+}
+.resumo-vazio {
+  opacity: 0.55;
+  font-style: italic;
+}
+.resumo-velho {
+  color: var(--acento);
+  font-style: italic;
+}
+.resumo-editor {
+  margin: 0 8px 4px;
+  padding: 4px 6px;
+  border: 1px solid var(--linha-forte);
+  border-radius: 4px;
+  background: var(--superficie);
+  color: var(--texto);
+  font: inherit;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  resize: vertical;
+}
+.resumo-editor:focus {
+  outline: 1px solid var(--acento);
+}

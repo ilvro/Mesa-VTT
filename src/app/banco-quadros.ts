@@ -1,5 +1,6 @@
 import { abrirBanco, obterTudo, promessa, transacao, type DefinicaoStore } from '#mesa';
 import { imagensDoModelo, validarModelo, type ModeloDeCena } from '../dominio/modelos.ts';
+import type { RegistroResumo } from '../dominio/resumos-do-quadro.ts';
 import type { EstadoDoMundo } from '../dominio/estado-do-mundo.ts';
 import {
   validarItem,
@@ -10,8 +11,8 @@ import {
 } from '../dominio/quadro.ts';
 
 export const NOME_BANCO_QUADROS = 'mesa-quadros-v1';
-/** v2: acrescenta a store `modelos` (a migração só cria o que falta). */
-export const VERSAO_BANCO_QUADROS = 2;
+/** v2: acrescenta a store `modelos`; v3: `resumos` (a migração só cria o que falta). */
+export const VERSAO_BANCO_QUADROS = 3;
 
 export interface RegistroImagem {
   id: string;
@@ -46,7 +47,19 @@ const STORES: DefinicaoStore[] = [
     nome: 'modelos',
     chave: 'id',
   },
+  {
+    // Resumos de seção e descrições de imagem (alvo = id da seção ou `item:<id>`).
+    nome: 'resumos',
+    chave: ['quadroId', 'alvo'],
+    indices: [{ nome: 'quadroId', caminho: 'quadroId' }],
+  },
 ];
+
+async function apagarResumosDoQuadro(tx: IDBTransaction, quadroId: string): Promise<void> {
+  const store = tx.objectStore('resumos');
+  const chaves = await promessa(store.index('quadroId').getAllKeys(quadroId));
+  for (const chave of chaves) await promessa(store.delete(chave));
+}
 
 let bancoPadrao: Promise<IDBDatabase> | null = null;
 let idbPadrao: IDBFactory | undefined;
@@ -95,7 +108,8 @@ export async function salvarQuadro(quadro: Quadro, db?: IDBDatabase): Promise<vo
 
 export async function removerQuadro(id: string, db?: IDBDatabase): Promise<void> {
   const banco = await obterBanco(db);
-  await transacao(banco, ['quadros', 'itens'], 'readwrite', async (tx) => {
+  await transacao(banco, ['quadros', 'itens', 'resumos'], 'readwrite', async (tx) => {
+    await apagarResumosDoQuadro(tx, id);
     await promessa(tx.objectStore('quadros').delete(id));
     const idx = tx.objectStore('itens').index('quadroId');
     const chaves = await promessa(idx.getAllKeys(id));
@@ -111,7 +125,7 @@ export async function removerQuadrosDaCampanha(
   db?: IDBDatabase,
 ): Promise<void> {
   const banco = await obterBanco(db);
-  await transacao(banco, ['quadros', 'itens', 'ajustes', 'modelos'], 'readwrite', async (tx) => {
+  await transacao(banco, ['quadros', 'itens', 'ajustes', 'modelos', 'resumos'], 'readwrite', async (tx) => {
     await promessa(tx.objectStore('ajustes').delete(campanhaId));
     const storeModelos = tx.objectStore('modelos');
     for (const m of await obterTudo<ModeloDeCena>(storeModelos)) {
@@ -126,9 +140,36 @@ export async function removerQuadrosDaCampanha(
       for (const iId of itemIds) {
         await promessa(storeItens.delete(iId));
       }
+      await apagarResumosDoQuadro(tx, qId as string);
       await promessa(storeQuadros.delete(qId));
     }
   });
+}
+
+export async function listarResumos(quadroId: string, db?: IDBDatabase): Promise<RegistroResumo[]> {
+  const banco = await obterBanco(db);
+  return transacao(banco, ['resumos'], 'readonly', (tx) =>
+    obterTudo<RegistroResumo>(tx.objectStore('resumos').index('quadroId'), quadroId),
+  );
+}
+
+export async function salvarResumo(resumo: RegistroResumo, db?: IDBDatabase): Promise<void> {
+  const banco = await obterBanco(db);
+  await transacao(banco, ['resumos'], 'readwrite', async (tx) => {
+    await promessa(tx.objectStore('resumos').put(resumo));
+  });
+}
+
+export async function removerResumo(quadroId: string, alvo: string, db?: IDBDatabase): Promise<void> {
+  const banco = await obterBanco(db);
+  await transacao(banco, ['resumos'], 'readwrite', async (tx) => {
+    await promessa(tx.objectStore('resumos').delete([quadroId, alvo]));
+  });
+}
+
+export async function removerResumosDoQuadro(quadroId: string, db?: IDBDatabase): Promise<void> {
+  const banco = await obterBanco(db);
+  await transacao(banco, ['resumos'], 'readwrite', (tx) => apagarResumosDoQuadro(tx, quadroId));
 }
 
 export async function listarItens(quadroId: string, db?: IDBDatabase): Promise<Item[]> {
@@ -165,14 +206,16 @@ export async function criarQuadroComItens(
   quadro: Quadro,
   lista: readonly Item[],
   db?: IDBDatabase,
+  resumos: readonly RegistroResumo[] = [],
 ): Promise<void> {
   validarQuadro(quadro);
   for (let i = 0; i < lista.length; i++) {
     validarItem(lista[i], `itens[${i}]`);
   }
   const banco = await obterBanco(db);
-  await transacao(banco, ['quadros', 'itens'], 'readwrite', async (tx) => {
+  await transacao(banco, ['quadros', 'itens', 'resumos'], 'readwrite', async (tx) => {
     await promessa(tx.objectStore('quadros').put(quadro));
+    for (const r of resumos) await promessa(tx.objectStore('resumos').put(r));
     const store = tx.objectStore('itens');
     for (const item of lista) {
       await promessa(store.put(item));

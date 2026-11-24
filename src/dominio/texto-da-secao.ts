@@ -21,6 +21,8 @@ export interface OpcoesTextoDaSecao {
   secoes?: readonly Secao[];
   /** Nome e tipo das entidades da Mesa, por id, para os cartões de entidade. */
   entidades?: ReadonlyMap<string, { nome: string; tipo: string }>;
+  /** Descrições de imagem guardadas (id do item → texto); aparecem no lugar da legenda. */
+  descricoes?: ReadonlyMap<string, string>;
 }
 
 export interface TextoDaSecao {
@@ -120,7 +122,7 @@ export function textoDaSecao(
   };
   const descricaoDeImagem = (item: Extract<Item, { tipo: 'imagem' }>): string => {
     const dim = `${Math.round(item.larguraOriginal)}x${Math.round(item.alturaOriginal)}`;
-    return `[imagem #${idCurto(item.id)}: ${item.legenda ?? 'sem legenda'}, ${dim}]`;
+    return `[imagem #${idCurto(item.id)}: ${opcoes.descricoes?.get(item.id) ?? item.legenda ?? 'sem legenda'}, ${dim}]`;
   };
 
   const linhasDeItens: string[] = [];
