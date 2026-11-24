@@ -14,6 +14,7 @@ import {
 } from '../../app/quadros.ts';
 import type { FiltroMolduras } from '../../dominio/molduras-miro.ts';
 import { navegarParaQuadro, tela } from '../../app/rotas.ts';
+import { abrirMenuContexto } from '../MenuDeContexto.tsx';
 
 export function Quadros() {
   const nova = useSignal('');
@@ -183,7 +184,44 @@ export function Quadros() {
       ) : (
         <div class="cartoes">
           {quadros.value.map((q) => (
-            <article key={q.id} class="cartao" data-testid={`cartao-quadro-${q.id}`}>
+            <article
+              key={q.id}
+              class="cartao"
+              data-testid={`cartao-quadro-${q.id}`}
+              onContextMenu={ev => {
+                const alvo = ev.target as HTMLElement | null;
+                if (alvo && alvo.tagName === 'INPUT') return;
+                abrirMenuContexto(
+                  ev,
+                  [
+                    {
+                      id: 'abrir-quadro',
+                      rotulo: 'Abrir quadro',
+                      executar: async () => {
+                        const aberto = await abrirQuadro(q.id);
+                        if (aberto) navegarParaQuadro(aberto.id);
+                      },
+                    },
+                    {
+                      id: 'exportar-quadro',
+                      rotulo: 'Exportar quadro…',
+                      executar: () =>
+                        exportarQuadro(q.id).catch(err =>
+                          avisar(err instanceof Error ? err.message : String(err), true),
+                        ),
+                    },
+                    {
+                      id: 'deletar-quadro',
+                      rotulo: 'Deletar quadro',
+                      perigo: true,
+                      confirmar: true,
+                      executar: () => excluirQuadro(q.id),
+                    },
+                  ],
+                  q.nome,
+                );
+              }}
+            >
               <div class="cartao-corpo">
                 <input
                   type="text"

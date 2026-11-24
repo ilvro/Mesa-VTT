@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { chaveDaRef, type Ref } from '#mesa';
 import { entidades } from '../app/campanha.ts';
-import { adicionarAoRoteiro, anotar, baixarMarkdown, continuarSessao, definirNotaDoItem, fecharSessao, gravando, linhas, moverNoRoteiro, notasDoRoteiro, removerDoRoteiro, roteiroDaSessao, sessaoAtiva, sessoes, abrirItemDoRoteiro } from '../app/registro.ts';
+import { adicionarAoRoteiro, anotar, baixarMarkdown, continuarSessao, definirNotaDoItem, fecharSessao, gravando, linhas, moverNoRoteiro, notasDoRoteiro, removerDoRoteiro, removerSessao, roteiroDaSessao, sessaoAtiva, sessoes, abrirItemDoRoteiro } from '../app/registro.ts';
 import { garantirPainelPara } from '../app/sessao.ts';
 import { candidatos, nomeDoRef, ondeEstaORef } from '../dominio/roteiro.ts';
+import { abrirMenuContexto, acoesParaRef } from './MenuDeContexto.tsx';
 import { cx } from './cx.ts';
 
 function Roteiro() {
@@ -15,7 +16,27 @@ function Roteiro() {
       {roteiro.length === 0 && <p class="dica">Nada no roteiro ainda. Acrescente mapas, cenas sonoras, documentos e fichas na ordem em que devem acontecer.</p>}
       <ol class="roteiro">
         {roteiro.map((r, i) => (
-          <li key={chaveDaRef(r)} class="roteiro-item" data-testid="roteiro-item">
+          <li
+            key={chaveDaRef(r)}
+            class="roteiro-item"
+            data-testid="roteiro-item"
+            onContextMenu={ev => {
+              const alvo = ev.target as HTMLElement | null;
+              if (alvo && alvo.tagName === 'INPUT') return;
+              abrirMenuContexto(
+                ev,
+                acoesParaRef(r, [
+                  {
+                    id: 'tirar-roteiro',
+                    rotulo: 'Deletar do roteiro',
+                    perigo: true,
+                    executar: () => removerDoRoteiro(i),
+                  },
+                ]),
+                nomeDoRef(entidades.value, r),
+              );
+            }}
+          >
             <div class="roteiro-linha">
               <button type="button" class="roteiro-nome" title="Abrir no aplicativo" data-testid={`roteiro-abrir-${i}`} onClick={() => abrir(r)}>
                 <b>{i + 1}. {nomeDoRef(entidades.value, r)}</b><span class="meta">{ondeEstaORef(r)}</span>
@@ -60,6 +81,7 @@ function Registro() {
 }
 
 function SemSessao() {
+  const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
   return (
     <div class="diario-vazio" data-testid="sem-sessao">
       <p class="dica">Inicie a sessão na barra de cima.</p>
@@ -67,7 +89,44 @@ function SemSessao() {
         <>
           <h4 class="faixa pequena">Sessões anteriores</h4>
           <ul class="sessoes-anteriores">
-            {sessoes.value.map(s => <li key={s.id}><span>{s.nome}<span class="meta"> · {new Date(s.data).toLocaleDateString('pt-BR')}</span></span><button type="button" class="botao-pilula" data-testid={`sessao-continuar-${s.id}`} onClick={() => continuarSessao(s.id)}>Abrir</button></li>)}
+            {sessoes.value.map(s => (
+              <li
+                key={s.id}
+                onContextMenu={ev =>
+                  abrirMenuContexto(
+                    ev,
+                    [
+                      {
+                        id: 'abrir-sessao',
+                        rotulo: 'Abrir sessão',
+                        executar: () => continuarSessao(s.id),
+                      },
+                      {
+                        id: 'deletar-sessao',
+                        rotulo: 'Deletar sessão',
+                        perigo: true,
+                        confirmar: true,
+                        executar: () => removerSessao(s.id),
+                      },
+                    ],
+                    s.nome,
+                  )
+                }
+              >
+                <span>{s.nome}<span class="meta"> · {new Date(s.data).toLocaleDateString('pt-BR')}</span></span>
+                <span class="grupo">
+                  <button type="button" class="botao-pilula" data-testid={`sessao-continuar-${s.id}`} onClick={() => continuarSessao(s.id)}>Abrir</button>
+                  {confirmandoId === s.id ? (
+                    <>
+                      <button type="button" class="botao-pilula perigo" data-testid={`sessao-confirmar-remover-${s.id}`} onClick={() => { setConfirmandoId(null); void removerSessao(s.id); }}>Apagar mesmo</button>
+                      <button type="button" class="botao-pilula" onClick={() => setConfirmandoId(null)}>Cancelar</button>
+                    </>
+                  ) : (
+                    <button type="button" class="botao-icone-texto" title="Deletar sessão" aria-label={`Deletar ${s.nome}`} data-testid={`sessao-remover-${s.id}`} onClick={() => setConfirmandoId(s.id)}>✕</button>
+                  )}
+                </span>
+              </li>
+            ))}
           </ul>
         </>
       )}

@@ -15,6 +15,7 @@ import {
   ROTULO_DO_TIPO,
   type ModoExibicaoColecao,
 } from '../dominio/entidades.ts';
+import { abrirMenuContexto, acoesParaEntidade } from './MenuDeContexto.tsx';
 import { cx } from './cx.ts';
 
 export const modoExibicao = signal<ModoExibicaoColecao>('grade');
@@ -174,6 +175,7 @@ export function CartaoColecao({ e }: { e: Entidade }) {
       data-testid={`entidade-${e.id}`}
       data-tipo={e.tipo}
       onClick={() => abrirEntidade(e.id)}
+      onContextMenu={ev => abrirMenuContexto(ev, acoesParaEntidade(e), e.nome)}
       onKeyDown={ev => {
         if (ev.key === 'Enter' || ev.key === ' ') {
           ev.preventDefault();
@@ -247,6 +249,7 @@ function ItemListaColecao({ e }: { e: Entidade }) {
       data-testid={`entidade-${e.id}`}
       data-tipo={e.tipo}
       onClick={() => abrirEntidade(e.id)}
+      onContextMenu={ev => abrirMenuContexto(ev, acoesParaEntidade(e), e.nome)}
     >
       <span class={cx('item-tipo', encontro && 'item-tipo-encontro')}>
         {encontro ? 'Encontro' : ROTULO_DO_TIPO[e.tipo].singular}

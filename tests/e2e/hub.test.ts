@@ -51,7 +51,7 @@ test('9.1a: a Mesa cria a campanha, o Atlas a vê, e o lugar criado pelo Atlas a
     assert.equal(await mesa.locator('[data-testid="campo-nome"]').isDisabled(), true);
     assert.match(await mesa.locator('[data-testid="so-leitura"]').textContent() ?? '', /O nome vem do Atlas: renomeie lá\. Etiquetas e notas você edita aqui\./);
     assert.equal(await mesa.locator('[data-testid="campo-tags"]').isDisabled(), false, 'etiquetas liberadas em entidade alheia');
-    assert.equal(await mesa.locator('[data-testid="remover-entidade"]').count(), 0, 'só quem criou remove');
+    assert.equal(await mesa.locator('[data-testid="remover-entidade"]').count(), 1, 'a Mesa pode remover entidades de qualquer app para limpeza');
     const abrir = mesa.locator('[data-testid="abrir-ref"]').first();
     await abrir.waitFor({ timeout: 10_000 });
     assert.match((await abrir.getAttribute('href')) ?? '', /\/Atlas\/#\/mapa\/.+/);

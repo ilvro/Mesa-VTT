@@ -18,6 +18,7 @@ import {
   podarElenco,
   podeEditar,
   podeEditarConteudo,
+  podeRemover,
   ROTULO_DO_TIPO,
   semAcento,
 } from '../../src/dominio/entidades.ts';
@@ -66,10 +67,13 @@ test('podeEditarConteudo: etiquetas e notas de qualquer app', () => {
   assert.equal(podeEditarConteudo(e('a', 'lugar', 'x')), true);
 });
 
-test('podeEditar: só quem criou', () => {
+test('podeEditar: só quem criou; podeRemover: a Mesa remove qualquer entidade para limpeza', () => {
   assert.equal(podeEditar(e('a', 'lugar', 'x')), true);
   assert.equal(podeEditar(e('b', 'personagem', 'y', { criadaPor: 'ficha' })), false);
   assert.equal(podeEditar(e('b', 'personagem', 'y', { criadaPor: 'ficha' }), 'ficha'), true);
+  assert.equal(podeRemover(e('b', 'personagem', 'y', { criadaPor: 'ficha' })), true);
+  assert.equal(podeRemover(e('b', 'personagem', 'y', { criadaPor: 'ficha' }), 'atlas'), false);
+  assert.equal(podeRemover(e('b', 'personagem', 'y', { criadaPor: 'ficha' }), 'ficha'), true);
 });
 
 test('lerTags: tira vazias e repetidas (sem acento), corta no limite do contrato', () => {

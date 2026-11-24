@@ -5,6 +5,7 @@ import { abrirNoApp } from '../app/barramento.ts';
 import { abrirEntidade } from '../app/rotas.ts';
 import { NOME_DO_APP, NOME_DO_TIPO_DE_REF, ROTULO_DO_TIPO, TIPOS_CRIAVEIS } from '../dominio/entidades.ts';
 import { analisarNota, autocompletarEm, ehRefDeEntidadeDaMesa, nomeLigavel, resolver, sugerirEntidades, textoDaSugestao, type Trecho } from '../dominio/notas.ts';
+import { abrirMenuContexto, acoesParaEntidade, acoesParaRef } from './MenuDeContexto.tsx';
 import { cx } from './cx.ts';
 
 /** O rótulo de uma ligação a um Ref que a nota não nomeou: “Atlas · mapa”. */
@@ -30,11 +31,23 @@ function Ligacao({ t, notaId }: { t: Extract<Trecho, { tipo: 'ligacao' }>; notaI
   const destino = resolver(t.alvo, entidades.value);
   if (destino.tipo === 'sem-destino') return <SemDestino nome={t.rotulo ?? destino.nome} notaId={notaId} />;
   if (destino.tipo === 'ref') {
-    return <button type="button" class="ligacao ligacao-ref" data-testid="ligacao-ref" title={t.bruto} onClick={() => void abrirNoApp(destino.ref)}>{t.rotulo ?? rotuloDoRef(destino.ref)}<span class="seta"> ↗</span></button>;
+    const rotulo = t.rotulo ?? rotuloDoRef(destino.ref);
+    return (
+      <button
+        type="button"
+        class="ligacao ligacao-ref"
+        data-testid="ligacao-ref"
+        title={t.bruto}
+        onClick={() => void abrirNoApp(destino.ref)}
+        onContextMenu={ev => abrirMenuContexto(ev, acoesParaRef(destino.ref), rotulo)}
+      >
+        {rotulo}<span class="seta"> ↗</span>
+      </button>
+    );
   }
   const e = destino.entidade, fora = e.refs.filter(r => !ehRefDeEntidadeDaMesa(r));
   return (
-    <span class="ligacao-entidade">
+    <span class="ligacao-entidade" onContextMenu={ev => abrirMenuContexto(ev, acoesParaEntidade(e), e.nome)}>
       <button type="button" class="ligacao" data-testid="ligacao-entidade" onClick={() => abrirEntidade(e.id)}>{t.rotulo ?? e.nome}</button>
       {fora.map(r => <button key={`${r.app}/${r.tipo}/${r.id}`} type="button" class="ligacao-app" data-testid={`ligacao-abrir-${r.app}`} title={`Abrir no ${NOME_DO_APP[r.app]}`} onClick={() => void abrirNoApp(r)}>{NOME_DO_APP[r.app]} ↗</button>)}
     </span>

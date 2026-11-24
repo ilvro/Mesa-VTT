@@ -11,6 +11,7 @@ import { Entidades } from './Entidades.tsx';
 import { MesaOnline } from './MesaOnline.tsx';
 import { ModoSessao } from './ModoSessao.tsx';
 import { BuscaRapida, buscaRapidaAberta } from './BuscaRapida.tsx';
+import { MenuDeContexto } from './MenuDeContexto.tsx';
 import { quadroAberto } from '../app/quadros.ts';
 import { Quadro } from './quadro/Quadro.tsx';
 import { Quadros } from './quadro/Quadros.tsx';
@@ -63,6 +64,7 @@ function AppDoMestre() {
           : tela.value === 'campanhas' ? <Campanhas /> : tela.value === 'aplicativos' ? <Aplicativos /> : tela.value === 'online' ? <MesaOnline /> : tela.value === 'sessao' ? <ModoSessao /> : tela.value === 'quadros' ? (quadroAberto.value ? <Quadro /> : <Quadros />) : <Entidades />}
       <Avisos />
       <BuscaRapida />
+      <MenuDeContexto />
     </>
   );
 }

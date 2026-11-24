@@ -11,8 +11,11 @@ import {
 } from '../app/rotas.ts';
 import { listarItens, listarQuadros } from '../app/banco-quadros.ts';
 import { abrirQuadro } from '../app/quadros.ts';
-import { continuarSessao } from '../app/registro.ts';
+import { continuarSessao, removerSessao } from '../app/registro.ts';
+import { excluirQuadro } from '../app/quadros.ts';
+import { removerEntidade } from '../app/campanha.ts';
 import { NOME_DO_APP, ROTULO_DO_TIPO } from '../dominio/entidades.ts';
+import { abrirMenuContexto, acoesParaEntidade } from './MenuDeContexto.tsx';
 import { cx } from './cx.ts';
 
 export const buscaRapidaAberta = signal(false);
@@ -213,6 +216,34 @@ export function BuscaRapida() {
                   data-testid={`resultado-busca-${item.id}`}
                   onClick={e => executarItem(item, e.shiftKey)}
                   onMouseEnter={() => setSelecionado(i)}
+                  onContextMenu={ev => {
+                    if (item.origem === 'entidade') {
+                      const repo = obterRepositorio();
+                      void repo.obterEntidade(item.id).then(ent => {
+                        if (ent) abrirMenuContexto(ev, acoesParaEntidade(ent), ent.nome);
+                      });
+                      ev.preventDefault();
+                      ev.stopPropagation();
+                    } else if (item.origem === 'sessao') {
+                      abrirMenuContexto(
+                        ev,
+                        [
+                          { id: 'abrir-sessao', rotulo: 'Abrir sessão', executar: () => executarItem(item, false) },
+                          { id: 'deletar-sessao', rotulo: 'Deletar sessão', perigo: true, confirmar: true, executar: () => removerSessao(item.id) },
+                        ],
+                        item.nome,
+                      );
+                    } else if (item.origem === 'quadro') {
+                      abrirMenuContexto(
+                        ev,
+                        [
+                          { id: 'abrir-quadro', rotulo: 'Abrir quadro', executar: () => executarItem(item, false) },
+                          { id: 'deletar-quadro', rotulo: 'Deletar quadro', perigo: true, confirmar: true, executar: () => excluirQuadro(item.id) },
+                        ],
+                        item.nome,
+                      );
+                    }
+                  }}
                 >
                   <span class="busca-rapida-item-tipo">{rotuloTipo}</span>
                   <span class="busca-rapida-item-nome">{item.nome}</span>

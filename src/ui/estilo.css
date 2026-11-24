@@ -2452,3 +2452,47 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   flex-wrap: wrap;
   gap: 6px;
 }
+
+/* Menu de contexto global (botão direito) */
+.menu-contexto-mesa {
+  position: fixed;
+  min-width: 200px;
+  max-width: 280px;
+  background: var(--superficie);
+  border: 1px solid var(--linha-forte);
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  z-index: 2000;
+}
+.menu-contexto-titulo {
+  padding: 4px 10px 6px;
+  font: 700 11px var(--titulo);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--apagado);
+  border-bottom: 1px solid var(--linha);
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu-contexto-confirmacao {
+  display: flex;
+  gap: 4px;
+}
+.menu-contexto-confirmacao .menu-contexto-btn {
+  flex: 1;
+  text-align: center;
+  font-weight: 700;
+}
+.menu-contexto-btn.confirmar {
+  background: color-mix(in srgb, var(--perigo), transparent 85%);
+  border: 1px solid var(--perigo);
+}
+.menu-contexto-btn.confirmar:hover {
+  background: color-mix(in srgb, var(--perigo), transparent 72%);
+}

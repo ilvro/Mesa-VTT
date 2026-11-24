@@ -14,6 +14,7 @@ import type { ItemMoldura } from '../../dominio/molduras.ts';
 import { PALETA_PADRAO, corComOpacidade, corDoTexto, fundoEfetivo } from '../../dominio/paleta.ts';
 import type { Item } from '../../dominio/quadro.ts';
 import { roteiroDoQuadro } from '../../dominio/roteiro-do-quadro.ts';
+import { abrirMenuContexto, acoesParaEntidade, acoesParaRef } from '../MenuDeContexto.tsx';
 import { ConteudoDecorado } from './TextoDecorado.tsx';
 
 interface LeituraProps {
@@ -44,7 +45,10 @@ function CartaoDeRef({ item }: { item: Extract<Item, { tipo: 'ref' }> }) {
   const entidade = entidadePorRef(item.ref, entidades.value);
   if (!entidade) {
     return (
-      <div class="leitura-ref">
+      <div
+        class="leitura-ref"
+        onContextMenu={(ev) => abrirMenuContexto(ev, acoesParaRef(item.ref), item.ref.id)}
+      >
         <span class="selo">{NOME_DO_APP[item.ref.app] ?? item.ref.app}</span>
         <strong>{item.ref.id}</strong>
         <span class="meta">{NOME_DO_TIPO_DE_REF[item.ref.tipo] ?? item.ref.tipo}</span>
@@ -54,10 +58,19 @@ function CartaoDeRef({ item }: { item: Extract<Item, { tipo: 'ref' }> }) {
       </div>
     );
   }
+  const refExterno = entidade.refs.find((r) => r.app !== 'mesa');
   return (
-    <div class="leitura-ref">
+    <div
+      class="leitura-ref"
+      onContextMenu={(ev) => abrirMenuContexto(ev, acoesParaEntidade(entidade), entidade.nome)}
+    >
       <strong>{entidade.nome}</strong>
       <span class="meta">{ROTULO_DO_TIPO[entidade.tipo].singular}</span>
+      {refExterno ? (
+        <button type="button" class="botao-pilula" onClick={() => void abrirNoApp(refExterno)}>
+          Abrir no {NOME_DO_APP[refExterno.app]} ↗
+        </button>
+      ) : null}
       <button type="button" class="botao-pilula" onClick={() => abrirEntidade(entidade.id)}>
         Abrir
       </button>

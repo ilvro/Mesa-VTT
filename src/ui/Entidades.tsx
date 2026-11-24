@@ -41,16 +41,19 @@ import {
   NOME_DO_TIPO_DE_REF,
   podeEditar,
   podeEditarConteudo,
+  podeRemover,
   ROTULO_DO_TIPO,
   semAcento,
   TIPOS_CRIAVEIS,
   type CategoriaFiltro,
   type OrdemColecao,
 } from '../dominio/entidades.ts';
+import { abrirNoApp } from '../app/barramento.ts';
 import { descobrirApp, enderecoDe } from '../app/aplicativos.ts';
 import { ehRefDeEntidadeDaMesa } from '../dominio/notas.ts';
 import { GradeDeColecao, modoExibicao } from './GradeDeColecao.tsx';
 import { EditorDeCena } from './EditorDeCena.tsx';
+import { abrirMenuContexto, acoesParaEntidade, acoesParaRef } from './MenuDeContexto.tsx';
 import { cx } from './cx.ts';
 import { CampoDeEtiquetas } from './CampoDeEtiquetas.tsx';
 import { EditorDeNota } from './EditorDeNota.tsx';
@@ -290,7 +293,34 @@ function LinhaTag({ ct }: { ct: ContagemTag }) {
 
   if (!editando) {
     return (
-      <div class="tag-linha">
+      <div
+        class="tag-linha"
+        onContextMenu={ev =>
+          abrirMenuContexto(
+            ev,
+            [
+              {
+                id: 'filtrar-tag',
+                rotulo: tagAtiva.value === ct.chave ? 'Remover filtro' : `Filtrar por #${ct.tag}`,
+                executar: () => { tagAtiva.value = tagAtiva.value === ct.chave ? null : ct.chave; },
+              },
+              {
+                id: 'renomear-tag',
+                rotulo: 'Renomear etiqueta…',
+                executar: () => { apagandoTag.value = false; tagEmEdicao.value = ct.chave; },
+              },
+              {
+                id: 'deletar-tag',
+                rotulo: 'Deletar etiqueta',
+                perigo: true,
+                confirmar: true,
+                executar: () => renomearEtiquetaNaCampanha(ct.chave, ''),
+              },
+            ],
+            `#${ct.tag}`,
+          )
+        }
+      >
         <button
           type="button"
           class={cx('tag-item', tagAtiva.value === ct.chave && 'ativa')}
@@ -482,12 +512,17 @@ function ChipDeRef({ r }: { r: Ref }) {
   const endereco = enderecoDe(r);
   const rotulo = `${NOME_DO_APP[r.app]} · ${NOME_DO_TIPO_DE_REF[r.tipo] ?? r.tipo}`;
   return (
-    <li class="ref" data-testid="ref" title={formatarRef(r)}>
+    <li
+      class="ref"
+      data-testid="ref"
+      title={formatarRef(r)}
+      onContextMenu={ev => abrirMenuContexto(ev, acoesParaRef(r), `${rotulo} (${r.id})`)}
+    >
       <span class="ref-app">{rotulo}</span>
       <code class="ref-id">{r.id}</code>
       {endereco
         ? <a class="botao-pilula" href={endereco} target="_blank" rel="noopener" data-testid="abrir-ref">Abrir</a>
-        : <span class="meta" title="O aplicativo não foi encontrado ao lado da Mesa.">sem link</span>}
+        : <button type="button" class="botao-pilula" data-testid="abrir-ref-barramento" onClick={() => void abrirNoApp(r)}>Abrir ↗</button>}
     </li>
   );
 }
@@ -533,16 +568,24 @@ function NosQuadros({ e }: { e: Entidade }) {
 }
 
 function Detalhe({ e }: { e: Entidade }) {
-  const editavel = podeEditar(e), conteudo = podeEditarConteudo(e), refsVisiveis = e.refs.filter(r => !ehRefDeEntidadeDaMesa(r));
+  const editavel = podeEditar(e), removivel = podeRemover(e), conteudo = podeEditarConteudo(e), refsVisiveis = e.refs.filter(r => !ehRefDeEntidadeDaMesa(r));
   const refDoDono = e.refs.find(r => r.app === e.criadaPor), enderecoDoDono = !editavel && refDoDono ? enderecoDe(refDoDono) : null;
   if (!editavel) void descobrirApp(e.criadaPor);
   return (
-    <section class="detalhe" data-testid="detalhe">
+    <section
+      class="detalhe"
+      data-testid="detalhe"
+      onContextMenu={ev => {
+        const alvo = ev.target as HTMLElement | null;
+        if (alvo && (alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA' || alvo.isContentEditable)) return;
+        abrirMenuContexto(ev, acoesParaEntidade(e, { mostrarAbrirNaMesa: false }), e.nome);
+      }}
+    >
       <header class="detalhe-topo">
         <span class="selo">{ROTULO_DO_TIPO[e.tipo].singular}</span>
         <span class="meta">criada por {NOME_DO_APP[e.criadaPor]}</span>
         <span class="espaco" />
-        {editavel && (confirmando.value === e.id
+        {removivel && (confirmando.value === e.id
           ? <>
               <button type="button" class="botao-pilula perigo" data-testid="confirmar-remover" onClick={() => { confirmando.value = null; void removerEntidade(e); }}>Remover mesmo</button>
               <button type="button" class="botao-pilula" onClick={() => { confirmando.value = null; }}>Cancelar</button>
@@ -553,7 +596,9 @@ function Detalhe({ e }: { e: Entidade }) {
       {!editavel && (
         <p class="aviso suave" data-testid="so-leitura">
           O nome vem do {NOME_DO_APP[e.criadaPor]}: renomeie lá. Etiquetas e notas você edita aqui.
-          {enderecoDoDono && <> <a class="botao-pilula" href={enderecoDoDono} target="_blank" rel="noopener" data-testid="abrir-no-dono">Abrir no {NOME_DO_APP[e.criadaPor]}</a></>}
+          {enderecoDoDono
+            ? <> <a class="botao-pilula" href={enderecoDoDono} target="_blank" rel="noopener" data-testid="abrir-no-dono">Abrir no {NOME_DO_APP[e.criadaPor]}</a></>
+            : refDoDono && <> <button type="button" class="botao-pilula" data-testid="abrir-no-dono" onClick={() => void abrirNoApp(refDoDono)}>Abrir no {NOME_DO_APP[e.criadaPor]} ↗</button></>}
         </p>
       )}
       <label class="campo">Nome
@@ -591,7 +636,7 @@ function Visao({ nome }: { nome: string }) {
       {recentes.length > 0 && (<>
         <h3 class="faixa pequena">Mexidas por último</h3>
         <ul class="recentes">{recentes.map(e => (
-          <li key={e.id}><button type="button" onClick={() => abrirEntidade(e.id)}><span class="item-tipo">{ROTULO_DO_TIPO[e.tipo].singular}</span><b>{e.nome}</b><span class="meta">{new Date(e.atualizadaEm).toLocaleDateString('pt-BR')}</span></button></li>
+          <li key={e.id}><button type="button" onClick={() => abrirEntidade(e.id)} onContextMenu={ev => abrirMenuContexto(ev, acoesParaEntidade(e), e.nome)}><span class="item-tipo">{ROTULO_DO_TIPO[e.tipo].singular}</span><b>{e.nome}</b><span class="meta">{new Date(e.atualizadaEm).toLocaleDateString('pt-BR')}</span></button></li>
         ))}</ul>
       </>)}
       <h3 class="faixa pequena">Começar</h3>

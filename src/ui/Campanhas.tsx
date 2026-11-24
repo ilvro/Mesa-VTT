@@ -20,8 +20,10 @@ import {
   type RelatorioDeImportacao,
 } from '../app/transferencia.ts';
 import { avisar, mensagemDe } from '../app/toasts.ts';
-import { tela } from '../app/rotas.ts';
+import { abrirEntidade, tela } from '../app/rotas.ts';
+import { abrirNoApp } from '../app/barramento.ts';
 import { personagensParaElenco } from '../dominio/entidades.ts';
+import { abrirMenuContexto, acoesParaEntidade } from './MenuDeContexto.tsx';
 import { cx } from './cx.ts';
 
 const nomeNovo = signal('');
@@ -244,10 +246,41 @@ function SecaoElenco({ c }: { c: Campanha }) {
         <ul class="elenco-lista" data-testid="elenco-lista">
           {todos.map(e => {
             const participa = idsNoElenco.has(e.id);
+            const refFicha = e.refs.find(r => r.app === 'ficha');
             return (
-              <li key={e.id} class={cx('elenco-item', participa && 'no-elenco')} data-testid={`elenco-item-${e.id}`}>
+              <li
+                key={e.id}
+                class={cx('elenco-item', participa && 'no-elenco')}
+                data-testid={`elenco-item-${e.id}`}
+                onContextMenu={ev =>
+                  abrirMenuContexto(
+                    ev,
+                    acoesParaEntidade(e, {
+                      extras: [
+                        {
+                          id: 'alternar-elenco',
+                          rotulo: participa ? 'Tirar do elenco' : 'Pôr no elenco',
+                          executar: () => alternarPersonagemNoElenco(c, e.id),
+                        },
+                      ],
+                    }),
+                    e.nome,
+                  )
+                }
+              >
                 <RetratoDoElenco e={e} />
-                <span class="elenco-nome">{e.nome}</span>
+                <button
+                  type="button"
+                  class="elenco-nome"
+                  style={{ textAlign: 'left', cursor: 'pointer' }}
+                  title={refFicha ? 'Abrir ficha no Dossiê' : 'Abrir na Mesa'}
+                  onClick={() => {
+                    if (refFicha) void abrirNoApp(refFicha);
+                    else abrirEntidade(e.id);
+                  }}
+                >
+                  {e.nome}
+                </button>
                 <button
                   type="button"
                   class={cx('botao-pilula', !participa && 'destaque')}
@@ -274,7 +307,35 @@ async function criar(e: Event) {
 function CartaoDeCampanha({ c }: { c: Campanha }) {
   const ativa = campanhaAtiva.value?.id === c.id;
   return (
-    <article class={cx('cartao', 'campanha', ativa && 'ativa')} data-testid={`campanha-${c.id}`}>
+    <article
+      class={cx('cartao', 'campanha', ativa && 'ativa')}
+      data-testid={`campanha-${c.id}`}
+      onContextMenu={ev => {
+        const alvo = ev.target as HTMLElement | null;
+        if (alvo && (alvo.tagName === 'INPUT' || alvo.closest('[data-testid^="elenco-item-"]'))) return;
+        abrirMenuContexto(
+          ev,
+          [
+            {
+              id: 'abrir-campanha',
+              rotulo: ativa ? 'Abrir campanha' : 'Usar e abrir campanha',
+              executar: async () => {
+                if (!ativa) await escolherCampanha(c.id);
+                tela.value = 'entidades';
+              },
+            },
+            {
+              id: 'deletar-campanha',
+              rotulo: 'Deletar campanha',
+              perigo: true,
+              confirmar: true,
+              executar: () => removerCampanha(c),
+            },
+          ],
+          c.nome,
+        );
+      }}
+    >
       <div class="cartao-corpo">
         <input key={`n-${c.id}`} type="text" class="nome-da-campanha" aria-label="Nome da campanha" maxLength={200} defaultValue={c.nome} data-testid="campanha-nome"
           onBlur={async e => { const campo = e.currentTarget, v = campo.value.trim(); if (v !== c.nome && !(await alterarCampanha(c, { nome: v }))) campo.value = c.nome; }}

@@ -227,10 +227,11 @@ export function agruparPorCategoria(lista: readonly Entidade[]): SecaoColecao[] 
   return resultado;
 }
 
-/** Quem criou a entidade altera tudo; os outros só mexem nas referências do próprio aplicativo (regra do repositório). */
+/** Quem criou a entidade altera nome e retrato; os outros só mexem em tags, notas e nas referências do próprio aplicativo. */
 export const podeEditar = (e: Pick<Entidade, 'criadaPor'>, app: AppId = APP_DA_MESA): boolean => e.criadaPor === app;
-export const podeRemover = podeEditar;
-/** Etiquetas e notas: qualquer app altera (contrato, U1). Nome, retrato e remoção: só o dono (`podeEditar`). */
+/** Na Mesa (hub), qualquer entidade pode ser removida para limpeza; nos demais aplicativos, só o criador remove. */
+export const podeRemover = (e: Pick<Entidade, 'criadaPor'>, app: AppId = APP_DA_MESA): boolean => app === APP_DA_MESA || e.criadaPor === app;
+/** Etiquetas e notas: qualquer app altera (contrato, U1). Nome e retrato: só o dono (`podeEditar`). */
 export const podeEditarConteudo = (_e: Pick<Entidade, 'criadaPor'>): boolean => true;
 
 /** “a, b ,, a” → ['a', 'b']: sem vazias, sem repetidas, até 50 de até 40 caracteres (o limite do contrato). */

@@ -2,9 +2,13 @@ import { useState } from 'preact/hooks';
 import { formatarRef, type Ref } from '#mesa';
 import type { ModoAlinhamento } from '../../dominio/alinhamento.ts';
 import { parsearRefAncora } from '../../dominio/ancoras.ts';
+import { entidadePorRef } from '../../dominio/cenas.ts';
+import { NOME_DO_APP, NOME_DO_TIPO_DE_REF } from '../../dominio/entidades.ts';
+import { ehRefDeEntidadeDaMesa } from '../../dominio/notas.ts';
 import type { AoFocar, Item } from '../../dominio/quadro.ts';
 import { abrirNoApp } from '../../app/barramento.ts';
 import { entidades } from '../../app/campanha.ts';
+import { abrirEntidade } from '../../app/rotas.ts';
 import {
   ancorarItemEmRef,
   ancorasDoItem,
@@ -64,6 +68,14 @@ export function MenuDoItem({
   const [escopoModelo, setEscopoModelo] = useState<'campanha' | 'todas'>('campanha');
   const [textoAncora, setTextoAncora] = useState('');
   const ancorasPrimeiro = primeiro ? ancorasDoItem(quadroId, primeiro.id) : [];
+  const entidadeRefPrimeiro =
+    primeiro?.tipo === 'ref' ? entidadePorRef(primeiro.ref, entidades.value) : undefined;
+  const refsExternasPrimeiro =
+    primeiro?.tipo === 'ref'
+      ? entidadeRefPrimeiro
+        ? entidadeRefPrimeiro.refs.filter((r) => !ehRefDeEntidadeDaMesa(r))
+        : [primeiro.ref]
+      : [];
 
   const cenasSonoras = entidades.value
     .map((e) => {
@@ -103,6 +115,38 @@ export function MenuDoItem({
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >
+      {selecionados.length === 1 && primeiro?.tipo === 'ref' ? (
+        <>
+          {refsExternasPrimeiro.map((r) => (
+            <button
+              key={`${r.app}/${r.tipo}/${r.id}`}
+              type="button"
+              class="menu-contexto-btn"
+              data-testid={`menu-abrir-app-${r.app}`}
+              onClick={() => {
+                void abrirNoApp(r);
+                onFechar();
+              }}
+            >
+              Abrir {NOME_DO_TIPO_DE_REF[r.tipo] ?? r.tipo} no {NOME_DO_APP[r.app] ?? r.app} ↗
+            </button>
+          ))}
+          {entidadeRefPrimeiro ? (
+            <button
+              type="button"
+              class="menu-contexto-btn"
+              data-testid="menu-abrir-entidade"
+              onClick={() => {
+                abrirEntidade(entidadeRefPrimeiro.id);
+                onFechar();
+              }}
+            >
+              Abrir na Mesa
+            </button>
+          ) : null}
+          <hr class="menu-contexto-sep" />
+        </>
+      ) : null}
       {temSelecao ? (
         <button
           type="button"
@@ -538,7 +582,7 @@ export function MenuDoItem({
               onFechar();
             }}
           >
-            Apagar
+            Deletar
           </button>
         </>
       ) : null}

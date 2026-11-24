@@ -7,7 +7,10 @@ import {
   extrairPacoteDeCena,
 } from '../dominio/cenas.ts';
 import { ehEncontro } from '../dominio/entidades.ts';
+import { abrirNoApp } from '../app/barramento.ts';
+import { abrirEntidade } from '../app/rotas.ts';
 import { ativarCena } from '../app/sessao.ts';
+import { abrirMenuContexto, acoesParaEntidade, acoesParaRef, type AcaoMenuContexto } from './MenuDeContexto.tsx';
 import {
   alternarEncontroDaCena,
   definirMomentoDaCena,
@@ -81,11 +84,31 @@ export function EditorDeCena({ e, editavel }: { e: Entidade; editavel: boolean }
         </div>
 
         {pacote.mapa ? (
-          <div class="card-vinculado" data-testid="mapa-vinculado">
+          <div
+            class="card-vinculado"
+            data-testid="mapa-vinculado"
+            onContextMenu={ev => {
+              const mapa = pacote.mapa!;
+              const acoesDesvincular: AcaoMenuContexto[] = editavel
+                ? [{ id: 'desvincular-mapa', rotulo: 'Desvincular da cena', executar: () => desvincularDaCena(mapa.ligacaoId, mapa.entidade?.nome) }]
+                : [];
+              abrirMenuContexto(
+                ev,
+                mapa.entidade ? acoesParaEntidade(mapa.entidade, { extras: acoesDesvincular }) : acoesParaRef(mapa.ref, acoesDesvincular),
+                mapa.entidade?.nome ?? formatarRef(mapa.ref),
+              );
+            }}
+          >
             <span class="icone-vinculo">📍</span>
-            <span class="nome-vinculo" title={pacote.mapa.entidade?.nome ?? formatarRef(pacote.mapa.ref)}>
+            <button
+              type="button"
+              class="nome-vinculo"
+              style={{ textAlign: 'left', cursor: 'pointer' }}
+              title="Abrir mapa no Atlas"
+              onClick={() => void abrirNoApp(pacote.mapa!.ref)}
+            >
               {pacote.mapa.entidade?.nome ?? formatarRef(pacote.mapa.ref)}
-            </span>
+            </button>
             {editavel && (
               <button
                 type="button"
@@ -185,11 +208,31 @@ export function EditorDeCena({ e, editavel }: { e: Entidade; editavel: boolean }
         </div>
 
         {pacote.trilha ? (
-          <div class="card-vinculado" data-testid="trilha-vinculada">
+          <div
+            class="card-vinculado"
+            data-testid="trilha-vinculada"
+            onContextMenu={ev => {
+              const trilha = pacote.trilha!;
+              const acoesDesvincular: AcaoMenuContexto[] = editavel
+                ? [{ id: 'desvincular-trilha', rotulo: 'Desvincular da cena', executar: () => desvincularDaCena(trilha.ligacaoId, trilha.entidade?.nome) }]
+                : [];
+              abrirMenuContexto(
+                ev,
+                trilha.entidade ? acoesParaEntidade(trilha.entidade, { extras: acoesDesvincular }) : acoesParaRef(trilha.ref, acoesDesvincular),
+                trilha.entidade?.nome ?? formatarRef(trilha.ref),
+              );
+            }}
+          >
             <span class="icone-vinculo">🎧</span>
-            <span class="nome-vinculo" title={pacote.trilha.entidade?.nome ?? formatarRef(pacote.trilha.ref)}>
+            <button
+              type="button"
+              class="nome-vinculo"
+              style={{ textAlign: 'left', cursor: 'pointer' }}
+              title="Tocar no Jukebox"
+              onClick={() => void abrirNoApp(pacote.trilha!.ref)}
+            >
               {pacote.trilha.entidade?.nome ?? formatarRef(pacote.trilha.ref)}
-            </span>
+            </button>
             {editavel && (
               <button
                 type="button"
@@ -239,12 +282,37 @@ export function EditorDeCena({ e, editavel }: { e: Entidade; editavel: boolean }
             {pacote.participantes.map(p => {
               const itemId = p.entidade?.id ?? p.ref.id;
               const nome = p.entidade?.nome ?? p.ref.id;
+              const acoesDesvincular: AcaoMenuContexto[] = editavel
+                ? [{ id: `desvincular-part-${itemId}`, rotulo: 'Desvincular da cena', executar: () => desvincularDaCena(p.ligacaoId, nome) }]
+                : [];
               return (
-                <li key={p.ligacaoId} class="item-vinculado" data-testid={`participante-${itemId}`}>
+                <li
+                  key={p.ligacaoId}
+                  class="item-vinculado"
+                  data-testid={`participante-${itemId}`}
+                  onContextMenu={ev =>
+                    abrirMenuContexto(
+                      ev,
+                      p.entidade ? acoesParaEntidade(p.entidade, { extras: acoesDesvincular }) : acoesParaRef(p.ref, acoesDesvincular),
+                      nome,
+                    )
+                  }
+                >
                   <span class={cx('badge-participante', p.ehAmeaca ? 'ameaca' : 'jogador')}>
                     {p.ehAmeaca ? 'Ameaça' : 'Jogador'}
                   </span>
-                  <span class="nome-vinculo" title={nome}>{nome}</span>
+                  <button
+                    type="button"
+                    class="nome-vinculo"
+                    style={{ textAlign: 'left', cursor: 'pointer' }}
+                    title={p.ref.app === 'ficha' ? 'Abrir ficha no Dossiê' : 'Abrir na Mesa'}
+                    onClick={() => {
+                      if (p.ref.app !== 'mesa') void abrirNoApp(p.ref);
+                      else if (p.entidade) abrirEntidade(p.entidade.id);
+                    }}
+                  >
+                    {nome}
+                  </button>
                   {editavel && (
                     <button
                       type="button"
@@ -310,10 +378,35 @@ export function EditorDeCena({ e, editavel }: { e: Entidade; editavel: boolean }
             {pacote.pistas.map(pi => {
               const itemId = pi.entidade?.id ?? pi.ref.id;
               const nome = pi.entidade?.nome ?? pi.ref.id;
+              const acoesDesvincular: AcaoMenuContexto[] = editavel
+                ? [{ id: `desvincular-pista-${itemId}`, rotulo: 'Desvincular da cena', executar: () => desvincularDaCena(pi.ligacaoId, nome) }]
+                : [];
               return (
-                <li key={pi.ligacaoId} class="item-vinculado" data-testid={`pista-${itemId}`}>
+                <li
+                  key={pi.ligacaoId}
+                  class="item-vinculado"
+                  data-testid={`pista-${itemId}`}
+                  onContextMenu={ev =>
+                    abrirMenuContexto(
+                      ev,
+                      pi.entidade ? acoesParaEntidade(pi.entidade, { extras: acoesDesvincular }) : acoesParaRef(pi.ref, acoesDesvincular),
+                      nome,
+                    )
+                  }
+                >
                   <span class="icone-vinculo">📜</span>
-                  <span class="nome-vinculo" title={nome}>{nome}</span>
+                  <button
+                    type="button"
+                    class="nome-vinculo"
+                    style={{ textAlign: 'left', cursor: 'pointer' }}
+                    title={pi.ref.app === 'atelie' ? 'Abrir documento no Ateliê' : 'Abrir na Mesa'}
+                    onClick={() => {
+                      if (pi.ref.app !== 'mesa') void abrirNoApp(pi.ref);
+                      else if (pi.entidade) abrirEntidade(pi.entidade.id);
+                    }}
+                  >
+                    {nome}
+                  </button>
                   {editavel && (
                     <button
                       type="button"

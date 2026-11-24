@@ -156,6 +156,20 @@ export function continuarSessao(id: string): void {
   abrirNaTela(s, true);
 }
 
+/** Remove uma sessão do banco da campanha. Se ela estiver aberta, fecha primeiro. */
+export async function removerSessao(id: string): Promise<void> {
+  const alvo = sessoes.value.find(x => x.id === id);
+  try {
+    if (sessaoAtiva.value?.id === id) fecharSessao();
+    await obterRepositorio().removerSessao(id);
+    try { localStorage.removeItem(chaveDasNotasAntigas(id)); } catch { /* ignora */ }
+    sessoes.value = sessoes.value.filter(x => x.id !== id);
+    if (alvo) avisar(`Sessão “${alvo.nome}” removida.`);
+  } catch (erro) {
+    avisar(mensagemDe(erro), true);
+  }
+}
+
 /** Para de gravar. A sessão continua aberta para ler, exportar e anotar. */
 export function encerrarSessao(): void { gravando.value = false; pararDeOuvir(); lembrarSessaoAtiva(); }
 /** Volta a gravar na sessão aberta. */
