@@ -10,4 +10,11 @@
 .online-estado { font: 700 11px var(--corpo); letter-spacing: 0.1em; text-transform: uppercase; color: var(--apagado); }
 .online-estado.aberta { color: var(--sucesso); }
 .online-estado.caiu { color: var(--perigo); }
-.online-membros li { padding: 6px 10px; background: var(--superficie); border: 1px solid var(--linha); border-radius: var(--raio); }
+.online-membros .saguao-membro { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--superficie); border: 1px solid var(--linha); border-radius: var(--raio); }
+.online-membros .saguao-avatar { flex: none; width: 34px; height: 34px; border-radius: 50%; object-fit: cover; border: 1px solid var(--linha); background: var(--painel); }
+.online-membros .saguao-iniciais { display: grid; place-items: center; font: 800 12px var(--corpo); color: var(--texto); }
+.online-membros .saguao-membro-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.online-membros .saguao-membro-topo { display: flex; align-items: center; gap: 6px; }
+.online-membros .saguao-selo-mestre { padding: 1px 7px; border-radius: 999px; background: var(--acento-suave); border: 1px solid var(--acento); color: var(--acento); font: 700 10px var(--corpo); letter-spacing: 0.08em; text-transform: uppercase; }
+.online-membros .saguao-membro-pers { font: 500 12px var(--corpo); color: var(--apagado); }
+.online-membros .saguao-membro-retrato { flex: none; width: 30px; height: 30px; border-radius: 50%; object-fit: cover; border: 1px solid var(--linha); }

@@ -110,7 +110,7 @@ export class Sala implements DurableObject {
       ws.close(4004, 'sala inexistente');
       return;
     }
-    const novo: Eu = { discordId: sessao.discordId, nome: sessao.nome, papel: papelNaSala(sessao.discordId, config.dono) };
+    const novo: Eu = { discordId: sessao.discordId, nome: sessao.nome, papel: papelNaSala(sessao.discordId, config.dono), avatar: sessao.avatar };
     ws.serializeAttachment(novo satisfies Anexo);
     const todos = this.conectados();
     ws.send(JSON.stringify(bemVindo(this.estado, novo, todos)));

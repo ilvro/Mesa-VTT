@@ -4,7 +4,9 @@ import { abrirMesaOnline, confirmarSemNevoa, conexaoOnline, estadoDaPonte, fecha
 import { carregarSessaoOnline, erroDoLogin, iniciarLogin, sairDoOnline, sessaoOnline } from '../app/online-login.ts';
 import { criarSala, ligarAoServidor, listarMinhasSalas, salaDaCampanha, type SalaDoMestre } from '../app/online-salas.ts';
 import { avisar, mensagemDe } from '../app/toasts.ts';
+import { MembroLinha } from '../jogar/Saguao.tsx';
 import { urlDaSala } from '../online/config.ts';
+import { estadoDoSaguao } from '../online/saguao.ts';
 import './online.css';
 
 const ROTULO_DA_CONEXAO = { desconectada: 'Desconectada', conectando: 'Conectando…', aberta: 'Conectada', caiu: 'Sem conexão (tentando de novo)' } as const;
@@ -130,9 +132,9 @@ function PainelDoMestre({ sessao }: { sessao: string }) {
       {conexao !== 'desconectada' && (
         <>
           <h3 class="faixa pequena">Conectados ({ponte.membros.length})</h3>
-          <ul class="lista online-membros" data-testid="online-membros">
+          <ul class="lista online-membros saguao-membros" data-testid="online-membros">
             {ponte.membros.length === 0 && <li class="meta">Ninguém por aqui ainda.</li>}
-            {ponte.membros.map(m => <li key={m.discordId}><strong>{m.nome}</strong> <span class="meta">{m.papel === 'mestre' ? 'mestre' : 'jogador'}</span></li>)}
+            {estadoDoSaguao(ponte.membros, ponte.fichas, false).membros.map(m => <MembroLinha key={m.discordId} m={m} />)}
           </ul>
         </>
       )}

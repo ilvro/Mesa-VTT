@@ -39,6 +39,7 @@ test('lerMensagemDaSala aceita as válidas e recusa lixo', () => {
   const validas = [
     { tipo: 'bem-vindo', eu, membros: [membro], fichas: [ficha], ultimoEstado: { 'atlas:projetor:ativo': { tipo: 'estado' } } },
     { tipo: 'membros', membros: [{ ...membro, personagem: 'f1' }] },
+    { tipo: 'config', config: { nome: 'Campanha', capaBlobId: 'c1' } },
     { tipo: 'canal', nome: 'c', msg: 1 },
     { tipo: 'evento', envelope: env },
     { tipo: 'ficha.atualizada', ficha, rev: 3, autor: { ...eu, fichas: ['f1'] } },

@@ -10,6 +10,7 @@ export interface Eu {
   discordId: string;
   nome: string;
   papel: Papel;
+  avatar?: string | null;
 }
 
 /** O carimbo que a sala põe em tudo o que repassa (o `autor` do mesa-core): quem fez, e as fichas que ele tem. */
@@ -98,6 +99,7 @@ export const ROLAGENS_NO_BEM_VINDO = 50;
 export type MensagemDaSala =
   | MsgBemVindo
   | { tipo: 'membros'; membros: Membro[] }
+  | { tipo: 'config'; config: ConfigSala }
   | { tipo: 'canal'; nome: string; msg: unknown }
   | { tipo: 'evento'; envelope: Envelope }
   /** `autor`: quem gravou (carimbado pela sala, R13): o dono, o mestre, ou o mestre numa entrega. */
@@ -122,7 +124,9 @@ const txt = (v: unknown): v is string => typeof v === 'string';
 const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const ehEnvelope = (v: unknown): v is Envelope => ehObj(v) && txt(v.tipo) && txt(v.id);
 const ehFicha = (v: unknown): v is FichaDaSala => ehObj(v) && txt(v.id);
-const ehEu = (v: unknown): v is Eu => ehObj(v) && txt(v.discordId) && txt(v.nome) && (v.papel === 'mestre' || v.papel === 'jogador');
+const ehEu = (v: unknown): v is Eu =>
+  ehObj(v) && txt(v.discordId) && txt(v.nome) && (v.papel === 'mestre' || v.papel === 'jogador')
+  && (v.avatar === undefined || v.avatar === null || txt(v.avatar));
 const ehAutor = (v: unknown): v is Autor => ehObj(v) && ehEu(v) && Array.isArray(v.fichas) && v.fichas.every(txt);
 const ehMembro = (v: unknown): v is Membro => ehObj(v) && ehEu(v) && (v.personagem === null || txt(v.personagem));
 const listaDe = <T>(v: unknown, ok: (x: unknown) => x is T): v is T[] => Array.isArray(v) && v.every(ok);
@@ -172,6 +176,10 @@ export function lerMensagemDaSala(texto: string): MensagemDaSala | null {
         ...(m.rolagens !== undefined ? { rolagens: m.rolagens } : {}),
       };
     case 'membros': return listaDe(m.membros, ehMembro) ? { tipo: 'membros', membros: m.membros } : null;
+    case 'config':
+      if (!ehObj(m.config) || !txt(m.config.nome)) return null;
+      if (m.config.capaBlobId !== undefined && !txt(m.config.capaBlobId)) return null;
+      return { tipo: 'config', config: m.config as unknown as ConfigSala };
     case 'canal': return txt(m.nome) && 'msg' in m ? { tipo: 'canal', nome: m.nome, msg: m.msg } : null;
     case 'evento': return ehEnvelope(m.envelope) ? { tipo: 'evento', envelope: m.envelope } : null;
     case 'ficha.atualizada':

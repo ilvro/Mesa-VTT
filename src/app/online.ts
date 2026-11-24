@@ -9,7 +9,7 @@ import { EVENTOS_DO_MESTRE, type Envelope, type Eu, type FichaDaSala, type Membr
 import { LIMITE_ESTADO_BYTES, blobIdDoEstado, comprimirEstado, type EstadoComprimidoRef } from '../online/estado-comprimido.ts';
 import { CANAL_EVENTOS, CONTRATO, criarBarramento, validarEvento, type Entidade } from '#mesa';
 import { barramentoDaMesa } from './barramento.ts';
-import { entidades } from './campanha.ts';
+import { campanhaAtiva, entidades } from './campanha.ts';
 
 /** No máximo isto de mensagens de gesto (`emGesto`, `peca-gesto`) por segundo; a última sempre sai. */
 export const GESTOS_POR_SEGUNDO = 15;
@@ -69,6 +69,8 @@ export interface OpcoesDaPonte {
    * (o Ref é sempre `ficha/ficha`), então quem sabe é a campanha. Padrão: nenhuma é.
    */
   ehAmeaca?: (fichaId: string) => boolean;
+  /** Nome e capa da campanha ativa para publicar via `sala.config` ao conectar. */
+  configDaSala?: () => { nome: string; capa?: string | null } | null;
 }
 
 /** Alguma entidade `ameaca` da campanha liga-se à ficha `fichaId` (Ref do aplicativo `ficha`)? */
@@ -94,6 +96,8 @@ export interface EstadoDosSons {
 
 export interface EstadoDaPonte {
   membros: Membro[];
+  /** Fichas guardadas na sala (todas, para o mestre). */
+  fichas: FichaDaSala[];
   /** Mapas sem névoa à espera da confirmação do mestre: o `estado` deles não sai até lá. */
   semNevoa: { mapa: string; nome: string }[];
   /** Há jogador na sala e a ponte pediu ao publicador do Atlas que trabalhe. */
@@ -136,9 +140,9 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
   const enviados = new Set<string>();
   let fila: Promise<void> = Promise.resolve();
   let fechada = false;
-  const estado: EstadoDaPonte = { membros: [], semNevoa: [], publicando: false, sons: SONS_VAZIOS };
+  const estado: EstadoDaPonte = { membros: [], fichas: [], semNevoa: [], publicando: false, sons: SONS_VAZIOS };
 
-  const mudou = () => { estado.semNevoa = [...pendentes].map(([mapa, p]) => ({ mapa, nome: p.nome })); estado.sons = resumoDosSons(); o.aoMudar?.({ ...estado, membros: [...estado.membros] }); };
+  const mudou = () => { estado.fichas = [...fichasDaSala.values()]; estado.semNevoa = [...pendentes].map(([mapa, p]) => ({ mapa, nome: p.nome })); estado.sons = resumoDosSons(); o.aoMudar?.({ ...estado, membros: [...estado.membros], fichas: [...estado.fichas] }); };
 
   /** Perguntas `blob.tem` em andamento, por id. Sem resposta a tempo, vale "não tem" e o blob sobe. */
   const perguntas = new Map<string, Promise<{ tem: boolean; tamanho?: number }>>();
@@ -428,6 +432,22 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
   };
   const lembrarNomes = (membros: readonly Membro[]): void => { for (const m of membros) nomes.set(m.discordId, m.nome); };
   const avisarConexao = (): void => { fato('sala.conexao', { conectada, ...(conectada && nome ? { nome } : {}) }); };
+  async function enviarConfig(): Promise<void> {
+    const cfg = o.configDaSala?.();
+    if (!cfg || fechada) return;
+    let capaBlobId: string | undefined;
+    if (cfg.capa) {
+      try {
+        const resp = await fetch(cfg.capa);
+        if (resp.ok) {
+          const r = await subir(await resp.blob());
+          if (r) capaBlobId = r.blobId;
+        }
+      } catch { /* capa indisponível: manda só o nome */ }
+    }
+    if (fechada) return;
+    cliente.enviar({ tipo: 'sala.config', nome: cfg.nome, ...(capaBlobId ? { capaBlobId } : {}) });
+  }
 
   dossie.atender('sala.fichas', () => {
     if (!conectada) return { ok: false, motivo: 'A sala não está conectada.' };
@@ -472,6 +492,7 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
       lembrarNomes(m.membros);
       avisarConexao();
       enviados.clear(); // nova conexão: o servidor ainda guarda os blobs, mas confirmamos de novo
+      void enviarConfig();
       for (const som of sons.values()) if (som.estado === 'falhou') som.estado = 'pendente'; // a falha pode ter sido a conexão
       if (proximoSom() !== null) void rodarSons();
       atualizarPresenca(m.membros, true);
@@ -484,6 +505,7 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
       if (m.dono) donosDaSala.set(m.ficha.id, m.dono);
       nomes.set(m.autor.discordId, m.autor.nome);
       fato('sala.ficha-atualizada', { ficha: m.ficha, rev: m.rev, ...(m.conflito ? { conflito: true } : {}), ...(m.dono ? { dono: m.dono } : {}) }, m.autor);
+      mudou();
     }),
     cliente.aoMudarEstado(e => {
       if (e === 'caiu' && estado.publicando) { estado.publicando = false; }
@@ -525,7 +547,7 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
 
 export type ConexaoOnline = 'desconectada' | EstadoDaSala;
 export const conexaoOnline = signal<ConexaoOnline>('desconectada');
-export const estadoDaPonte = signal<EstadoDaPonte>({ membros: [], semNevoa: [], publicando: false, sons: SONS_VAZIOS });
+export const estadoDaPonte = signal<EstadoDaPonte>({ membros: [], fichas: [], semNevoa: [], publicando: false, sons: SONS_VAZIOS });
 export const salaConectadaId = signal<string | null>(null);
 
 let atual: { cliente: ClienteDaSala; ponte: Ponte } | null = null;
@@ -547,6 +569,7 @@ export function abrirMesaOnline(sessao: string, salaId: string, nome?: string): 
     criarCanal: n => new BroadcastChannel(n) as unknown as CanalLocal,
     pedirAoJukebox: pedirAoJukeboxPeloBarramento,
     ehAmeaca: id => fichaEhAmeaca(entidades.value, id),
+    configDaSala: () => campanhaAtiva.value ? { nome: campanhaAtiva.value.nome, capa: campanhaAtiva.value.capa } : null,
     ...(nome !== undefined ? { nomeDaSala: nome } : {}),
     aoMudar: e => { estadoDaPonte.value = e; },
   });
@@ -566,5 +589,5 @@ export function fecharMesaOnline(): void {
   atual = null;
   salaConectadaId.value = null;
   conexaoOnline.value = 'desconectada';
-  estadoDaPonte.value = { membros: [], semNevoa: [], publicando: false, sons: SONS_VAZIOS };
+  estadoDaPonte.value = { membros: [], fichas: [], semNevoa: [], publicando: false, sons: SONS_VAZIOS };
 }

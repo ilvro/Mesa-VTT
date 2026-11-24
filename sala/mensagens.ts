@@ -43,10 +43,13 @@ export function blobsCitadosPor(msg: unknown): string[] {
 /** Quadros de um blob completo, na ordem em que o mestre os mandou: o anúncio e os pedaços binários. */
 export interface BlobParaEnviar { anuncio: MsgBlob; quadros: ArrayBuffer[] }
 
-/** O que mandar a quem chegou depois do `bem-vindo`: os blobs citados nos últimos `canal` guardados. Os incompletos são pulados. */
+/** O que mandar a quem chegou depois do `bem-vindo`: os blobs citados nos últimos `canal` guardados e a capa da sala. Os incompletos são pulados. */
 export function blobsParaQuemChega(estado: Estado): BlobParaEnviar[] {
+  const ids = new Set(estado.blobsCitados());
+  const capa = estado.config().capaBlobId;
+  if (capa) ids.add(capa);
   const saida: BlobParaEnviar[] = [];
-  for (const id of estado.blobsCitados()) {
+  for (const id of ids) {
     const pedacos = estado.pedacosDoBlob(id);
     if (!pedacos || pedacos.length === 0) continue;
     saida.push({
@@ -168,7 +171,7 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
       return [saidaMembros(estado, conectados)];
     case 'sala.config':
       estado.definirConfig(msg.nome, msg.capaBlobId);
-      return [];
+      return [{ destino: 'todos', msg: { tipo: 'config', config: estado.config() } }];
     case 'blob.tem': {
       const tamanho = estado.tamanhoDoBlob(msg.id);
       return [{ destino: 'remetente', msg: { tipo: 'blob.tem', id: msg.id, tem: tamanho !== null, ...(tamanho !== null ? { tamanho } : {}) } }];

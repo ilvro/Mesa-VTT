@@ -243,3 +243,12 @@ test('limite de 60 mensagens por segundo: avisa uma vez por janela', () => {
   for (let i = 0; i < 59; i++) l.tentar(a, 2001);
   assert.equal(l.tentar(a, 2002), 'avisar');
 });
+
+test('sala.config grava, espalha config para todos e libera capaBlobId em blobsPedidos', () => {
+  const e = sala();
+  const s = tratar(e, mestre, j({ tipo: 'sala.config', nome: 'Ordem', capaBlobId: 'capa-1' }), 1, todos);
+  assert.equal(s.length, 1);
+  assert.equal(s[0]?.destino, 'todos');
+  assert.deepEqual(s[0]?.msg, { tipo: 'config', config: { nome: 'Ordem', capaBlobId: 'capa-1', dono: 'M' } });
+  assert.equal(e.blobsPedidos().includes('capa-1'), true);
+});

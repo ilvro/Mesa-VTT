@@ -261,6 +261,8 @@ export function criarEstado(sql: Sql): Estado {
     },
     blobsPedidos() {
       const todos = new Set<string>(this.blobsCitados());
+      const capa = lerChave('capaBlobId');
+      if (capa) todos.add(capa);
       const mix = this.ultimoMix();
       const faixas = (mix?.dados as { faixas?: unknown } | undefined)?.faixas;
       if (Array.isArray(faixas)) for (const f of faixas) if (f && typeof (f as { faixaId?: unknown }).faixaId === 'string') todos.add((f as { faixaId: string }).faixaId);
@@ -287,7 +289,13 @@ export function montarMembros(conectados: readonly Eu[], personagemDe: (discordI
   for (const c of conectados) {
     if (vistos.has(c.discordId)) continue;
     vistos.add(c.discordId);
-    saida.push({ discordId: c.discordId, nome: c.nome, papel: c.papel, personagem: personagemDe(c.discordId) });
+    saida.push({
+      discordId: c.discordId,
+      nome: c.nome,
+      papel: c.papel,
+      ...(c.avatar !== undefined ? { avatar: c.avatar } : {}),
+      personagem: personagemDe(c.discordId),
+    });
   }
   return saida;
 }

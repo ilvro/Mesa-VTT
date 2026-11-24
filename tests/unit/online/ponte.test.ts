@@ -548,3 +548,11 @@ test('ficha.atualizada da sala vira sala.ficha-atualizada com o autor da sala, e
   assert.equal(r.resposta.nomes['2'], 'Ana');
   ponte.fechar();
 });
+
+test('configDaSala manda sala.config ao receber bem-vindo', async () => {
+  const { emitir, enviadas, ponte } = montar('teste-1', { configDaSala: () => ({ nome: 'Ordem', capa: null }) });
+  emitir(bemVindo([membro('1', 'mestre')]));
+  await new Promise(r => setTimeout(r, 0));
+  assert.deepEqual(enviadas, [{ tipo: 'sala.config', nome: 'Ordem' }]);
+  ponte.fechar();
+});
