@@ -9,7 +9,7 @@ import { deveMostrarSaguao, estadoDoSaguao } from '../online/saguao.ts';
 import { FeedDeRolagens } from './FeedDeRolagens.tsx';
 import { criarPonteDoJogador, type CanalLocal } from './ponte-jogador.ts';
 import { Saguao } from './Saguao.tsx';
-import { fichaCobreOMapa, mensagemDeVista, vistaDaFicha, vistaPedidaPeloDossie } from './vista-ficha.ts';
+import { fichaCobreOMapa, mensagemDeVista, mensagemDoJogador, vistaDaFicha, vistaPedidaPeloDossie } from './vista-ficha.ts';
 import './casca.css';
 
 /** O endereço do projetor remoto do Atlas para esta sala. Não muda quando o mestre troca de mapa: o projetor aceita o `estado` de qualquer mapa. */
@@ -74,6 +74,7 @@ function Sala({ salaId, sessao, nome, aoSessaoInvalida }: { salaId: string; sess
   const [aberta, setAberta] = useState(false);   // a ficha completa pediu a tela toda (fora do celular)
   const celular = useCelularVertical();
   const quadro = useRef<HTMLIFrameElement>(null);
+  const projetorQuadro = useRef<HTMLIFrameElement>(null);
   const vista = vistaDaFicha({ celularVertical: celular, aba, aberta });
   const cobre = fichaCobreOMapa({ celularVertical: celular, aberta });
   const vistaAtual = useRef(vista);
@@ -151,6 +152,12 @@ function Sala({ salaId, sessao, nome, aoSessaoInvalida }: { salaId: string; sess
   // A vista muda por mensagem, sem recarregar o `iframe`.
   const mandarVista = () => { try { quadro.current?.contentWindow?.postMessage(mensagemDeVista(vistaAtual.current), location.origin); } catch { /* o Dossiê ainda não carregou */ } };
   useEffect(mandarVista, [vista]);
+  // As fichas do jogador vão ao projetor remoto (R14) para marcar as peças próprias.
+  const fichasChave = fichas.map(f => f.id).join(',');
+  const fichasIdsAtual = useRef<string[]>([]);
+  fichasIdsAtual.current = fichas.map(f => f.id);
+  const mandarJogador = () => { try { projetorQuadro.current?.contentWindow?.postMessage(mensagemDoJogador(fichasIdsAtual.current), location.origin); } catch { /* o projetor ainda não carregou */ } };
+  useEffect(mandarJogador, [fichasChave]);
   // Esc volta ao mapa, com o foco na casca ou dentro do Dossiê (mesma origem).
   useEffect(() => {
     if (!cobre) return;
@@ -186,7 +193,7 @@ function Sala({ salaId, sessao, nome, aoSessaoInvalida }: { salaId: string; sess
   return (
     <main class="casca" data-testid="casca" data-aba={aba} data-ficha={cobre ? 'completa' : 'painel'}>
       <section class="casca-mapa" data-testid="casca-mapa" aria-label="Mapa">
-        <iframe class="casca-iframe" data-testid="casca-iframe" title="Mapa" src={enderecoDoProjetorRemoto(baseDoApp('atlas'), salaId)} allow="fullscreen; autoplay" />
+        <iframe ref={projetorQuadro} class="casca-iframe" data-testid="casca-iframe" title="Mapa" src={enderecoDoProjetorRemoto(baseDoApp('atlas'), salaId)} onLoad={mandarJogador} allow="fullscreen; autoplay" />
         {erro === 'sala' && (
           <div class="casca-sobre aviso-grande" data-testid="casca-erro-sala" role="alert"><h2 class="faixa">Sala não encontrada</h2><p>Esta sala não existe ou foi encerrada. Confira o link com o mestre.</p></div>
         )}

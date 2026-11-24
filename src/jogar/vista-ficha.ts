@@ -25,3 +25,6 @@ export const fichaCobreOMapa = (o: { celularVertical: boolean; aberta: boolean }
 
 /** A mensagem que a casca manda ao `iframe` quando a vista muda. */
 export const mensagemDeVista = (vista: VistaDaFicha) => ({ tipo: 'dossie.vista' as const, vista });
+
+/** A mensagem que a casca manda ao `iframe` do projetor remoto com os ids das fichas do jogador (R14). */
+export const mensagemDoJogador = (fichas: readonly string[]) => ({ tipo: 'jogador' as const, fichas: [...fichas] });

@@ -1,4 +1,4 @@
-import { strFromU8, unzipSync } from 'fflate'
+import { strFromU8 } from 'fflate'
 import {
   converterMiro,
   type MetadadosImagemImportada,
@@ -8,6 +8,7 @@ import { filtrarPacote, itensSoltosDoPacote, moldurasDoPacote, type FiltroMoldur
 import { novoQuadro, type Quadro } from '../dominio/quadro.ts'
 import { criarQuadroComItens, guardarImagem, listarQuadros } from './banco-quadros.ts'
 import { campanhaAtiva } from './campanha.ts'
+import { prepararImagemParaGuardar } from './imagens-quadro.ts'
 import { ligarItensNovos } from './ligacoes-quadro.ts'
 import { idsDoMiro, planejarAtualizacaoDoMiro, type RelatorioDaAtualizacao } from '../dominio/sincronia-miro.ts'
 import {
@@ -20,6 +21,10 @@ import {
   quadroAberto,
   quadros,
 } from './quadros.ts'
+import { lerEntradaDoZip, percorrerZipEmPedacos } from './zip-streaming.ts'
+
+const LADO_MAXIMO_IMAGEM_MIRO = 2048
+const QUALIDADE_WEBP_MIRO = 0.85
 
 export interface RelatorioImportacaoMiro {
   quadro: Quadro
@@ -44,72 +49,92 @@ interface PacoteLido {
   imagensPorItemId: Map<string, MetadadosImagemImportada>
 }
 
-interface PacoteAberto {
-  bruto: PacoteMiroBruto
-  entradas: Record<string, Uint8Array>
+function idDoCaminhoImagem(caminho: string): string | null {
+  if (!caminho.startsWith('imagens/')) return null
+  const resto = caminho.slice('imagens/'.length)
+  const ponto = resto.indexOf('.')
+  return ponto > 0 ? resto.slice(0, ponto) : null
 }
 
-/** Abre o zip e valida o quadro.json, sem tocar no banco. */
-async function abrirPacoteMiro(arquivo: File | Blob | Uint8Array): Promise<PacoteAberto> {
-  const bytes =
-    arquivo instanceof Uint8Array
-      ? arquivo
-      : new Uint8Array(await (arquivo as Blob).arrayBuffer())
-
-  const entradas = unzipSync(bytes)
-  const quadroJsonBytes = entradas['quadro.json']
+/** Lê e valida apenas o `quadro.json` do zip em pedaços, sem carregar as imagens na memória. */
+async function abrirCabecalhoMiro(arquivo: File | Blob | Uint8Array): Promise<PacoteMiroBruto> {
+  const quadroJsonBytes = await lerEntradaDoZip(arquivo, 'quadro.json')
   if (!quadroJsonBytes) {
     throw new Error('Pacote .miro.zip inválido: arquivo quadro.json não encontrado.')
   }
 
-  let bruto: PacoteMiroBruto
   try {
-    bruto = JSON.parse(strFromU8(quadroJsonBytes)) as PacoteMiroBruto
+    return JSON.parse(strFromU8(quadroJsonBytes)) as PacoteMiroBruto
   } catch {
     throw new Error('Pacote .miro.zip inválido: quadro.json malformado.')
   }
-  return { bruto, entradas }
 }
 
-/** Guarda no banco as imagens dos itens do pacote (já filtrado). */
+/** Lê o zip em pedaços, reduz as imagens do pacote (já filtrado) para WebP ≤ 2048 px e grava no banco. */
 async function guardarImagensDoPacote(
+  arquivo: File | Blob | Uint8Array,
   bruto: PacoteMiroBruto,
-  entradas: Record<string, Uint8Array>,
 ): Promise<Map<string, MetadadosImagemImportada>> {
   const imagensPorItemId = new Map<string, MetadadosImagemImportada>()
   const rawItems = Array.isArray(bruto.items) ? bruto.items : []
 
+  type ItemBruto = NonNullable<PacoteMiroBruto['items']>[number]
+  const porCaminhoExact = new Map<string, ItemBruto[]>()
+  const porId = new Map<string, ItemBruto[]>()
   for (const item of rawItems) {
     if (!item || item.type !== 'image' || typeof item.id !== 'string') continue
-    const candidatoCaminho =
-      typeof item.arquivoLocal === 'string' && entradas[item.arquivoLocal]
-        ? item.arquivoLocal
-        : Object.keys(entradas).find((k) => k.startsWith(`imagens/${item.id}.`))
+    if (typeof item.arquivoLocal === 'string' && item.arquivoLocal) {
+      const lista = porCaminhoExact.get(item.arquivoLocal) ?? []
+      lista.push(item)
+      porCaminhoExact.set(item.arquivoLocal, lista)
+    }
+    const listaId = porId.get(item.id) ?? []
+    listaId.push(item)
+    porId.set(item.id, listaId)
+  }
 
-    if (candidatoCaminho && entradas[candidatoCaminho]) {
-      const imgBytes = entradas[candidatoCaminho]!
-      const blob = new Blob([new Uint8Array(imgBytes)], {
-        type: mimePorExtensao(candidatoCaminho),
+  if (porCaminhoExact.size === 0 && porId.size === 0) return imagensPorItemId
+
+  await percorrerZipEmPedacos(arquivo, {
+    decidir: (nome) => {
+      if (porCaminhoExact.has(nome)) return true
+      const id = idDoCaminhoImagem(nome)
+      return id !== null && porId.has(id)
+    },
+    aoLer: async (nome, dados) => {
+      const exatos = porCaminhoExact.get(nome) ?? []
+      const id = idDoCaminhoImagem(nome)
+      const porPrefixo = id ? (porId.get(id) ?? []).filter((it) => !imagensPorItemId.has(it.id)) : []
+      if (exatos.length === 0 && porPrefixo.length === 0) return
+
+      const brutoBlob = new Blob([dados as Uint8Array<ArrayBuffer>], { type: mimePorExtensao(nome) })
+      const blob = await prepararImagemParaGuardar(brutoBlob, {
+        ladoMaximo: LADO_MAXIMO_IMAGEM_MIRO,
+        converterParaWebp: true,
+        qualidade: QUALIDADE_WEBP_MIRO,
       })
       const salvo = await guardarImagem(blob)
-      imagensPorItemId.set(item.id, {
-        imagemId: salvo.id,
-        larguraOriginal: salvo.largura || Number(item.geometry?.width) || 320,
-        alturaOriginal: salvo.altura || Number(item.geometry?.height) || 240,
-      })
-    }
-  }
+      for (const item of [...exatos, ...porPrefixo]) {
+        imagensPorItemId.set(item.id, {
+          imagemId: salvo.id,
+          larguraOriginal: salvo.largura || Number(item.geometry?.width) || 320,
+          alturaOriginal: salvo.altura || Number(item.geometry?.height) || 240,
+        })
+      }
+    },
+  })
+
   return imagensPorItemId
 }
 
-/** Lê o zip, aplica o filtro de molduras (se houver) e guarda as imagens que sobraram. */
+/** Lê o zip em pedaços, aplica o filtro de molduras (se houver) e guarda as imagens que sobraram. */
 async function lerPacoteMiro(
   arquivo: File | Blob | Uint8Array,
   filtro?: FiltroMolduras,
 ): Promise<PacoteLido> {
-  const aberto = await abrirPacoteMiro(arquivo)
-  const bruto = filtro ? filtrarPacote(aberto.bruto, filtro) : aberto.bruto
-  return { bruto, imagensPorItemId: await guardarImagensDoPacote(bruto, aberto.entradas) }
+  const brutoOriginal = await abrirCabecalhoMiro(arquivo)
+  const bruto = filtro ? filtrarPacote(brutoOriginal, filtro) : brutoOriginal
+  return { bruto, imagensPorItemId: await guardarImagensDoPacote(arquivo, bruto) }
 }
 
 export interface ExamePacoteMiro {
@@ -121,7 +146,7 @@ export interface ExamePacoteMiro {
 
 /** Lista as molduras de um pacote para o diálogo de escolha (não grava nada). */
 export async function examinarPacoteMiro(arquivo: File | Blob | Uint8Array): Promise<ExamePacoteMiro> {
-  const { bruto } = await abrirPacoteMiro(arquivo)
+  const bruto = await abrirCabecalhoMiro(arquivo)
   const nome = typeof bruto.board?.name === 'string' && bruto.board.name.trim() ? bruto.board.name.trim() : 'Quadro do Miro'
   return { nome, molduras: moldurasDoPacote(bruto), soltos: itensSoltosDoPacote(bruto) }
 }
@@ -193,13 +218,13 @@ export async function atualizarQuadroDoMiro(
   const filtro: FiltroMolduras | undefined = quadro.origem.molduras
     ? { molduras: quadro.origem.molduras, soltos: quadro.origem.soltos ?? false }
     : undefined
-  const aberto = await abrirPacoteMiro(arquivo)
-  const miroBoardId = typeof aberto.bruto.board?.id === 'string' ? aberto.bruto.board.id.trim() : ''
+  const brutoOriginal = await abrirCabecalhoMiro(arquivo)
+  const miroBoardId = typeof brutoOriginal.board?.id === 'string' ? brutoOriginal.board.id.trim() : ''
   if (miroBoardId !== quadro.origem.miroBoardId) {
     throw new Error('Este pacote é de outro quadro do Miro.')
   }
-  const bruto = filtro ? filtrarPacote(aberto.bruto, filtro) : aberto.bruto
-  const imagensPorItemId = await guardarImagensDoPacote(bruto, aberto.entradas)
+  const bruto = filtro ? filtrarPacote(brutoOriginal, filtro) : brutoOriginal
+  const imagensPorItemId = await guardarImagensDoPacote(arquivo, bruto)
 
   await descarregarPendentes()
   const atuais = itens.value

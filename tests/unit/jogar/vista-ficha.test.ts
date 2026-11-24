@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fichaCobreOMapa, mensagemDeVista, vistaDaFicha, vistaPedidaPeloDossie } from '../../../src/jogar/vista-ficha.ts';
+import { fichaCobreOMapa, mensagemDeVista, mensagemDoJogador, vistaDaFicha, vistaPedidaPeloDossie } from '../../../src/jogar/vista-ficha.ts';
 
 const janela = {}, outra = {};
 const pedido = { tipo: 'dossie.pedir-vista', vista: 'completa' };
@@ -28,4 +28,5 @@ test('a tela toda só fora do celular; a mensagem da vista é a do protocolo do 
   assert.equal(fichaCobreOMapa({ celularVertical: false, aberta: false }), false);
   assert.equal(fichaCobreOMapa({ celularVertical: true, aberta: true }), false);
   assert.deepEqual(mensagemDeVista('card'), { tipo: 'dossie.vista', vista: 'card' });
+  assert.deepEqual(mensagemDoJogador(['f1', 'f2']), { tipo: 'jogador', fichas: ['f1', 'f2'] });
 });

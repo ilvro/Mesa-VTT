@@ -50,29 +50,47 @@ export function revogarImagensDoQuadro(): void {
   carregandoUrls.clear();
 }
 
-export async function prepararImagemParaGuardar(arquivo: Blob): Promise<Blob> {
-  if (!FORMATOS_IMAGEM_ACEITOS.has(arquivo.type)) {
+export interface OpcoesPreparoImagem {
+  ladoMaximo?: number;
+  converterParaWebp?: boolean;
+  qualidade?: number;
+}
+
+export async function prepararImagemParaGuardar(
+  arquivo: Blob,
+  opcoes: OpcoesPreparoImagem = {},
+): Promise<Blob> {
+  const converterParaWebp = opcoes.converterParaWebp ?? false;
+  if (!converterParaWebp && !FORMATOS_IMAGEM_ACEITOS.has(arquivo.type)) {
     throw new Error(`Formato de imagem não suportado: ${arquivo.type || 'desconhecido'}`);
   }
-  if (arquivo.type === 'image/gif') return arquivo;
+  if (arquivo.type === 'image/gif' || arquivo.type === 'image/svg+xml') return arquivo;
   if (typeof createImageBitmap !== 'function' || typeof OffscreenCanvas !== 'function') {
     return arquivo;
   }
 
-  const bmp = await createImageBitmap(arquivo);
+  let bmp: ImageBitmap;
   try {
+    bmp = await createImageBitmap(arquivo);
+  } catch {
+    return arquivo;
+  }
+  try {
+    const ladoMaximo = opcoes.ladoMaximo ?? LADO_MAXIMO_IMAGEM;
     const maiorLado = Math.max(bmp.width, bmp.height);
-    if (maiorLado <= LADO_MAXIMO_IMAGEM) {
+    const precisaRedimensionar = maiorLado > ladoMaximo;
+    const precisaWebp = converterParaWebp && arquivo.type !== 'image/webp';
+    if (!precisaRedimensionar && !precisaWebp) {
       return arquivo;
     }
-    const escala = LADO_MAXIMO_IMAGEM / maiorLado;
+    const escala = precisaRedimensionar ? ladoMaximo / maiorLado : 1;
     const w = Math.max(1, Math.round(bmp.width * escala));
     const h = Math.max(1, Math.round(bmp.height * escala));
     const canvas = new OffscreenCanvas(w, h);
     const ctx = canvas.getContext('2d');
     if (!ctx) return arquivo;
     ctx.drawImage(bmp, 0, 0, w, h);
-    return await canvas.convertToBlob({ type: 'image/webp', quality: 0.9 });
+    return await canvas.convertToBlob({ type: 'image/webp', quality: opcoes.qualidade ?? 0.9 });
   } finally {
     bmp.close();
   }

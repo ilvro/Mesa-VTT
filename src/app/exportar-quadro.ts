@@ -1,4 +1,4 @@
-import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate';
+import { strFromU8, strToU8, zipSync, type Zippable } from 'fflate';
 import {
   imagensDoPacote,
   lerPacote,
@@ -11,6 +11,7 @@ import { criarQuadroComItens, guardarImagem, lerImagem, listarItens, listarQuadr
 import { campanhaAtiva } from './campanha.ts';
 import { ligarItensNovos } from './ligacoes-quadro.ts';
 import { carregarQuadros, descarregarPendentes, quadroAberto } from './quadros.ts';
+import { lerEntradaDoZip, percorrerZipEmPedacos } from './zip-streaming.ts';
 
 /** Monta o `.mesa-quadro.zip` de um quadro (itens e imagens). */
 export async function montarArquivoDoQuadro(quadroId: string): Promise<{ nome: string; blob: Blob }> {
@@ -52,28 +53,30 @@ export interface RelatorioDoPacote {
 export async function importarPacoteDeQuadro(arquivo: Blob | Uint8Array): Promise<RelatorioDoPacote> {
   const campanha = campanhaAtiva.value;
   if (!campanha) throw new Error('Escolha uma campanha antes de importar um quadro.');
-  const bytes = arquivo instanceof Uint8Array ? arquivo : new Uint8Array(await arquivo.arrayBuffer());
-  let entradas: Record<string, Uint8Array>;
+  let json: Uint8Array | null;
   try {
-    entradas = unzipSync(bytes);
+    json = await lerEntradaDoZip(arquivo, 'quadro.json');
   } catch {
     throw new Error('Este arquivo não é um pacote de quadro (zip inválido).');
   }
-  const json = entradas['quadro.json'];
   if (!json) throw new Error('Pacote de quadro inválido: arquivo quadro.json não encontrado.');
   const pacote = lerPacote(strFromU8(json));
 
-  let imagensFaltando = 0;
-  for (const id of imagensDoPacote(pacote.itens)) {
-    const dados = entradas[`imagens/${id}`];
-    if (!dados) {
-      imagensFaltando++;
-      continue;
-    }
-    const tipo = (await lerImagem(id))?.tipo;
-    if (tipo) continue; // já guardada (o id é o hash do conteúdo)
-    await guardarImagem(new Blob([new Uint8Array(dados)], { type: tipoPorAssinatura(dados) }));
+  const esperados = new Set(imagensDoPacote(pacote.itens));
+  const encontradas = new Set<string>();
+  if (esperados.size > 0) {
+    await percorrerZipEmPedacos(arquivo, {
+      decidir: (nome) => nome.startsWith('imagens/') && esperados.has(nome.slice('imagens/'.length)),
+      aoLer: async (nome, dados) => {
+        const id = nome.slice('imagens/'.length);
+        encontradas.add(id);
+        const tipo = (await lerImagem(id))?.tipo;
+        if (tipo) return; // já guardada (o id é o hash do conteúdo)
+        await guardarImagem(new Blob([dados as Uint8Array<ArrayBuffer>], { type: tipoPorAssinatura(dados) }));
+      },
+    });
   }
+  const imagensFaltando = esperados.size - encontradas.size;
 
   const existentes = (await listarQuadros(campanha.id)).map((q) => q.nome);
   const { quadro, itens, resumos } = prepararImportacao(pacote, {
