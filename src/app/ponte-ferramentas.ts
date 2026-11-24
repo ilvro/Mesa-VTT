@@ -5,6 +5,7 @@ import {
   ferramentasDeCampanhas, ferramentasDeCena, ferramentasDeElenco, ferramentasDeEntidade, ferramentasDeSessao,
   type ContextoDeCampanhas, type ContextoDeCenas, type ContextoDeElenco, type ContextoDeEntidades, type ContextoDeSessoes
 } from './ponte-escrita.ts';
+import { ferramentasDeQuadros, type ContextoDeQuadros } from './ponte-quadros.ts';
 
 export interface ContextoDaMesa {
   repositorio: Parameters<typeof ferramentasDaCampanha>[0];
@@ -13,6 +14,7 @@ export interface ContextoDaMesa {
   campanhas: ContextoDeCampanhas;
   cenas: ContextoDeCenas;
   elenco: ContextoDeElenco;
+  quadros: ContextoDeQuadros;
   /** A campanha selecionada no hub, ou null. */
   campanhaAtual: () => { id: string; nome: string; sistema: string } | null;
   oQueVejo: () => Record<string, unknown>;
@@ -26,6 +28,7 @@ export function ferramentasDaMesa(ctx: ContextoDaMesa): FerramentaDaPonte[] {
     ...ferramentasDeCampanhas(ctx.campanhas),
     ...ferramentasDeCena(ctx.cenas),
     ...ferramentasDeElenco(ctx.elenco),
+    ...ferramentasDeQuadros(ctx.quadros),
     {
       nome: 'mesa_campanha_atual',
       descricao: 'A campanha selecionada no hub da Mesa (id, nome e sistema), ou "nenhuma".',

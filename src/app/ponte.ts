@@ -5,6 +5,9 @@ import { abrirAplicativo } from './aplicativos.ts';
 import { alternarEncontroDaCena, alterarEntidade, atualizar, campanhaAtiva, campanhas, criarCampanha, criarEntidade, definirMomentoDaCena, ligarRefs, obterRepositorio, salvarElencoDaCampanha, vincularMapaNaCena, vincularParticipanteNaCena, vincularPistaNaCena, vincularTrilhaNaCena } from './campanha.ts';
 import { ferramentasDaMesa } from './ponte-ferramentas.ts';
 import { momentosDoMapaDoAtlas } from './momentos-do-atlas.ts';
+import { listarItens, listarQuadros } from './banco-quadros.ts';
+import { imagemReduzidaParaAssistente } from './imagens-quadro.ts';
+import { itens as itensDoQuadro, quadroAberto } from './quadros.ts';
 import { oQueVejo } from './o-que-vejo.ts';
 import { alterarSessaoPorId, carregarSessoes, planejarSessao } from './registro.ts';
 import type { Efeito } from '../dominio/efeitos.ts';
@@ -123,6 +126,14 @@ const ferramentas = ferramentasDaMesa({
     entidades: entidadesDoBanco,
     salvarElenco: salvarElencoDaCampanha,
     registrar,
+  },
+  quadros: {
+    campanha: campanhaDaChamada,
+    quadros: id => listarQuadros(id),
+    itens: id => listarItens(id),
+    aberto: () => (quadroAberto.value ? { quadro: quadroAberto.value, itens: [...itensDoQuadro.value.values()] } : null),
+    entidades: async () => new Map((await entidadesDoBanco()).map(e => [e.id, { nome: e.nome, tipo: e.tipo }])),
+    imagem: imagemReduzidaParaAssistente,
   },
   campanhaAtual: () => campanhaAtiva.value,
   oQueVejo,

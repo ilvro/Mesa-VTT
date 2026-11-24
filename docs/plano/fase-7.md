@@ -105,7 +105,7 @@ Commit: `command to inspect board sections`
 
 ## Etapa C — Ferramentas na ponte
 
-### L2a — Ferramentas de leitura  ⬜
+### L2a — Ferramentas de leitura  ✅
 Objetivo: o Claude navega pelo quadro sem carregar o que não precisa.
 Depende de: L1c.
 Ler: `src/app/ponte-ferramentas.ts`, `src/app/ponte-escrita.ts` (padrão de contexto injetável e de erros legíveis), `src/app/ponte.ts`, `../Atlas/scripts/ponte/LEIAME.md` ("Dois níveis de ferramentas", "Catálogo base"), `../Atlas/mesa-core/src/ponte.ts` (`json`, `imagem`).
@@ -119,13 +119,15 @@ Como (todas só de leitura e sob demanda, cada uma com menos de 4,5 KB no catál
 O contexto lê do banco na hora da chamada (como `ContextoDeSessoes`); o quadro aberto vem da memória. A busca aceita o quadro pelo nome ou pelo id.
 Testes: cada ferramenta com contexto falso; erro legível para quadro ou seção inexistente; tamanho do catálogo.
 Depois: no Atlas, `npm run ponte:catalogo` e commit de `scripts/ponte/catalogo-base.json` (rotina descrita no LEIAME).
+Nota: `ferramentasDeQuadros(ctx: ContextoDeQuadros)` em `src/app/ponte-quadros.ts`; `ContextoDaMesa` ganhou `quadros`. Contexto: `quadros(campanhaId)`, `itens(quadroId)` (banco), `aberto()` (memória, vale mais que o banco), `entidades?()` e `imagem(imagemId, lado)` (`imagemReduzidaParaAssistente` em `imagens-quadro.ts`: JPEG 0,8 em OffscreenCanvas, data URL). `quadro_secao` usa `nivel: 'titulos'` por padrão. Quadro por id, nome ou trecho do nome (sem acento); seção por id ou título; item de imagem pelo #id curto (prefixo do id). `quadro_buscar` sem `quadro` busca em todos. No Atlas, `scripts/ponte/catalogo.ts` ganhou `'quadros'` em `subcontextos` e o `catalogo-base.json` recebeu as 5 ferramentas. Na revisão do Opus: o gerador passou a tirar do cache e do catálogo antigo as entradas com o mesmo nome de uma ferramenta do código (o cache trazia `campanha_*` duplicadas como do Atlas); as entradas `atlas_*` do catálogo ficaram as do HEAD, para não embutir mudanças não commitadas de outra sessão. O `atlas_caminho` aparece duas vezes porque o código do Atlas o define duas vezes (`src/app/ponte-escrita.ts`), defeito anterior.
 Commit: `board reading tools for the assistant`
 
-### L2b — Guia de uso para o Claude  ⬜
+### L2b — Guia de uso para o Claude  ✅
 Objetivo: o Claude saber ler o quadro do jeito barato.
 Depende de: L2a.
 Arquivos: `../Atlas/docs/assistente/guia/quadros.md` (novo) e a linha dele no índice do guia (veja como `ferramentas-mesa.md` entra).
 Como: ensinar a ordem (mapa → busca → seção em `titulos` → seção `completo` → imagem só se precisar), a gravar o resumo depois de ler uma seção (L3a), a citar itens pelo id curto, a não pedir todas as imagens, e a vocabulário do mestre (marcadores, tipos semânticos, `[[ligações]]`).
+Nota: guia em `Atlas/docs/assistente/guia/quadros.md` (seção nova da `plataforma_guia`: qualquer `.md` da pasta vira seção, então não há índice a editar); a linha dele entrou na lista do `docs/assistente/LEIAME.md`. As ferramentas `quadro_resumir` e `quadro_descrever_imagem` aparecem no guia como "só quando a L3a estiver pronta"; ajuste o texto ao entregar a L3a. Na revisão, a sintaxe das falas no guia foi corrigida para `[SINDRE]` / `[KARL PARA OLE]`.
 Commit no Atlas: `guide for reading mesa boards`
 
 ---

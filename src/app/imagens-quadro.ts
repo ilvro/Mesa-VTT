@@ -108,3 +108,32 @@ export async function importarArquivoImagem(arquivo: Blob): Promise<ImagemImport
     altura,
   };
 }
+
+/** A imagem guardada, reduzida (lado maior ≤ `lado`) e em JPEG 0,8, como data URL para o assistente; null se não há arquivo. */
+export async function imagemReduzidaParaAssistente(imagemId: string, lado: number): Promise<string | null> {
+  const registro = await lerImagem(imagemId);
+  if (!registro) return null;
+  let blob: Blob = registro.blob;
+  if (typeof createImageBitmap === 'function' && typeof OffscreenCanvas === 'function') {
+    const bmp = await createImageBitmap(registro.blob);
+    try {
+      const escala = Math.min(1, lado / Math.max(bmp.width, bmp.height));
+      const w = Math.max(1, Math.round(bmp.width * escala));
+      const h = Math.max(1, Math.round(bmp.height * escala));
+      const canvas = new OffscreenCanvas(w, h);
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(bmp, 0, 0, w, h);
+        blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 });
+      }
+    } finally {
+      bmp.close();
+    }
+  }
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binario = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binario += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return `data:${blob.type || 'image/jpeg'};base64,${btoa(binario)}`;
+}
