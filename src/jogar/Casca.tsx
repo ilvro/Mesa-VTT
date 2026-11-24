@@ -4,6 +4,7 @@ import { baseDoApp } from '../app/inventario.ts';
 import { carregarSessaoOnline, iniciarLogin, sairDoOnline, sessaoOnline } from '../app/online-login.ts';
 import { conectarSala, type ClienteDaSala, type EstadoDaSala } from '../online/cliente.ts';
 import { urlDoWebSocket } from '../online/config.ts';
+import { FeedDeRolagens } from './FeedDeRolagens.tsx';
 import { criarPonteDoJogador, type CanalLocal } from './ponte-jogador.ts';
 import './casca.css';
 
@@ -40,6 +41,8 @@ function Sala({ salaId, sessao, nome, aoSessaoInvalida }: { salaId: string; sess
   const [temMapa, setTemMapa] = useState(false);
   const [erro, setErro] = useState<ErroDaCasca>(null);
   const [aba, setAba] = useState<Aba>('mapa');
+  const [clienteSala, setClienteSala] = useState<ClienteDaSala | null>(null);
+  const [retratos, setRetratos] = useState<Record<string, string>>({});
   const invalida = useRef(aoSessaoInvalida);
   invalida.current = aoSessaoInvalida;
 
@@ -52,8 +55,15 @@ function Sala({ salaId, sessao, nome, aoSessaoInvalida }: { salaId: string; sess
     });
     const sairEstado = cliente.aoMudarEstado(setConexao);
     setConexao(cliente.estado);
+    setClienteSala(cliente);
+    // retratos conhecidos: o `tokenImage` das fichas que a sala entrega (as do próprio jogador)
+    const sairBemVindo = cliente.ouvir('bem-vindo', m => {
+      const por: Record<string, string> = {};
+      for (const f of m.fichas) if (typeof f.tokenImage === 'string' && f.tokenImage) por[f.id] = f.tokenImage;
+      setRetratos(por);
+    });
     const ponte = criarPonteDoJogador({ cliente, salaId, criarCanal: n => new BroadcastChannel(n) as unknown as CanalLocal, aoTerMapa: () => setTemMapa(true) });
-    return () => { sairEstado(); ponte.fechar(); cliente?.fechar(); };
+    return () => { sairEstado(); sairBemVindo(); ponte.fechar(); cliente?.fechar(); };
   }, [salaId, sessao]);
 
   if (erro === 'sessao') return null;   // volta para "Entrar" com o aviso
@@ -65,6 +75,7 @@ function Sala({ salaId, sessao, nome, aoSessaoInvalida }: { salaId: string; sess
         {erro === 'sala'
           ? <div class="casca-sobre aviso-grande" data-testid="casca-erro-sala" role="alert"><h2 class="faixa">Sala não encontrada</h2><p>Esta sala não existe ou foi encerrada. Confira o link com o mestre.</p></div>
           : !temMapa && <div class="casca-sobre" data-testid="casca-aguardando"><p>Aguardando o mestre abrir a mesa</p></div>}
+        <FeedDeRolagens cliente={clienteSala} salaId={salaId} nome={nome} retratos={retratos} />
         <span class={`casca-selo ${erro ? 'caiu' : conexao}`} data-testid="casca-selo" title={`Entrou como ${nome}`}>{erro === 'sala' ? 'Sem sala' : selo}</span>
       </section>
       <aside class="casca-ficha" data-testid="casca-ficha" aria-label="Ficha"><p class="meta">A ficha aparece aqui em breve</p></aside>

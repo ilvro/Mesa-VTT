@@ -4,7 +4,7 @@
  */
 
 import {
-  codificarPedaco, decodificarPedaco, lerMensagemParaSala,
+  ROLAGENS_NO_BEM_VINDO, codificarPedaco, decodificarPedaco, lerMensagemParaSala,
   type Eu, type MensagemDaSala, type MsgBemVindo, type MsgBlob,
 } from '../src/online/protocolo.ts';
 import { ErroEstado, montarMembros, type Estado } from './estado.ts';
@@ -96,6 +96,7 @@ export function bemVindo(estado: Estado, eu: Eu, conectados: readonly Eu[]): Msg
     config: estado.config(),
     revs,
     donos,
+    rolagens: estado.rolagens(ROLAGENS_NO_BEM_VINDO),
   };
 }
 
@@ -151,6 +152,8 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
       if (!f) return [erro('inexistente', msg.tipo)];
       return [{ destino: { ficha: f.dono }, msg: { tipo: 'ficha.atualizada', ficha: f.ficha, rev: f.rev, dono: f.dono } }];
     }
+    case 'rolagens.historico':
+      return [{ destino: 'remetente', msg: { tipo: 'rolagens.historico', rolagens: estado.rolagens() } }];
     case 'membro.personagem':
       estado.escolherPersonagem(eu.discordId, msg.fichaId);
       return [saidaMembros(estado, conectados)];

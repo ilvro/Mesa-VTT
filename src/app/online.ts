@@ -7,8 +7,9 @@ import { conectarSala, type ClienteDaSala, type EstadoDaSala } from '../online/c
 import { urlDoWebSocket } from '../online/config.ts';
 import { EVENTOS_DO_MESTRE, type Envelope, type Membro } from '../online/protocolo.ts';
 import { LIMITE_ESTADO_BYTES, blobIdDoEstado, comprimirEstado, type EstadoComprimidoRef } from '../online/estado-comprimido.ts';
-import { CANAL_EVENTOS } from '#mesa';
+import { CANAL_EVENTOS, type Entidade } from '#mesa';
 import { barramentoDaMesa } from './barramento.ts';
+import { entidades } from './campanha.ts';
 
 /** No máximo isto de mensagens de gesto (`emGesto`, `peca-gesto`) por segundo; a última sempre sai. */
 export const GESTOS_POR_SEGUNDO = 15;
@@ -63,6 +64,16 @@ export interface OpcoesDaPonte {
   /** Pedidos ao Jukebox pelo barramento (`jukebox.ouvir`, `jukebox.arquivo`). Sem isto, a ponte não leva som à sala. */
   pedirAoJukebox?: (tipo: 'jukebox.ouvir' | 'jukebox.arquivo', dados: unknown, prazoMs: number) => Promise<RespostaDoJukebox>;
   aoMudar?: (estado: EstadoDaPonte) => void;
+  /**
+   * A ficha (id do Ref `dados.ficha`) é de uma ameaça? A rolagem de uma ameaça é do mestre e não sai (R9). O envelope não distingue
+   * (o Ref é sempre `ficha/ficha`), então quem sabe é a campanha. Padrão: nenhuma é.
+   */
+  ehAmeaca?: (fichaId: string) => boolean;
+}
+
+/** Alguma entidade `ameaca` da campanha liga-se à ficha `fichaId` (Ref do aplicativo `ficha`)? */
+export function fichaEhAmeaca(entidades: readonly Pick<Entidade, 'tipo' | 'refs'>[], fichaId: string): boolean {
+  return entidades.some(e => e.tipo === 'ameaca' && e.refs.some(r => r.app === 'ficha' && r.id === fichaId));
 }
 
 export type RespostaDoJukebox = { ok: true; dados: unknown } | { ok: false; motivo: string };
@@ -385,6 +396,10 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     if (typeof e.tipo !== 'string' || typeof e.id !== 'string') return;
     if (e.autor !== undefined) return; // veio da sala: não volta para ela
     if (!EVENTOS_DO_MESTRE.includes(e.tipo)) return;
+    if (e.tipo === 'ficha.rolagem' && o.ehAmeaca) {
+      const ref = (e.dados as { ficha?: { id?: unknown } } | null | undefined)?.ficha;
+      if (typeof ref?.id === 'string' && o.ehAmeaca(ref.id)) return; // ameaça: a rolagem é do mestre
+    }
     if (e.tipo === 'jukebox.mix' || e.tipo === 'jukebox.efeito-tocado') {
       if (!pedirAoJukebox || !e.dados || typeof e.dados !== 'object') return;
       if (e.tipo === 'jukebox.mix') aoMix(e); else aoEfeito(e);
@@ -473,6 +488,7 @@ export function abrirMesaOnline(sessao: string, salaId: string, nome?: string): 
     cliente,
     criarCanal: n => new BroadcastChannel(n) as unknown as CanalLocal,
     pedirAoJukebox: pedirAoJukeboxPeloBarramento,
+    ehAmeaca: id => fichaEhAmeaca(entidades.value, id),
     ...(nome !== undefined ? { nomeDaSala: nome } : {}),
     aoMudar: e => { estadoDaPonte.value = e; },
   });

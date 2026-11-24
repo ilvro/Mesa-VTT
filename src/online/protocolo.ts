@@ -30,6 +30,8 @@ export type MsgFichaSalvar = { tipo: 'ficha.salvar'; ficha: FichaDaSala; rev: nu
 export type MsgFichaEntregar = { tipo: 'ficha.entregar'; fichaId: string; dono: string };
 export type MsgMembroPersonagem = { tipo: 'membro.personagem'; fichaId: string | null };
 export type MsgSalaConfig = { tipo: 'sala.config'; nome: string; capaBlobId?: string };
+/** Qualquer membro pede o histórico de rolagens (as 200 da sala); a resposta é `MsgRolagensHistorico`, só ao remetente. */
+export type MsgRolagensHistorico = { tipo: 'rolagens.historico' };
 
 /** Anúncio de um blob; os pedaços seguem em quadros binários (ver `codificarPedaco`). */
 export interface MsgBlob { tipo: 'blob'; id: string; tipoMime: string }
@@ -55,6 +57,7 @@ export type MensagemParaSala =
   | MsgBlobTem
   | MsgBlobPedir
   | MsgMembroPersonagem
+  | MsgRolagensHistorico
   | MsgSalaConfig;
 
 /** Nome, capa e dono da sala, guardados no `config` dela. */
@@ -80,7 +83,12 @@ export interface MsgBemVindo {
   revs?: Record<string, number>;
   /** Dono (`discordId`) de cada ficha enviada, pelo id. */
   donos?: Record<string, string>;
+  /** As últimas rolagens (`ficha.rolagem` já carimbadas, da mais antiga à mais nova), no máximo `ROLAGENS_NO_BEM_VINDO`. */
+  rolagens?: Envelope[];
 }
+
+/** Quantas rolagens o `bem-vindo` traz. */
+export const ROLAGENS_NO_BEM_VINDO = 50;
 
 export type MensagemDaSala =
   | MsgBemVindo
@@ -88,6 +96,8 @@ export type MensagemDaSala =
   | { tipo: 'canal'; nome: string; msg: unknown }
   | { tipo: 'evento'; envelope: Envelope }
   | { tipo: 'ficha.atualizada'; ficha: FichaDaSala; rev: number; conflito?: boolean; dono?: string }
+  /** Resposta a `rolagens.historico`: as rolagens da sala (até 200), da mais antiga à mais nova. */
+  | { tipo: 'rolagens.historico'; rolagens: Envelope[] }
   | MsgBlob
   | MsgBlobTemResposta
   /** `recusado`: o `tipo` da mensagem recusada (o campo `tipo` já é o discriminante `'erro'`). */
@@ -125,6 +135,7 @@ export function lerMensagemParaSala(texto: string): MensagemParaSala | null {
     case 'blob': return txt(m.id) && m.id && txt(m.tipoMime) ? { tipo: 'blob', id: m.id, tipoMime: m.tipoMime } : null;
     case 'blob.tem': return txt(m.id) && m.id ? { tipo: 'blob.tem', id: m.id } : null;
     case 'blob.pedir': return txt(m.id) && m.id ? { tipo: 'blob.pedir', id: m.id } : null;
+    case 'rolagens.historico': return { tipo: 'rolagens.historico' };
     case 'membro.personagem': return m.fichaId === null || txt(m.fichaId) ? { tipo: 'membro.personagem', fichaId: m.fichaId } : null;
     case 'sala.config':
       if (!txt(m.nome) || (m.capaBlobId !== undefined && !txt(m.capaBlobId))) return null;
@@ -143,11 +154,13 @@ export function lerMensagemDaSala(texto: string): MensagemDaSala | null {
       if (m.config !== undefined && !(ehObj(m.config) && txt(m.config.nome))) return null;
       if (m.revs !== undefined && !(ehObj(m.revs) && Object.values(m.revs).every(num))) return null;
       if (m.donos !== undefined && !(ehObj(m.donos) && Object.values(m.donos).every(txt))) return null;
+      if (m.rolagens !== undefined && !listaDe(m.rolagens, ehEnvelope)) return null;
       return {
         tipo: 'bem-vindo', eu: m.eu, membros: m.membros, fichas: m.fichas, ultimoEstado: m.ultimoEstado,
         ...(m.config !== undefined ? { config: m.config as unknown as ConfigSala } : {}),
         ...(m.revs !== undefined ? { revs: m.revs as Record<string, number> } : {}),
         ...(m.donos !== undefined ? { donos: m.donos as Record<string, string> } : {}),
+        ...(m.rolagens !== undefined ? { rolagens: m.rolagens } : {}),
       };
     case 'membros': return listaDe(m.membros, ehMembro) ? { tipo: 'membros', membros: m.membros } : null;
     case 'canal': return txt(m.nome) && 'msg' in m ? { tipo: 'canal', nome: m.nome, msg: m.msg } : null;
@@ -155,6 +168,7 @@ export function lerMensagemDaSala(texto: string): MensagemDaSala | null {
     case 'ficha.atualizada':
       if (!ehFicha(m.ficha) || !num(m.rev) || (m.conflito !== undefined && typeof m.conflito !== 'boolean') || (m.dono !== undefined && !txt(m.dono))) return null;
       return { tipo: 'ficha.atualizada', ficha: m.ficha, rev: m.rev, ...(m.conflito !== undefined ? { conflito: m.conflito } : {}), ...(m.dono !== undefined ? { dono: m.dono } : {}) };
+    case 'rolagens.historico': return listaDe(m.rolagens, ehEnvelope) ? { tipo: 'rolagens.historico', rolagens: m.rolagens } : null;
     case 'blob': return txt(m.id) && m.id && txt(m.tipoMime) ? { tipo: 'blob', id: m.id, tipoMime: m.tipoMime } : null;
     case 'blob.tem':
       if (!txt(m.id) || !m.id || typeof m.tem !== 'boolean' || (m.tamanho !== undefined && !num(m.tamanho))) return null;

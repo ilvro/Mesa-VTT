@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { criarPonte, LIMITE_SOM_BYTES, type CanalLocal } from '../../../src/app/online.ts';
+import { criarPonte, fichaEhAmeaca, LIMITE_SOM_BYTES, type CanalLocal } from '../../../src/app/online.ts';
 import { descomprimirEstado } from '../../../src/online/estado-comprimido.ts';
 import type { ClienteDaSala } from '../../../src/online/cliente.ts';
 import type { MensagemDaSala, MensagemParaSala, Membro } from '../../../src/online/protocolo.ts';
@@ -65,6 +65,24 @@ test('evento fora de EVENTOS_DO_MESTRE não sai; o permitido sai; o que veio da 
   assert.equal((enviadas[0] as { envelope: { id: string } }).envelope.id, 'b');
   apps.postMessage({ ...base, tipo: 'ficha.rolagem', id: 'c', autor: { discordId: '2', nome: 'x', papel: 'jogador', fichas: [] } });
   assert.equal(enviadas.length, 1);
+});
+
+test('rolagem de ameaça do mestre não sai; a de personagem sai', () => {
+  const { enviadas, apps } = montar('teste-1', { ehAmeaca: id => id === 'monstro' });
+  const rolagem = (id: string, ficha: string) => ({ contrato: 1, app: 'ficha', em: 1, campanhaId: null, tipo: 'ficha.rolagem', id, dados: { ficha: { app: 'ficha', tipo: 'ficha', id: ficha }, titulo: 'Garras', total: 14 } });
+  apps.postMessage(rolagem('r1', 'monstro'));
+  assert.equal(enviadas.length, 0);
+  apps.postMessage(rolagem('r2', 'heroi'));
+  assert.equal(enviadas.length, 1);
+  assert.equal((enviadas[0] as { envelope: { id: string } }).envelope.id, 'r2');
+});
+
+test('fichaEhAmeaca consulta as entidades ameaca da campanha pelo Ref da ficha', () => {
+  const ref = (id: string) => ({ app: 'ficha' as const, tipo: 'ficha', id });
+  const ents = [{ tipo: 'ameaca' as const, refs: [ref('m1')] }, { tipo: 'personagem' as const, refs: [ref('p1')] }];
+  assert.equal(fichaEhAmeaca(ents as never, 'm1'), true);
+  assert.equal(fichaEhAmeaca(ents as never, 'p1'), false);
+  assert.equal(fichaEhAmeaca(ents as never, 'x'), false);
 });
 
 test('evento da sala vai ao mesa:eventos local com o autor', () => {

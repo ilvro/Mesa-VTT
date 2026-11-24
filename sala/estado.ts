@@ -59,7 +59,8 @@ export interface Estado {
   entregarFicha(id: string, dono: string): FichaGuardada | null;
 
   registrarRolagem(envelope: Envelope, autor: string, agora: number): void;
-  rolagens(): Envelope[];
+  /** As rolagens, da mais antiga à mais nova; com `ultimas`, só as `ultimas` mais novas. */
+  rolagens(ultimas?: number): Envelope[];
 
   guardarUltimo(canal: string, msg: unknown): void;
   ultimoEstado(): Record<string, unknown>;
@@ -189,8 +190,11 @@ export function criarEstado(sql: Sql): Estado {
       rodar('INSERT OR REPLACE INTO rolagens (id, em, autor, json) VALUES (?, ?, ?, ?)', envelope.id, typeof envelope.em === 'number' ? envelope.em : agora, autor, JSON.stringify(envelope));
       rodar('DELETE FROM rolagens WHERE rowid <= (SELECT rowid FROM rolagens ORDER BY rowid DESC LIMIT 1 OFFSET ?)', MAX_ROLAGENS);
     },
-    rolagens() {
-      return rodar('SELECT json FROM rolagens ORDER BY rowid').map(r => JSON.parse(String(r.json)) as Envelope);
+    rolagens(ultimas) {
+      const linhas = ultimas === undefined
+        ? rodar('SELECT json FROM rolagens ORDER BY rowid')
+        : rodar('SELECT json FROM (SELECT rowid AS r, json FROM rolagens ORDER BY rowid DESC LIMIT ?) ORDER BY r', ultimas);
+      return linhas.map(r => JSON.parse(String(r.json)) as Envelope);
     },
 
     guardarUltimo(canal, msg) {
