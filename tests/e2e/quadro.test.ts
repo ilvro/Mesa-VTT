@@ -994,3 +994,91 @@ test('E3a: alternar para Ler, clicar numa moldura do índice e voltar ao quadro 
     await ctx.close();
   }
 });
+
+test('importação do Miro lê em pedaços e reduz imagem > 2048 px para WebP', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  const erros: string[] = [];
+  page.on('pageerror', (e) => erros.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') erros.push(m.text()); });
+
+  try {
+    await page.goto(`${amb.origem}/Mesa/`);
+    await page.waitForSelector('[data-testid="campanha-select"]');
+    await page.click('[data-testid="aba-campanhas"]');
+    await page.fill('[data-testid="nova-campanha-nome"]', 'Campanha Miro WebP');
+    await page.click('[data-testid="criar-campanha"]');
+    await page.waitForSelector('[data-testid="tela-entidades"]');
+    await page.click('[data-testid="aba-quadros"]');
+    await page.waitForSelector('[data-testid="tela-quadros"]');
+
+    const pngBytes = new Uint8Array(
+      await page.evaluate(async () => {
+        const c = new OffscreenCanvas(3000, 1500);
+        const cx = c.getContext('2d')!;
+        cx.fillStyle = '#336699';
+        cx.fillRect(0, 0, 3000, 1500);
+        const blob = await c.convertToBlob({ type: 'image/png' });
+        return Array.from(new Uint8Array(await blob.arrayBuffer()));
+      }),
+    );
+
+    const pacoteMiro = {
+      formato: 'miro-bruto',
+      versao: 1,
+      baixadoEm: Date.now(),
+      board: { id: 'b-webp', name: 'Handouts Grandes' },
+      items: [
+        {
+          id: 'img-1',
+          type: 'image',
+          arquivoLocal: 'imagens/img-1.png',
+          position: { x: 0, y: 0 },
+          geometry: { width: 3000, height: 1500 },
+        },
+      ],
+      connectors: [],
+    };
+    const zipBytes = zipSync({
+      'imagens/img-1.png': [pngBytes, { level: 0 }],
+      'quadro.json': strToU8(JSON.stringify(pacoteMiro)),
+    });
+
+    await page.setInputFiles('[data-testid="importar-miro-input"]', {
+      name: 'handouts.miro.zip',
+      mimeType: 'application/zip',
+      buffer: Buffer.from(zipBytes),
+    });
+    await page.waitForSelector('[data-testid="area-quadro"]');
+
+    const salva = await page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const req = indexedDB.open('mesa-quadros-v1');
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      return new Promise<{ tipo: string; largura: number; altura: number }[]>((resolve, reject) => {
+        const tx = db.transaction(['imagens'], 'readonly');
+        const req = tx.objectStore('imagens').getAll();
+        req.onsuccess = () => {
+          resolve(
+            (req.result as { tipo: string; largura: number; altura: number }[]).map((r) => ({
+              tipo: r.tipo,
+              largura: r.largura,
+              altura: r.altura,
+            })),
+          );
+        };
+        req.onerror = () => reject(req.error);
+      });
+    });
+
+    assert.equal(salva.length, 1);
+    assert.equal(salva[0]!.tipo, 'image/webp');
+    assert.equal(salva[0]!.largura, 2048);
+    assert.equal(salva[0]!.altura, 1024);
+    assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
+  } finally {
+    await ctx.close();
+  }
+});
