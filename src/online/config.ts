@@ -3,8 +3,8 @@
 /** Id público do app no Discord Developer Portal (não é segredo). */
 export const DISCORD_CLIENT_ID = '1573405277389197415';
 
-/** Ajustar depois do primeiro deploy (`npm run sala:deploy`): o subdomínio é o da conta do Cloudflare. */
-export const URL_SALA_PRODUCAO = 'https://mesa-sala.SUBDOMINIO.workers.dev';
+/** URL do Worker da sala em produção. */
+export const URL_SALA_PRODUCAO = 'https://mesa-sala.ilvro-ermes.workers.dev';
 
 export const CHAVE_URL_DA_SALA = 'mesa:sala-url';
 export const URL_SALA_LOCAL = 'http://127.0.0.1:8787';
