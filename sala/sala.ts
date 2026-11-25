@@ -113,7 +113,7 @@ export class Sala implements DurableObject {
     const novo: Eu = { discordId: sessao.discordId, nome: sessao.nome, papel: papelNaSala(sessao.discordId, config.dono), avatar: sessao.avatar };
     ws.serializeAttachment(novo satisfies Anexo);
     const todos = this.conectados();
-    ws.send(JSON.stringify(bemVindo(this.estado, novo, todos)));
+    ws.send(JSON.stringify(bemVindo(this.estado, novo, todos, Date.now())));
     // quem chega depois não viu os blobs que o mestre mandou: manda os citados nos últimos `canal` (o mestre já os tem)
     if (novo.papel !== 'mestre') {
       for (const b of blobsParaQuemChega(this.estado)) {

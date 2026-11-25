@@ -18,6 +18,8 @@ export interface SaguaoProps {
   meuPersonagemId: string | null;
   podeFechar: boolean;
   espectador?: boolean;
+  preparandoSons?: boolean;
+  aoLiberarSom?: () => void;
   aoEscolher: (fichaId: string) => void;
   aoNovaFicha: () => void;
   aoImportar: (fichas: FichaDaSala[]) => void;
@@ -62,6 +64,8 @@ export function Saguao({
   meuPersonagemId,
   podeFechar,
   espectador = false,
+  preparandoSons = false,
+  aoLiberarSom,
   aoEscolher,
   aoNovaFicha,
   aoImportar,
@@ -83,7 +87,7 @@ export function Saguao({
   };
 
   return (
-    <div class="saguao" data-testid="casca-saguao" role="dialog" aria-label="Saguão da mesa">
+    <div class="saguao" data-testid="casca-saguao" role="dialog" aria-label="Saguão da mesa" onClick={() => aoLiberarSom?.()}>
       <div class="saguao-miolo">
         <header class={`saguao-capa ${capaUrl ? 'com-imagem' : ''}`}>
           {capaUrl && <img class="saguao-capa-img" src={capaUrl} alt="" />}
@@ -101,6 +105,7 @@ export function Saguao({
             ) : (
               <p class="saguao-status" data-testid="casca-aguardando">Aguardando o mestre abrir a mesa</p>
             )}
+            {preparandoSons && <p class="saguao-status" data-testid="saguao-preparando-sons">Preparando os sons…</p>}
           </div>
         </header>
 

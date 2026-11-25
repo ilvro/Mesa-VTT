@@ -92,7 +92,7 @@ export function saidaMembros(estado: Estado, conectados: readonly Eu[]): Saida {
 }
 
 /** O `bem-vindo` de quem acabou de entrar: `conectados` já inclui `eu`. */
-export function bemVindo(estado: Estado, eu: Eu, conectados: readonly Eu[]): MsgBemVindo {
+export function bemVindo(estado: Estado, eu: Eu, conectados: readonly Eu[], agora?: number): MsgBemVindo {
   const guardadas = estado.fichas(eu.papel === 'mestre' ? undefined : eu.discordId);
   const revs: Record<string, number> = {};
   const donos: Record<string, string> = {};
@@ -110,6 +110,7 @@ export function bemVindo(estado: Estado, eu: Eu, conectados: readonly Eu[]): Msg
     revs,
     donos,
     rolagens: estado.rolagens(ROLAGENS_NO_BEM_VINDO),
+    ...(agora !== undefined ? { agora } : {}),
   };
 }
 
@@ -125,6 +126,8 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
   if (!permitido(msg, eu, estado)) return [erro('permissao', msg.tipo === 'evento' ? msg.envelope.tipo : msg.tipo)];
 
   switch (msg.tipo) {
+    case 'ping':
+      return [{ destino: 'remetente', msg: { tipo: 'pong', em: msg.em, agora } }];
     case 'canal': {
       if (!msg.nome.startsWith(PREFIXO_PROJETOR)) return [erro('invalido', 'canal')];
       const dentro = msg.msg as { tipo?: unknown } | null;

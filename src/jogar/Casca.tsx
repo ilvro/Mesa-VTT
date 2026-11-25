@@ -18,6 +18,8 @@ import {
 import { FeedDeRolagens } from './FeedDeRolagens.tsx';
 import { criarPonteDoJogador, type CanalLocal } from './ponte-jogador.ts';
 import { Saguao } from './Saguao.tsx';
+import { criarSomDaCasca, type EstadoDoSomNaCasca, type SomDaCasca } from './som.ts';
+import { lerPreferenciasDeSom } from '../online/sincronia.ts';
 import { fichaCobreOMapa, mensagemDeVista, mensagemDoJogador, vistaDaFicha, vistaPedidaPeloDossie } from './vista-ficha.ts';
 import './casca.css';
 
@@ -223,6 +225,13 @@ function Sala({
   const [config, setConfig] = useState<ConfigSala | null>(null);
   const [capaUrl, setCapaUrl] = useState<string | null>(null);
   const [saguaoAberto, setSaguaoAberto] = useState(false);
+  const [somPainelAberto, setSomPainelAberto] = useState(false);
+  const [estadoSom, setEstadoSom] = useState<EstadoDoSomNaCasca>(() => ({
+    preferencias: lerPreferenciasDeSom(),
+    bloqueado: false,
+    preparando: false,
+  }));
+  const somRef = useRef<SomDaCasca | null>(null);
   const capaBlobIdRef = useRef<string | null>(null);
   const capaUrlRef = useRef<string | null>(null);
   const [aberta, setAberta] = useState(false);   // a ficha completa pediu a tela toda (fora do celular)
@@ -290,13 +299,19 @@ function Sala({
       setCapaUrl(url);
     });
     const ponte = criarPonteDoJogador({ cliente, salaId, criarCanal: n => new BroadcastChannel(n) as unknown as CanalLocal, aoTerMapa: () => setTemMapa(true) });
+    const baseJukebox = emDiscord ? baseDoAppNoDiscord('jukebox') : baseDoApp('jukebox');
+    const som = criarSomDaCasca({ cliente, baseJukebox });
+    somRef.current = som;
+    setEstadoSom(som.estado);
+    const sairSom = som.aoMudar(setEstadoSom);
     return () => {
+      sairSom(); som.fechar(); somRef.current = null;
       sairEstado(); sairBemVindo(); sairMembros(); sairConfig(); sairAtualizada(); sairRemovida(); sairBlob();
       if (capaUrlRef.current) { URL.revokeObjectURL(capaUrlRef.current); capaUrlRef.current = null; }
       capaBlobIdRef.current = null;
       ponte.fechar(); cliente?.fechar();
     };
-  }, [salaId, sessao]);
+  }, [salaId, sessao, emDiscord]);
 
   // Pedido do card ("Ficha completa"): só do `iframe` do Dossiê, na mesma origem.
   useEffect(() => {
@@ -360,21 +375,85 @@ function Sala({
         )}
         <FeedDeRolagens cliente={clienteSala} salaId={salaId} nome={nome} retratos={retratos} />
         {!mostrarSaguao && erro !== 'sala' && (
-          <button
-            type="button"
-            class="casca-saguao-botao"
-            data-testid="casca-saguao-botao"
-            title="Saguão da mesa"
-            aria-label="Saguão da mesa"
-            onClick={() => setSaguaoAberto(true)}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-          </button>
+          <div class="casca-topo-direita">
+            {estadoSom.bloqueado && (
+              <button
+                type="button"
+                class="casca-ativar-som"
+                data-testid="casca-ativar-som"
+                onClick={() => somRef.current?.liberar()}
+              >
+                Ativar som
+              </button>
+            )}
+            <button
+              type="button"
+              class={`casca-som-botao ${estadoSom.preferencias.mudo ? 'mudo' : ''}`}
+              data-testid="casca-som-botao"
+              title="Volume do som"
+              aria-label="Volume do som"
+              aria-expanded={somPainelAberto}
+              onClick={() => { somRef.current?.liberar(); setSomPainelAberto(v => !v); }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                {estadoSom.preferencias.mudo
+                  ? <><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></>
+                  : <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />}
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="casca-saguao-botao"
+              data-testid="casca-saguao-botao"
+              title="Saguão da mesa"
+              aria-label="Saguão da mesa"
+              onClick={() => setSaguaoAberto(true)}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </button>
+          </div>
+        )}
+        {!mostrarSaguao && somPainelAberto && (
+          <div class="casca-som-painel" data-testid="casca-som-painel" role="region" aria-label="Controles de som">
+            <label class="casca-som-linha">
+              <span>Música</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                data-testid="casca-som-musica"
+                value={estadoSom.preferencias.mudo ? 0 : estadoSom.preferencias.musica}
+                onInput={e => somRef.current?.definirMusica(Number(e.currentTarget.value))}
+              />
+            </label>
+            <label class="casca-som-linha">
+              <span>Efeitos</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                data-testid="casca-som-efeitos"
+                value={estadoSom.preferencias.mudo ? 0 : estadoSom.preferencias.efeitos}
+                onInput={e => somRef.current?.definirEfeitos(Number(e.currentTarget.value))}
+              />
+            </label>
+            <button
+              type="button"
+              class="botao-pilula"
+              data-testid="casca-som-mudo"
+              onClick={() => somRef.current?.alternarMudo()}
+            >
+              {estadoSom.preferencias.mudo ? 'Reativar som' : 'Mudo'}
+            </button>
+          </div>
         )}
         <span class={`casca-selo ${erro ? 'caiu' : conexao}`} data-testid="casca-selo" title={`Entrou como ${nome}`}>{erro === 'sala' ? 'Sem sala' : selo}</span>
       </section>
@@ -387,6 +466,8 @@ function Sala({
           meuPersonagemId={meuPersonagemId}
           podeFechar={!saguaoObrigatorio}
           espectador={espectador}
+          preparandoSons={estadoSom.preparando}
+          aoLiberarSom={() => somRef.current?.liberar()}
           aoEscolher={escolherPersonagem}
           aoNovaFicha={abrirNovaFicha}
           aoImportar={importarFichas}

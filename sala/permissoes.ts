@@ -52,6 +52,7 @@ export function permitido(msg: MensagemParaSala, autor: Eu, ctx: ContextoPermiss
     case 'blob.tem': return mestre;
     // qualquer membro pede; quais ids saem é decisão da sala (`mensagens.ts`)
     case 'blob.pedir':
+    case 'ping':
     case 'rolagens.historico': return true;
     case 'membro.personagem':
       return msg.fichaId === null || ctx.donoDaFicha(msg.fichaId) === autor.discordId;

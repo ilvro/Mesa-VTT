@@ -57,9 +57,15 @@
 @keyframes feed-entra { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .feed-item { animation: none; } }
 
-/* Botão do saguão (ícone de pessoas) por cima do mapa */
-.casca-saguao-botao { position: absolute; top: 14px; right: 14px; z-index: 4; width: 38px; height: 38px; border-radius: 999px; display: grid; place-items: center; background: rgba(12, 10, 20, 0.78); border: 1px solid rgba(255, 255, 255, 0.2); color: #f4f1fb; cursor: pointer; backdrop-filter: blur(6px); }
-.casca-saguao-botao:hover, .casca-saguao-botao:focus-visible { border-color: var(--acento); color: #fff; }
+/* Botões no canto superior direito do mapa (som e saguão) */
+.casca-topo-direita { position: absolute; top: 14px; right: 14px; z-index: 4; display: flex; align-items: center; gap: 8px; }
+.casca-saguao-botao, .casca-som-botao { width: 38px; height: 38px; border-radius: 999px; display: grid; place-items: center; background: rgba(12, 10, 20, 0.78); border: 1px solid rgba(255, 255, 255, 0.2); color: #f4f1fb; cursor: pointer; backdrop-filter: blur(6px); }
+.casca-saguao-botao:hover, .casca-saguao-botao:focus-visible, .casca-som-botao:hover, .casca-som-botao:focus-visible { border-color: var(--acento); color: #fff; }
+.casca-som-botao.mudo { color: rgba(244, 241, 251, 0.55); }
+.casca-ativar-som { padding: 6px 12px; border-radius: 999px; background: var(--acento); border: 0; color: #fff; font: 700 11px var(--corpo); letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
+.casca-som-painel { position: absolute; top: 60px; right: 14px; z-index: 5; width: 220px; padding: 12px; border-radius: 10px; background: rgba(12, 10, 20, 0.92); border: 1px solid rgba(255, 255, 255, 0.16); color: #f4f1fb; display: flex; flex-direction: column; gap: 10px; backdrop-filter: blur(8px); }
+.casca-som-linha { display: flex; flex-direction: column; gap: 4px; font: 700 11px var(--corpo); letter-spacing: 0.06em; text-transform: uppercase; }
+.casca-som-linha input[type='range'] { width: 100%; accent-color: var(--acento); }
 
 /* Saguão da mesa (R12b) */
 .saguao { position: fixed; inset: 0; z-index: 9; overflow-y: auto; background: color-mix(in srgb, var(--fundo), transparent 4%); backdrop-filter: blur(10px); padding: 24px 16px; display: flex; justify-content: center; align-items: flex-start; }

@@ -61,8 +61,8 @@ export function aplicarMapeamentosDiscord(): void {
   patchUrlMappings([{ prefix: `${BASE_PROXY_DISCORD}/sala`, target: hostSala }]);
 }
 
-/** Base dos aplicativos irmãos dentro da atividade (`/.proxy/Atlas/`, `/.proxy/Dossie/`). */
-export function baseDoAppNoDiscord(app: 'atlas' | 'ficha', aqui: string | URL = location.href): string {
+/** Base dos aplicativos irmãos dentro da atividade (`/.proxy/Atlas/`, `/.proxy/Dossie/`, `/.proxy/Jukebox/`). */
+export function baseDoAppNoDiscord(app: 'atlas' | 'ficha' | 'jukebox', aqui: string | URL = location.href): string {
   return new URL(`${BASE_PROXY_DISCORD}/${PASTA_DO_APP[app]}/`, aqui).href;
 }
 

@@ -30,6 +30,7 @@ export type FichaDaSala = { id: string } & Record<string, unknown>;
 export type Envelope = Record<string, unknown> & { tipo: string; id: string };
 
 export type MsgOla = { tipo: 'ola'; sessao: string };
+export type MsgPing = { tipo: 'ping'; em: number };
 export type MsgCanalParaSala = { tipo: 'canal'; nome: string; msg: unknown };
 export type MsgEventoParaSala = { tipo: 'evento'; envelope: Envelope };
 export type MsgFichaSalvar = { tipo: 'ficha.salvar'; ficha: FichaDaSala; rev: number };
@@ -55,6 +56,7 @@ export interface MsgBlobPedir { tipo: 'blob.pedir'; id: string }
 
 export type MensagemParaSala =
   | MsgOla
+  | MsgPing
   | MsgCanalParaSala
   | MsgEventoParaSala
   | MsgFichaSalvar
@@ -91,6 +93,8 @@ export interface MsgBemVindo {
   donos?: Record<string, string>;
   /** As últimas rolagens (`ficha.rolagem` já carimbadas, da mais antiga à mais nova), no máximo `ROLAGENS_NO_BEM_VINDO`. */
   rolagens?: Envelope[];
+  /** Relógio da sala em ms no momento do `bem-vindo` (R23). */
+  agora?: number;
 }
 
 /** Quantas rolagens o `bem-vindo` traz. */
@@ -98,6 +102,7 @@ export const ROLAGENS_NO_BEM_VINDO = 50;
 
 export type MensagemDaSala =
   | MsgBemVindo
+  | { tipo: 'pong'; em: number; agora: number }
   | { tipo: 'membros'; membros: Membro[] }
   | { tipo: 'config'; config: ConfigSala }
   | { tipo: 'canal'; nome: string; msg: unknown }
@@ -141,6 +146,7 @@ export function lerMensagemParaSala(texto: string): MensagemParaSala | null {
   if (!ehObj(m)) return null;
   switch (m.tipo) {
     case 'ola': return txt(m.sessao) ? { tipo: 'ola', sessao: m.sessao } : null;
+    case 'ping': return num(m.em) ? { tipo: 'ping', em: m.em } : null;
     case 'canal': return txt(m.nome) && 'msg' in m ? { tipo: 'canal', nome: m.nome, msg: m.msg } : null;
     case 'evento': return ehEnvelope(m.envelope) ? { tipo: 'evento', envelope: m.envelope } : null;
     case 'ficha.salvar': return ehFicha(m.ficha) && num(m.rev) ? { tipo: 'ficha.salvar', ficha: m.ficha, rev: m.rev } : null;
@@ -168,13 +174,16 @@ export function lerMensagemDaSala(texto: string): MensagemDaSala | null {
       if (m.revs !== undefined && !(ehObj(m.revs) && Object.values(m.revs).every(num))) return null;
       if (m.donos !== undefined && !(ehObj(m.donos) && Object.values(m.donos).every(txt))) return null;
       if (m.rolagens !== undefined && !listaDe(m.rolagens, ehEnvelope)) return null;
+      if (m.agora !== undefined && !num(m.agora)) return null;
       return {
         tipo: 'bem-vindo', eu: m.eu, membros: m.membros, fichas: m.fichas, ultimoEstado: m.ultimoEstado,
         ...(m.config !== undefined ? { config: m.config as unknown as ConfigSala } : {}),
         ...(m.revs !== undefined ? { revs: m.revs as Record<string, number> } : {}),
         ...(m.donos !== undefined ? { donos: m.donos as Record<string, string> } : {}),
         ...(m.rolagens !== undefined ? { rolagens: m.rolagens } : {}),
+        ...(m.agora !== undefined ? { agora: m.agora } : {}),
       };
+    case 'pong': return num(m.em) && num(m.agora) ? { tipo: 'pong', em: m.em, agora: m.agora } : null;
     case 'membros': return listaDe(m.membros, ehMembro) ? { tipo: 'membros', membros: m.membros } : null;
     case 'config':
       if (!ehObj(m.config) || !txt(m.config.nome)) return null;
