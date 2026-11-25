@@ -149,7 +149,16 @@ import {
 } from './quadro-helpers.ts';
 
 type Gesto =
-  | { tipo: 'pan'; x: number; y: number; camX: number; camY: number }
+  | {
+      tipo: 'pan';
+      x: number;
+      y: number;
+      camX: number;
+      camY: number;
+      botao: number;
+      arrastou: boolean;
+      alvoEl: HTMLElement | null;
+    }
   | { tipo: 'marque'; inicio: Ponto }
   | { tipo: 'criar-forma'; inicio: Ponto; id: string }
   | { tipo: 'criar-moldura'; inicio: Ponto; id: string }
@@ -267,6 +276,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
     }
   }
   const rafMoverRef = useRef<number | null>(null);
+  const ultimoUpDireitoEmRef = useRef(0);
   const moverPendenteRef = useRef<{
     clientX: number;
     clientY: number;
@@ -809,16 +819,22 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
 
   const aoPressionar = (e: PointerEvent) => {
     const ehBotaoMeio = e.button === 1;
+    const ehBotaoDireito = e.button === 2;
     const ehPanEsquerdo = e.button === 0 && modoPanAtivo;
-    if (ehBotaoMeio || ehPanEsquerdo) {
-      e.preventDefault();
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    if (ehBotaoMeio || ehBotaoDireito || ehPanEsquerdo) {
+      if (!ehBotaoDireito) {
+        e.preventDefault();
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      }
       gestoRef.current = {
         tipo: 'pan',
         x: e.clientX,
         y: e.clientY,
         camX: camera.value.x,
         camY: camera.value.y,
+        botao: e.button,
+        arrastou: false,
+        alvoEl: ehBotaoDireito ? (e.target as HTMLElement | null) : null,
       };
       return;
     }
@@ -1064,6 +1080,9 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
             y: e.clientY,
             camX: camera.value.x,
             camY: camera.value.y,
+            botao: 0,
+            arrastou: true,
+            alvoEl: null,
           };
           return;
         }
@@ -1085,6 +1104,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
     const cam = camera.value;
 
     if (g.tipo === 'pan') {
+      if (g.botao === 2 && !g.arrastou) return;
       camera.value = {
         ...cam,
         x: g.camX - (e.clientX - g.x) / cam.zoom,
@@ -1411,6 +1431,21 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
 
   const aoMover = (e: PointerEvent) => {
     if (!gestoRef.current) return;
+    if (
+      gestoRef.current.tipo === 'pan' &&
+      gestoRef.current.botao === 2 &&
+      !gestoRef.current.arrastou
+    ) {
+      if (Math.hypot(e.clientX - gestoRef.current.x, e.clientY - gestoRef.current.y) <= 4) {
+        return;
+      }
+      gestoRef.current.arrastou = true;
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {
+        /* ignora */
+      }
+    }
     usuarioInteragindoNoQuadro.value = true;
     moverPendenteRef.current = {
       clientX: e.clientX,
@@ -1487,6 +1522,13 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
     if (!g) return;
     gestoRef.current = null;
     usuarioInteragindoNoQuadro.value = editandoId.value !== null;
+    if (g.tipo === 'pan' && g.botao === 2) {
+      ultimoUpDireitoEmRef.current = Date.now();
+      if (!g.arrastou) {
+        abrirMenuNoPonto(e.clientX, e.clientY, g.alvoEl);
+      }
+      return;
+    }
     if (g.tipo === 'desenhar') {
       tracoEmDesenho.value = null;
       const simplificados = simplificar(g.pontos, 1.2);
@@ -1949,6 +1991,8 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
         onDblClick={aoDuploClique}
         onContextMenu={(e) => {
           e.preventDefault();
+          if (gestoRef.current?.tipo === 'pan' && gestoRef.current.botao === 2) return;
+          if (Date.now() - ultimoUpDireitoEmRef.current < 100) return;
           abrirMenuNoPonto(e.clientX, e.clientY, e.target as HTMLElement | null);
         }}
         onDragOver={(e) => {

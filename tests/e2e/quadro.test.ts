@@ -1082,3 +1082,43 @@ test('importação do Miro lê em pedaços e reduz imagem > 2048 px para WebP', 
     await ctx.close();
   }
 });
+
+test('QW1: arrastar com o botão direito move o quadro e clique direito parado abre o menu', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  const erros: string[] = [];
+  page.on('pageerror', (e) => erros.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') erros.push(m.text()); });
+
+  try {
+    await page.goto(`${amb.origem}/Mesa/`);
+    await page.waitForSelector('[data-testid="campanha-select"]');
+    await page.click('[data-testid="aba-campanhas"]');
+    await page.fill('[data-testid="nova-campanha-nome"]', 'Campanha QW1');
+    await page.click('[data-testid="criar-campanha"]');
+    await page.waitForSelector('[data-testid="tela-entidades"]');
+    await page.click('[data-testid="aba-quadros"]');
+    await page.waitForSelector('[data-testid="tela-quadros"]');
+    await page.fill('[data-testid="novo-quadro-nome"]', 'Pan Direito');
+    await page.click('[data-testid="criar-quadro"]');
+    await page.waitForSelector('[data-testid="area-quadro"]');
+
+    const antes = await page.locator('[data-testid="mundo-quadro"]').getAttribute('style');
+
+    await page.mouse.move(600, 400);
+    await page.mouse.down({ button: 'right' });
+    await page.mouse.move(450, 300, { steps: 5 });
+    await page.mouse.up({ button: 'right' });
+
+    const depois = await page.locator('[data-testid="mundo-quadro"]').getAttribute('style');
+    assert.notEqual(depois, antes);
+    assert.equal(await page.locator('[data-testid="menu-do-item"]').count(), 0);
+
+    // Clique direito parado continua abrindo o menu de contexto.
+    await page.mouse.click(600, 400, { button: 'right' });
+    await page.waitForSelector('[data-testid="menu-do-item"]');
+    assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
+  } finally {
+    await ctx.close();
+  }
+});
