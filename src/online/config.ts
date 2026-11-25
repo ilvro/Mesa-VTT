@@ -26,12 +26,35 @@ function lugarPadrao(): Lugar | undefined {
   return typeof location === 'undefined' ? undefined : location;
 }
 
-/** A sala: `localStorage['mesa:sala-url']`, senão o `wrangler dev` em localhost, senão a de produção. */
-export function urlDaSala(lugar: Lugar | undefined = lugarPadrao(), storage: Armazem | undefined = armazemPadrao()): string {
+/** Detecta se a Mesa está rodando no build/app Desktop (`VITE_DESKTOP=1` ou User-Agent `MesaVTT/`). Seguro fora do navegador. */
+export function ehDesktopMesa(): boolean {
+  try {
+    if (import.meta.env?.VITE_DESKTOP === '1') return true;
+  } catch { /* fora do Vite */ }
+  try {
+    if (typeof navigator !== 'undefined' && typeof navigator.userAgent === 'string' && navigator.userAgent.includes('MesaVTT/')) {
+      return true;
+    }
+  } catch { /* fora do navegador */ }
+  return false;
+}
+
+/** A sala: `localStorage['mesa:sala-url']`, senão produção no Desktop, senão `wrangler dev` em localhost, senão produção. */
+export function urlDaSala(
+  lugar: Lugar | undefined = lugarPadrao(),
+  storage: Armazem | undefined = armazemPadrao(),
+  desktop: boolean = ehDesktopMesa(),
+): string {
   const guardada = lerArmazem(storage, CHAVE_URL_DA_SALA);
   if (guardada) return guardada.replace(/\/+$/, '');
+  if (desktop) return URL_SALA_PRODUCAO;
   if (lugar && (lugar.hostname === '127.0.0.1' || lugar.hostname === 'localhost')) return URL_SALA_LOCAL;
   return URL_SALA_PRODUCAO;
+}
+
+/** Link web compartilhável para um jogador entrar na sala fora do Discord. */
+export function urlDeConviteDaSala(salaId: string): string {
+  return `${REDIRECT_PAGES}#/jogar/${encodeURIComponent(salaId)}`;
 }
 
 /** O `redirect_uri` do OAuth2 web: o do Pages, ou o do `mesa-dev` (porta 5100) fora do Pages. O Worker só aceita estes dois. */

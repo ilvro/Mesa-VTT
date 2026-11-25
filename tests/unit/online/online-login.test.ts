@@ -1,9 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CHAVE_SESSAO, CHAVE_STATE, CHAVE_VOLTA, concluirLogin, expDaSessao, hashDeVolta, iniciarLogin, lerSessaoGuardada, queryLimpa, sessaoOnline, urlDeAutorizacao,
+  CHAVE_SESSAO, CHAVE_STATE, CHAVE_VOLTA,
+  concluirLogin, erroDoLogin, expDaSessao, hashDeVolta, iniciarLogin, lerSessaoGuardada,
+  queryLimpa, sessaoOnline, urlDeAutorizacao,
 } from '../../../src/app/online-login.ts';
-import { DISCORD_CLIENT_ID, REDIRECT_DEV, REDIRECT_PAGES, redirectUri, urlDaSala, urlDoWebSocket, URL_SALA_PRODUCAO } from '../../../src/online/config.ts';
+import {
+  DISCORD_CLIENT_ID, ehDesktopMesa, REDIRECT_DEV, REDIRECT_PAGES, redirectUri, urlDaSala, urlDeConviteDaSala,
+  urlDoWebSocket, URL_SALA_LOCAL, URL_SALA_PRODUCAO,
+} from '../../../src/online/config.ts';
 
 class Armazem {
   m = new Map<string, string>();
@@ -116,4 +121,29 @@ test('o hash de volta só aceita #/jogar/<sala>; o login do mestre volta a #/onl
   iniciarLogin({ sessionStorage: aba, voltarPara: '#/jogar/abc' });
   iniciarLogin({ sessionStorage: aba });
   assert.equal(hashDeVolta(aba), '#/online');
+});
+
+test('config Desktop: ehDesktopMesa, urlDaSala com desktop=true e urlDeConviteDaSala', () => {
+  assert.equal(ehDesktopMesa(), false);
+  const desc = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  try {
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { userAgent: 'Mozilla/5.0 MesaVTT/1' },
+      configurable: true,
+    });
+    assert.equal(ehDesktopMesa(), true);
+  } finally {
+    if (desc) Object.defineProperty(globalThis, 'navigator', desc);
+  }
+
+  const storage = new Armazem();
+  assert.equal(urlDaSala({ hostname: '127.0.0.1' }, storage, true), URL_SALA_PRODUCAO);
+  assert.equal(urlDaSala({ hostname: 'localhost' }, storage, true), URL_SALA_PRODUCAO);
+  assert.equal(urlDaSala({ hostname: '127.0.0.1' }, storage, false), URL_SALA_LOCAL);
+
+  storage.setItem('mesa:sala-url', 'http://127.0.0.1:8787/');
+  assert.equal(urlDaSala({ hostname: '127.0.0.1' }, storage, true), URL_SALA_LOCAL);
+
+  assert.equal(urlDeConviteDaSala('sala-123'), 'https://ilvro.github.io/Mesa-VTT/#/jogar/sala-123');
+  assert.equal(urlDeConviteDaSala('a b/c'), 'https://ilvro.github.io/Mesa-VTT/#/jogar/a%20b%2Fc');
 });
