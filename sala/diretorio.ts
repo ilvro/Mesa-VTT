@@ -40,8 +40,13 @@ export class Diretorio implements DurableObject {
     }
     const g = /^\/guild\/([^/]+)$/.exec(url.pathname);
     if (request.method === 'GET' && g) {
-      const salaId = this.dir.consultar(decodeURIComponent(g[1] as string));
+      const guildId = decodeURIComponent(g[1] as string);
+      this.dir.registrarGuilda(guildId, Date.now());
+      const salaId = this.dir.consultar(guildId);
       return salaId === null ? resposta({ erro: 'nenhuma sala ligada' }, 404) : resposta({ salaId });
+    }
+    if (request.method === 'GET' && url.pathname === '/guildas') {
+      return resposta({ guildIds: this.dir.guildasVistas() });
     }
     if (request.method === 'GET' && url.pathname === '/minhas') {
       return resposta({ salas: this.dir.salasDoMestre(discordId) });

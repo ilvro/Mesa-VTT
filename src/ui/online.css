@@ -7,6 +7,7 @@
 .online-salas li { padding: 8px 10px; background: var(--superficie); border: 1px solid var(--linha); border-radius: var(--raio); }
 .online-sala { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .online-sala .meta { margin-left: auto; font-family: 'JetBrains Mono', monospace; }
+.online-servidor { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .online-estado { font: 700 11px var(--corpo); letter-spacing: 0.1em; text-transform: uppercase; color: var(--apagado); }
 .online-estado.aberta { color: var(--sucesso); }
 .online-estado.caiu { color: var(--perigo); }

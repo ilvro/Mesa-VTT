@@ -12,10 +12,17 @@ export interface UsuarioDiscord {
   avatar: string | null;
 }
 
+export interface GuildaDiscord {
+  id: string;
+  name: string;
+  icon: string | null;
+}
+
 export class ErroDiscord extends Error {}
 
 export const URL_TOKEN = 'https://discord.com/api/oauth2/token';
 export const URL_USUARIO = 'https://discord.com/api/users/@me';
+export const URL_GUILDAS = 'https://discord.com/api/users/@me/guilds';
 
 async function motivo(resp: { status: number; json(): Promise<unknown> }): Promise<string> {
   let detalhe = '';
@@ -83,4 +90,37 @@ export async function lerUsuario(accessToken: string, fetch: FetchLike): Promise
     nome: global ?? j.username,
     avatar: typeof j.avatar === 'string' && j.avatar ? j.avatar : null,
   };
+}
+
+/** Lista os servidores em que o usuário está (`GET /users/@me/guilds`, exige escopo `guilds`). */
+export async function lerGuildas(accessToken: string, fetch: FetchLike): Promise<GuildaDiscord[]> {
+  let resp;
+  try {
+    resp = await fetch(URL_GUILDAS, { headers: { Authorization: `Bearer ${accessToken}` } });
+  } catch {
+    throw new ErroDiscord('não consegui falar com o Discord para listar os servidores');
+  }
+  if (!resp.ok) throw new ErroDiscord(`o Discord recusou a leitura dos servidores (${await motivo(resp)})`);
+  const j = await resp.json().catch(() => null);
+  if (!Array.isArray(j)) {
+    throw new ErroDiscord('resposta inesperada do Discord em /users/@me/guilds');
+  }
+  const saida: GuildaDiscord[] = [];
+  for (const item of j) {
+    if (!item || typeof item !== 'object') continue;
+    const g = item as Record<string, unknown>;
+    if (typeof g.id !== 'string' || typeof g.name !== 'string') continue;
+    saida.push({
+      id: g.id,
+      name: g.name,
+      icon: typeof g.icon === 'string' && g.icon ? g.icon : null,
+    });
+  }
+  return saida;
+}
+
+/** Mantém apenas os servidores do usuário em que o app já foi visto pela atividade. */
+export function filtrarGuildasInstaladas(guildas: readonly GuildaDiscord[], vistas: readonly string[]): GuildaDiscord[] {
+  const conjunto = new Set(vistas);
+  return guildas.filter(g => conjunto.has(g.id));
 }

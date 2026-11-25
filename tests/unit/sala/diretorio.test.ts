@@ -31,3 +31,12 @@ test('lista as salas de cada mestre, as mais novas primeiro', () => {
   assert.deepEqual(d.salasDoMestre('M'), [{ salaId: 's2', nome: 'B', criadaEm: 20 }, { salaId: 's1', nome: 'A', criadaEm: 10 }]);
   assert.deepEqual(d.salasDoMestre('X'), []);
 });
+
+test('registra e lista guildas vistas pela atividade sem duplicar', () => {
+  const d = criarDiretorio(sqlEmMemoria());
+  assert.deepEqual(d.guildasVistas(), []);
+  d.registrarGuilda('g1', 100);
+  d.registrarGuilda('g2', 200);
+  d.registrarGuilda('g1', 300);
+  assert.deepEqual(d.guildasVistas(), ['g1', 'g2']);
+});

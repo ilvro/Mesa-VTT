@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ErroDiscord, lerUsuario, trocarCodigo, type FetchLike } from '../../../sala/discord.ts';
+import { ErroDiscord, filtrarGuildasInstaladas, lerGuildas, lerUsuario, trocarCodigo, type FetchLike } from '../../../sala/discord.ts';
 
 function falso(status: number, corpo: unknown) {
   const chamadas: { url: string; init?: Parameters<FetchLike>[1] }[] = [];
@@ -62,4 +62,22 @@ test('lerUsuario trata erro', async () => {
   const { f } = falso(401, { message: '401: Unauthorized' });
   await assert.rejects(lerUsuario('ruim', f), /401.*Unauthorized/);
   await assert.rejects(lerUsuario('x', falso(200, { foo: 1 }).f), ErroDiscord);
+});
+
+test('lerGuildas lista servidores e filtrarGuildasInstaladas cruza com as vistas pela atividade', async () => {
+  const { f, chamadas } = falso(200, [
+    { id: 'g1', name: 'Mesa do Sábado', icon: 'ic1' },
+    { id: 'g2', name: 'Outro Servidor', icon: null },
+    { id: 123, name: 'inválido' },
+  ]);
+  const guildas = await lerGuildas('tok', f);
+  assert.equal(chamadas[0]!.url, 'https://discord.com/api/users/@me/guilds');
+  assert.equal(chamadas[0]!.init?.headers?.Authorization, 'Bearer tok');
+  assert.deepEqual(guildas, [
+    { id: 'g1', name: 'Mesa do Sábado', icon: 'ic1' },
+    { id: 'g2', name: 'Outro Servidor', icon: null },
+  ]);
+  assert.deepEqual(filtrarGuildasInstaladas(guildas, ['g2', 'g3']), [
+    { id: 'g2', name: 'Outro Servidor', icon: null },
+  ]);
 });

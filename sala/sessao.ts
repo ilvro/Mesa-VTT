@@ -6,6 +6,8 @@ export interface Sessao {
   avatar: string | null;
   /** Pode criar salas (está em `MESTRES_DISCORD_IDS`). O papel dentro de uma sala vem do dono dela. */
   podeMestrar: boolean;
+  /** Access token OAuth2 do Discord (apenas para mestres no login web, usado em `/sala/servidores`). */
+  discordToken?: string;
   /** Instante de vencimento, em ms desde a época. */
   exp: number;
 }
@@ -80,7 +82,14 @@ export async function verificarSessao(token: unknown, segredo: string, agora: nu
   ) {
     return null;
   }
-  return { discordId: d.discordId, nome: d.nome, avatar: d.avatar, podeMestrar: d.podeMestrar, exp: d.exp };
+  return {
+    discordId: d.discordId,
+    nome: d.nome,
+    avatar: d.avatar,
+    podeMestrar: d.podeMestrar,
+    ...(typeof d.discordToken === 'string' && d.discordToken ? { discordToken: d.discordToken } : {}),
+    exp: d.exp,
+  };
 }
 
 /** `discordId` está na lista de ids separados por vírgula (`MESTRES_DISCORD_IDS`)? */

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { campanhaAtiva } from '../app/campanha.ts';
 import { abrirMesaOnline, confirmarSemNevoa, conexaoOnline, estadoDaPonte, fecharMesaOnline, salaConectadaId } from '../app/online.ts';
 import { carregarSessaoOnline, erroDoLogin, iniciarLogin, sairDoOnline, sessaoOnline } from '../app/online-login.ts';
-import { criarSala, ligarAoServidor, listarMinhasSalas, salaDaCampanha, type SalaDoMestre } from '../app/online-salas.ts';
+import { criarSala, ligarAoServidor, listarMinhasSalas, listarServidoresDoDiscord, salaDaCampanha, type SalaDoMestre, type ServidorDiscord } from '../app/online-salas.ts';
 import { avisar, mensagemDe } from '../app/toasts.ts';
 import { MembroLinha } from '../jogar/Saguao.tsx';
 import { urlDaSala } from '../online/config.ts';
@@ -51,12 +51,19 @@ function SemSessao() {
 function PainelDoMestre({ sessao }: { sessao: string }) {
   const camp = campanhaAtiva.value;
   const [salas, setSalas] = useState<SalaDoMestre[]>([]);
+  const [servidores, setServidores] = useState<ServidorDiscord[]>([]);
+  const [precisaRelogar, setPrecisaRelogar] = useState(false);
   const [escolhida, setEscolhida] = useState<string | null>(() => salaDaCampanha(camp?.id));
   const [guild, setGuild] = useState('');
   const [ocupado, setOcupado] = useState(false);
 
   const recarregar = () => listarMinhasSalas(sessao).then(setSalas).catch(e => avisar(`Não consegui listar as salas: ${mensagemDe(e)}`, true));
-  useEffect(() => { void recarregar(); setEscolhida(salaDaCampanha(camp?.id)); }, [sessao, camp?.id]);
+  const carregarServidores = () => {
+    void listarServidoresDoDiscord(sessao)
+      .then(r => { setServidores(r.servidores); setPrecisaRelogar(!!r.precisaRelogar); })
+      .catch(() => { /* fallback manual segue disponível */ });
+  };
+  useEffect(() => { void recarregar(); carregarServidores(); setEscolhida(salaDaCampanha(camp?.id)); }, [sessao, camp?.id]);
 
   const sala = salas.find(x => x.salaId === escolhida) ?? null;
   const conexao = conexaoOnline.value, ponte = estadoDaPonte.value;
@@ -71,10 +78,10 @@ function PainelDoMestre({ sessao }: { sessao: string }) {
       avisar('Sala criada.');
     } catch (e) { avisar(`Não consegui criar a sala: ${mensagemDe(e)}`, true); } finally { setOcupado(false); }
   };
-  const ligar = async () => {
-    if (!sala || !guild.trim()) return;
+  const ligar = async (guildId: string = guild.trim()) => {
+    if (!sala || !guildId) return;
     setOcupado(true);
-    try { await ligarAoServidor(sessao, guild.trim(), sala.salaId); setGuild(''); avisar('Sala ligada ao servidor do Discord.'); }
+    try { await ligarAoServidor(sessao, guildId, sala.salaId); setGuild(''); avisar('Sala ligada ao servidor do Discord.'); }
     catch (e) { avisar(`Não consegui ligar ao servidor: ${mensagemDe(e)}`, true); } finally { setOcupado(false); }
   };
 
@@ -98,6 +105,20 @@ function PainelDoMestre({ sessao }: { sessao: string }) {
       </div>
 
       <h3 class="faixa pequena">Servidor do Discord</h3>
+      {precisaRelogar ? (
+        <p class="meta">Saia e entre de novo com o Discord para listar seus servidores.</p>
+      ) : servidores.length > 0 ? (
+        <ul class="lista online-salas" data-testid="online-servidores">
+          {servidores.map(srv => (
+            <li key={srv.id} class="online-servidor">
+              <span>{srv.name}</span>
+              <button type="button" class="botao-pilula" data-testid={`online-ligar-${srv.id}`} disabled={!sala || ocupado} onClick={() => void ligar(srv.id)}>Ligar</button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p class="meta">Nenhum servidor visto pela atividade ainda. Abra a atividade no servidor ou cole o id abaixo.</p>
+      )}
       <div class="online-acoes">
         <input type="text" data-testid="online-guild" placeholder="Id do servidor do Discord" value={guild} onInput={e => setGuild(e.currentTarget.value)} />
         <button type="button" class="botao-pilula" disabled={!sala || !guild.trim() || ocupado} onClick={() => void ligar()}>Ligar a um servidor do Discord</button>

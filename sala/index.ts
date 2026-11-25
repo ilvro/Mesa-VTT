@@ -1,4 +1,4 @@
-import { ErroDiscord, lerUsuario, trocarCodigo } from './discord.ts';
+import { ErroDiscord, filtrarGuildasInstaladas, lerGuildas, lerUsuario, trocarCodigo } from './discord.ts';
 import { origemPermitida } from './retransmitir.ts';
 import { assinarSessao, podeMestrar, venceEm, verificarSessao, type Sessao } from './sessao.ts';
 
@@ -54,7 +54,10 @@ async function rotaToken(request: Request, env: Env, cabecalhos: Record<string, 
     });
     const u = await lerUsuario(accessToken, (url, i) => fetch(url, i));
     const pode = podeMestrar(u.discordId, env.MESTRES_DISCORD_IDS);
-    const sessao = await assinarSessao({ ...u, podeMestrar: pode, exp: venceEm(Date.now()) }, env.SEGREDO_SESSAO);
+    const sessao = await assinarSessao(
+      { ...u, podeMestrar: pode, ...(pode ? { discordToken: accessToken } : {}), exp: venceEm(Date.now()) },
+      env.SEGREDO_SESSAO,
+    );
     return json(
       { access_token: accessToken, sessao, eu: { discordId: u.discordId, nome: u.nome, avatar: u.avatar, podeMestrar: pode } },
       200,
@@ -133,6 +136,25 @@ export default {
 
     if (request.method === 'POST' && url.pathname === '/sala/nova') {
       return rotaNova(request, env, cabecalhos);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/sala/servidores') {
+      const sessao = await autenticar(request, env);
+      if (!sessao) return json({ erro: 'sessão inválida' }, 401, cabecalhos);
+      if (!sessao.podeMestrar) return json({ erro: 'só mestres listam servidores' }, 403, cabecalhos);
+      if (!sessao.discordToken) return json({ servidores: [], precisaRelogar: true }, 200, cabecalhos);
+      try {
+        const [guildas, dirResp] = await Promise.all([
+          lerGuildas(sessao.discordToken, (u, i) => fetch(u, i)),
+          diretorio(env, '/guildas', sessao.discordId),
+        ]);
+        const dirDados = (await dirResp.json().catch(() => ({}))) as { guildIds?: unknown };
+        const vistas = Array.isArray(dirDados.guildIds) ? dirDados.guildIds.filter((x): x is string => typeof x === 'string') : [];
+        return json({ servidores: filtrarGuildasInstaladas(guildas, vistas) }, 200, cabecalhos);
+      } catch (e) {
+        if (e instanceof ErroDiscord) return json({ erro: e.message }, 401, cabecalhos);
+        return json({ erro: 'falha ao listar servidores' }, 500, cabecalhos);
+      }
     }
 
     if (url.pathname.startsWith('/sala/diretorio/') || url.pathname === '/sala/minhas') {

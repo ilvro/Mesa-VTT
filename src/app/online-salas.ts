@@ -2,6 +2,7 @@
 import { urlDaSala } from '../online/config.ts';
 
 export interface SalaDoMestre { salaId: string; nome: string; criadaEm: number }
+export interface ServidorDiscord { id: string; name: string; icon: string | null }
 
 export const chaveDaSalaDaCampanha = (campanhaId: string): string => `mesa:sala:${campanhaId}`;
 
@@ -29,6 +30,11 @@ export async function criarSala(sessao: string, nome: string, campanhaId: string
 
 export async function ligarAoServidor(sessao: string, guildId: string, salaId: string, f?: typeof fetch): Promise<void> {
   await pedir(sessao, 'POST', '/sala/diretorio/ligar', { guildId, salaId }, f);
+}
+
+export async function listarServidoresDoDiscord(sessao: string, f?: typeof fetch): Promise<{ servidores: ServidorDiscord[]; precisaRelogar?: boolean }> {
+  const r = await pedir<{ servidores?: ServidorDiscord[]; precisaRelogar?: boolean }>(sessao, 'GET', '/sala/servidores', undefined, f);
+  return { servidores: r.servidores ?? [], ...(r.precisaRelogar ? { precisaRelogar: true } : {}) };
 }
 
 export function salaDaCampanha(campanhaId: string | undefined): string | null {
