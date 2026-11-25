@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { attemptRemap } from '@discord/embedded-app-sdk';
 import {
   atualizarAtividadeDiscord,
   baseDoAppNoDiscord,
   iniciarAtividadeDiscord,
   ligarSalaNoDiscord,
+  mapeamentosDiscord,
   type SdkDiscordLike,
 } from '../../../src/jogar/discord.ts';
 import { ehAtividadeDoDiscord } from '../../../src/jogar/modo-discord.ts';
@@ -193,5 +195,23 @@ describe('ligarSalaNoDiscord, atualizarAtividadeDiscord e baseDoAppNoDiscord', (
     const aqui = 'https://1573405277389197415.discordsays.com/?frame_id=123';
     assert.equal(baseDoAppNoDiscord('atlas', aqui), 'https://1573405277389197415.discordsays.com/.proxy/Atlas/');
     assert.equal(baseDoAppNoDiscord('ficha', aqui), 'https://1573405277389197415.discordsays.com/.proxy/Dossie/');
+  });
+
+  it('mapeamentosDiscord reescreve URL do Worker para /.proxy/sala/... sem duplicar /sala', () => {
+    const globalRef = globalThis as { window?: unknown };
+    const anterior = globalRef.window;
+    const tinha = 'window' in globalRef;
+    globalRef.window = { location: { host: '1573405277389197415.discordsays.com' } };
+    try {
+      const remapped = attemptRemap({
+        url: new URL('https://mesa-sala.ilvro-ermes.workers.dev/sala/token'),
+        mappings: mapeamentosDiscord(),
+      });
+      assert.equal(remapped.pathname, '/.proxy/sala/token');
+      assert.equal(remapped.toString(), 'https://1573405277389197415.discordsays.com/.proxy/sala/token');
+    } finally {
+      if (tinha) globalRef.window = anterior;
+      else delete globalRef.window;
+    }
   });
 });

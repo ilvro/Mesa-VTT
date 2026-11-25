@@ -55,10 +55,15 @@ export interface OpcoesDiscord {
   patchMappings?: boolean;
 }
 
+/** Lista de mapeamentos de URL usados pelo proxy do Discord (`/.proxy/sala` -> Worker da sala). */
+export function mapeamentosDiscord(): Array<{ prefix: string; target: string }> {
+  const hostSala = new URL(URL_SALA_PRODUCAO).host;
+  return [{ prefix: `${BASE_PROXY_DISCORD}/sala`, target: `${hostSala}/sala` }];
+}
+
 /** Aplica `patchUrlMappings` para redirecionar chamadas absolutas ao Worker pelo proxy do Discord (`/.proxy/sala`). */
 export function aplicarMapeamentosDiscord(): void {
-  const hostSala = new URL(URL_SALA_PRODUCAO).host;
-  patchUrlMappings([{ prefix: `${BASE_PROXY_DISCORD}/sala`, target: hostSala }]);
+  patchUrlMappings(mapeamentosDiscord());
 }
 
 /** Base dos aplicativos irmãos dentro da atividade (`/.proxy/Atlas/`, `/.proxy/Dossie/`, `/.proxy/Jukebox/`). */
