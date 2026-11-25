@@ -372,7 +372,15 @@ function Sala({
       <section class="casca-mapa" data-testid="casca-mapa" aria-label="Mapa">
         <iframe ref={projetorQuadro} class="casca-iframe" data-testid="casca-iframe" title="Mapa" src={enderecoDoProjetorRemoto(baseAtlas, salaId)} onLoad={mandarJogador} allow="fullscreen; autoplay" />
         {erro === 'sala' && (
-          <div class="casca-sobre aviso-grande" data-testid="casca-erro-sala" role="alert"><h2 class="faixa">Sala não encontrada</h2><p>Esta sala não existe ou foi encerrada. Confira o link com o mestre.</p></div>
+          <div class="casca-sobre aviso-grande" data-testid="casca-erro-sala" role="alert">
+            <h2 class="faixa">Sala não encontrada</h2>
+            <p>Esta sala não existe ou foi encerrada. Confira o link com o mestre.</p>
+            {emDiscord && (
+              <button type="button" class="botao-pilula destaque" onClick={() => location.reload()}>
+                Atualizar sala
+              </button>
+            )}
+          </div>
         )}
         <FeedDeRolagens cliente={clienteSala} salaId={salaId} nome={nome} retratos={retratos} />
         {!mostrarSaguao && erro !== 'sala' && (

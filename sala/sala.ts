@@ -36,6 +36,13 @@ export class Sala implements DurableObject {
       const ok = this.estado.iniciar(c.dono, c.nome, typeof c.campanhaId === 'string' ? c.campanhaId : undefined);
       return new Response(null, { status: ok ? 204 : 409 });
     }
+    if (request.method === 'POST' && url.pathname === '/encerrar') {
+      for (const c of this.ctx.getWebSockets()) {
+        try { c.close(4004, 'sala encerrada'); } catch { /* já fechada */ }
+      }
+      await this.ctx.storage.deleteAll();
+      return new Response(null, { status: 204 });
+    }
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('esperava WebSocket', { status: 426 });
     }

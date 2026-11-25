@@ -163,7 +163,11 @@ export default {
       if (request.method === 'POST' && url.pathname === '/sala/remover') {
         const corpo = (await request.json().catch(() => null)) as { salaId?: unknown } | null;
         if (!corpo || typeof corpo.salaId !== 'string' || !corpo.salaId) return json({ erro: 'faltou salaId' }, 400, cabecalhos);
-        return repassar(await diretorio(env, '/remover', sessao.discordId, { salaId: corpo.salaId }), cabecalhos);
+        const r = await diretorio(env, '/remover', sessao.discordId, { salaId: corpo.salaId });
+        if (r.ok) {
+          await env.SALA.get(env.SALA.idFromName(corpo.salaId)).fetch('https://sala/encerrar', { method: 'POST' });
+        }
+        return repassar(r, cabecalhos);
       }
       if (request.method === 'POST' && url.pathname === '/sala/diretorio/ligar') {
         const corpo = (await request.json().catch(() => null)) as { guildId?: unknown; salaId?: unknown } | null;
