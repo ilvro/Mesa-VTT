@@ -400,6 +400,7 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     if (typeof e.tipo !== 'string' || typeof e.id !== 'string') return;
     if (e.autor !== undefined) return; // veio da sala: não volta para ela
     if (!EVENTOS_DO_MESTRE.includes(e.tipo)) return;
+    if (e.tipo === 'mesa.resposta' && e.app === 'mesa') return; // respostas locais da própria Mesa ficam só no mestre
     if (e.tipo === 'ficha.rolagem' && o.ehAmeaca) {
       const ref = (e.dados as { ficha?: { id?: unknown } } | null | undefined)?.ficha;
       if (typeof ref?.id === 'string' && o.ehAmeaca(ref.id)) return; // ameaça: a rolagem é do mestre

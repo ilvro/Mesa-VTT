@@ -96,6 +96,14 @@ test('evento da sala vai ao mesa:eventos local com o autor', () => {
   assert.deepEqual(vistos, [envelope]);
 });
 
+test('mesa.resposta do mestre vai à sala pelo canal de eventos', () => {
+  const { enviadas } = montar();
+  const atlas = new Canal('mesa:eventos');
+  const resp = { contrato: 1, app: 'atlas', tipo: 'mesa.resposta', id: 'r1', em: 1, campanhaId: null, respondeA: 'p1', dados: { ok: false, motivo: 'Recusado.' } };
+  atlas.postMessage(resp);
+  assert.deepEqual(enviadas, [{ tipo: 'evento', envelope: resp }]);
+});
+
 test('Blob vira blobId (hash dos bytes) e cada id sobe uma vez', async () => {
   const { atlas, enviadas, blobs, ponte } = montar();
   const png = () => new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' });

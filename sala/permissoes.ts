@@ -26,7 +26,7 @@ export function fichaDoEvento(envelope: Envelope): string | null {
 function eventoPermitido(envelope: Envelope, autor: Eu, ctx: ContextoPermissao): boolean {
   if (envelopeInvalido(envelope) !== null) return false;
   if (autor.papel === 'mestre') return EVENTOS_DO_MESTRE.includes(envelope.tipo);
-  if (envelope.tipo === 'atlas.mover-peca') return true;
+  if (envelope.tipo === 'atlas.mover-peca' || envelope.tipo === 'mesa.ping') return true;
   if (envelope.tipo === 'ficha.rolagem' || envelope.tipo === 'ficha.recursos') {
     const id = fichaDoEvento(envelope);
     return id !== null && ctx.donoDaFicha(id) === autor.discordId;

@@ -16,7 +16,7 @@ import { descomprimirEstado } from '../online/estado-comprimido.ts';
 import type { Envelope, Eu, FichaDaSala } from '../online/protocolo.ts';
 
 /** Os eventos que o jogador pode mandar à sala (a sala confere de novo e carimba o autor). */
-export const EVENTOS_DO_JOGADOR: readonly string[] = ['ficha.rolagem', 'ficha.recursos', 'atlas.mover-peca'];
+export const EVENTOS_DO_JOGADOR: readonly string[] = ['ficha.rolagem', 'ficha.recursos', 'atlas.mover-peca', 'mesa.ping'];
 /** Quanto a ponte espera um blob que ainda não chegou antes de descartar a mensagem que o cita. */
 export const PRAZO_DO_BLOB_MS = 15_000;
 

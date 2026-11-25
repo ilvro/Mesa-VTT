@@ -57,8 +57,8 @@ test('lerMensagemDaSala aceita as válidas e recusa lixo', () => {
   for (const t of ruins) assert.equal(lerMensagemDaSala(t), null, t);
 });
 
-test('EVENTOS_DO_MESTRE: rolagens e o som do Jukebox', () => {
-  assert.deepEqual([...EVENTOS_DO_MESTRE], ['ficha.rolagem', 'jukebox.mix', 'jukebox.efeito-tocado']);
+test('EVENTOS_DO_MESTRE: rolagens, som do Jukebox, respostas e ping', () => {
+  assert.deepEqual([...EVENTOS_DO_MESTRE], ['ficha.rolagem', 'jukebox.mix', 'jukebox.efeito-tocado', 'mesa.resposta', 'mesa.ping']);
 });
 
 test('codificarPedaco e decodificarPedaco são inversos; quadros inválidos viram null', () => {

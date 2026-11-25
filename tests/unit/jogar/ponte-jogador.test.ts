@@ -145,13 +145,13 @@ test('só saem os eventos permitidos a jogador e sem autor', () => {
   const { enviadas, eventos } = montar();
   const outro = new Canal(`sala:${SALA}:mesa:eventos`);
   void eventos;
-  for (const tipo of ['ficha.rolagem', 'ficha.recursos', 'atlas.mover-peca']) outro.postMessage({ ...base, tipo, id: `ok-${tipo}` });
-  assert.equal(enviadas.length, 3);
+  for (const tipo of ['ficha.rolagem', 'ficha.recursos', 'atlas.mover-peca', 'mesa.ping']) outro.postMessage({ ...base, tipo, id: `ok-${tipo}` });
+  assert.equal(enviadas.length, 4);
   outro.postMessage({ ...base, tipo: 'atlas.focar', id: 'x1' });
   outro.postMessage({ ...base, tipo: 'sala.membros', id: 'x2' });
   outro.postMessage({ ...base, tipo: 'ficha.rolagem', id: 'x3', autor });
   outro.postMessage({ tipo: 'ficha.rolagem' });
-  assert.equal(enviadas.length, 3);
+  assert.equal(enviadas.length, 4);
   assert.equal(eventoPodeSair({ ...base, tipo: 'ficha.rolagem', id: 'a' }), true);
   assert.equal(eventoPodeSair({ ...base, tipo: 'ficha.rolagem', id: 'a', autor: undefined }), false);
 });

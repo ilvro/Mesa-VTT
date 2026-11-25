@@ -252,3 +252,20 @@ test('sala.config grava, espalha config para todos e libera capaBlobId em blobsP
   assert.deepEqual(s[0]?.msg, { tipo: 'config', config: { nome: 'Ordem', capaBlobId: 'capa-1', dono: 'M' } });
   assert.equal(e.blobsPedidos().includes('capa-1'), true);
 });
+
+test('mesa.ping passa para jogadores e mestre, e descarta excesso acima de 1 por segundo por pessoa', () => {
+  const e = sala();
+  const ping = evento('mesa.ping', 'atlas', { mapa: 'm1', ponto: [3, 4] });
+  const r1 = tratar(e, ana, j(ping), 1000, todos);
+  assert.equal(r1.length, 1);
+  assert.equal(r1[0]?.destino, 'outros');
+  // 500 ms depois da mesma pessoa: descartado
+  const r2 = tratar(e, ana, j(ping), 1500, todos);
+  assert.deepEqual(r2, []);
+  // Outra pessoa no mesmo instante: passa
+  const r3 = tratar(e, mestre, j(ping), 1500, todos);
+  assert.equal(r3.length, 1);
+  // 1000 ms depois da primeira pessoa: passa de novo
+  const r4 = tratar(e, ana, j(ping), 2000, todos);
+  assert.equal(r4.length, 1);
+});

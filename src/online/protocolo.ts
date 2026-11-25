@@ -114,7 +114,7 @@ export type MensagemDaSala =
   | { tipo: 'erro'; motivo: string; recusado?: string };
 
 /** O que a ponte do mestre pode repassar à sala (decisão 12). `atlas.cena-aberta` fica de fora. */
-export const EVENTOS_DO_MESTRE: readonly string[] = ['ficha.rolagem', 'jukebox.mix', 'jukebox.efeito-tocado'];
+export const EVENTOS_DO_MESTRE: readonly string[] = ['ficha.rolagem', 'jukebox.mix', 'jukebox.efeito-tocado', 'mesa.resposta', 'mesa.ping'];
 
 // ---------- validação ----------
 

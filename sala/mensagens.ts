@@ -27,6 +27,16 @@ export interface Saida {
 const PREFIXO_PROJETOR = 'atlas:projetor:';
 /** Prefixo dos blobs de `estado` comprimido (`estado:<mapa>:<versao>`): o id se repete entre sessões, então vale o mais novo. */
 const PREFIXO_ESTADO = 'estado:';
+const INTERVALO_PING_MS = 1000;
+const ultimoPingPorEstado = new WeakMap<Estado, Map<string, number>>();
+function podePingar(estado: Estado, discordId: string, agora: number): boolean {
+  let porPessoa = ultimoPingPorEstado.get(estado);
+  if (!porPessoa) { porPessoa = new Map(); ultimoPingPorEstado.set(estado, porPessoa); }
+  const anterior = porPessoa.get(discordId);
+  if (anterior !== undefined && agora - anterior < INTERVALO_PING_MS) return false;
+  porPessoa.set(discordId, agora);
+  return true;
+}
 
 const ehObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const blobIdDe = (v: unknown): string[] => (ehObj(v) && typeof v.blobId === 'string' && v.blobId ? [v.blobId] : []);
@@ -130,6 +140,7 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
     }
     case 'evento': {
       const envelope = carimbar(msg.envelope, eu, estado.idsDoDono(eu.discordId));
+      if (envelope.tipo === 'mesa.ping' && !podePingar(estado, eu.discordId, agora)) return [];
       if (envelope.tipo === 'ficha.rolagem') estado.registrarRolagem(envelope, eu.discordId, agora);
       if (envelope.tipo === 'jukebox.mix') estado.guardarMix(envelope);
       if (envelope.tipo === 'jukebox.efeito-tocado') {
