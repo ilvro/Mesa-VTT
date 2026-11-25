@@ -111,7 +111,9 @@ export function Mundo({
   }, [selecao, itens]);
 
   const lodSimples = camera.zoom < 0.25;
-  const usarCanvasLod = lodSimples && visiveis.length > 200;
+  const usarCanvasLod =
+    (lodSimples && visiveis.length > 80) ||
+    (camera.zoom < 0.45 && visiveis.length > 350);
   const canvasLodRef = useRef<HTMLCanvasElement | null>(null);
 
   const [, setImagensProntas] = useState(0);

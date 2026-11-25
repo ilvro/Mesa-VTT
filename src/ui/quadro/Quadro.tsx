@@ -206,9 +206,12 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
   const painelEstadoAberto = useSignal(false);
   const painelSegredosAberto = useSignal(false);
   const painelLinhaDoTempoAberto = useSignal(false);
-  const painelRevisaoAberto = useSignal(
-    [...itens.value.values()].some((i) => Boolean(i.revisao)),
-  );
+  const totalRevisao = useMemo(() => {
+    let n = 0;
+    for (const it of itens.value.values()) if (it.revisao) n++;
+    return n;
+  }, [itens.value]);
+  const painelRevisaoAberto = useSignal(totalRevisao > 0);
   const buscaAberta = useSignal(false);
   const termoBusca = useSignal('');
   const indiceBusca = useSignal(0);
@@ -1753,7 +1756,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
             }
           }}
         >
-          Revisão ({[...itens.value.values()].filter((i) => Boolean(i.revisao)).length})
+          Revisão ({totalRevisao})
         </button>
         <details class="menu-paineis-quadro" data-testid="menu-paineis-quadro">
           <summary class="botao-pilula" data-testid="botao-paineis-quadro">Painéis</summary>

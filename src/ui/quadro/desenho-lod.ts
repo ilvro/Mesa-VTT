@@ -13,10 +13,28 @@ import { urlDaImagem } from '../../app/imagens-quadro.ts';
  * formas e traços com o contorno certo, tudo com rotação e na densidade da tela.
  */
 
-const imagens = new Map<string, HTMLImageElement | 'carregando' | 'falhou'>();
+const LADO_MINIATURA_LOD = 256;
+const imagens = new Map<string, HTMLCanvasElement | HTMLImageElement | 'carregando' | 'falhou'>();
 
-function imagemPronta(imagemId: string, aoCarregar: () => void): HTMLImageElement | null {
+function reduzirParaLod(img: HTMLImageElement): HTMLCanvasElement | HTMLImageElement {
+  const maior = Math.max(img.naturalWidth, img.naturalHeight);
+  if (maior <= LADO_MINIATURA_LOD || maior === 0) return img;
+  const escala = LADO_MINIATURA_LOD / maior;
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(img.naturalWidth * escala));
+  c.height = Math.max(1, Math.round(img.naturalHeight * escala));
+  const cx = c.getContext('2d');
+  if (!cx) return img;
+  cx.drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
+
+function imagemPronta(
+  imagemId: string,
+  aoCarregar: () => void,
+): HTMLCanvasElement | HTMLImageElement | null {
   const atual = imagens.get(imagemId);
+  if (atual instanceof HTMLCanvasElement) return atual;
   if (atual instanceof HTMLImageElement) return atual.complete ? atual : null;
   if (atual) return null;
   imagens.set(imagemId, 'carregando');
@@ -27,10 +45,12 @@ function imagemPronta(imagemId: string, aoCarregar: () => void): HTMLImageElemen
     }
     const img = new Image();
     img.decoding = 'async';
-    img.onload = () => aoCarregar();
+    img.onload = () => {
+      imagens.set(imagemId, reduzirParaLod(img));
+      aoCarregar();
+    };
     img.onerror = () => imagens.set(imagemId, 'falhou');
     img.src = url;
-    imagens.set(imagemId, img);
   });
   return null;
 }

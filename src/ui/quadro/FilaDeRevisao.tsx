@@ -1,4 +1,5 @@
 import { useSignal } from '@preact/signals'
+import { useMemo } from 'preact/hooks'
 import { entidades } from '../../app/campanha.ts'
 import { executar, paletaDaCampanha } from '../../app/quadros.ts'
 import { ordemDeLeitura, type ItemMoldura } from '../../dominio/molduras.ts'
@@ -55,49 +56,72 @@ export function FilaDeRevisao({ itens, onFocarItem, onFechar }: FilaDeRevisaoPro
   const filtro = useSignal<TipoSemantico | 'sem' | 'conflitos' | null>(null)
   const confirmandoDescarte = useSignal(false)
   const confirmandoMassa = useSignal<string | null>(null)
+  const limiteExibido = useSignal(80)
 
-  const molduras = [...itens.values()].filter(
-    (i): i is ItemMoldura => i.tipo === 'moldura',
-  )
-  const moldurasOrdenadas = ordemDeLeitura(molduras)
-
-  const todosEmRevisao = [...itens.values()].filter((i) => Boolean(i.revisao))
-  const resumo = resumoDaRevisao(todosEmRevisao)
-  const chaveDoTipo = (r: ResumoPorTipo) => r.tipo ?? 'sem'
-  const passaNoFiltro = (i: Item): boolean => {
+  const { moldurasOrdenadas, todosEmRevisao, resumo, doAssistente, emRevisao, grupos } = useMemo(() => {
+    const molduras: ItemMoldura[] = []
+    const revisao: Item[] = []
+    for (const i of itens.values()) {
+      if (i.tipo === 'moldura') molduras.push(i)
+      if (i.revisao) revisao.push(i)
+    }
+    const moldOrd = ordemDeLeitura(molduras)
+    const res = resumoDaRevisao(revisao)
     const f = filtro.value
-    if (!f) return true
-    if (ehConflitoOuSaida(i)) return f === 'conflitos'
-    return f === (i.revisao?.tipoSugerido ?? 'sem')
-  }
-  const doAssistente = ordenarItensEmLeitura(todosEmRevisao.filter(ehDoAssistente))
-  const emRevisao = todosEmRevisao.filter((i) => !ehDoAssistente(i) && passaNoFiltro(i))
-  const grupos: GrupoRevisao[] = []
+    const passa = (i: Item): boolean => {
+      if (!f) return true
+      if (ehConflitoOuSaida(i)) return f === 'conflitos'
+      return f === (i.revisao?.tipoSugerido ?? 'sem')
+    }
+    const assistente: Item[] = []
+    const restantes: Item[] = []
+    for (const i of revisao) {
+      if (ehDoAssistente(i)) assistente.push(i)
+      else if (passa(i)) restantes.push(i)
+    }
 
-  for (const m of moldurasOrdenadas) {
-    const daMoldura = ordenarItensEmLeitura(
-      emRevisao.filter((i) => i.molduraId === m.id),
-    )
-    if (daMoldura.length > 0) {
-      grupos.push({
-        molduraId: m.id,
-        titulo: m.titulo || 'Moldura',
-        itens: daMoldura,
+    const porMoldura = new Map<string, Item[]>()
+    const semMold: Item[] = []
+    const idsMold = new Set(moldOrd.map((m) => m.id))
+    for (const i of restantes) {
+      if (i.molduraId && idsMold.has(i.molduraId)) {
+        const lista = porMoldura.get(i.molduraId)
+        if (lista) lista.push(i)
+        else porMoldura.set(i.molduraId, [i])
+      } else {
+        semMold.push(i)
+      }
+    }
+
+    const grps: GrupoRevisao[] = []
+    for (const m of moldOrd) {
+      const daMoldura = porMoldura.get(m.id)
+      if (daMoldura && daMoldura.length > 0) {
+        grps.push({
+          molduraId: m.id,
+          titulo: m.titulo || 'Moldura',
+          itens: ordenarItensEmLeitura(daMoldura),
+        })
+      }
+    }
+    if (semMold.length > 0) {
+      grps.push({
+        molduraId: null,
+        titulo: 'Fora de molduras',
+        itens: ordenarItensEmLeitura(semMold),
       })
     }
-  }
 
-  const idsMoldurasConhecidas = new Set(moldurasOrdenadas.map((m) => m.id))
-  const semMoldura = ordenarItensEmLeitura(
-    emRevisao.filter((i) => !i.molduraId || !idsMoldurasConhecidas.has(i.molduraId)),
-  )
-  if (semMoldura.length > 0) {
-    grupos.push({
-      molduraId: null,
-      titulo: 'Fora de molduras',
-      itens: semMoldura,
-    })
-  }
+    return {
+      moldurasOrdenadas: moldOrd,
+      todosEmRevisao: revisao,
+      resumo: res,
+      doAssistente: ordenarItensEmLeitura(assistente),
+      emRevisao: restantes,
+      grupos: grps,
+    }
+  }, [itens, filtro.value])
+  const chaveDoTipo = (r: ResumoPorTipo) => r.tipo ?? 'sem'
 
   const descartarDoAssistente = () => {
     if (doAssistente.length > 0) {
@@ -519,56 +543,74 @@ export function FilaDeRevisao({ itens, onFocarItem, onFechar }: FilaDeRevisaoPro
               <ul class="fila-revisao-lista">{doAssistente.map(renderItem)}</ul>
             </section>
           ) : null}
-          {grupos.map((grupo) => {
-            const chaveGrupo = grupo.molduraId ?? 'sem-moldura'
-            return (
-              <section
-                key={chaveGrupo}
-                class="fila-revisao-grupo"
-                data-testid={`revisao-grupo-${chaveGrupo}`}
-              >
-                <header class="fila-revisao-grupo-topo">
-                  <strong>{grupo.titulo}</strong>
-                  {confirmandoMolduraId.value === chaveGrupo ? (
-                    <span class="fila-revisao-confirmacao">
-                      <button
-                        type="button"
-                        class="botao-pilula pequeno destaque"
-                        data-testid={`revisao-confirmar-moldura-${chaveGrupo}`}
-                        onClick={() => aceitarMoldura(grupo)}
-                      >
-                        Confirmar ({grupo.itens.filter((i) => !ehConflitoOuSaida(i)).length})
-                      </button>
+          {(() => {
+            let resta = limiteExibido.value
+            return grupos.map((grupo) => {
+              if (resta <= 0) return null
+              const visiveis = grupo.itens.length <= resta ? grupo.itens : grupo.itens.slice(0, resta)
+              resta -= visiveis.length
+              const chaveGrupo = grupo.molduraId ?? 'sem-moldura'
+              return (
+                <section
+                  key={chaveGrupo}
+                  class="fila-revisao-grupo"
+                  data-testid={`revisao-grupo-${chaveGrupo}`}
+                >
+                  <header class="fila-revisao-grupo-topo">
+                    <strong>{grupo.titulo}</strong>
+                    {confirmandoMolduraId.value === chaveGrupo ? (
+                      <span class="fila-revisao-confirmacao">
+                        <button
+                          type="button"
+                          class="botao-pilula pequeno destaque"
+                          data-testid={`revisao-confirmar-moldura-${chaveGrupo}`}
+                          onClick={() => aceitarMoldura(grupo)}
+                        >
+                          Confirmar ({grupo.itens.filter((i) => !ehConflitoOuSaida(i)).length})
+                        </button>
+                        <button
+                          type="button"
+                          class="botao-pilula pequeno"
+                          onClick={() => {
+                            confirmandoMolduraId.value = null
+                          }}
+                        >
+                          Cancelar
+                        </button>
+                      </span>
+                    ) : (
                       <button
                         type="button"
                         class="botao-pilula pequeno"
+                        data-testid={`revisao-aceitar-moldura-${chaveGrupo}`}
                         onClick={() => {
-                          confirmandoMolduraId.value = null
+                          confirmandoMolduraId.value = chaveGrupo
                         }}
                       >
-                        Cancelar
+                        Aceitar todos desta moldura
                       </button>
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      class="botao-pilula pequeno"
-                      data-testid={`revisao-aceitar-moldura-${chaveGrupo}`}
-                      onClick={() => {
-                        confirmandoMolduraId.value = chaveGrupo
-                      }}
-                    >
-                      Aceitar todos desta moldura
-                    </button>
-                  )}
-                </header>
+                    )}
+                  </header>
 
-                <ul class="fila-revisao-lista">
-                  {grupo.itens.map(renderItem)}
-                </ul>
-              </section>
-            )
-          })}
+                  <ul class="fila-revisao-lista">
+                    {visiveis.map(renderItem)}
+                  </ul>
+                </section>
+              )
+            })
+          })()}
+          {emRevisao.length > limiteExibido.value ? (
+            <button
+              type="button"
+              class="botao-pilula pequeno"
+              data-testid="revisao-mostrar-mais"
+              onClick={() => {
+                limiteExibido.value += 120
+              }}
+            >
+              Mostrar mais ({emRevisao.length - limiteExibido.value} restantes)
+            </button>
+          ) : null}
         </div>
       )}
     </aside>

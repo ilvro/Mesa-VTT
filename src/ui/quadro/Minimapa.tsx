@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'preact/hooks';
 import {
   caixaEnvolventeTotal,
   caixaVisivel,
+  type Caixa,
   type Camera,
   type Tamanho,
 } from '../../dominio/camera.ts';
@@ -32,6 +33,16 @@ export function Minimapa({
   const ultimoDesenhoRef = useRef(0);
   const timerRef = useRef<number | null>(null);
   const projecaoRef = useRef({ minX: 0, minY: 0, escala: 1 });
+  const cacheItensRef = useRef<{
+    itens: ReadonlyMap<string, Item>;
+    total: Caixa | null;
+    buffer: HTMLCanvasElement;
+    minX: number;
+    minY: number;
+    escala: number;
+    offX: number;
+    offY: number;
+  } | null>(null);
 
   const desenhar = () => {
     const canvas = canvasRef.current;
@@ -43,53 +54,68 @@ export function Minimapa({
     ctx.clearRect(0, 0, LARGURA_MINIMAPA, ALTURA_MINIMAPA);
 
     const vis = caixaVisivel(camera, tamanhoTela);
-    const total = caixaEnvolventeTotal(itens.values());
-    const minX = total ? Math.min(total.x, vis.x) : vis.x;
-    const minY = total ? Math.min(total.y, vis.y) : vis.y;
-    const maxX = total ? Math.max(total.x + total.largura, vis.x + vis.largura) : vis.x + vis.largura;
-    const maxY = total ? Math.max(total.y + total.altura, vis.y + vis.altura) : vis.y + vis.altura;
+    let cache = cacheItensRef.current;
+    if (!cache || cache.itens !== itens) {
+      const total = caixaEnvolventeTotal(itens.values());
+      const minX = total ? total.x : vis.x;
+      const minY = total ? total.y : vis.y;
+      const maxX = total ? total.x + total.largura : vis.x + vis.largura;
+      const maxY = total ? total.y + total.altura : vis.y + vis.altura;
 
-    const mundoW = Math.max(100, maxX - minX);
-    const mundoH = Math.max(100, maxY - minY);
-    const escala = Math.min(
-      (LARGURA_MINIMAPA - 12) / mundoW,
-      (ALTURA_MINIMAPA - 12) / mundoH,
-    );
-    const offX = (LARGURA_MINIMAPA - mundoW * escala) / 2 - minX * escala;
-    const offY = (ALTURA_MINIMAPA - mundoH * escala) / 2 - minY * escala;
+      const mundoW = Math.max(100, maxX - minX);
+      const mundoH = Math.max(100, maxY - minY);
+      const escala = Math.min(
+        (LARGURA_MINIMAPA - 12) / mundoW,
+        (ALTURA_MINIMAPA - 12) / mundoH,
+      );
+      const offX = (LARGURA_MINIMAPA - mundoW * escala) / 2 - minX * escala;
+      const offY = (ALTURA_MINIMAPA - mundoH * escala) / 2 - minY * escala;
 
+      const buffer = cache?.buffer ?? document.createElement('canvas');
+      buffer.width = LARGURA_MINIMAPA;
+      buffer.height = ALTURA_MINIMAPA;
+      const bctx = buffer.getContext('2d');
+      if (bctx) {
+        bctx.clearRect(0, 0, LARGURA_MINIMAPA, ALTURA_MINIMAPA);
+        for (const it of itens.values()) {
+          if (it.tipo === 'moldura') {
+            bctx.strokeStyle = 'rgba(200, 212, 203, 0.35)';
+            bctx.lineWidth = 1;
+            bctx.strokeRect(
+              it.x * escala + offX,
+              it.y * escala + offY,
+              Math.max(2, it.largura * escala),
+              Math.max(2, it.altura * escala),
+            );
+            continue;
+          }
+          const fundo = 'caixa' in it ? fundoEfetivo(it, paletaDaCampanha.value) : null;
+          bctx.fillStyle =
+            fundo
+              ? fundo
+              : it.tipo === 'seta' || it.tipo === 'traco'
+                ? it.cor
+                : '#8fa396';
+          bctx.fillRect(
+            it.x * escala + offX,
+            it.y * escala + offY,
+            Math.max(2, it.largura * escala),
+            Math.max(2, it.altura * escala),
+          );
+        }
+      }
+      cache = { itens, total, buffer, minX, minY, escala, offX, offY };
+      cacheItensRef.current = cache;
+    }
+
+    const { escala, offX, offY, buffer } = cache;
     projecaoRef.current = {
       minX: -offX / escala,
       minY: -offY / escala,
       escala,
     };
 
-    for (const it of itens.values()) {
-      if (it.tipo === 'moldura') {
-        ctx.strokeStyle = 'rgba(200, 212, 203, 0.35)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(
-          it.x * escala + offX,
-          it.y * escala + offY,
-          Math.max(2, it.largura * escala),
-          Math.max(2, it.altura * escala),
-        );
-        continue;
-      }
-      const fundo = 'caixa' in it ? fundoEfetivo(it, paletaDaCampanha.value) : null;
-      ctx.fillStyle =
-        fundo
-          ? fundo
-          : it.tipo === 'seta' || it.tipo === 'traco'
-            ? it.cor
-            : '#8fa396';
-      ctx.fillRect(
-        it.x * escala + offX,
-        it.y * escala + offY,
-        Math.max(2, it.largura * escala),
-        Math.max(2, it.altura * escala),
-      );
-    }
+    ctx.drawImage(buffer, 0, 0);
 
     ctx.strokeStyle = '#d9b44a';
     ctx.lineWidth = 1.5;
