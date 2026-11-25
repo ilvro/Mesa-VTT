@@ -39,6 +39,8 @@ export interface OpcoesDaPonteDoJogador {
   prazoDoBlobMs?: number;
   /** A primeira vez que um `estado` foi entregue ao projetor local (a sala já tem mapa). */
   aoTerMapa?: () => void;
+  /** Chamado quando o Dossiê pede `sala.fichas` (sinal de que carregou e registrou seus listeners). */
+  aoDossiePronto?: () => void;
   aviso?: (texto: string) => void;
 }
 
@@ -142,6 +144,7 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
   eventos.onmessage = ({ data }) => { if (eventoPodeSair(data)) cliente.enviar({ tipo: 'evento', envelope: data }); };
 
   barramento.atender('sala.fichas', async () => {
+    o.aoDossiePronto?.();
     await aberta;
     const minhas = [...fichas.values()].filter(f => !donos.has(f.id) || !eu || donos.get(f.id) === eu.discordId);
     return { ok: true, fichas: minhas, revs: Object.fromEntries(minhas.filter(f => revs.has(f.id)).map(f => [f.id, revs.get(f.id)])), ...(eu ? { eu: { discordId: eu.discordId, nome: eu.nome } } : {}) };

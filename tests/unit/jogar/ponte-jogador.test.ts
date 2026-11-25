@@ -275,6 +275,24 @@ test('ficha.removida (entregue a outro jogador): a ponte esquece a ficha e avisa
   ponte.fechar();
 });
 
+test('aoDossiePronto é chamado quando o Dossiê pede sala.fichas', async () => {
+  Canal.todos.clear(); Canal.escritos = [];
+  const f = clienteFalso();
+  let chamados = 0;
+  const ponte = criarPonteDoJogador({
+    cliente: f.cliente,
+    salaId: SALA,
+    criarCanal: n => new Canal(n),
+    aoDossiePronto: () => { chamados++; },
+  });
+  const dossie = criarBarramento({ app: 'ficha', campanhaId: null, criarCanal: () => new Canal(`sala:${SALA}:mesa:eventos`) });
+  f.emitir(bemVindo([ficha('a')], { donos: { a: '2' } }));
+  assert.equal(chamados, 0);
+  await dossie.pedir('sala.fichas', {});
+  assert.equal(chamados, 1);
+  ponte.fechar();
+});
+
 test('os pedidos de ficha e as respostas ficam só no canal da sala, e nada disso vai para a sala', async () => {
   const { dossie, emitir, enviadas, ponte } = comDossie();
   emitir(bemVindo([ficha('a')], { donos: { a: '2' } }));

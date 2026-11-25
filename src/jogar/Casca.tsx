@@ -21,7 +21,7 @@ import { criarPonteDoJogador, type CanalLocal } from './ponte-jogador.ts';
 import { Saguao } from './Saguao.tsx';
 import { criarSomDaCasca, type EstadoDoSomNaCasca, type SomDaCasca } from './som.ts';
 import { lerPreferenciasDeSom } from '../online/sincronia.ts';
-import { fichaCobreOMapa, mensagemDeVista, mensagemDoJogador, vistaDaFicha, vistaPedidaPeloDossie } from './vista-ficha.ts';
+import { fichaCobreOMapa, mensagemDeVista, mensagemDoJogador, projetorPronto, vistaDaFicha, vistaPedidaPeloDossie } from './vista-ficha.ts';
 import './casca.css';
 
 /** O endereço do projetor remoto do Atlas para esta sala. Não muda quando o mestre troca de mapa: o projetor aceita o `estado` de qualquer mapa. */
@@ -271,6 +271,8 @@ function Sala({
   invalida.current = aoSessaoInvalida;
   const mudarCampanha = useRef(aoMudarCampanha);
   mudarCampanha.current = aoMudarCampanha;
+  const mandarVistaAtual = useRef<() => void>(() => {});
+  const mandarJogadorAtual = useRef<() => void>(() => {});
 
   useEffect(() => {
     setErro(null); setTemMapa(false);
@@ -323,7 +325,13 @@ function Sala({
       capaUrlRef.current = url;
       setCapaUrl(url);
     });
-    const ponte = criarPonteDoJogador({ cliente, salaId, criarCanal: n => new BroadcastChannel(n) as unknown as CanalLocal, aoTerMapa: () => setTemMapa(true) });
+    const ponte = criarPonteDoJogador({
+      cliente,
+      salaId,
+      criarCanal: n => new BroadcastChannel(n) as unknown as CanalLocal,
+      aoTerMapa: () => setTemMapa(true),
+      aoDossiePronto: () => mandarVistaAtual.current(),
+    });
     const baseJukebox = emDiscord ? baseDoAppNoDiscord('jukebox') : baseDoApp('jukebox');
     const som = criarSomDaCasca({ cliente, baseJukebox });
     somRef.current = som;
@@ -338,11 +346,12 @@ function Sala({
     };
   }, [salaId, sessao, emDiscord]);
 
-  // Pedido do card ("Ficha completa"): só do `iframe` do Dossiê, na mesma origem.
+  // Pedido do card ("Ficha completa") e aviso do projetor remoto ("projetor.pronto"): só dos `iframe`s da casca, na mesma origem.
   useEffect(() => {
     const ouvir = (ev: MessageEvent) => {
       const pedida = vistaPedidaPeloDossie(ev, quadro.current?.contentWindow, location.origin);
       if (pedida) setAberta(pedida === 'completa');
+      if (projetorPronto(ev, projetorQuadro.current?.contentWindow, location.origin)) mandarJogadorAtual.current();
     };
     addEventListener('message', ouvir);
     return () => removeEventListener('message', ouvir);
@@ -360,12 +369,14 @@ function Sala({
     try { quadro.current?.contentWindow?.postMessage(mensagemDeVista(vistaAtual.current), location.origin); } catch { /* o Dossiê ainda não carregou */ }
     mandarFichaAtiva();
   };
+  mandarVistaAtual.current = mandarVista;
   useEffect(mandarVista, [vista]);
   // As fichas do jogador vão ao projetor remoto (R14) para marcar as peças próprias.
   const fichasChave = fichas.map(f => f.id).join(',');
   const fichasIdsAtual = useRef<string[]>([]);
   fichasIdsAtual.current = fichas.map(f => f.id);
   const mandarJogador = () => { try { projetorQuadro.current?.contentWindow?.postMessage(mensagemDoJogador(fichasIdsAtual.current), location.origin); } catch { /* o projetor ainda não carregou */ } };
+  mandarJogadorAtual.current = mandarJogador;
   useEffect(mandarJogador, [fichasChave]);
   // Esc volta ao mapa, com o foco na casca ou dentro do Dossiê (mesma origem).
   useEffect(() => {

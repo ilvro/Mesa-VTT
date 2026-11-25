@@ -15,6 +15,13 @@ export function vistaPedidaPeloDossie(ev: { source: unknown; origin: string; dat
   return d.vista;
 }
 
+/** Um aviso `postMessage` do projetor remoto indicando que ele já montou e pode receber a lista de fichas do jogador. */
+export function projetorPronto(ev: { source: unknown; origin: string; data: unknown }, janelaDoProjetor: unknown, origemLocal: string): boolean {
+  if (!janelaDoProjetor || ev.source !== janelaDoProjetor || ev.origin !== origemLocal) return false;
+  const d = ev.data as { tipo?: unknown } | null;
+  return !!d && typeof d === 'object' && d.tipo === 'projetor.pronto';
+}
+
 /** A vista que o Dossiê mostra. No celular na vertical, as abas decidem (Ficha = completa); fora dele, vale o pedido (`aberta`). */
 export function vistaDaFicha(o: { celularVertical: boolean; aba: AbaDaCasca; aberta: boolean }): VistaDaFicha {
   return o.celularVertical ? (o.aba === 'ficha' ? 'completa' : 'card') : (o.aberta ? 'completa' : 'card');

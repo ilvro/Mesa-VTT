@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fichaCobreOMapa, mensagemDeVista, mensagemDoJogador, vistaDaFicha, vistaPedidaPeloDossie } from '../../../src/jogar/vista-ficha.ts';
+import { fichaCobreOMapa, mensagemDeVista, mensagemDoJogador, projetorPronto, vistaDaFicha, vistaPedidaPeloDossie } from '../../../src/jogar/vista-ficha.ts';
 
 const janela = {}, outra = {};
 const pedido = { tipo: 'dossie.pedir-vista', vista: 'completa' };
@@ -29,4 +29,13 @@ test('a tela toda só fora do celular; a mensagem da vista é a do protocolo do 
   assert.equal(fichaCobreOMapa({ celularVertical: true, aberta: true }), false);
   assert.deepEqual(mensagemDeVista('card'), { tipo: 'dossie.vista', vista: 'card' });
   assert.deepEqual(mensagemDoJogador(['f1', 'f2']), { tipo: 'jogador', fichas: ['f1', 'f2'] });
+});
+
+test('projetorPronto só aceita mensagem do iframe do projetor na mesma origem', () => {
+  assert.equal(projetorPronto({ source: janela, origin: 'http://a', data: { tipo: 'projetor.pronto' } }, janela, 'http://a'), true);
+  assert.equal(projetorPronto({ source: outra, origin: 'http://a', data: { tipo: 'projetor.pronto' } }, janela, 'http://a'), false);
+  assert.equal(projetorPronto({ source: janela, origin: 'http://b', data: { tipo: 'projetor.pronto' } }, janela, 'http://a'), false);
+  assert.equal(projetorPronto({ source: janela, origin: 'http://a', data: { tipo: 'outro' } }, janela, 'http://a'), false);
+  assert.equal(projetorPronto({ source: janela, origin: 'http://a', data: null }, janela, 'http://a'), false);
+  assert.equal(projetorPronto({ source: janela, origin: 'http://a', data: { tipo: 'projetor.pronto' } }, null, 'http://a'), false);
 });
