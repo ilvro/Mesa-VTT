@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { campanhaAtiva } from '../app/campanha.ts';
 import { abrirMesaOnline, confirmarSemNevoa, conexaoOnline, estadoDaPonte, fecharMesaOnline, salaConectadaId } from '../app/online.ts';
 import { carregarSessaoOnline, erroDoLogin, iniciarLogin, sairDoOnline, sessaoOnline } from '../app/online-login.ts';
-import { criarSala, ligarAoServidor, listarMinhasSalas, listarServidoresDoDiscord, salaDaCampanha, type SalaDoMestre, type ServidorDiscord } from '../app/online-salas.ts';
+import { apagarSala, criarSala, ligarAoServidor, listarMinhasSalasComLigacoes, listarServidoresDoDiscord, salaDaCampanha, type SalaDoMestre, type ServidorDiscord } from '../app/online-salas.ts';
 import { avisar, mensagemDe } from '../app/toasts.ts';
 import { MembroLinha } from '../jogar/Saguao.tsx';
 import { urlDaSala } from '../online/config.ts';
@@ -51,13 +51,16 @@ function SemSessao() {
 function PainelDoMestre({ sessao }: { sessao: string }) {
   const camp = campanhaAtiva.value;
   const [salas, setSalas] = useState<SalaDoMestre[]>([]);
+  const [ligacoes, setLigacoes] = useState<Record<string, string>>({});
   const [servidores, setServidores] = useState<ServidorDiscord[]>([]);
   const [precisaRelogar, setPrecisaRelogar] = useState(false);
   const [escolhida, setEscolhida] = useState<string | null>(() => salaDaCampanha(camp?.id));
   const [guild, setGuild] = useState('');
   const [ocupado, setOcupado] = useState(false);
 
-  const recarregar = () => listarMinhasSalas(sessao).then(setSalas).catch(e => avisar(`Não consegui listar as salas: ${mensagemDe(e)}`, true));
+  const recarregar = () => listarMinhasSalasComLigacoes(sessao)
+    .then(r => { setSalas(r.salas); setLigacoes(r.ligacoes); })
+    .catch(e => avisar(`Não consegui listar as salas: ${mensagemDe(e)}`, true));
   const carregarServidores = () => {
     void listarServidoresDoDiscord(sessao)
       .then(r => { setServidores(r.servidores); setPrecisaRelogar(!!r.precisaRelogar); })
@@ -81,23 +84,43 @@ function PainelDoMestre({ sessao }: { sessao: string }) {
   const ligar = async (guildId: string = guild.trim()) => {
     if (!sala || !guildId) return;
     setOcupado(true);
-    try { await ligarAoServidor(sessao, guildId, sala.salaId); setGuild(''); avisar('Sala ligada ao servidor do Discord.'); }
+    try { await ligarAoServidor(sessao, guildId, sala.salaId); setGuild(''); await recarregar(); avisar('Sala ligada ao servidor do Discord.'); }
     catch (e) { avisar(`Não consegui ligar ao servidor: ${mensagemDe(e)}`, true); } finally { setOcupado(false); }
   };
+  const apagar = async (salaId: string) => {
+    setOcupado(true);
+    try {
+      if (salaConectadaId.value === salaId) fecharMesaOnline();
+      await apagarSala(sessao, salaId);
+      if (escolhida === salaId) setEscolhida(null);
+      await recarregar();
+      avisar('Sala apagada.');
+    } catch (e) { avisar(`Não consegui apagar a sala: ${mensagemDe(e)}`, true); } finally { setOcupado(false); }
+  };
+  const servidoresDaSala = (salaId: string): string[] =>
+    Object.entries(ligacoes)
+      .filter(([, s]) => s === salaId)
+      .map(([gid]) => servidores.find(srv => srv.id === gid)?.name ?? gid);
 
   return (
     <>
       <h3 class="faixa pequena">Salas</h3>
       <ul class="lista online-salas" data-testid="online-salas">
         {salas.length === 0 && <li class="meta">Nenhuma sala ainda.</li>}
-        {salas.map(x => (
-          <li key={x.salaId}>
-            <label class="online-sala">
-              <input type="radio" name="sala" checked={x.salaId === escolhida} onChange={() => setEscolhida(x.salaId)} />
-              <span>{x.nome}</span><span class="meta">{x.salaId}</span>
-            </label>
-          </li>
-        ))}
+        {salas.map(x => {
+          const ligados = servidoresDaSala(x.salaId);
+          return (
+            <li key={x.salaId} class="online-sala-item">
+              <label class="online-sala">
+                <input type="radio" name="sala" checked={x.salaId === escolhida} onChange={() => setEscolhida(x.salaId)} />
+                <span>{x.nome}</span>
+                {ligados.length > 0 && <span class="online-ligada" title={`Ligada a: ${ligados.join(', ')}`}>{ligados.join(', ')}</span>}
+                <span class="meta">{x.salaId}</span>
+              </label>
+              <button type="button" class="botao-pilula perigo" data-testid={`online-apagar-${x.salaId}`} disabled={ocupado} onClick={() => void apagar(x.salaId)}>Apagar</button>
+            </li>
+          );
+        })}
       </ul>
       <div class="online-acoes">
         <button type="button" class="botao-pilula" data-testid="online-criar" disabled={!camp || ocupado} onClick={() => void criar()}>Criar sala para esta campanha</button>
@@ -109,12 +132,20 @@ function PainelDoMestre({ sessao }: { sessao: string }) {
         <p class="meta">Saia e entre de novo com o Discord para listar seus servidores.</p>
       ) : servidores.length > 0 ? (
         <ul class="lista online-salas" data-testid="online-servidores">
-          {servidores.map(srv => (
-            <li key={srv.id} class="online-servidor">
-              <span>{srv.name}</span>
-              <button type="button" class="botao-pilula" data-testid={`online-ligar-${srv.id}`} disabled={!sala || ocupado} onClick={() => void ligar(srv.id)}>Ligar</button>
-            </li>
-          ))}
+          {servidores.map(srv => {
+            const salaLigada = salas.find(x => x.salaId === ligacoes[srv.id]);
+            return (
+              <li key={srv.id} class="online-servidor">
+                <span class="online-servidor-info">
+                  <span>{srv.name}</span>
+                  {salaLigada && <span class="meta">Ligada: {salaLigada.nome} ({salaLigada.salaId.slice(0, 6)})</span>}
+                </span>
+                <button type="button" class="botao-pilula" data-testid={`online-ligar-${srv.id}`} disabled={!sala || ocupado} onClick={() => void ligar(srv.id)}>
+                  {salaLigada && salaLigada.salaId === sala?.salaId ? 'Religar' : 'Ligar'}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p class="meta">Nenhum servidor visto pela atividade ainda. Abra a atividade no servidor ou cole o id abaixo.</p>

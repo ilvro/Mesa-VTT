@@ -17,8 +17,17 @@ async function pedir<T>(sessao: string, metodo: 'GET' | 'POST', caminho: string,
   return d;
 }
 
+export async function listarMinhasSalasComLigacoes(sessao: string, f?: typeof fetch): Promise<{ salas: SalaDoMestre[]; ligacoes: Record<string, string> }> {
+  const r = await pedir<{ salas?: SalaDoMestre[]; ligacoes?: Record<string, string> }>(sessao, 'GET', '/sala/minhas', undefined, f);
+  return { salas: r.salas ?? [], ligacoes: r.ligacoes ?? {} };
+}
+
 export async function listarMinhasSalas(sessao: string, f?: typeof fetch): Promise<SalaDoMestre[]> {
-  return (await pedir<{ salas?: SalaDoMestre[] }>(sessao, 'GET', '/sala/minhas', undefined, f)).salas ?? [];
+  return (await listarMinhasSalasComLigacoes(sessao, f)).salas;
+}
+
+export async function apagarSala(sessao: string, salaId: string, f?: typeof fetch): Promise<void> {
+  await pedir(sessao, 'POST', '/sala/remover', { salaId }, f);
 }
 
 /** Cria a sala da campanha e guarda o id em `localStorage['mesa:sala:<campanhaId>']`. */

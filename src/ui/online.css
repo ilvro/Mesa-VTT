@@ -5,9 +5,12 @@
 .online-acoes { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 8px 0; }
 .online-acoes input[type='text'] { flex: 1 1 260px; }
 .online-salas li { padding: 8px 10px; background: var(--superficie); border: 1px solid var(--linha); border-radius: var(--raio); }
-.online-sala { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.online-sala-item { display: flex; align-items: center; gap: 10px; }
+.online-sala { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .online-sala .meta { margin-left: auto; font-family: 'JetBrains Mono', monospace; }
+.online-ligada { padding: 1px 7px; border-radius: 999px; background: var(--acento-suave); border: 1px solid var(--acento); color: var(--acento); font: 700 10px var(--corpo); letter-spacing: 0.06em; }
 .online-servidor { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.online-servidor-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .online-estado { font: 700 11px var(--corpo); letter-spacing: 0.1em; text-transform: uppercase; color: var(--apagado); }
 .online-estado.aberta { color: var(--sucesso); }
 .online-estado.caiu { color: var(--perigo); }

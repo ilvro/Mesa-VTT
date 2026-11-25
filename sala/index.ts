@@ -157,9 +157,14 @@ export default {
       }
     }
 
-    if (url.pathname.startsWith('/sala/diretorio/') || url.pathname === '/sala/minhas') {
+    if (url.pathname.startsWith('/sala/diretorio/') || url.pathname === '/sala/minhas' || url.pathname === '/sala/remover') {
       const sessao = await autenticar(request, env);
       if (!sessao) return json({ erro: 'sessão inválida' }, 401, cabecalhos);
+      if (request.method === 'POST' && url.pathname === '/sala/remover') {
+        const corpo = (await request.json().catch(() => null)) as { salaId?: unknown } | null;
+        if (!corpo || typeof corpo.salaId !== 'string' || !corpo.salaId) return json({ erro: 'faltou salaId' }, 400, cabecalhos);
+        return repassar(await diretorio(env, '/remover', sessao.discordId, { salaId: corpo.salaId }), cabecalhos);
+      }
       if (request.method === 'POST' && url.pathname === '/sala/diretorio/ligar') {
         const corpo = (await request.json().catch(() => null)) as { guildId?: unknown; salaId?: unknown } | null;
         if (!corpo || typeof corpo.guildId !== 'string' || typeof corpo.salaId !== 'string') return json({ erro: 'faltou guildId ou salaId' }, 400, cabecalhos);

@@ -20,6 +20,10 @@ export interface RegistroDiretorio {
   consultar(guildId: string): string | null;
   /** As salas de um mestre, as mais novas primeiro. */
   salasDoMestre(dono: string): SalaDoMestre[];
+  /** Ligações `guildId -> salaId` das salas de um mestre. */
+  ligacoesDoMestre(dono: string): Record<string, string>;
+  /** Apaga uma sala do dono e suas ligações: `ok`, `desconhecida` ou `nao-dono`. */
+  removerSala(salaId: string, discordId: string): 'ok' | 'desconhecida' | 'nao-dono';
   /** Registra que a atividade foi aberta neste servidor do Discord (R18). */
   registrarGuilda(guildId: string, agora: number): void;
   /** Lista os ids dos servidores onde a atividade já foi vista. */
@@ -50,6 +54,21 @@ export function criarDiretorio(sql: Sql): RegistroDiretorio {
     salasDoMestre(dono) {
       return rodar('SELECT sala_id, nome, criada_em FROM salas WHERE dono = ? ORDER BY criada_em DESC, rowid DESC', dono)
         .map(r => ({ salaId: String(r.sala_id), nome: String(r.nome), criadaEm: Number(r.criada_em) }));
+    },
+    ligacoesDoMestre(dono) {
+      const out: Record<string, string> = {};
+      for (const r of rodar('SELECT l.guild_id, l.sala_id FROM ligacoes l INNER JOIN salas s ON s.sala_id = l.sala_id WHERE s.dono = ?', dono)) {
+        out[String(r.guild_id)] = String(r.sala_id);
+      }
+      return out;
+    },
+    removerSala(salaId, discordId) {
+      const s = rodar('SELECT dono FROM salas WHERE sala_id = ?', salaId)[0];
+      if (!s) return 'desconhecida';
+      if (String(s.dono) !== discordId) return 'nao-dono';
+      rodar('DELETE FROM ligacoes WHERE sala_id = ?', salaId);
+      rodar('DELETE FROM salas WHERE sala_id = ?', salaId);
+      return 'ok';
     },
     registrarGuilda(guildId, agora) {
       if (!guildId) return;

@@ -48,8 +48,15 @@ export class Diretorio implements DurableObject {
     if (request.method === 'GET' && url.pathname === '/guildas') {
       return resposta({ guildIds: this.dir.guildasVistas() });
     }
+    if (request.method === 'POST' && url.pathname === '/remover') {
+      if (typeof corpo.salaId !== 'string' || !corpo.salaId || !discordId) return resposta({ erro: 'pedido inválido' }, 400);
+      const r = this.dir.removerSala(corpo.salaId, discordId);
+      if (r === 'desconhecida') return resposta({ erro: 'sala desconhecida' }, 404);
+      if (r === 'nao-dono') return resposta({ erro: 'só o dono da sala pode apagá-la' }, 403);
+      return resposta({ ok: true });
+    }
     if (request.method === 'GET' && url.pathname === '/minhas') {
-      return resposta({ salas: this.dir.salasDoMestre(discordId) });
+      return resposta({ salas: this.dir.salasDoMestre(discordId), ligacoes: this.dir.ligacoesDoMestre(discordId) });
     }
     return resposta({ erro: 'não encontrado' }, 404);
   }

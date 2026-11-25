@@ -40,3 +40,19 @@ test('registra e lista guildas vistas pela atividade sem duplicar', () => {
   d.registrarGuilda('g1', 300);
   assert.deepEqual(d.guildasVistas(), ['g1', 'g2']);
 });
+
+test('ligacoesDoMestre e removerSala só apagam sala do dono e limpam ligações', () => {
+  const d = criarDiretorio(sqlEmMemoria());
+  d.registrarSala('s1', 'M', 'A', 10);
+  d.registrarSala('s2', 'M', 'B', 20);
+  d.registrarSala('s3', 'N', 'C', 30);
+  d.ligar('g1', 's1', 'M');
+  d.ligar('g2', 's3', 'N');
+  assert.deepEqual(d.ligacoesDoMestre('M'), { g1: 's1' });
+  assert.equal(d.removerSala('s1', 'N'), 'nao-dono');
+  assert.equal(d.removerSala('nada', 'M'), 'desconhecida');
+  assert.equal(d.removerSala('s1', 'M'), 'ok');
+  assert.equal(d.consultar('g1'), null);
+  assert.deepEqual(d.ligacoesDoMestre('M'), {});
+  assert.deepEqual(d.salasDoMestre('M'), [{ salaId: 's2', nome: 'B', criadaEm: 20 }]);
+});
