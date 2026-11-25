@@ -4,6 +4,7 @@ import { attemptRemap } from '@discord/embedded-app-sdk';
 import {
   atualizarAtividadeDiscord,
   baseDoAppNoDiscord,
+  criarControladorSdkDiscord,
   iniciarAtividadeDiscord,
   ligarSalaNoDiscord,
   mapeamentosDiscord,
@@ -213,5 +214,25 @@ describe('ligarSalaNoDiscord, atualizarAtividadeDiscord e baseDoAppNoDiscord', (
       if (tinha) globalRef.window = anterior;
       else delete globalRef.window;
     }
+  });
+
+  it('criarControladorSdkDiscord limpa o singleton se ready() rejeitar, permitindo nova tentativa', async () => {
+    let criacoes = 0;
+    const obter = criarControladorSdkDiscord(() => {
+      criacoes++;
+      const tentativa = criacoes;
+      return {
+        ...criarSdkFalso(),
+        async ready() {
+          if (tentativa === 1) throw new Error('timeout ready');
+        },
+      };
+    });
+
+    await assert.rejects(() => obter().pronto, /timeout ready/);
+    const segunda = obter();
+    await segunda.pronto;
+    assert.equal(criacoes, 2);
+    assert.equal(obter(), segunda, 'quando ready() resolve, reutiliza o mesmo singleton');
   });
 });

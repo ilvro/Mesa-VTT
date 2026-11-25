@@ -144,15 +144,23 @@ export async function atualizarAtividadeDiscord(sdk: SdkDiscordLike, nomeCampanh
   }
 }
 
-let sdkCompartilhado: { sdk: DiscordSDK; pronto: Promise<void> } | null = null;
-
-function obterSdkDiscord(): { sdk: DiscordSDK; pronto: Promise<void> } {
-  if (!sdkCompartilhado) {
-    const sdk = new DiscordSDK(DISCORD_CLIENT_ID);
-    sdkCompartilhado = { sdk, pronto: sdk.ready() };
-  }
-  return sdkCompartilhado;
+/** Controla o singleton do SDK do Discord, limpando-o se `ready()` falhar para permitir nova tentativa. */
+export function criarControladorSdkDiscord<T extends SdkDiscordLike>(criar: () => T): () => { sdk: T; pronto: Promise<void> } {
+  let compartilhado: { sdk: T; pronto: Promise<void> } | null = null;
+  return () => {
+    if (!compartilhado) {
+      const sdk = criar();
+      const pronto = sdk.ready().catch(err => {
+        compartilhado = null;
+        throw err;
+      });
+      compartilhado = { sdk, pronto };
+    }
+    return compartilhado;
+  };
 }
+
+const obterSdkDiscord = criarControladorSdkDiscord(() => new DiscordSDK(DISCORD_CLIENT_ID));
 
 /** Fluxo completo de entrada na Atividade do Discord: `ready` -> `authorize` -> `/sala/token` -> `authenticate` -> diretório. */
 export async function iniciarAtividadeDiscord(opcoes: OpcoesDiscord = {}): Promise<ResultadoDiscord> {
