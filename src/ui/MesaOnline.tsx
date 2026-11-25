@@ -2,13 +2,12 @@ import { useEffect, useState } from 'preact/hooks';
 import { campanhaAtiva } from '../app/campanha.ts';
 import { abrirMesaOnline, confirmarSemNevoa, conexaoOnline, estadoDaPonte, fecharMesaOnline, salaConectadaId } from '../app/online.ts';
 import {
-  abrirLoginDiscord, aguardandoLoginExterno, cancelarLoginExterno,
-  carregarSessaoOnline, erroDoLogin, sairDoOnline, sessaoOnline,
+  abrirLoginDiscord, aguardandoLoginExterno, cancelarLoginExterno, carregarSessaoOnline, erroDoLogin, sairDoOnline, sessaoOnline,
 } from '../app/online-login.ts';
 import { apagarSala, criarSala, ligarAoServidor, listarMinhasSalasComLigacoes, listarServidoresDoDiscord, salaDaCampanha, type SalaDoMestre, type ServidorDiscord } from '../app/online-salas.ts';
 import { avisar, mensagemDe } from '../app/toasts.ts';
 import { MembroLinha } from '../jogar/Saguao.tsx';
-import { urlDaSala } from '../online/config.ts';
+import { CHAVE_URL_DA_SALA, ehDesktopMesa, urlDaSala, urlDeConviteDaSala, URL_SALA_LOCAL, URL_SALA_PRODUCAO } from '../online/config.ts';
 import { estadoDoSaguao } from '../online/saguao.ts';
 import './online.css';
 
@@ -68,6 +67,7 @@ function PainelDoMestre({ sessao }: { sessao: string }) {
   const [escolhida, setEscolhida] = useState<string | null>(() => salaDaCampanha(camp?.id));
   const [guild, setGuild] = useState('');
   const [ocupado, setOcupado] = useState(false);
+  const [servidorAtual, setServidorAtual] = useState(() => urlDaSala());
 
   const recarregar = () => listarMinhasSalasComLigacoes(sessao)
     .then(r => { setSalas(r.salas); setLigacoes(r.ligacoes); })
@@ -112,6 +112,29 @@ function PainelDoMestre({ sessao }: { sessao: string }) {
     Object.entries(ligacoes)
       .filter(([, s]) => s === salaId)
       .map(([gid]) => servidores.find(srv => srv.id === gid)?.name ?? gid);
+
+  const ehLocal = servidorAtual === URL_SALA_LOCAL;
+  const ehProducao = servidorAtual === URL_SALA_PRODUCAO;
+  const alternarServidor = () => {
+    const proximo = ehLocal ? URL_SALA_PRODUCAO : URL_SALA_LOCAL;
+    const padrao = ehDesktopMesa() ? URL_SALA_PRODUCAO : URL_SALA_LOCAL;
+    try {
+      if (proximo === padrao) localStorage.removeItem(CHAVE_URL_DA_SALA);
+      else localStorage.setItem(CHAVE_URL_DA_SALA, proximo);
+    } catch { /* ignora */ }
+    if (conexao !== 'desconectada') fecharMesaOnline();
+    setServidorAtual(urlDaSala());
+    void recarregar();
+  };
+  const copiarConvite = async () => {
+    if (!sala) return;
+    try {
+      await navigator.clipboard.writeText(urlDeConviteDaSala(sala.salaId));
+      avisar('Link de jogador copiado.');
+    } catch {
+      avisar('Não consegui copiar o link de jogador.', true);
+    }
+  };
 
   return (
     <>
@@ -171,9 +194,17 @@ function PainelDoMestre({ sessao }: { sessao: string }) {
         {salaConectadaId.value && salaConectadaId.value === sala?.salaId
           ? <button type="button" class="botao-pilula perigo" data-testid="online-fechar" onClick={() => fecharMesaOnline()}>Fechar a mesa online</button>
           : <button type="button" class="botao-pilula destaque" data-testid="online-abrir" disabled={!sala} onClick={() => abrirMesaOnline(sessao, sala!.salaId, sala!.nome)}>Abrir a mesa online</button>}
+        {sala && <button type="button" class="botao-pilula" data-testid="online-copiar-convite" onClick={() => void copiarConvite()}>Copiar link de jogador</button>}
         <span class={`online-estado ${conexao}`} data-testid="online-conexao">{ROTULO_DA_CONEXAO[conexao]}</span>
       </div>
-      <p class="meta">Servidor da sala: {urlDaSala()}</p>
+      <div class="online-acoes">
+        <span class="meta" data-testid="online-servidor-url">
+          Servidor da sala: {ehLocal ? 'Local (127.0.0.1:8787)' : ehProducao ? `Produção (${URL_SALA_PRODUCAO})` : servidorAtual}
+        </span>
+        <button type="button" class="botao-pilula" data-testid="online-alternar-servidor" onClick={alternarServidor}>
+          {ehLocal ? 'Trocar para produção' : 'Trocar para local'}
+        </button>
+      </div>
       {conexao !== 'desconectada' && ponte.semNevoa.map(x => (
         <div key={x.mapa} class="aviso suave" data-testid="online-sem-nevoa">
           <p>Este mapa está sem névoa: os jogadores vão receber o mapa inteiro.</p>
