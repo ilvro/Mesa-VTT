@@ -21,7 +21,7 @@ test('a URL de autorização tem client_id, code, scope, redirect_uri e state', 
   assert.equal(u.searchParams.get('client_id'), DISCORD_CLIENT_ID);
   assert.equal(u.searchParams.get('response_type'), 'code');
   assert.equal(u.searchParams.get('scope'), 'identify guilds');
-  assert.equal(u.searchParams.get('redirect_uri'), 'https://ilvro.github.io/Mesa/');
+  assert.equal(u.searchParams.get('redirect_uri'), 'https://ilvro.github.io/Mesa-VTT/');
   assert.equal(u.searchParams.get('state'), 'abc');
 });
 

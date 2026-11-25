@@ -8,7 +8,7 @@ export const URL_SALA_PRODUCAO = 'https://mesa-sala.ilvro-ermes.workers.dev';
 
 export const CHAVE_URL_DA_SALA = 'mesa:sala-url';
 export const URL_SALA_LOCAL = 'http://127.0.0.1:8787';
-export const REDIRECT_PAGES = 'https://ilvro.github.io/Mesa/';
+export const REDIRECT_PAGES = 'https://ilvro.github.io/Mesa-VTT/';
 export const REDIRECT_DEV = 'http://127.0.0.1:5100/Mesa/';
 
 type Armazem = Pick<Storage, 'getItem'>;

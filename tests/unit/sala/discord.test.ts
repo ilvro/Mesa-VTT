@@ -30,8 +30,8 @@ test('trocarCodigo sem redirect_uri', async () => {
 
 test('trocarCodigo com redirect_uri', async () => {
   const { f, chamadas } = falso(200, { access_token: 'tok' });
-  await trocarCodigo({ ...base, redirectUri: 'https://ilvro.github.io/Mesa/', fetch: f });
-  assert.equal(new URLSearchParams(chamadas[0]!.init?.body).get('redirect_uri'), 'https://ilvro.github.io/Mesa/');
+  await trocarCodigo({ ...base, redirectUri: 'https://ilvro.github.io/Mesa-VTT/', fetch: f });
+  assert.equal(new URLSearchParams(chamadas[0]!.init?.body).get('redirect_uri'), 'https://ilvro.github.io/Mesa-VTT/');
 });
 
 test('erro do Discord vira motivo legível, sem o segredo', async () => {
