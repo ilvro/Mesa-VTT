@@ -386,6 +386,10 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
   function largarGestosPendentes(): void { for (const g of gestos.values()) { g.cancelar?.(); g.cancelar = null; g.pendente = undefined; } }
 
   projetor.onmessage = ({ data }) => {
+    if (data && typeof data === 'object' && (data as { tipo?: unknown }).tipo === 'precisa-ola') {
+      if (!fechada && estado.publicando) projetor.postMessage({ tipo: 'ola', largura: 1920, altura: 1080, remoto: true });
+      return;
+    }
     if (data && typeof data === 'object' && (data as { tipo?: unknown }).tipo === 'aviso-sem-nevoa') { if (!fechada) aoAviso(data as Record<string, unknown>); return; }
     const m = data as { tipo?: unknown; emGesto?: unknown; id?: unknown } | null;
     const chave = m && typeof m === 'object' ? chaveDoGesto(m) : null;

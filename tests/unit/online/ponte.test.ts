@@ -564,3 +564,18 @@ test('configDaSala manda sala.config ao receber bem-vindo', async () => {
   assert.deepEqual(enviadas, [{ tipo: 'sala.config', nome: 'Ordem' }]);
   ponte.fechar();
 });
+
+test('ponte responde precisa-ola do Atlas com ola remoto quando há jogadores na sala', async () => {
+  const { emitir, atlas, ponte } = montar('teste-1');
+  const recebidas: unknown[] = [];
+  atlas.onmessage = m => recebidas.push(m.data);
+
+  atlas.postMessage({ tipo: 'precisa-ola' });
+  assert.equal(recebidas.length, 0, 'sem jogadores não responde ola');
+
+  emitir(bemVindo([membro('1', 'mestre'), membro('2', 'jogador')]));
+  recebidas.length = 0;
+  atlas.postMessage({ tipo: 'precisa-ola' });
+  assert.deepEqual(recebidas, [{ tipo: 'ola', largura: 1920, altura: 1080, remoto: true }]);
+  ponte.fechar();
+});
