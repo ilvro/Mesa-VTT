@@ -17,6 +17,7 @@ export interface SaguaoProps {
   fichas: readonly FichaDaSala[];
   meuPersonagemId: string | null;
   podeFechar: boolean;
+  espectador?: boolean;
   aoEscolher: (fichaId: string) => void;
   aoNovaFicha: () => void;
   aoImportar: (fichas: FichaDaSala[]) => void;
@@ -60,6 +61,7 @@ export function Saguao({
   fichas,
   meuPersonagemId,
   podeFechar,
+  espectador = false,
   aoEscolher,
   aoNovaFicha,
   aoImportar,
@@ -103,6 +105,7 @@ export function Saguao({
         </header>
 
         <div class="saguao-grade">
+          {!espectador && (
           <section class="saguao-bloco" aria-label="Personagem">
             <div class="saguao-bloco-cabecalho">
               <h2 class="faixa pequena">Seu personagem</h2>
@@ -158,6 +161,7 @@ export function Saguao({
               </ul>
             )}
           </section>
+          )}
 
           <section class="saguao-bloco" aria-label="Participantes">
             <h2 class="faixa pequena">Na mesa ({estado.membros.length})</h2>

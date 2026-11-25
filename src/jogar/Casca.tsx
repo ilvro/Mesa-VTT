@@ -6,6 +6,15 @@ import { conectarSala, type ClienteDaSala, type EstadoDaSala } from '../online/c
 import { urlDoWebSocket } from '../online/config.ts';
 import type { ConfigSala, Eu, FichaDaSala, Membro } from '../online/protocolo.ts';
 import { deveMostrarSaguao, estadoDoSaguao } from '../online/saguao.ts';
+import {
+  BASE_PROXY_DISCORD,
+  atualizarAtividadeDiscord,
+  baseDoAppNoDiscord,
+  iniciarAtividadeDiscord,
+  ligarSalaNoDiscord,
+  type OpcoesDiscord,
+  type ResultadoDiscord,
+} from './discord.ts';
 import { FeedDeRolagens } from './FeedDeRolagens.tsx';
 import { criarPonteDoJogador, type CanalLocal } from './ponte-jogador.ts';
 import { Saguao } from './Saguao.tsx';
@@ -42,6 +51,137 @@ export function Casca({ salaId }: { salaId: string }) {
   return <Sala salaId={salaId} sessao={s.sessao} nome={s.eu.nome} aoSessaoInvalida={() => { sairDoOnline(); setMotivoDeSaida('Sua sessão não vale mais. Entre de novo com o Discord.'); }} />;
 }
 
+export function CascaDiscord({
+  opcoes,
+  iniciar = iniciarAtividadeDiscord,
+  ligar = ligarSalaNoDiscord,
+}: {
+  opcoes?: OpcoesDiscord;
+  iniciar?: (o?: OpcoesDiscord) => Promise<ResultadoDiscord>;
+  ligar?: typeof ligarSalaNoDiscord;
+} = {}) {
+  const [estado, setEstado] = useState<
+    | { tipo: 'carregando' }
+    | { tipo: 'erro'; mensagem: string }
+    | { tipo: 'resultado'; dados: ResultadoDiscord }
+  >({ tipo: 'carregando' });
+  const [salaEscolhida, setSalaEscolhida] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+  const [erroLigacao, setErroLigacao] = useState<string | null>(null);
+
+  const conectar = () => {
+    setEstado({ tipo: 'carregando' });
+    void iniciar(opcoes).then(
+      dados => {
+        setEstado({ tipo: 'resultado', dados });
+        if (dados.estado === 'sem-sala' && dados.salas.length > 0) {
+          setSalaEscolhida(dados.salas[0]!.salaId);
+        }
+      },
+      err => {
+        setEstado({ tipo: 'erro', mensagem: err instanceof Error ? err.message : 'Não foi possível entrar pelo Discord.' });
+      },
+    );
+  };
+
+  useEffect(() => { conectar(); }, []);
+
+  if (estado.tipo === 'carregando') {
+    return (
+      <main class="casca casca-entrar" data-testid="casca-discord-carregando">
+        <div class="casca-cartao">
+          <h1 class="faixa">Mesa online</h1>
+          <p class="dica">Conectando ao Discord…</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (estado.tipo === 'erro') {
+    return (
+      <main class="casca casca-entrar" data-testid="casca-discord-erro">
+        <div class="casca-cartao">
+          <h1 class="faixa">Mesa online</h1>
+          <div class="aviso" role="alert">{estado.mensagem}</div>
+          <button type="button" class="botao-pilula destaque" onClick={conectar}>Tentar de novo</button>
+        </div>
+      </main>
+    );
+  }
+
+  const dados = estado.dados;
+  if (dados.estado === 'sem-sala') {
+    const confirmar = async () => {
+      if (!salaEscolhida) return;
+      setOcupado(true);
+      setErroLigacao(null);
+      try {
+        if (dados.guildId) {
+          await ligar({ sessao: dados.sessao, guildId: dados.guildId, salaId: salaEscolhida, fetch: opcoes?.fetch, baseSala: opcoes?.baseSala });
+        }
+        setEstado({
+          tipo: 'resultado',
+          dados: { estado: 'pronta', sessao: dados.sessao, eu: dados.eu, salaId: salaEscolhida, guildId: dados.guildId, sdk: dados.sdk },
+        });
+      } catch (e) {
+        setErroLigacao(e instanceof Error ? e.message : 'Não foi possível ligar a sala.');
+      } finally {
+        setOcupado(false);
+      }
+    };
+
+    return (
+      <main class="casca casca-entrar" data-testid="casca-discord-sem-sala">
+        <div class="casca-cartao">
+          <h1 class="faixa">Mesa online</h1>
+          <p class="dica" data-testid="casca-discord-aviso-sem-sala">O mestre ainda não ligou uma sala a este servidor.</p>
+          {dados.eu.podeMestrar && (
+            dados.salas.length === 0 ? (
+              <p class="dica">Você ainda não criou nenhuma sala. Abra a Mesa no navegador para criar uma.</p>
+            ) : (
+              <>
+                <label class="dica" for="casca-seletor-sala">Escolha uma sala para ligar a este servidor:</label>
+                <select
+                  id="casca-seletor-sala"
+                  class="casca-seletor-sala"
+                  data-testid="casca-discord-seletor"
+                  value={salaEscolhida}
+                  onChange={e => setSalaEscolhida(e.currentTarget.value)}
+                >
+                  {dados.salas.map(s => (
+                    <option key={s.salaId} value={s.salaId}>{s.nome}</option>
+                  ))}
+                </select>
+                {erroLigacao && <div class="aviso" role="alert">{erroLigacao}</div>}
+                <button
+                  type="button"
+                  class="botao-pilula destaque"
+                  data-testid="casca-discord-ligar"
+                  disabled={!salaEscolhida || ocupado}
+                  onClick={() => void confirmar()}
+                >
+                  {ocupado ? 'Ligando…' : 'Ligar e abrir sala'}
+                </button>
+              </>
+            )
+          )}
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <Sala
+      salaId={dados.salaId}
+      sessao={dados.sessao}
+      nome={dados.eu.nome}
+      emDiscord
+      aoSessaoInvalida={conectar}
+      aoMudarCampanha={nome => { void atualizarAtividadeDiscord(dados.sdk, nome); }}
+    />
+  );
+}
+
 function Entrar({ salaId, aviso }: { salaId: string; aviso: string | null }) {
   return (
     <main class="casca casca-entrar" data-testid="casca-entrar">
@@ -56,7 +196,21 @@ function Entrar({ salaId, aviso }: { salaId: string; aviso: string | null }) {
   );
 }
 
-function Sala({ salaId, sessao, nome, aoSessaoInvalida }: { salaId: string; sessao: string; nome: string; aoSessaoInvalida: () => void }) {
+function Sala({
+  salaId,
+  sessao,
+  nome,
+  emDiscord = false,
+  aoSessaoInvalida,
+  aoMudarCampanha,
+}: {
+  salaId: string;
+  sessao: string;
+  nome: string;
+  emDiscord?: boolean;
+  aoSessaoInvalida: () => void;
+  aoMudarCampanha?: (nome: string) => void;
+}) {
   const [conexao, setConexao] = useState<EstadoDaSala>('conectando');
   const [temMapa, setTemMapa] = useState(false);
   const [erro, setErro] = useState<ErroDaCasca>(null);
@@ -81,12 +235,15 @@ function Sala({ salaId, sessao, nome, aoSessaoInvalida }: { salaId: string; sess
   vistaAtual.current = vista;
   const invalida = useRef(aoSessaoInvalida);
   invalida.current = aoSessaoInvalida;
+  const mudarCampanha = useRef(aoMudarCampanha);
+  mudarCampanha.current = aoMudarCampanha;
 
   useEffect(() => {
     setErro(null); setTemMapa(false);
     let cliente: ClienteDaSala | null = null;
+    const wsUrl = emDiscord ? urlDoWebSocket(salaId, `${location.origin}${BASE_PROXY_DISCORD}`) : urlDoWebSocket(salaId);
     cliente = conectarSala({
-      url: urlDoWebSocket(salaId), sessao,
+      url: wsUrl, sessao,
       aoFechar: codigo => { if (codigo === 4004) setErro('sala'); else if (codigo === 4001) { setErro('sessao'); invalida.current(); } },
     });
     const sairEstado = cliente.aoMudarEstado(setConexao);
@@ -95,6 +252,7 @@ function Sala({ salaId, sessao, nome, aoSessaoInvalida }: { salaId: string; sess
     const aplicarConfig = (cfg: ConfigSala | undefined) => {
       if (!cfg) return;
       setConfig(cfg);
+      mudarCampanha.current?.(cfg.nome);
       const id = cfg.capaBlobId ?? null;
       if (id !== capaBlobIdRef.current) {
         capaBlobIdRef.current = id;
@@ -170,10 +328,13 @@ function Sala({ salaId, sessao, nome, aoSessaoInvalida }: { salaId: string; sess
 
   if (erro === 'sessao') return null;   // volta para "Entrar" com o aviso
   const selo = conexao === 'aberta' ? 'Conectado' : 'Reconectando…';
+  const espectador = eu?.papel === 'mestre';
   const meuPersonagemId = (eu ? membros.find(m => m.discordId === eu.discordId)?.personagem : undefined) ?? null;
   const saguaoObrigatorio = deveMostrarSaguao({ temMapa, papel: eu?.papel ?? 'jogador', personagem: meuPersonagemId });
   const mostrarSaguao = erro !== 'sala' && (saguaoAberto || saguaoObrigatorio);
   const resumoSaguao = estadoDoSaguao(membros, fichas, temMapa);
+  const baseAtlas = emDiscord ? baseDoAppNoDiscord('atlas') : baseDoApp('atlas');
+  const baseFicha = emDiscord ? baseDoAppNoDiscord('ficha') : baseDoApp('ficha');
 
   const escolherPersonagem = (fichaId: string) => {
     clienteSala?.enviar({ tipo: 'membro.personagem', fichaId });
@@ -191,9 +352,9 @@ function Sala({ salaId, sessao, nome, aoSessaoInvalida }: { salaId: string; sess
   };
 
   return (
-    <main class="casca" data-testid="casca" data-aba={aba} data-ficha={cobre ? 'completa' : 'painel'}>
+    <main class="casca" data-testid="casca" data-aba={aba} data-ficha={cobre ? 'completa' : 'painel'} data-espectador={espectador ? '1' : undefined}>
       <section class="casca-mapa" data-testid="casca-mapa" aria-label="Mapa">
-        <iframe ref={projetorQuadro} class="casca-iframe" data-testid="casca-iframe" title="Mapa" src={enderecoDoProjetorRemoto(baseDoApp('atlas'), salaId)} onLoad={mandarJogador} allow="fullscreen; autoplay" />
+        <iframe ref={projetorQuadro} class="casca-iframe" data-testid="casca-iframe" title="Mapa" src={enderecoDoProjetorRemoto(baseAtlas, salaId)} onLoad={mandarJogador} allow="fullscreen; autoplay" />
         {erro === 'sala' && (
           <div class="casca-sobre aviso-grande" data-testid="casca-erro-sala" role="alert"><h2 class="faixa">Sala não encontrada</h2><p>Esta sala não existe ou foi encerrada. Confira o link com o mestre.</p></div>
         )}
@@ -225,19 +386,24 @@ function Sala({ salaId, sessao, nome, aoSessaoInvalida }: { salaId: string; sess
           fichas={fichas}
           meuPersonagemId={meuPersonagemId}
           podeFechar={!saguaoObrigatorio}
+          espectador={espectador}
           aoEscolher={escolherPersonagem}
           aoNovaFicha={abrirNovaFicha}
           aoImportar={importarFichas}
           aoFechar={() => setSaguaoAberto(false)}
         />
       )}
-      {/* Um só `iframe`, filho direto da casca: o CSS (`data-ficha`) o move entre o painel e a tela toda, sem remontar. O feed fica por baixo na ficha completa. */}
-      <iframe ref={quadro} class="casca-ficha" data-testid="casca-ficha" data-vista={vista} title="Ficha" src={enderecoDoDossie(baseDoApp('ficha'), salaId)} onLoad={mandarVista} allow="fullscreen; autoplay" />
-      {cobre && <button type="button" class="casca-voltar" data-testid="casca-voltar" onClick={() => setAberta(false)}>Voltar ao mapa</button>}
-      <nav class="casca-abas" role="tablist" aria-label="Seções">
-        <button type="button" role="tab" aria-selected={aba === 'mapa'} data-testid="casca-aba-mapa" onClick={() => setAba('mapa')}>Mapa</button>
-        <button type="button" role="tab" aria-selected={aba === 'ficha'} data-testid="casca-aba-ficha" onClick={() => setAba('ficha')}>Ficha</button>
-      </nav>
+      {!espectador && (
+        <>
+          {/* Um só `iframe`, filho direto da casca: o CSS (`data-ficha`) o move entre o painel e a tela toda, sem remontar. O feed fica por baixo na ficha completa. */}
+          <iframe ref={quadro} class="casca-ficha" data-testid="casca-ficha" data-vista={vista} title="Ficha" src={enderecoDoDossie(baseFicha, salaId)} onLoad={mandarVista} allow="fullscreen; autoplay" />
+          {cobre && <button type="button" class="casca-voltar" data-testid="casca-voltar" onClick={() => setAberta(false)}>Voltar ao mapa</button>}
+          <nav class="casca-abas" role="tablist" aria-label="Seções">
+            <button type="button" role="tab" aria-selected={aba === 'mapa'} data-testid="casca-aba-mapa" onClick={() => setAba('mapa')}>Mapa</button>
+            <button type="button" role="tab" aria-selected={aba === 'ficha'} data-testid="casca-aba-ficha" onClick={() => setAba('ficha')}>Ficha</button>
+          </nav>
+        </>
+      )}
     </main>
   );
 }

@@ -1,5 +1,6 @@
 /* Casca do jogador (`#/jogar/<sala>`): tela cheia, só tokens do tema da Mesa (estilo.css). */
 .casca { position: fixed; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; background: var(--fundo-mapa, #000); color: var(--texto); }
+.casca[data-espectador='1'] { grid-template-columns: minmax(0, 1fr); }
 .casca-mapa { position: relative; min-width: 0; min-height: 0; background: #000; }
 .casca-iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
 .casca-ficha { grid-column: 2; grid-row: 1; width: 100%; height: 100%; min-width: 0; border: 0; border-left: 1px solid var(--linha); background: var(--painel); display: block; }
@@ -17,10 +18,13 @@
 .casca-entrar { display: grid; place-items: center; grid-template-columns: 1fr; padding: 24px; background: var(--fundo); }
 .casca-cartao { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; max-width: 420px; padding: 22px; background: var(--superficie); border: 1px solid var(--linha); border-radius: 8px; }
 .casca-cartao h1 { margin: 0; font-size: 20px; }
+.casca-seletor-sala { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--linha); background: var(--painel); color: var(--texto); font: 500 14px var(--corpo); }
 
 /* Tela estreita na vertical: abas embaixo (Mapa | Ficha). */
 @media (max-width: 760px) and (orientation: portrait) {
   .casca { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) 48px; }
+  .casca[data-espectador='1'] { grid-template-rows: minmax(0, 1fr); }
+  .casca[data-espectador='1'] .casca-abas { display: none; }
   .casca-ficha { border-left: 0; }
   .casca[data-aba='mapa'] .casca-ficha { display: none; }   /* escondido, mas vivo: o Dossiê não recarrega */
   .casca[data-aba='ficha'] .casca-mapa { display: none; }
