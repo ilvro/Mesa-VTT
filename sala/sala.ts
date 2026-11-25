@@ -98,7 +98,11 @@ export class Sala implements DurableObject {
         const r = tratarBinario(this.estado, eu, mensagem);
         this.entregar(r.saidas, ws);
         if (r.repassar) {
-          for (const c of this.ctx.getWebSockets()) if (c !== ws && anexoDe(c)) c.send(mensagem);
+          for (const c of this.ctx.getWebSockets()) {
+            if (c !== ws && anexoDe(c)) {
+              try { c.send(mensagem); } catch { /* conexão já fechada: o runtime a remove */ }
+            }
+          }
         }
         return;
       }
