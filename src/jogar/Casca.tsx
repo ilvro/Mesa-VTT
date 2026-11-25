@@ -5,7 +5,7 @@ import { carregarSessaoOnline, iniciarLogin, sairDoOnline, sessaoOnline } from '
 import { conectarSala, type ClienteDaSala, type EstadoDaSala } from '../online/cliente.ts';
 import { urlDoWebSocket } from '../online/config.ts';
 import type { ConfigSala, Eu, FichaDaSala, Membro } from '../online/protocolo.ts';
-import { deveMostrarSaguao, estadoDoSaguao } from '../online/saguao.ts';
+import { deveMostrarSaguao, estadoDoSaguao, retratoDaFicha } from '../online/saguao.ts';
 import {
   BASE_PROXY_DISCORD,
   atualizarAtividadeDiscord,
@@ -273,6 +273,8 @@ function Sala({
   mudarCampanha.current = aoMudarCampanha;
   const mandarVistaAtual = useRef<() => void>(() => {});
   const mandarJogadorAtual = useRef<() => void>(() => {});
+  const baseAtlas = emDiscord ? baseDoAppNoDiscord('atlas') : baseDoApp('atlas');
+  const baseFicha = emDiscord ? baseDoAppNoDiscord('ficha') : baseDoApp('ficha');
 
   useEffect(() => {
     setErro(null); setTemMapa(false);
@@ -303,15 +305,18 @@ function Sala({
       setFichas(m.fichas);
       aplicarConfig(m.config);
       const por: Record<string, string> = {};
-      for (const f of m.fichas) if (typeof f.tokenImage === 'string' && f.tokenImage) por[f.id] = f.tokenImage;
+      for (const f of m.fichas) {
+        const img = retratoDaFicha(f, baseFicha);
+        if (img) por[f.id] = img;
+      }
       setRetratos(por);
     });
     const sairMembros = cliente.ouvir('membros', m => setMembros(m.membros));
     const sairConfig = cliente.ouvir('config', m => aplicarConfig(m.config));
     const sairAtualizada = cliente.ouvir('ficha.atualizada', m => {
       setFichas(fs => fs.some(x => x.id === m.ficha.id) ? fs.map(x => x.id === m.ficha.id ? m.ficha : x) : [...fs, m.ficha]);
-      const img = m.ficha.tokenImage;
-      setRetratos(r => typeof img === 'string' && img ? { ...r, [m.ficha.id]: img } : r);
+      const img = retratoDaFicha(m.ficha, baseFicha);
+      setRetratos(r => img ? { ...r, [m.ficha.id]: img } : r);
     });
     // a ficha foi entregue a outro jogador (R13): sai da lista de retratos e fichas, e a ponte avisa o Dossiê
     const sairRemovida = cliente.ouvir('ficha.removida', m => {
@@ -399,8 +404,6 @@ function Sala({
   const saguaoObrigatorio = deveMostrarSaguao({ temMapa, papel: eu?.papel ?? 'jogador', personagem: meuPersonagemId });
   const editandoFicha = aberta || (celular && aba === 'ficha');
   const mostrarSaguao = erro !== 'sala' && !editandoFicha && (saguaoAberto || saguaoObrigatorio);
-  const baseAtlas = emDiscord ? baseDoAppNoDiscord('atlas') : baseDoApp('atlas');
-  const baseFicha = emDiscord ? baseDoAppNoDiscord('ficha') : baseDoApp('ficha');
   const resumoSaguao = estadoDoSaguao(membros, fichas, temMapa, baseFicha);
 
   const escolherPersonagem = (fichaId: string) => {
