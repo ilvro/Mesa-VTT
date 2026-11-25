@@ -39,12 +39,15 @@ test('assinatura válida de corpo malformado é rejeitada', async () => {
   assert.equal(await verificarSessao(t, SEGREDO, AGORA), null);
 });
 
-test('podeMestrar aceita uma lista de ids separados por vírgula', () => {
+test('podeMestrar aceita uma lista de ids separados por vírgula ou *', () => {
   assert.equal(podeMestrar('1', '1'), true);
   assert.equal(podeMestrar('2', '1,2, 3'), true);
   assert.equal(podeMestrar('3', '1,2, 3'), true);
   assert.equal(podeMestrar('4', '1,2,3'), false);
   assert.equal(podeMestrar('12', '1,2'), false);
+  assert.equal(podeMestrar('999', '*'), true);
+  assert.equal(podeMestrar('999', '1, *'), true);
+  assert.equal(podeMestrar('', '*'), false);
   assert.equal(podeMestrar('1', undefined), false);
   assert.equal(podeMestrar('1', ''), false);
   assert.equal(podeMestrar('', ''), false);

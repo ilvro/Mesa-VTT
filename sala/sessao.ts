@@ -92,8 +92,11 @@ export async function verificarSessao(token: unknown, segredo: string, agora: nu
   };
 }
 
-/** `discordId` está na lista de ids separados por vírgula (`MESTRES_DISCORD_IDS`)? */
+/** `discordId` está na lista de ids separados por vírgula (`MESTRES_DISCORD_IDS`) — ou `*` libera todos? */
 export function podeMestrar(discordId: string, lista: string | undefined): boolean {
   if (!discordId || !lista) return false;
-  return lista.split(',').some(id => id.trim() === discordId);
+  return lista.split(',').some(id => {
+    const t = id.trim();
+    return t === '*' || t === discordId;
+  });
 }
