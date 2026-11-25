@@ -2,7 +2,7 @@ import { useSignal } from '@preact/signals';
 import { useRef } from 'preact/hooks';
 import { DialogoMolduras } from './DialogoMolduras.tsx';
 import { campanhaAtiva } from '../../app/campanha.ts';
-import { examinarPacoteMiro, importarArquivoMiro, type ExamePacoteMiro } from '../../app/importar-miro.ts';
+import { examinarPacoteMiro, importarArquivoMiro, type ExamePacoteMiro, type ProgressoMiro } from '../../app/importar-miro.ts';
 import { exportarQuadro, importarPacoteDeQuadro } from '../../app/exportar-quadro.ts';
 import { avisar } from '../../app/toasts.ts';
 import {
@@ -22,6 +22,7 @@ export function Quadros() {
   const inputMiroRef = useRef<HTMLInputElement>(null);
   const inputPacoteRef = useRef<HTMLInputElement>(null);
   const escolhendo = useSignal<{ arquivo: File; exame: ExamePacoteMiro } | null>(null);
+  const importando = useSignal<string | null>(null);
   const c = campanhaAtiva.value;
 
   if (!c) {
@@ -57,15 +58,28 @@ export function Quadros() {
     }
   };
 
+  const textoProgresso = (p: ProgressoMiro): string => {
+    if (p.fase === 'lendo') return 'Lendo pacote do Miro…';
+    if (p.fase === 'imagens') {
+      return p.total ? `Preparando imagens (${p.atual ?? 0}/${p.total})…` : 'Preparando imagens…';
+    }
+    return 'Salvando quadro…';
+  };
+
   const importar = async (arquivo: File, filtro?: FiltroMolduras) => {
+    importando.value = 'Lendo pacote do Miro…';
     try {
-      const rel = await importarArquivoMiro(arquivo, filtro);
+      const rel = await importarArquivoMiro(arquivo, filtro, (p) => {
+        importando.value = textoProgresso(p);
+      });
       avisar(
         `Quadro "${rel.quadro.nome}" importado (${rel.totalItens} itens, ${rel.paraRevisar} para revisar).`,
       );
       navegarParaQuadro(rel.quadro.id);
     } catch (err) {
       avisar(err instanceof Error ? err.message : String(err), true);
+    } finally {
+      importando.value = null;
     }
   };
 
@@ -116,9 +130,10 @@ export function Quadros() {
           type="button"
           class="botao-pilula"
           data-testid="importar-miro-botao"
+          disabled={importando.value !== null}
           onClick={() => inputMiroRef.current?.click()}
         >
-          Importar do Miro…
+          {importando.value ? 'Importando…' : 'Importar do Miro…'}
         </button>
         <button
           type="button"
@@ -162,19 +177,28 @@ export function Quadros() {
             const f = e.currentTarget.files?.[0];
             e.currentTarget.value = '';
             if (!f) return;
+            importando.value = 'Lendo pacote do Miro…';
             try {
               const exame = await examinarPacoteMiro(f);
               if (exame.molduras.length === 0) {
                 await importar(f);
               } else {
+                importando.value = null;
                 escolhendo.value = { arquivo: f, exame };
               }
             } catch (err) {
+              importando.value = null;
               avisar(err instanceof Error ? err.message : String(err), true);
             }
           }}
         />
       </form>
+
+      {importando.value ? (
+        <p class="selo" data-testid="progresso-importacao-miro" role="status" aria-live="polite">
+          {importando.value}
+        </p>
+      ) : null}
 
       {quadros.value.length === 0 ? (
         <div class="vazio">

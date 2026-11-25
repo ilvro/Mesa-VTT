@@ -33,6 +33,12 @@ export interface RelatorioImportacaoMiro {
   avisos: string[]
 }
 
+export interface ProgressoMiro {
+  fase: 'lendo' | 'imagens' | 'salvando'
+  atual?: number
+  total?: number
+}
+
 function mimePorExtensao(caminho: string): string {
   const m = caminho.toLowerCase().match(/\.(png|jpe?g|webp|gif|svg)$/)
   if (!m) return 'image/png'
@@ -74,6 +80,7 @@ async function abrirCabecalhoMiro(arquivo: File | Blob | Uint8Array): Promise<Pa
 async function guardarImagensDoPacote(
   arquivo: File | Blob | Uint8Array,
   bruto: PacoteMiroBruto,
+  aoProgredir?: (p: ProgressoMiro) => void,
 ): Promise<Map<string, MetadadosImagemImportada>> {
   const imagensPorItemId = new Map<string, MetadadosImagemImportada>()
   const rawItems = Array.isArray(bruto.items) ? bruto.items : []
@@ -94,6 +101,10 @@ async function guardarImagensDoPacote(
   }
 
   if (porCaminhoExact.size === 0 && porId.size === 0) return imagensPorItemId
+
+  const total = porId.size
+  let processadas = 0
+  aoProgredir?.({ fase: 'imagens', atual: 0, total })
 
   await percorrerZipEmPedacos(arquivo, {
     decidir: (nome) => {
@@ -121,6 +132,8 @@ async function guardarImagensDoPacote(
           alturaOriginal: salvo.altura || Number(item.geometry?.height) || 240,
         })
       }
+      processadas++
+      aoProgredir?.({ fase: 'imagens', atual: Math.min(processadas, total), total })
     },
   })
 
@@ -131,10 +144,12 @@ async function guardarImagensDoPacote(
 async function lerPacoteMiro(
   arquivo: File | Blob | Uint8Array,
   filtro?: FiltroMolduras,
+  aoProgredir?: (p: ProgressoMiro) => void,
 ): Promise<PacoteLido> {
+  aoProgredir?.({ fase: 'lendo' })
   const brutoOriginal = await abrirCabecalhoMiro(arquivo)
   const bruto = filtro ? filtrarPacote(brutoOriginal, filtro) : brutoOriginal
-  return { bruto, imagensPorItemId: await guardarImagensDoPacote(arquivo, bruto) }
+  return { bruto, imagensPorItemId: await guardarImagensDoPacote(arquivo, bruto, aoProgredir) }
 }
 
 export interface ExamePacoteMiro {
@@ -154,12 +169,15 @@ export async function examinarPacoteMiro(arquivo: File | Blob | Uint8Array): Pro
 export async function importarArquivoMiro(
   arquivo: File | Blob | Uint8Array,
   filtro?: FiltroMolduras,
+  aoProgredir?: (p: ProgressoMiro) => void,
 ): Promise<RelatorioImportacaoMiro> {
   const campanha = campanhaAtiva.value
   if (!campanha) {
     throw new Error('Escolha uma campanha antes de importar um quadro do Miro.')
   }
-  const { bruto, imagensPorItemId } = await lerPacoteMiro(arquivo, filtro)
+  const { bruto, imagensPorItemId } = await lerPacoteMiro(arquivo, filtro, aoProgredir)
+
+  aoProgredir?.({ fase: 'salvando' })
 
   const agora = Date.now()
   const quadroId = crypto.randomUUID()
