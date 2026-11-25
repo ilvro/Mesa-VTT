@@ -116,3 +116,22 @@ test('textoPuro e docDeTexto fazem ida e volta de linhas', () => {
   const doc = docDeTexto('Linha 1\n\nLinha 3');
   assert.equal(textoPuro(doc), 'Linha 1\n\nLinha 3');
 });
+
+test('validarItem aceita seta com curva manual e espessura até 48, e recusa curva inválida', () => {
+  const valida = novaSeta(
+    {
+      quadroId: 'q1',
+      de: { ponto: [0, 0] },
+      para: { ponto: [100, 50] },
+      rota: 'curva',
+      curva: [50, -30],
+      espessura: 32,
+    },
+    1,
+    's1',
+  );
+  validarItem(valida);
+
+  assert.throws(() => validarItem({ ...valida, curva: [50] }), /curva/);
+  assert.throws(() => validarItem({ ...valida, espessura: 49 }), /espessura/);
+});

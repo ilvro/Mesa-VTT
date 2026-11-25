@@ -184,6 +184,7 @@ export type Item =
       de: Ponta;
       para: Ponta;
       rota: (typeof ROTAS_SETA)[number];
+      curva?: [number, number];
       cor: string;
       espessura: number;
       tracejado: (typeof TRACEJADOS)[number];
@@ -596,6 +597,7 @@ const CHAVES_POR_TIPO: Record<Item['tipo'], ReadonlySet<string>> = {
     'de',
     'para',
     'rota',
+    'curva',
     'cor',
     'espessura',
     'tracejado',
@@ -713,8 +715,15 @@ export function validarItem(v: unknown, caminho = 'item'): asserts v is Item {
       validarPonta(v.de, `${caminho}.de`);
       validarPonta(v.para, `${caminho}.para`);
       exigirUmDe(v.rota, ROTAS_SETA, `${caminho}.rota`);
+      if (v.curva !== undefined) {
+        if (!Array.isArray(v.curva) || v.curva.length !== 2) {
+          falhar(`${caminho}.curva`, 'deve ser [x, y]');
+        }
+        exigirNumero(v.curva[0], `${caminho}.curva[0]`);
+        exigirNumero(v.curva[1], `${caminho}.curva[1]`);
+      }
       exigirTexto(v.cor, `${caminho}.cor`, true);
-      exigirNumero(v.espessura, `${caminho}.espessura`, 0);
+      exigirNumero(v.espessura, `${caminho}.espessura`, 0.5, 48);
       exigirUmDe(v.tracejado, TRACEJADOS, `${caminho}.tracejado`);
       exigirUmDe(v.inicio, CABECAS_SETA, `${caminho}.inicio`);
       exigirUmDe(v.fim, CABECAS_SETA, `${caminho}.fim`);
@@ -1035,7 +1044,9 @@ export function novaSeta(
     altura?: number;
     z?: number;
     rota?: (typeof ROTAS_SETA)[number];
+    curva?: [number, number];
     cor?: string;
+    espessura?: number;
     rotulo?: string;
   },
   agora: number,
@@ -1058,8 +1069,9 @@ export function novaSeta(
     de: opts.de,
     para: opts.para,
     rota: opts.rota ?? 'curva',
+    ...(opts.curva ? { curva: opts.curva } : {}),
     cor: opts.cor ?? '#a8b8ad',
-    espessura: 2,
+    espessura: opts.espessura ?? 2,
     tracejado: 'solido',
     inicio: 'nenhuma',
     fim: 'seta',

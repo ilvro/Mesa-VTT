@@ -74,3 +74,27 @@ test('caixaDaSeta e setasLigadasA acompanham movimento de item ligado', () => {
   assert.ok(c2.largura > 300);
   assert.ok(c2.altura >= 200);
 });
+
+test('caminhoDaSeta com curva manual passa pelo ponto puxado e ajusta a caixa', () => {
+  const seta = novaSeta(
+    {
+      quadroId: 'q1',
+      de: { ponto: [0, 0] },
+      para: { ponto: [200, 0] },
+      rota: 'curva',
+      curva: [100, -80],
+    },
+    1,
+    's-curva',
+  );
+  const itens = mapaDe(seta);
+  const cam = caminhoDaSeta(seta, itens);
+  assert.equal(cam.d, 'M 0 0 Q 100 -160 200 0');
+  assert.deepEqual(cam.meio, [100, -80]);
+  assert.ok(cam.angInicio < 0);
+  assert.ok(cam.angFim > 0);
+
+  const caixa = caixaDaSeta(seta, itens);
+  assert.equal(caixa.y, -160);
+  assert.equal(caixa.altura, 160);
+});

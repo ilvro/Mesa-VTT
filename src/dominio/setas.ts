@@ -99,7 +99,7 @@ function anguloEntre(de: Ponto, para: Ponto, fallback = 0): number {
 }
 
 export function caminhoDaSeta(
-  seta: Pick<ItemSeta, 'de' | 'para' | 'rota'>,
+  seta: Pick<ItemSeta, 'de' | 'para' | 'rota' | 'curva'>,
   itens: ReadonlyMap<string, Item>,
 ): CaminhoSeta {
   const resInicio = pontoDaPonta(seta.de, itens, seta.para);
@@ -121,6 +121,23 @@ export function caminhoDaSeta(
   }
 
   if (seta.rota === 'curva') {
+    if (seta.curva) {
+      const m: Ponto = { x: seta.curva[0], y: seta.curva[1] };
+      const c: Ponto = {
+        x: 2 * m.x - (p1.x + p2.x) / 2,
+        y: 2 * m.y - (p1.y + p2.y) / 2,
+      };
+      return {
+        d: `M ${p1.x} ${p1.y} Q ${c.x} ${c.y} ${p2.x} ${p2.y}`,
+        inicio: p1,
+        fim: p2,
+        meio: [m.x, m.y],
+        angInicio: anguloEntre(p1, c, angDireto),
+        angFim: anguloEntre(c, p2, angDireto),
+        pontosControle: [p1, c, m, p2],
+      };
+    }
+
     const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
     const alavanca = Math.max(36, Math.min(180, dist * 0.4));
     const v1 = resInicio.lado
@@ -192,7 +209,7 @@ export function caminhoDaSeta(
 }
 
 export function caixaDaSeta(
-  seta: Pick<ItemSeta, 'de' | 'para' | 'rota'>,
+  seta: Pick<ItemSeta, 'de' | 'para' | 'rota' | 'curva'>,
   itens: ReadonlyMap<string, Item>,
 ): { x: number; y: number; largura: number; altura: number } {
   const cam = caminhoDaSeta(seta, itens);
