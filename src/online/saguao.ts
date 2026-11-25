@@ -31,15 +31,18 @@ export function nomeDaFicha(ficha: FichaDaSala): string {
   return typeof ficha.name === 'string' && ficha.name.trim() ? ficha.name.trim() : 'Sem nome';
 }
 
-export function retratoDaFicha(ficha: FichaDaSala): string | null {
-  return typeof ficha.tokenImage === 'string' && ficha.tokenImage ? ficha.tokenImage : null;
+export function retratoDaFicha(ficha: FichaDaSala, baseDossie?: string): string | null {
+  if (typeof ficha.tokenImage !== 'string' || !ficha.tokenImage) return null;
+  const img = ficha.tokenImage;
+  if (/^(data:|blob:|https?:\/\/|\/)/i.test(img) || !baseDossie) return img;
+  try { return new URL(img, baseDossie).href; } catch { return img; }
 }
 
 /**
  * Resume o estado do saguão a partir dos membros conectados, das fichas conhecidas e de `temMapa`.
  * Na casca do jogador, `fichas` contém as fichas do próprio jogador; na Mesa do mestre, contém todas.
  */
-export function estadoDoSaguao(membros: readonly Membro[], fichas: readonly FichaDaSala[], temMapa: boolean): EstadoDoSaguao {
+export function estadoDoSaguao(membros: readonly Membro[], fichas: readonly FichaDaSala[], temMapa: boolean, baseDossie?: string): EstadoDoSaguao {
   const porId = new Map<string, FichaDaSala>();
   for (const f of fichas) porId.set(f.id, f);
 
@@ -52,7 +55,7 @@ export function estadoDoSaguao(membros: readonly Membro[], fichas: readonly Fich
       avatarUrl: urlDoAvatarDiscord(m.discordId, m.avatar),
       personagemId: m.personagem,
       personagemNome: f ? nomeDaFicha(f) : null,
-      personagemRetrato: f ? retratoDaFicha(f) : null,
+      personagemRetrato: f ? retratoDaFicha(f, baseDossie) : null,
       escolheu: m.personagem !== null,
     };
   });

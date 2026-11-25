@@ -348,9 +348,9 @@ function Sala({
   const saguaoObrigatorio = deveMostrarSaguao({ temMapa, papel: eu?.papel ?? 'jogador', personagem: meuPersonagemId });
   const editandoFicha = aberta || (celular && aba === 'ficha');
   const mostrarSaguao = erro !== 'sala' && !editandoFicha && (saguaoAberto || saguaoObrigatorio);
-  const resumoSaguao = estadoDoSaguao(membros, fichas, temMapa);
   const baseAtlas = emDiscord ? baseDoAppNoDiscord('atlas') : baseDoApp('atlas');
   const baseFicha = emDiscord ? baseDoAppNoDiscord('ficha') : baseDoApp('ficha');
+  const resumoSaguao = estadoDoSaguao(membros, fichas, temMapa, baseFicha);
 
   const escolherPersonagem = (fichaId: string) => {
     clienteSala?.enviar({ tipo: 'membro.personagem', fichaId });
@@ -470,6 +470,7 @@ function Sala({
         <Saguao
           nomeDaSala={config?.nome ?? ''}
           capaUrl={capaUrl}
+          baseDossie={baseFicha}
           estado={resumoSaguao}
           fichas={fichas}
           meuPersonagemId={meuPersonagemId}

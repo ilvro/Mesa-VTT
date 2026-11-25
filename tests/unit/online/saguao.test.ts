@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deveMostrarSaguao, estadoDoSaguao, prepararFichasImportadas, urlDoAvatarDiscord } from '../../../src/online/saguao.ts';
+import { deveMostrarSaguao, estadoDoSaguao, prepararFichasImportadas, retratoDaFicha, urlDoAvatarDiscord } from '../../../src/online/saguao.ts';
 import type { FichaDaSala, Membro } from '../../../src/online/protocolo.ts';
 
 const membro = (discordId: string, nome: string, papel: 'mestre' | 'jogador', personagem: string | null = null, avatar: string | null = null): Membro =>
@@ -55,4 +55,10 @@ test('urlDoAvatarDiscord e prepararFichasImportadas', () => {
 
   assert.throws(() => prepararFichasImportadas([], () => 'x'));
   assert.throws(() => prepararFichasImportadas('texto', () => 'x'));
+});
+
+test('retratoDaFicha resolve caminhos relativos contra a base do Dossiê', () => {
+  const f = { id: 'f1', name: 'Muirenn', tokenImage: 'portraits/muirenn.webp' };
+  assert.equal(retratoDaFicha(f, 'https://123.discordsays.com/.proxy/Dossie/'), 'https://123.discordsays.com/.proxy/Dossie/portraits/muirenn.webp');
+  assert.equal(retratoDaFicha({ id: 'f2', name: 'A', tokenImage: 'data:image/png;base64,abc' }, 'https://x/Dossie/'), 'data:image/png;base64,abc');
 });

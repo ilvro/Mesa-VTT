@@ -13,6 +13,7 @@ import {
 export interface SaguaoProps {
   nomeDaSala: string;
   capaUrl: string | null;
+  baseDossie?: string;
   estado: EstadoDoSaguao;
   fichas: readonly FichaDaSala[];
   meuPersonagemId: string | null;
@@ -35,6 +36,7 @@ function Avatar({ m }: { m: MembroNoSaguao }) {
 }
 
 export function MembroLinha({ m }: { m: MembroNoSaguao }) {
+  const [retratoFalhou, setRetratoFalhou] = useState(false);
   return (
     <li class="saguao-membro" data-testid="saguao-membro" data-papel={m.papel}>
       <Avatar m={m} />
@@ -49,8 +51,8 @@ export function MembroLinha({ m }: { m: MembroNoSaguao }) {
           </span>
         )}
       </div>
-      {m.personagemRetrato && (
-        <img class="saguao-membro-retrato" src={m.personagemRetrato} alt={m.personagemNome ?? ''} />
+      {m.personagemRetrato && !retratoFalhou && (
+        <img class="saguao-membro-retrato" src={m.personagemRetrato} alt="" onError={() => setRetratoFalhou(true)} />
       )}
     </li>
   );
@@ -59,6 +61,7 @@ export function MembroLinha({ m }: { m: MembroNoSaguao }) {
 export function Saguao({
   nomeDaSala,
   capaUrl,
+  baseDossie,
   estado,
   fichas,
   meuPersonagemId,
@@ -143,7 +146,7 @@ export function Saguao({
               <ul class="saguao-fichas" data-testid="saguao-fichas">
                 {fichas.map(f => {
                   const nome = nomeDaFicha(f);
-                  const retrato = retratoDaFicha(f);
+                  const retrato = retratoDaFicha(f, baseDossie);
                   const ativa = f.id === meuPersonagemId;
                   return (
                     <li key={f.id}>
