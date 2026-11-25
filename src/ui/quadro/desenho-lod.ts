@@ -1,7 +1,8 @@
 import type { Camera, Tamanho } from '../../dominio/camera.ts';
+import { familiaCss } from '../../dominio/fontes.ts';
 import { caminhoDaForma } from '../../dominio/formas.ts';
-import { fundoEfetivo, type PaletaDaCampanha } from '../../dominio/paleta.ts';
-import type { Item, TipoSemantico } from '../../dominio/quadro.ts';
+import { corDoTexto, fundoEfetivo, type PaletaDaCampanha } from '../../dominio/paleta.ts';
+import { textoPuro, type Item, type TipoSemantico } from '../../dominio/quadro.ts';
 import { itemEhSecreto, itemPassaNoFiltro } from '../../dominio/busca-quadro.ts';
 import { pontoDaPonta } from '../../dominio/setas.ts';
 import { caminhoDoTraco } from '../../dominio/tracos.ts';
@@ -74,13 +75,91 @@ function caminhoDe(it: Item): Path2D | null {
   return p;
 }
 
-function linhasDeTexto(ctx: CanvasRenderingContext2D, it: Item & { caixa: { padding: number } }): void {
-  ctx.fillStyle = 'rgba(160, 175, 165, 0.35)';
-  const pad = Math.min(it.caixa.padding, it.largura * 0.1);
-  const w = Math.max(4, it.largura - pad * 2);
-  const h = Math.max(4, it.altura * 0.08);
-  ctx.fillRect(pad, pad, w, h);
-  ctx.fillRect(pad, pad + Math.max(8, it.altura * 0.16), w * 0.65, h);
+const textosEmCache = new WeakMap<Item, string>();
+
+function textoDe(it: Extract<Item, { tipo: 'texto' | 'forma' }>): string {
+  const salvo = textosEmCache.get(it);
+  if (salvo !== undefined) return salvo;
+  const limpo = textoPuro(it.doc).trim();
+  textosEmCache.set(it, limpo);
+  return limpo;
+}
+
+function corTextoLod(
+  it: Extract<Item, { tipo: 'texto' | 'forma' }>,
+  fundo: string | null,
+): string {
+  return it.semantica && !it.caixa.fundo && fundo ? corDoTexto(fundo) : it.texto.cor;
+}
+
+function desenharTextoLod(
+  ctx: CanvasRenderingContext2D,
+  it: Extract<Item, { tipo: 'texto' | 'forma' }>,
+  zoom: number,
+  fundo: string | null,
+): void {
+  const conteudo = textoDe(it);
+  if (!conteudo) return;
+
+  const cor = corTextoLod(it, fundo);
+  const tamTela = it.texto.tamanho * zoom;
+  const pad = Math.min(it.caixa.padding, it.largura * 0.1, it.altura * 0.1);
+  const maxW = Math.max(4, it.largura - pad * 2);
+
+  if (tamTela < 4.5) {
+    ctx.save();
+    ctx.globalAlpha *= 0.35;
+    ctx.fillStyle = cor;
+    const h = Math.max(4, Math.min(it.texto.tamanho * 0.7, it.altura * 0.08));
+    ctx.fillRect(pad, pad, maxW, h);
+    if (it.altura > pad * 2 + h * 2.5) {
+      ctx.fillRect(pad, pad + Math.max(8, h * 1.8), maxW * 0.65, h);
+    }
+    ctx.restore();
+    return;
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(pad, pad, maxW, Math.max(4, it.altura - pad * 2));
+  ctx.clip();
+
+  ctx.fillStyle = cor;
+  ctx.font = `${it.texto.tamanho}px ${familiaCss(it.texto.fonte)}`;
+  ctx.textBaseline = 'top';
+  const alin = it.texto.alinhamento;
+  ctx.textAlign = alin === 'centro' ? 'center' : alin === 'direita' ? 'right' : 'left';
+  const xTexto = alin === 'centro' ? it.largura / 2 : alin === 'direita' ? it.largura - pad : pad;
+
+  const entrelinha = it.texto.tamanho * 1.25;
+  let y = pad;
+  const maxY = it.altura - pad;
+  const paragrafos = conteudo.split('\n');
+  for (const par of paragrafos) {
+    if (y > maxY) break;
+    const palavras = par.split(/\s+/).filter(Boolean);
+    if (palavras.length === 0) {
+      y += entrelinha * 0.6;
+      continue;
+    }
+    let linha = palavras[0]!;
+    for (let i = 1; i < palavras.length; i++) {
+      const teste = `${linha} ${palavras[i]}`;
+      if (ctx.measureText(teste).width <= maxW) {
+        linha = teste;
+      } else {
+        ctx.fillText(linha, xTexto, y);
+        y += entrelinha;
+        if (y > maxY) break;
+        linha = palavras[i]!;
+      }
+    }
+    if (y <= maxY) {
+      ctx.fillText(linha, xTexto, y);
+      y += entrelinha;
+    }
+  }
+  ctx.restore();
 }
 
 export interface OpcoesLod {
@@ -162,9 +241,12 @@ export function desenharLod(canvas: HTMLCanvasElement, o: OpcoesLod): void {
       const p = caminhoDe(it);
       const fundo = fundoEfetivo(it, o.paleta);
       if (p) {
-        if (fundo) {
+        if (fundo && it.caixa.opacidade > 0) {
+          ctx.save();
+          ctx.globalAlpha *= it.caixa.opacidade;
           ctx.fillStyle = fundo;
           ctx.fill(p);
+          ctx.restore();
         }
         if (it.caixa.borda && it.caixa.espessuraBorda > 0) {
           ctx.strokeStyle = it.caixa.borda;
@@ -172,12 +254,16 @@ export function desenharLod(canvas: HTMLCanvasElement, o: OpcoesLod): void {
           ctx.stroke(p);
         }
       }
-      linhasDeTexto(ctx, it);
+      desenharTextoLod(ctx, it, camera.zoom, fundo);
     } else if (it.tipo === 'texto' || it.tipo === 'ref') {
       const fundo = it.tipo === 'texto' ? fundoEfetivo(it, o.paleta) : '#202b24';
-      if (fundo) {
+      const opacidadeFundo = it.tipo === 'texto' ? it.caixa.opacidade : 1;
+      if (fundo && opacidadeFundo > 0) {
+        ctx.save();
+        ctx.globalAlpha *= opacidadeFundo;
         ctx.fillStyle = fundo;
         ctx.fillRect(0, 0, it.largura, it.altura);
+        ctx.restore();
       }
       if (it.tipo === 'texto') {
         if (it.caixa.borda && it.caixa.espessuraBorda > 0) {
@@ -185,7 +271,7 @@ export function desenharLod(canvas: HTMLCanvasElement, o: OpcoesLod): void {
           ctx.lineWidth = Math.max(it.caixa.espessuraBorda, umPixel);
           ctx.strokeRect(0, 0, it.largura, it.altura);
         }
-        linhasDeTexto(ctx, it);
+        desenharTextoLod(ctx, it, camera.zoom, fundo);
       }
     }
     ctx.restore();
