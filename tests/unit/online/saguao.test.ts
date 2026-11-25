@@ -57,6 +57,19 @@ test('urlDoAvatarDiscord e prepararFichasImportadas', () => {
   assert.throws(() => prepararFichasImportadas('texto', () => 'x'));
 });
 
+test('urlDoAvatarDiscord e estadoDoSaguao respeitam baseAvatar customizada (proxy do Discord)', () => {
+  assert.equal(
+    urlDoAvatarDiscord('10', 'hash123', 128, '/.proxy/cdn'),
+    '/.proxy/cdn/avatars/10/hash123.png?size=128',
+  );
+  assert.equal(
+    urlDoAvatarDiscord('10', 'hash123', 64, '/.proxy/cdn/'),
+    '/.proxy/cdn/avatars/10/hash123.png?size=64',
+  );
+  const res = estadoDoSaguao([membro('10', 'Ana', 'jogador', null, 'hash123')], [], true, undefined, '/.proxy/cdn');
+  assert.equal(res.membros[0]?.avatarUrl, '/.proxy/cdn/avatars/10/hash123.png?size=128');
+});
+
 test('retratoDaFicha resolve caminhos relativos contra a base do Dossiê', () => {
   const f = { id: 'f1', name: 'Muirenn', tokenImage: 'portraits/muirenn.webp' };
   assert.equal(retratoDaFicha(f, 'https://123.discordsays.com/.proxy/Dossie/'), 'https://123.discordsays.com/.proxy/Dossie/portraits/muirenn.webp');

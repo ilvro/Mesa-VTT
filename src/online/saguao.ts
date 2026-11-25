@@ -20,11 +20,19 @@ export interface EstadoDoSaguao {
   mesaAberta: boolean;
 }
 
+export const BASE_CDN_DISCORD = 'https://cdn.discordapp.com';
+
 /** URL do avatar do Discord a partir do hash guardado na sessão, ou `null` se não houver. */
-export function urlDoAvatarDiscord(discordId: string, avatar: string | null | undefined, tamanho = 128): string | null {
+export function urlDoAvatarDiscord(
+  discordId: string,
+  avatar: string | null | undefined,
+  tamanho = 128,
+  baseAvatar = BASE_CDN_DISCORD,
+): string | null {
   if (!avatar) return null;
   if (avatar.startsWith('http://') || avatar.startsWith('https://') || avatar.startsWith('data:')) return avatar;
-  return `https://cdn.discordapp.com/avatars/${encodeURIComponent(discordId)}/${encodeURIComponent(avatar)}.png?size=${tamanho}`;
+  const base = baseAvatar.replace(/\/+$/, '');
+  return `${base}/avatars/${encodeURIComponent(discordId)}/${encodeURIComponent(avatar)}.png?size=${tamanho}`;
 }
 
 export function nomeDaFicha(ficha: FichaDaSala): string {
@@ -42,7 +50,13 @@ export function retratoDaFicha(ficha: FichaDaSala, baseDossie?: string): string 
  * Resume o estado do saguão a partir dos membros conectados, das fichas conhecidas e de `temMapa`.
  * Na casca do jogador, `fichas` contém as fichas do próprio jogador; na Mesa do mestre, contém todas.
  */
-export function estadoDoSaguao(membros: readonly Membro[], fichas: readonly FichaDaSala[], temMapa: boolean, baseDossie?: string): EstadoDoSaguao {
+export function estadoDoSaguao(
+  membros: readonly Membro[],
+  fichas: readonly FichaDaSala[],
+  temMapa: boolean,
+  baseDossie?: string,
+  baseAvatar?: string,
+): EstadoDoSaguao {
   const porId = new Map<string, FichaDaSala>();
   for (const f of fichas) porId.set(f.id, f);
 
@@ -52,7 +66,7 @@ export function estadoDoSaguao(membros: readonly Membro[], fichas: readonly Fich
       discordId: m.discordId,
       nome: m.nome,
       papel: m.papel,
-      avatarUrl: urlDoAvatarDiscord(m.discordId, m.avatar),
+      avatarUrl: urlDoAvatarDiscord(m.discordId, m.avatar, 128, baseAvatar),
       personagemId: m.personagem,
       personagemNome: f ? nomeDaFicha(f) : null,
       personagemRetrato: f ? retratoDaFicha(f, baseDossie) : null,
