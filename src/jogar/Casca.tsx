@@ -322,8 +322,19 @@ function Sala({
     addEventListener('message', ouvir);
     return () => removeEventListener('message', ouvir);
   }, []);
+  const meuPersonagemId = (eu ? membros.find(m => m.discordId === eu.discordId)?.personagem : undefined) ?? null;
+  const meuPersonagemAtual = useRef<string | null>(null);
+  meuPersonagemAtual.current = meuPersonagemId;
+  const mandarFichaAtiva = (id: string | null = meuPersonagemAtual.current) => {
+    if (!id) return;
+    try { quadro.current?.contentWindow?.postMessage({ tipo: 'dossie:abrir-ficha', fichaId: id }, location.origin); } catch { /* o Dossiê ainda não carregou */ }
+  };
+  useEffect(() => { mandarFichaAtiva(meuPersonagemId); }, [meuPersonagemId]);
   // A vista muda por mensagem, sem recarregar o `iframe`.
-  const mandarVista = () => { try { quadro.current?.contentWindow?.postMessage(mensagemDeVista(vistaAtual.current), location.origin); } catch { /* o Dossiê ainda não carregou */ } };
+  const mandarVista = () => {
+    try { quadro.current?.contentWindow?.postMessage(mensagemDeVista(vistaAtual.current), location.origin); } catch { /* o Dossiê ainda não carregou */ }
+    mandarFichaAtiva();
+  };
   useEffect(mandarVista, [vista]);
   // As fichas do jogador vão ao projetor remoto (R14) para marcar as peças próprias.
   const fichasChave = fichas.map(f => f.id).join(',');
@@ -344,7 +355,6 @@ function Sala({
   if (erro === 'sessao') return null;   // volta para "Entrar" com o aviso
   const selo = conexao === 'aberta' ? 'Conectado' : 'Reconectando…';
   const espectador = eu?.papel === 'mestre';
-  const meuPersonagemId = (eu ? membros.find(m => m.discordId === eu.discordId)?.personagem : undefined) ?? null;
   const saguaoObrigatorio = deveMostrarSaguao({ temMapa, papel: eu?.papel ?? 'jogador', personagem: meuPersonagemId });
   const editandoFicha = aberta || (celular && aba === 'ficha');
   const mostrarSaguao = erro !== 'sala' && !editandoFicha && (saguaoAberto || saguaoObrigatorio);
@@ -354,6 +364,7 @@ function Sala({
 
   const escolherPersonagem = (fichaId: string) => {
     clienteSala?.enviar({ tipo: 'membro.personagem', fichaId });
+    mandarFichaAtiva(fichaId);
     if (temMapa) setSaguaoAberto(false);
   };
   const importarFichas = (novas: FichaDaSala[]) => {
