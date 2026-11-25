@@ -1,5 +1,5 @@
 import { ALCAS, caixaDe, type Alca } from '../../dominio/geometria.ts';
-import type { Caixa } from '../../dominio/camera.ts';
+import { ZOOM_MIN, type Caixa } from '../../dominio/camera.ts';
 import type { Item } from '../../dominio/quadro.ts';
 import { caminhoDaSeta, type LadoResolvido } from '../../dominio/setas.ts';
 
@@ -58,7 +58,7 @@ export function Selecao({
   onIniciarConector,
   onIniciarPontaSeta,
 }: SelecaoProps) {
-  const invZoom = 1 / Math.max(0.02, zoom);
+  const invZoom = 1 / Math.max(ZOOM_MIN, zoom);
   const todosTravados = selecionados.length > 0 && selecionados.every((i) => i.travado);
   const unico = selecionados.length === 1 ? selecionados[0] : undefined;
   const unicaSeta = unico?.tipo === 'seta' ? unico : undefined;

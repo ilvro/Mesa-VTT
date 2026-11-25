@@ -23,7 +23,7 @@ export interface Tamanho {
   altura: number;
 }
 
-export const ZOOM_MIN = 0.02;
+export const ZOOM_MIN = 0.001;
 export const ZOOM_MAX = 4;
 
 export function limitarZoom(zoom: number, min = ZOOM_MIN, max = ZOOM_MAX): number {

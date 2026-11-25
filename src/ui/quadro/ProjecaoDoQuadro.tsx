@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { enquadrar } from '../../dominio/camera.ts';
+import { enquadrar, ZOOM_MIN } from '../../dominio/camera.ts';
 import { entidadePorRef } from '../../dominio/cenas.ts';
 import { docParaHtml } from '../../dominio/doc-rico.ts';
 import { areaUtil, caminhoDaForma } from '../../dominio/formas.ts';
@@ -158,7 +158,7 @@ export function ProjecaoDoQuadro() {
   if (!vista) return <div class="projecao projecao-preta" data-testid="projecao" data-estado="parada" />;
 
   const raiz = vista.itens.find((i) => i.id === vista.molduraId)!;
-  const camera = enquadrar({ x: raiz.x, y: raiz.y, largura: raiz.largura, altura: raiz.altura }, tela, 24, 0.02, 8);
+  const camera = enquadrar({ x: raiz.x, y: raiz.y, largura: raiz.largura, altura: raiz.altura }, tela, 24, ZOOM_MIN, 8);
   const todos = new Map(vista.itens.map((i) => [i.id, i]));
   const ordenados = [...vista.itens].sort(
     (a, b) => (a.tipo === 'moldura' ? 0 : 1) - (b.tipo === 'moldura' ? 0 : 1) || a.z - b.z || (a.id < b.id ? -1 : 1),

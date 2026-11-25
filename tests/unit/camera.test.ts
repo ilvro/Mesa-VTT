@@ -32,7 +32,7 @@ test('zoomEm mantém fixo o ponto do mundo sob o cursor e respeita limites', () 
   assert.ok(Math.abs(mundoDepois.x - mundoAntes.x) < 1e-9);
   assert.ok(Math.abs(mundoDepois.y - mundoAntes.y) < 1e-9);
 
-  // Limites mínimo (0.02) e máximo (4)
+  // Limites mínimo (0.001) e máximo (4)
   assert.equal(zoomEm(cam, cursor, 0.0001).zoom, ZOOM_MIN);
   assert.equal(zoomEm(cam, cursor, 1000).zoom, ZOOM_MAX);
 });

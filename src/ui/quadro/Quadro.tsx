@@ -1884,7 +1884,9 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
             camera.value = zoomEm(cam, centro, 1 / cam.zoom);
           }}
         >
-          {Math.round(camera.value.zoom * 100)}%
+          {camera.value.zoom * 100 < 1
+            ? `${(camera.value.zoom * 100).toFixed(1)}%`
+            : `${Math.round(camera.value.zoom * 100)}%`}
         </button>
       </div>
 

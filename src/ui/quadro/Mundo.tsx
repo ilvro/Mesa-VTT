@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
   caixaVisivel,
   itensVisiveis,
+  ZOOM_MIN,
   type Caixa,
   type Camera,
   type Tamanho,
@@ -97,7 +98,7 @@ export function Mundo({
 
   const visiveis = useMemo(() => {
     const caixa = caixaVisivel(camera, tamanhoTela);
-    const margem = 120 / Math.max(0.02, camera.zoom);
+    const margem = 120 / Math.max(ZOOM_MIN, camera.zoom);
     return itensVisiveis(itensOrdenados, caixa, margem);
   }, [camera, tamanhoTela, itensOrdenados]);
 
@@ -110,9 +111,9 @@ export function Mundo({
     return lista;
   }, [selecao, itens]);
 
-  const lodSimples = camera.zoom < 0.25;
+  const lodSimples = camera.zoom < 0.08;
   const usarCanvasLod =
-    (lodSimples && visiveis.length > 80) ||
+    (camera.zoom < 0.25 && visiveis.length > 80) ||
     (camera.zoom < 0.45 && visiveis.length > 350);
   const canvasLodRef = useRef<HTMLCanvasElement | null>(null);
 

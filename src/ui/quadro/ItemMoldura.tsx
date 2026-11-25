@@ -1,5 +1,6 @@
 import { useSignal } from '@preact/signals';
 import { useEffect, useRef } from 'preact/hooks';
+import { ZOOM_MIN } from '../../dominio/camera.ts';
 import type { ItemMoldura as ItemMolduraModelo } from '../../dominio/molduras.ts';
 
 interface ItemMolduraProps {
@@ -17,7 +18,7 @@ export function ItemMoldura({
 }: ItemMolduraProps) {
   const texto = useSignal(item.titulo);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const invZoom = 1 / Math.max(0.02, zoom);
+  const invZoom = 1 / Math.max(ZOOM_MIN, zoom);
 
   useEffect(() => {
     texto.value = item.titulo;

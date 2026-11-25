@@ -106,7 +106,8 @@ function desenharTextoLod(
   const pad = Math.min(it.caixa.padding, it.largura * 0.1, it.altura * 0.1);
   const maxW = Math.max(4, it.largura - pad * 2);
 
-  if (tamTela < 4.5) {
+  if (tamTela < 2.5) {
+    if (it.largura * zoom < 14 || it.altura * zoom < 10) return;
     ctx.save();
     ctx.globalAlpha *= 0.35;
     ctx.fillStyle = cor;
@@ -205,6 +206,7 @@ export function desenharLod(canvas: HTMLCanvasElement, o: OpcoesLod): void {
     if (it.tipo === 'seta') {
       const p1 = pontoDaPonta(it.de, o.todos, it.para).ponto;
       const p2 = pontoDaPonta(it.para, o.todos, it.de).ponto;
+      if (Math.hypot(p2.x - p1.x, p2.y - p1.y) * camera.zoom < 3) continue;
       ctx.strokeStyle = it.cor;
       ctx.lineWidth = Math.max(it.espessura, umPixel);
       ctx.beginPath();
@@ -213,6 +215,11 @@ export function desenharLod(canvas: HTMLCanvasElement, o: OpcoesLod): void {
       ctx.stroke();
       continue;
     }
+
+    const wTela = it.largura * camera.zoom;
+    const hTela = it.altura * camera.zoom;
+    const maiorTela = Math.max(wTela, hTela);
+    if (maiorTela < 1.2) continue;
 
     ctx.save();
     ctx.translate(it.x, it.y);
@@ -238,23 +245,31 @@ export function desenharLod(canvas: HTMLCanvasElement, o: OpcoesLod): void {
         ctx.fill(p);
       }
     } else if (it.tipo === 'forma') {
-      const p = caminhoDe(it);
       const fundo = fundoEfetivo(it, o.paleta);
-      if (p) {
+      if (maiorTela < 10) {
         if (fundo && it.caixa.opacidade > 0) {
-          ctx.save();
           ctx.globalAlpha *= it.caixa.opacidade;
           ctx.fillStyle = fundo;
-          ctx.fill(p);
-          ctx.restore();
+          ctx.fillRect(0, 0, it.largura, it.altura);
         }
-        if (it.caixa.borda && it.caixa.espessuraBorda > 0) {
-          ctx.strokeStyle = it.caixa.borda;
-          ctx.lineWidth = Math.max(it.caixa.espessuraBorda, umPixel);
-          ctx.stroke(p);
+      } else {
+        const p = caminhoDe(it);
+        if (p) {
+          if (fundo && it.caixa.opacidade > 0) {
+            ctx.save();
+            ctx.globalAlpha *= it.caixa.opacidade;
+            ctx.fillStyle = fundo;
+            ctx.fill(p);
+            ctx.restore();
+          }
+          if (it.caixa.borda && it.caixa.espessuraBorda > 0) {
+            ctx.strokeStyle = it.caixa.borda;
+            ctx.lineWidth = Math.max(it.caixa.espessuraBorda, umPixel);
+            ctx.stroke(p);
+          }
         }
+        desenharTextoLod(ctx, it, camera.zoom, fundo);
       }
-      desenharTextoLod(ctx, it, camera.zoom, fundo);
     } else if (it.tipo === 'texto' || it.tipo === 'ref') {
       const fundo = it.tipo === 'texto' ? fundoEfetivo(it, o.paleta) : '#202b24';
       const opacidadeFundo = it.tipo === 'texto' ? it.caixa.opacidade : 1;
@@ -265,7 +280,7 @@ export function desenharLod(canvas: HTMLCanvasElement, o: OpcoesLod): void {
         ctx.fillRect(0, 0, it.largura, it.altura);
         ctx.restore();
       }
-      if (it.tipo === 'texto') {
+      if (it.tipo === 'texto' && maiorTela >= 10) {
         if (it.caixa.borda && it.caixa.espessuraBorda > 0) {
           ctx.strokeStyle = it.caixa.borda;
           ctx.lineWidth = Math.max(it.caixa.espessuraBorda, umPixel);
