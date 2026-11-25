@@ -346,7 +346,8 @@ function Sala({
   const espectador = eu?.papel === 'mestre';
   const meuPersonagemId = (eu ? membros.find(m => m.discordId === eu.discordId)?.personagem : undefined) ?? null;
   const saguaoObrigatorio = deveMostrarSaguao({ temMapa, papel: eu?.papel ?? 'jogador', personagem: meuPersonagemId });
-  const mostrarSaguao = erro !== 'sala' && (saguaoAberto || saguaoObrigatorio);
+  const editandoFicha = aberta || (celular && aba === 'ficha');
+  const mostrarSaguao = erro !== 'sala' && !editandoFicha && (saguaoAberto || saguaoObrigatorio);
   const resumoSaguao = estadoDoSaguao(membros, fichas, temMapa);
   const baseAtlas = emDiscord ? baseDoAppNoDiscord('atlas') : baseDoApp('atlas');
   const baseFicha = emDiscord ? baseDoAppNoDiscord('ficha') : baseDoApp('ficha');
