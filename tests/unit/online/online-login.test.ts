@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CHAVE_SESSAO, CHAVE_STATE, CHAVE_VOLTA,
-  concluirLogin, erroDoLogin, expDaSessao, hashDeVolta, iniciarLogin, lerSessaoGuardada,
-  queryLimpa, sessaoOnline, urlDeAutorizacao,
+  abrirLoginDiscord, aguardandoLoginExterno, cancelarLoginExterno, CHAVE_SESSAO, CHAVE_STATE, CHAVE_VOLTA,
+  concluirLogin, erroDoLogin, EVENTO_OAUTH_RETORNO, expDaSessao, hashDeVolta, iniciarLogin, lerSessaoGuardada,
+  queryLimpa, registrarOuvinteOAuth, sessaoOnline, urlDeAutorizacao,
 } from '../../../src/app/online-login.ts';
 import {
   DISCORD_CLIENT_ID, ehDesktopMesa, REDIRECT_DEV, REDIRECT_PAGES, redirectUri, urlDaSala, urlDeConviteDaSala,
@@ -146,4 +146,64 @@ test('config Desktop: ehDesktopMesa, urlDaSala com desktop=true e urlDeConviteDa
 
   assert.equal(urlDeConviteDaSala('sala-123'), 'https://ilvro.github.io/Mesa-VTT/#/jogar/sala-123');
   assert.equal(urlDeConviteDaSala('a b/c'), 'https://ilvro.github.io/Mesa-VTT/#/jogar/a%20b%2Fc');
+});
+
+test('abrirLoginDiscord: abre via /__oauth/abrir no Desktop e cai em navegação direta se falhar', async () => {
+  cancelarLoginExterno();
+  const aba = new Armazem();
+  let urlEnviada = '';
+  const resExterno = await abrirLoginDiscord({
+    sessionStorage: aba,
+    redirect: REDIRECT_DEV,
+    viaNavegadorExterno: true,
+    fetch: (async (_u: string, init: { body: string }) => {
+      urlEnviada = (JSON.parse(init.body) as { url: string }).url;
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as unknown as typeof fetch,
+    navegar: () => { throw new Error('não deveria navegar'); },
+  });
+  assert.equal(resExterno, 'externo');
+  assert.equal(aguardandoLoginExterno.value, true);
+  assert.ok(urlEnviada.startsWith('https://discord.com/oauth2/authorize?'));
+
+  cancelarLoginExterno();
+  assert.equal(aguardandoLoginExterno.value, false);
+
+  let navegou = '';
+  const resFallback = await abrirLoginDiscord({
+    sessionStorage: aba,
+    redirect: REDIRECT_DEV,
+    viaNavegadorExterno: true,
+    fetch: (async () => new Response('erro', { status: 500 })) as unknown as typeof fetch,
+    navegar: u => { navegou = u; },
+  });
+  assert.equal(resFallback, 'redirecionado');
+  assert.equal(aguardandoLoginExterno.value, false);
+  assert.ok(navegou.startsWith('https://discord.com/oauth2/authorize?'));
+});
+
+test('registrarOuvinteOAuth: conclui o login ao receber mesa:oauth-retorno', async () => {
+  const aba = new Armazem();
+  const local = new Armazem();
+  aba.setItem(CHAVE_STATE, 'st-1');
+  aguardandoLoginExterno.value = true;
+  erroDoLogin.value = 'anterior';
+  const sessao = token(Date.now() + 60_000);
+
+  const alvo = new EventTarget();
+  registrarOuvinteOAuth(alvo, {
+    sessionStorage: aba,
+    localStorage: local,
+    urlSala: 'http://sala',
+    redirect: REDIRECT_DEV,
+    fetch: (async () => new Response(JSON.stringify({ sessao, eu }))) as unknown as typeof fetch,
+  });
+
+  alvo.dispatchEvent(new CustomEvent(EVENTO_OAUTH_RETORNO, { detail: { search: '?code=C1&state=st-1' } }));
+  await new Promise(r => setTimeout(r, 10));
+
+  assert.equal(aguardandoLoginExterno.value, false);
+  assert.equal(erroDoLogin.value, null);
+  assert.equal(sessaoOnline.value?.eu.nome, 'Ana');
+  assert.deepEqual(JSON.parse(local.getItem(CHAVE_SESSAO)!), { sessao, eu });
 });

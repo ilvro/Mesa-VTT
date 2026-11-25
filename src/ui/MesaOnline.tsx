@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'preact/hooks';
 import { campanhaAtiva } from '../app/campanha.ts';
 import { abrirMesaOnline, confirmarSemNevoa, conexaoOnline, estadoDaPonte, fecharMesaOnline, salaConectadaId } from '../app/online.ts';
-import { carregarSessaoOnline, erroDoLogin, iniciarLogin, sairDoOnline, sessaoOnline } from '../app/online-login.ts';
+import {
+  abrirLoginDiscord, aguardandoLoginExterno, cancelarLoginExterno,
+  carregarSessaoOnline, erroDoLogin, sairDoOnline, sessaoOnline,
+} from '../app/online-login.ts';
 import { apagarSala, criarSala, ligarAoServidor, listarMinhasSalasComLigacoes, listarServidoresDoDiscord, salaDaCampanha, type SalaDoMestre, type ServidorDiscord } from '../app/online-salas.ts';
 import { avisar, mensagemDe } from '../app/toasts.ts';
 import { MembroLinha } from '../jogar/Saguao.tsx';
@@ -40,10 +43,18 @@ export function MesaOnline() {
 }
 
 function SemSessao() {
+  const aguardando = aguardandoLoginExterno.value;
   return (
     <div class="online-bloco">
       <p class="dica">Entre com o Discord para abrir a campanha aos jogadores. Sem entrar, a Mesa continua funcionando como sempre.</p>
-      <button type="button" class="botao-pilula destaque" data-testid="online-entrar" onClick={() => { location.assign(iniciarLogin()); }}>Entrar com o Discord</button>
+      {aguardando ? (
+        <div class="online-acoes" data-testid="online-aguardando">
+          <span class="meta">Aguardando autorização no navegador…</span>
+          <button type="button" class="botao-pilula" data-testid="online-cancelar-login" onClick={() => cancelarLoginExterno()}>Cancelar</button>
+        </div>
+      ) : (
+        <button type="button" class="botao-pilula destaque" data-testid="online-entrar" onClick={() => void abrirLoginDiscord()}>Entrar com o Discord</button>
+      )}
     </div>
   );
 }

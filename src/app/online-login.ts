@@ -1,6 +1,8 @@
 /** Login pelo Discord no navegador (OAuth2 web) e a sessão guardada no `localStorage`. Plano: `Atlas/docs/plano/mesa-online.md` (R5). */
 import { signal } from '@preact/signals';
-import { DISCORD_CLIENT_ID, redirectUri, urlDaSala } from '../online/config.ts';
+import { DISCORD_CLIENT_ID, ehDesktopMesa, redirectUri, urlDaSala } from '../online/config.ts';
+
+export const EVENTO_OAUTH_RETORNO = 'mesa:oauth-retorno';
 
 export const CHAVE_SESSAO = 'mesa:online-sessao';
 export const CHAVE_STATE = 'mesa:online-state';
@@ -136,9 +138,74 @@ export async function concluirLogin(o: OpcoesDoRetorno): Promise<ResultadoDoReto
   } catch { return 'erro'; }
 }
 
+/** Aguardando o usuário concluir a autorização do Discord no navegador padrão do sistema (Desktop). */
+export const aguardandoLoginExterno = signal(false);
+
+export function cancelarLoginExterno(): void {
+  aguardandoLoginExterno.value = false;
+}
+
+export interface OpcoesAbrirLogin {
+  sessionStorage?: Armazem | undefined;
+  redirect?: string;
+  state?: string;
+  scope?: string;
+  voltarPara?: string;
+  viaNavegadorExterno?: boolean;
+  fetch?: typeof fetch;
+  navegar?: (url: string) => void;
+}
+
+/** Inicia o login com o Discord; no Desktop abre no navegador padrão via `/__oauth/abrir` com fallback para `location.assign`. */
+export async function abrirLoginDiscord(opcoes: OpcoesAbrirLogin = {}): Promise<'externo' | 'redirecionado'> {
+  const url = iniciarLogin(opcoes);
+  const externo = opcoes.viaNavegadorExterno ?? ehDesktopMesa();
+  if (externo) {
+    try {
+      const f = opcoes.fetch ?? fetch;
+      const r = await f('/__oauth/abrir', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      if (r.ok) {
+        aguardandoLoginExterno.value = true;
+        return 'externo';
+      }
+    } catch {
+      /* fallback para navegação direta */
+    }
+  }
+  (opcoes.navegar ?? (u => location.assign(u)))(url);
+  return 'redirecionado';
+}
+
+let ouvinteOAuthRegistrado = false;
+
+/** Registra o listener para o retorno do OAuth2 enviado pelo launcher desktop. */
+export function registrarOuvinteOAuth(
+  alvo: Pick<EventTarget, 'addEventListener'> = window,
+  opcoes: Omit<OpcoesDoRetorno, 'search'> = {},
+): void {
+  if (typeof window !== 'undefined' && alvo === window) {
+    if (ouvinteOAuthRegistrado) return;
+    ouvinteOAuthRegistrado = true;
+  }
+  alvo.addEventListener(EVENTO_OAUTH_RETORNO, (ev: Event) => {
+    const search = (ev as CustomEvent<{ search?: unknown }>).detail?.search;
+    if (typeof search !== 'string') return;
+    void (async () => {
+      const r = await concluirLogin({ ...opcoes, search });
+      aguardandoLoginExterno.value = false;
+      erroDoLogin.value = r === 'ok' || r === 'sem-codigo' ? null : MENSAGEM_DO_ERRO[r];
+    })();
+  });
+}
+
 /** Chamado pelo `main.tsx` ao abrir: trata a volta do Discord (se houver) e carrega a sessão guardada. */
 export async function iniciarOnline(): Promise<void> {
   carregarSessaoOnline();
+  if (typeof window !== 'undefined') registrarOuvinteOAuth(window);
   const search = location.search;
   if (!new URLSearchParams(search).has('code') && !new URLSearchParams(search).has('error')) return;
   const r = await concluirLogin({ search });

@@ -67,12 +67,114 @@ const MIME_TYPES = {
   '.wasm': 'application/wasm',
 };
 
-export function iniciarServidorEstatico(rootDir, port, host) {
+const OAUTH_TTL_MS = 5 * 60 * 1000;
+const OAUTH_URL_PREFIXO = 'https://discord.com/oauth2/authorize?';
+const HTML_OAUTH_CONCLUIDO = `<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Mesa VTT — Login concluído</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0f111a; color: #e6e9f4; font: 500 16px/1.5 system-ui, sans-serif; }
+    main { max-width: 440px; padding: 28px 32px; border-radius: 12px; background: #171a26; border: 1px solid rgba(110,168,254,0.3); text-align: center; }
+    h1 { margin: 0 0 10px; font-size: 20px; }
+    p { margin: 0; color: #b7bdd4; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Login concluído!</h1>
+    <p>Você pode fechar esta aba e voltar para o Mesa VTT.</p>
+  </main>
+</body>
+</html>`;
+
+function lerCorpoJson(req, limiteBytes = 16 * 1024) {
   return new Promise((resolve, reject) => {
-    const server = http.createServer((req, res) => {
+    let tamanho = 0;
+    const pedacos = [];
+    req.on('data', pedaco => {
+      tamanho += pedaco.length;
+      if (tamanho > limiteBytes) {
+        reject(new Error('Corpo muito grande'));
+        req.destroy();
+        return;
+      }
+      pedacos.push(pedaco);
+    });
+    req.on('end', () => {
       try {
-        const url = new URL(req.url ?? '/', `http://${host}:${port}`);
-        let pathname = decodeURIComponent(url.pathname);
+        resolve(JSON.parse(Buffer.concat(pedacos).toString('utf-8') || '{}'));
+      } catch {
+        reject(new Error('JSON inválido'));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+export function iniciarServidorEstatico(rootDir, port, host, opcoes = {}) {
+  const aoAbrirOAuth = opcoes.aoAbrirOAuth ?? (url => {
+    const proc = spawn('xdg-open', [url], { stdio: 'ignore', detached: true });
+    proc.on('error', () => {});
+    proc.unref();
+  });
+  const aoRetornoOAuth = opcoes.aoRetornoOAuth;
+  let oauthExpiraEm = 0;
+
+  return new Promise((resolve, reject) => {
+    const server = http.createServer(async (req, res) => {
+      try {
+        const addr = server.address();
+        const portaReal = typeof addr === 'object' && addr ? addr.port : port;
+        const origemServidor = `http://${host}:${portaReal}`;
+        const url = new URL(req.url ?? '/', origemServidor);
+        const pathname = decodeURIComponent(url.pathname);
+
+        if (req.method === 'POST' && pathname === '/__oauth/abrir') {
+          const origin = req.headers.origin;
+          if (origin !== `http://127.0.0.1:${PORT}` && origin !== origemServidor) {
+            res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ erro: 'Origem não permitida' }));
+            return;
+          }
+          let body;
+          try {
+            body = await lerCorpoJson(req);
+          } catch {
+            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ erro: 'JSON inválido' }));
+            return;
+          }
+          if (typeof body?.url !== 'string' || !body.url.startsWith(OAUTH_URL_PREFIXO)) {
+            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ erro: 'URL de autorização inválida' }));
+            return;
+          }
+          oauthExpiraEm = Date.now() + OAUTH_TTL_MS;
+          aoAbrirOAuth(body.url);
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ ok: true }));
+          return;
+        }
+
+        if (
+          req.method === 'GET' &&
+          pathname === '/Mesa/' &&
+          oauthExpiraEm > Date.now() &&
+          (url.searchParams.has('code') || url.searchParams.has('error')) &&
+          !String(req.headers['user-agent'] ?? '').includes('MesaVTT/')
+        ) {
+          oauthExpiraEm = 0;
+          aoRetornoOAuth?.(url.search);
+          res.writeHead(200, {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-store',
+          });
+          res.end(HTML_OAUTH_CONCLUIDO);
+          return;
+        }
+
         if (pathname === '/' || pathname === '') {
           res.writeHead(302, { Location: '/Mesa/' });
           res.end();
@@ -131,8 +233,16 @@ export function iniciarServidorEstatico(rootDir, port, host) {
  * (`/__ponte`, token em `Atlas/.ponte`). Sem o Atlas ou sem `node_modules`, avisa no stderr e segue sem a ponte.
  * Com `port` 0 a origem da ponte acompanha a porta sorteada.
  */
-export async function iniciarServidorComPonte({ rootDir, port, host, raizAtlas = path.resolve(mesaRoot, '..', 'Atlas'), pastaDoToken = path.join(raizAtlas, '.ponte') }) {
-  const server = await iniciarServidorEstatico(rootDir, port, host);
+export async function iniciarServidorComPonte({
+  rootDir,
+  port,
+  host,
+  raizAtlas = path.resolve(mesaRoot, '..', 'Atlas'),
+  pastaDoToken = path.join(raizAtlas, '.ponte'),
+  aoAbrirOAuth,
+  aoRetornoOAuth,
+}) {
+  const server = await iniciarServidorEstatico(rootDir, port, host, { aoAbrirOAuth, aoRetornoOAuth });
   const porta = server.address().port;
   let ponte = null;
   try {
@@ -280,10 +390,18 @@ export function iniciarObservadorDeFontes({
 async function iniciarAppDesktop() {
   const jaRodando = await portaEmUso(PORT, HOST);
   let hospedeiro = null;
+  let enviarParaPython = null;
 
   if (!jaRodando) {
     atualizarAppsNaAbertura();
-    hospedeiro = await iniciarServidorComPonte({ rootDir: distDesktop, port: PORT, host: HOST });
+    hospedeiro = await iniciarServidorComPonte({
+      rootDir: distDesktop,
+      port: PORT,
+      host: HOST,
+      aoRetornoOAuth: search => {
+        enviarParaPython?.(`${JSON.stringify({ tipo: 'oauth', search })}\n`);
+      },
+    });
   }
 
   const targetUrl = `http://${HOST}:${PORT}/Mesa/`;
@@ -291,7 +409,7 @@ async function iniciarAppDesktop() {
   fs.mkdirSync(dataDir, { recursive: true });
 
   const pyScript = `
-import sys, os, json, gi
+import sys, os, json, subprocess, gi
 gi.require_version('Gtk', '3.0')
 try:
     gi.require_version('WebKit2', '4.1')
@@ -529,6 +647,9 @@ def ao_decidir(origem, decisao, tipo):
     decisao.ignore()
     if not uri:
         return True
+    if (uri.startswith('http://') or uri.startswith('https://')) and not (uri == 'http://127.0.0.1:5100' or uri.startswith('http://127.0.0.1:5100/')):
+        subprocess.Popen(['xdg-open', uri])
+        return True
     achada = aba_existente(uri)
     if achada:
         focar(*achada)
@@ -658,6 +779,17 @@ def ao_ler(canal, condicao):
                             wv_mesa,
                             aviso_js('A ponte do assistente mudou. Feche e abra o app, e reinicie o app do Claude.', False)
                         )
+                elif tipo == 'oauth':
+                    wv_mesa = principal.get('mesa')
+                    search = ev.get('search') or ''
+                    if wv_mesa is not None:
+                        executar_js(
+                            wv_mesa,
+                            'window.dispatchEvent(new CustomEvent("mesa:oauth-retorno", { detail: { search: ' + json.dumps(search) + ' } }));'
+                        )
+                    caderno_principal = principal.get('caderno')
+                    if caderno_principal is not None:
+                        caderno_principal.get_toplevel().present()
             except Exception:
                 pass
     if condicao & GLib.IOCondition.HUP:
@@ -683,16 +815,16 @@ Gtk.main()
   });
   py.stdin?.on('error', () => {});
 
+  enviarParaPython = linha => {
+    if (py.stdin && !py.stdin.destroyed && py.stdin.writable) {
+      try {
+        py.stdin.write(linha);
+      } catch {}
+    }
+  };
+
   const observador = !jaRodando
-    ? iniciarObservadorDeFontes({
-        enviarParaPython: linha => {
-          if (py.stdin && !py.stdin.destroyed && py.stdin.writable) {
-            try {
-              py.stdin.write(linha);
-            } catch {}
-          }
-        },
-      })
+    ? iniciarObservadorDeFontes({ enviarParaPython })
     : null;
 
   py.on('error', () => {

@@ -412,3 +412,73 @@ test('atualizarAppsNaAbertura: executa build-desktop.ts --se-mudou e segue sem l
     'A atualização falhou; abrindo a versão anterior',
   ]);
 });
+
+test('iniciarServidorEstatico: /__oauth/abrir e retorno OAuth em /Mesa/ para navegador externo', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mesa-oauth-srv-'));
+  fs.mkdirSync(path.join(dir, 'Mesa'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'Mesa', 'index.html'), '<html>mesa-spa</html>', 'utf-8');
+
+  const abertas: string[] = [];
+  const retornos: string[] = [];
+  const server = await iniciarServidorEstatico(dir, 0, '127.0.0.1', {
+    aoAbrirOAuth: (u: string) => abertas.push(u),
+    aoRetornoOAuth: (s: string) => retornos.push(s),
+  });
+  const porta = (server.address() as { port: number }).port;
+  const base = `http://127.0.0.1:${porta}`;
+
+  try {
+    // Rejeita Origin inválido
+    const rOrigem = await fetch(`${base}/__oauth/abrir`, {
+      method: 'POST',
+      headers: { Origin: 'https://evil.example', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: 'https://discord.com/oauth2/authorize?client_id=1' }),
+    });
+    assert.equal(rOrigem.status, 403);
+
+    // Rejeita URL fora do Discord OAuth2
+    const rUrl = await fetch(`${base}/__oauth/abrir`, {
+      method: 'POST',
+      headers: { Origin: base, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: 'https://example.com/' }),
+    });
+    assert.equal(rUrl.status, 400);
+
+    // Aceita pedido válido
+    const urlOAuth = 'https://discord.com/oauth2/authorize?client_id=1&state=abc';
+    const rOk = await fetch(`${base}/__oauth/abrir`, {
+      method: 'POST',
+      headers: { Origin: base, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: urlOAuth }),
+    });
+    assert.equal(rOk.status, 200);
+    assert.deepEqual(abertas, [urlOAuth]);
+
+    // Retorno vindo do próprio WebKit2GTK (UA MesaVTT/1) não é interceptado
+    const rWebkit = await fetch(`${base}/Mesa/?code=c1&state=abc`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 MesaVTT/1' },
+    });
+    assert.equal(rWebkit.status, 200);
+    assert.equal(await rWebkit.text(), '<html>mesa-spa</html>');
+    assert.deepEqual(retornos, []);
+
+    // Retorno vindo do navegador externo é interceptado e entrega HTML de conclusão
+    const rNav = await fetch(`${base}/Mesa/?code=c1&state=abc`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 Firefox/130.0' },
+    });
+    assert.equal(rNav.status, 200);
+    assert.match(await rNav.text(), /Login concluído!/);
+    assert.deepEqual(retornos, ['?code=c1&state=abc']);
+
+    // Segunda chamada já sem oauthPendente volta a servir a SPA normalmente
+    const rDepois = await fetch(`${base}/Mesa/?code=c1&state=abc`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 Firefox/130.0' },
+    });
+    assert.equal(await rDepois.text(), '<html>mesa-spa</html>');
+    assert.deepEqual(retornos, ['?code=c1&state=abc']);
+  } finally {
+    server.close();
+    server.closeAllConnections?.();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
