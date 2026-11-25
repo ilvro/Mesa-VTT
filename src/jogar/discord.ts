@@ -139,6 +139,16 @@ export async function atualizarAtividadeDiscord(sdk: SdkDiscordLike, nomeCampanh
   }
 }
 
+let sdkCompartilhado: { sdk: DiscordSDK; pronto: Promise<void> } | null = null;
+
+function obterSdkDiscord(): { sdk: DiscordSDK; pronto: Promise<void> } {
+  if (!sdkCompartilhado) {
+    const sdk = new DiscordSDK(DISCORD_CLIENT_ID);
+    sdkCompartilhado = { sdk, pronto: sdk.ready() };
+  }
+  return sdkCompartilhado;
+}
+
 /** Fluxo completo de entrada na Atividade do Discord: `ready` -> `authorize` -> `/sala/token` -> `authenticate` -> diretório. */
 export async function iniciarAtividadeDiscord(opcoes: OpcoesDiscord = {}): Promise<ResultadoDiscord> {
   if (opcoes.patchMappings !== false && typeof window !== 'undefined') {
@@ -146,9 +156,12 @@ export async function iniciarAtividadeDiscord(opcoes: OpcoesDiscord = {}): Promi
   }
   const f = opcoes.fetch ?? fetch;
   const base = (opcoes.baseSala ?? BASE_PROXY_DISCORD).replace(/\/+$/, '');
-  const sdk = opcoes.sdk ?? new DiscordSDK(DISCORD_CLIENT_ID);
-
-  await sdk.ready();
+  if (opcoes.sdk) {
+    await opcoes.sdk.ready();
+  }
+  const padrao = opcoes.sdk ? null : obterSdkDiscord();
+  const sdk = opcoes.sdk ?? padrao!.sdk;
+  if (padrao) await padrao.pronto;
   const { code } = await sdk.commands.authorize({
     client_id: DISCORD_CLIENT_ID,
     response_type: 'code',

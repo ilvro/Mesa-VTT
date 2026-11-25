@@ -10,6 +10,7 @@ import {
   BASE_PROXY_DISCORD,
   atualizarAtividadeDiscord,
   baseDoAppNoDiscord,
+  descobrirSalaDoServidor,
   iniciarAtividadeDiscord,
   ligarSalaNoDiscord,
   type OpcoesDiscord,
@@ -172,13 +173,35 @@ export function CascaDiscord({
     );
   }
 
+  const atualizarSala = async () => {
+    if (estado.tipo !== 'resultado') { conectar(); return; }
+    const { sessao, eu, guildId, sdk } = estado.dados;
+    setEstado({ tipo: 'carregando' });
+    try {
+      const novo = await descobrirSalaDoServidor({
+        sessao,
+        eu,
+        guildId,
+        sdk,
+        ...(opcoes?.fetch ? { fetch: opcoes.fetch } : {}),
+        ...(opcoes?.baseSala ? { baseSala: opcoes.baseSala } : {}),
+      });
+      setEstado({ tipo: 'resultado', dados: novo });
+      if (novo.estado === 'sem-sala' && novo.salas.length > 0) setSalaEscolhida(novo.salas[0]!.salaId);
+    } catch (err) {
+      setEstado({ tipo: 'erro', mensagem: err instanceof Error ? err.message : 'Não foi possível atualizar a sala.' });
+    }
+  };
+
   return (
     <Sala
+      key={dados.salaId}
       salaId={dados.salaId}
       sessao={dados.sessao}
       nome={dados.eu.nome}
       emDiscord
       aoSessaoInvalida={conectar}
+      aoAtualizarSala={() => { void atualizarSala(); }}
       aoMudarCampanha={nome => { void atualizarAtividadeDiscord(dados.sdk, nome); }}
     />
   );
@@ -204,6 +227,7 @@ function Sala({
   nome,
   emDiscord = false,
   aoSessaoInvalida,
+  aoAtualizarSala,
   aoMudarCampanha,
 }: {
   salaId: string;
@@ -211,6 +235,7 @@ function Sala({
   nome: string;
   emDiscord?: boolean;
   aoSessaoInvalida: () => void;
+  aoAtualizarSala?: () => void;
   aoMudarCampanha?: (nome: string) => void;
 }) {
   const [conexao, setConexao] = useState<EstadoDaSala>('conectando');
@@ -387,7 +412,7 @@ function Sala({
             <h2 class="faixa">Sala não encontrada</h2>
             <p>Esta sala não existe ou foi encerrada. Confira o link com o mestre.</p>
             {emDiscord && (
-              <button type="button" class="botao-pilula destaque" onClick={() => location.reload()}>
+              <button type="button" class="botao-pilula destaque" onClick={() => (aoAtualizarSala ? aoAtualizarSala() : location.reload())}>
                 Atualizar sala
               </button>
             )}
