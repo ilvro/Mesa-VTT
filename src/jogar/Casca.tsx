@@ -371,13 +371,19 @@ function Sala({
   };
   mandarVistaAtual.current = mandarVista;
   useEffect(mandarVista, [vista]);
-  // As fichas do jogador vão ao projetor remoto (R14) para marcar as peças próprias.
+  // As fichas do jogador vão ao projetor remoto (R14) para marcar as peças próprias (mestre espectador manda lista vazia).
+  const espectador = eu?.papel === 'mestre';
+  const espectadorAtual = useRef(espectador);
+  espectadorAtual.current = espectador;
   const fichasChave = fichas.map(f => f.id).join(',');
   const fichasIdsAtual = useRef<string[]>([]);
   fichasIdsAtual.current = fichas.map(f => f.id);
-  const mandarJogador = () => { try { projetorQuadro.current?.contentWindow?.postMessage(mensagemDoJogador(fichasIdsAtual.current), location.origin); } catch { /* o projetor ainda não carregou */ } };
+  const mandarJogador = () => {
+    const ids = espectadorAtual.current ? [] : fichasIdsAtual.current;
+    try { projetorQuadro.current?.contentWindow?.postMessage(mensagemDoJogador(ids), location.origin); } catch { /* o projetor ainda não carregou */ }
+  };
   mandarJogadorAtual.current = mandarJogador;
-  useEffect(mandarJogador, [fichasChave]);
+  useEffect(mandarJogador, [fichasChave, espectador]);
   // Esc volta ao mapa, com o foco na casca ou dentro do Dossiê (mesma origem).
   useEffect(() => {
     if (!cobre) return;
@@ -390,7 +396,6 @@ function Sala({
 
   if (erro === 'sessao') return null;   // volta para "Entrar" com o aviso
   const selo = conexao === 'aberta' ? 'Conectado' : 'Reconectando…';
-  const espectador = eu?.papel === 'mestre';
   const saguaoObrigatorio = deveMostrarSaguao({ temMapa, papel: eu?.papel ?? 'jogador', personagem: meuPersonagemId });
   const editandoFicha = aberta || (celular && aba === 'ficha');
   const mostrarSaguao = erro !== 'sala' && !editandoFicha && (saguaoAberto || saguaoObrigatorio);
