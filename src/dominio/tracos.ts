@@ -109,25 +109,33 @@ function contornoParaSvg(contorno: readonly number[][]): string {
   return partes.join(' ');
 }
 
+export function contornoDoTraco(traco: {
+  pontos: readonly PontoTraco[];
+  ferramenta: (typeof FERRAMENTAS_TRACO)[number];
+  espessura: number;
+}): number[][] {
+  if (traco.pontos.length === 0) return [];
+  const marcaTexto = traco.ferramenta === 'marca-texto';
+  return getStroke(
+    traco.pontos.map((p) => [p[0], p[1], p[2]]),
+    {
+      size: traco.espessura,
+      thinning: marcaTexto ? 0 : 0.5,
+      smoothing: marcaTexto ? 0.3 : 0.5,
+      streamline: marcaTexto ? 0.4 : 0.5,
+      simulatePressure: false,
+      start: marcaTexto ? { cap: false } : { cap: true },
+      end: marcaTexto ? { cap: false } : { cap: true },
+    },
+  );
+}
+
 export function caminhoDoTraco(traco: {
   pontos: readonly PontoTraco[];
   ferramenta: (typeof FERRAMENTAS_TRACO)[number];
   espessura: number;
 }): string {
-  if (traco.pontos.length === 0) return '';
-  const marcaTexto = traco.ferramenta === 'marca-texto';
-  const contorno = getStroke(
-    traco.pontos.map((p) => [p[0], p[1], p[2]]),
-    {
-    size: traco.espessura,
-    thinning: marcaTexto ? 0 : 0.5,
-    smoothing: marcaTexto ? 0.3 : 0.5,
-    streamline: marcaTexto ? 0.4 : 0.5,
-    simulatePressure: false,
-    start: marcaTexto ? { cap: false } : { cap: true },
-    end: marcaTexto ? { cap: false } : { cap: true },
-  });
-  return contornoParaSvg(contorno);
+  return contornoParaSvg(contornoDoTraco(traco));
 }
 
 export function tracoToca(
