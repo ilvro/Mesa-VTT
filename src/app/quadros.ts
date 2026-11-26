@@ -343,7 +343,7 @@ export async function fecharQuadro(): Promise<void> {
   versaoHistorico.value++;
 }
 
-export async function abrirQuadro(id: string): Promise<Quadro | null> {
+export async function abrirQuadro(id: string, focoItemId?: string): Promise<Quadro | null> {
   await descarregarPendentes();
   const q = await obterQuadro(id);
   if (!q) {
@@ -357,8 +357,10 @@ export async function abrirQuadro(id: string): Promise<Quadro | null> {
   }
   limparLigacoesOrfas(q.id, lista.map((i) => i.id));
   quadroAberto.value = q;
-  itens.value = new Map(lista.map((i) => [i.id, i]));
-  selecao.value = new Set();
+  const mapa = new Map(lista.map((i) => [i.id, i]));
+  itens.value = mapa;
+  const pendente = focoItemId ?? itemPendente.value;
+  selecao.value = pendente && mapa.has(pendente) ? new Set([pendente]) : new Set();
   historico.limpar();
   versaoHistorico.value++;
   return q;

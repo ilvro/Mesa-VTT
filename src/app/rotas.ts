@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals';
 import { registrarSelecaoNoHistorico, selecionadaId } from './campanha.ts';
-import { abrirQuadro, fecharQuadro, itemPendente } from './quadros.ts';
+import { abrirQuadro, fecharQuadro, itemPendente, quadroAberto } from './quadros.ts';
 
 export type Tela = 'entidades' | 'campanhas' | 'aplicativos' | 'sessao' | 'quadros' | 'online';
 export const tela = signal<Tela>('entidades');
@@ -43,7 +43,7 @@ export function lerHash(): void {
     const itemId = decodeURIComponent(qi[2]!);
     itemPendente.value = itemId;
     tela.value = 'quadros';
-    void abrirQuadro(quadroId);
+    if (quadroAberto.value?.id !== quadroId) void abrirQuadro(quadroId, itemId);
     return;
   }
   const q = QUADRO.exec(hash);
@@ -79,7 +79,7 @@ export function navegarParaQuadro(id: string | null): void {
 export function navegarParaItemNoQuadro(quadroId: string, itemId: string): void {
   itemPendente.value = itemId;
   tela.value = 'quadros';
-  void abrirQuadro(quadroId);
+  if (quadroAberto.value?.id !== quadroId) void abrirQuadro(quadroId, itemId);
   const alvo = `#/quadro/${encodeURIComponent(quadroId)}/item/${encodeURIComponent(itemId)}`;
   try { history.replaceState(null, '', alvo); } catch { /* ignora */ }
 }
