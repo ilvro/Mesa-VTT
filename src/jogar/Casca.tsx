@@ -404,7 +404,7 @@ function Sala({
   const saguaoObrigatorio = deveMostrarSaguao({ temMapa, papel: eu?.papel ?? 'jogador', personagem: meuPersonagemId });
   const editandoFicha = aberta || (celular && aba === 'ficha');
   const mostrarSaguao = erro !== 'sala' && !editandoFicha && (saguaoAberto || saguaoObrigatorio);
-  const baseAvatar = emDiscord ? `${BASE_PROXY_DISCORD}/cdn` : undefined;
+  const baseAvatar = emDiscord ? `${BASE_PROXY_DISCORD}/sala/cdn` : undefined;
   const resumoSaguao = estadoDoSaguao(membros, fichas, temMapa, baseFicha, baseAvatar);
 
   const escolherPersonagem = (fichaId: string) => {

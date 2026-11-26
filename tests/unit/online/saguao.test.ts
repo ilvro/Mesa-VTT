@@ -59,15 +59,15 @@ test('urlDoAvatarDiscord e prepararFichasImportadas', () => {
 
 test('urlDoAvatarDiscord e estadoDoSaguao respeitam baseAvatar customizada (proxy do Discord)', () => {
   assert.equal(
-    urlDoAvatarDiscord('10', 'hash123', 128, '/.proxy/cdn'),
-    '/.proxy/cdn/avatars/10/hash123.png?size=128',
+    urlDoAvatarDiscord('10', 'hash123', 128, '/.proxy/sala/cdn'),
+    '/.proxy/sala/cdn/avatars/10/hash123.png?size=128',
   );
   assert.equal(
-    urlDoAvatarDiscord('10', 'hash123', 64, '/.proxy/cdn/'),
-    '/.proxy/cdn/avatars/10/hash123.png?size=64',
+    urlDoAvatarDiscord('10', 'hash123', 64, '/.proxy/sala/cdn/'),
+    '/.proxy/sala/cdn/avatars/10/hash123.png?size=64',
   );
-  const res = estadoDoSaguao([membro('10', 'Ana', 'jogador', null, 'hash123')], [], true, undefined, '/.proxy/cdn');
-  assert.equal(res.membros[0]?.avatarUrl, '/.proxy/cdn/avatars/10/hash123.png?size=128');
+  const res = estadoDoSaguao([membro('10', 'Ana', 'jogador', null, 'hash123')], [], true, undefined, '/.proxy/sala/cdn');
+  assert.equal(res.membros[0]?.avatarUrl, '/.proxy/sala/cdn/avatars/10/hash123.png?size=128');
 });
 
 test('retratoDaFicha resolve caminhos relativos e iniciados por / contra a base do Dossiê', () => {

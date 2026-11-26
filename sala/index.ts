@@ -1,4 +1,4 @@
-import { ErroDiscord, filtrarGuildasInstaladas, lerGuildas, lerUsuario, trocarCodigo } from './discord.ts';
+import { ErroDiscord, filtrarGuildasInstaladas, lerGuildas, lerUsuario, trocarCodigo, urlAvatarCdnDiscord } from './discord.ts';
 import { origemPermitida } from './retransmitir.ts';
 import { assinarSessao, podeMestrar, venceEm, verificarSessao, type Sessao } from './sessao.ts';
 
@@ -107,6 +107,28 @@ async function rotaNova(request: Request, env: Env, cabecalhos: Record<string, s
   return json({ salaId, nome }, 200, cabecalhos);
 }
 
+async function rotaAvatar(urlCdn: string, cabecalhos: Record<string, string>): Promise<Response> {
+  let resp: Response;
+  try {
+    resp = await fetch(urlCdn);
+  } catch {
+    return new Response('falha ao buscar avatar', { status: 502, headers: cabecalhos });
+  }
+  if (!resp.ok) {
+    return new Response('avatar não encontrado', { status: resp.status === 404 ? 404 : 502, headers: cabecalhos });
+  }
+  const tipo = resp.headers.get('Content-Type') ?? '';
+  const contentType = tipo.startsWith('image/') ? tipo : 'image/png';
+  return new Response(resp.body, {
+    status: 200,
+    headers: {
+      ...cabecalhos,
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=3600',
+    },
+  });
+}
+
 function cors(origem: string | null): Record<string, string> {
   if (!origemPermitida(origem)) return {};
   return {
@@ -128,6 +150,11 @@ export default {
 
     if (request.method === 'GET' && url.pathname === '/sala/saude') {
       return new Response('ok', { headers: cabecalhos });
+    }
+
+    const urlAvatar = request.method === 'GET' ? urlAvatarCdnDiscord(url.pathname, url.searchParams.get('size')) : null;
+    if (urlAvatar) {
+      return rotaAvatar(urlAvatar, cabecalhos);
     }
 
     if (request.method === 'POST' && url.pathname === '/sala/token') {

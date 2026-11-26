@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ErroDiscord, filtrarGuildasInstaladas, lerGuildas, lerUsuario, trocarCodigo, type FetchLike } from '../../../sala/discord.ts';
+import { ErroDiscord, filtrarGuildasInstaladas, lerGuildas, lerUsuario, trocarCodigo, urlAvatarCdnDiscord, type FetchLike } from '../../../sala/discord.ts';
 
 function falso(status: number, corpo: unknown) {
   const chamadas: { url: string; init?: Parameters<FetchLike>[1] }[] = [];
@@ -80,4 +80,18 @@ test('lerGuildas lista servidores e filtrarGuildasInstaladas cruza com as vistas
   assert.deepEqual(filtrarGuildasInstaladas(guildas, ['g2', 'g3']), [
     { id: 'g2', name: 'Outro Servidor', icon: null },
   ]);
+});
+
+test('urlAvatarCdnDiscord valida caminho e tamanho do avatar do Discord', () => {
+  assert.equal(
+    urlAvatarCdnDiscord('/sala/cdn/avatars/123456789/a_hash123.png', '128'),
+    'https://cdn.discordapp.com/avatars/123456789/a_hash123.png?size=128',
+  );
+  assert.equal(
+    urlAvatarCdnDiscord('/sala/cdn/avatars/123456789/hash.webp', '999'),
+    'https://cdn.discordapp.com/avatars/123456789/hash.webp?size=128',
+  );
+  assert.equal(urlAvatarCdnDiscord('/sala/cdn/avatars/nao-numero/hash.png', '128'), null);
+  assert.equal(urlAvatarCdnDiscord('/sala/cdn/avatars/123/../evil.png', '128'), null);
+  assert.equal(urlAvatarCdnDiscord('/sala/cdn/outro/123/hash.png', '128'), null);
 });

@@ -124,3 +124,14 @@ export function filtrarGuildasInstaladas(guildas: readonly GuildaDiscord[], vist
   const conjunto = new Set(vistas);
   return guildas.filter(g => conjunto.has(g.id));
 }
+
+const TAMANHOS_AVATAR = new Set(['16', '32', '64', '128', '256', '512', '1024']);
+const ROTA_AVATAR_CDN = /^\/sala\/cdn\/avatars\/(\d{1,32})\/((?:a_)?[A-Za-z0-9_-]{1,128}\.(?:png|webp|jpg|jpeg|gif))$/;
+
+/** Valida `/sala/cdn/avatars/:discordId/:arquivo` e devolve a URL correspondente em `cdn.discordapp.com`, ou `null`. */
+export function urlAvatarCdnDiscord(pathname: string, size?: string | null): string | null {
+  const m = ROTA_AVATAR_CDN.exec(pathname);
+  if (!m) return null;
+  const tamanho = size && TAMANHOS_AVATAR.has(size) ? size : '128';
+  return `https://cdn.discordapp.com/avatars/${m[1]}/${m[2]}?size=${tamanho}`;
+}
