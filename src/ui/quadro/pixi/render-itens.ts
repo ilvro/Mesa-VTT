@@ -18,20 +18,24 @@ import {
 } from '../../../dominio/indice-espacial.ts';
 import {
   PALETA_PADRAO,
+  corDoTexto,
   fundoEfetivo,
   type PaletaDaCampanha,
 } from '../../../dominio/paleta.ts';
-import type { Forma, Item, TipoSemantico } from '../../../dominio/quadro.ts';
-import { setasLigadasA } from '../../../dominio/setas.ts';
+import { areaUtil } from '../../../dominio/formas.ts';
+import { docDeTexto, type Forma, type Item, type TipoSemantico } from '../../../dominio/quadro.ts';
+import { caminhoDaSeta, setasLigadasA } from '../../../dominio/setas.ts';
 import { nivelMipmapParaTela, type CacheImagensPixi } from './cache-imagens-pixi.ts';
 import { desenharPolilinha, parsearCorPixi } from './cores-pixi.ts';
 import { desenharSetaPixi } from './render-setas.ts';
+import { CacheTextosPixi, type PedidoTextoPixi } from './render-textos.ts';
 import { desenharTracoPixi } from './render-tracos.ts';
 
 interface EntradaVisual {
   item: Item;
   container: Container;
   spriteImagem?: Sprite;
+  spriteTexto?: Sprite;
   graficos?: Graphics;
 }
 
@@ -44,6 +48,7 @@ export interface OpcoesSincroniaItens {
   tiposFiltro?: ReadonlySet<TipoSemantico>;
   esconderSegredos: boolean;
   pular?: (it: Item) => boolean;
+  aoFicarPendenteTexto?: () => void;
 }
 
 function pontosDaForma(forma: Forma, w: number, h: number): number[] {
@@ -180,6 +185,7 @@ export class GerenciadorItensPixi {
   private readonly camadaItens: Container;
   private readonly camadaSetas: Container;
   private readonly cacheImagens: CacheImagensPixi;
+  private readonly cacheTextos: CacheTextosPixi;
   private readonly entradas = new Map<string, EntradaVisual>();
   private itensAnteriores: ReadonlyMap<string, Item> | null = null;
   private paletaAnterior: PaletaDaCampanha | null = null;
@@ -191,11 +197,13 @@ export class GerenciadorItensPixi {
     camadaItens: Container;
     camadaSetas: Container;
     cacheImagens: CacheImagensPixi;
+    cacheTextos?: CacheTextosPixi;
   }) {
     this.camadaMolduras = opcoes.camadaMolduras;
     this.camadaItens = opcoes.camadaItens;
     this.camadaSetas = opcoes.camadaSetas;
     this.cacheImagens = opcoes.cacheImagens;
+    this.cacheTextos = opcoes.cacheTextos ?? new CacheTextosPixi();
   }
 
   sincronizar(op: OpcoesSincroniaItens): readonly Item[] {
@@ -212,6 +220,8 @@ export class GerenciadorItensPixi {
       this.indice = criarIndiceEspacial(op.itens.values());
     }
 
+    this.cacheTextos.iniciarQuadro();
+    const dpr = typeof window !== 'undefined' ? Math.max(1, Math.min(2, window.devicePixelRatio || 1)) : 1;
     const caixa = caixaVisivel(op.camera, op.tamanho);
     const margem = 120 / Math.max(ZOOM_MIN, op.camera.zoom);
     const visiveis = consultarCaixa(this.indice, caixa, margem);
@@ -249,6 +259,8 @@ export class GerenciadorItensPixi {
           ent.spriteImagem.visible = false;
           if (ent.graficos) ent.graficos.visible = true;
         }
+      } else {
+        this.atualizarTextoItem(ent, item, op.itens, op.paleta, op.camera.zoom, dpr);
       }
     }
 
@@ -265,7 +277,42 @@ export class GerenciadorItensPixi {
       this.ordemMudou = false;
     }
 
+    if (this.cacheTextos.tevePendencia()) {
+      op.aoFicarPendenteTexto?.();
+    }
+
     return visiveis;
+  }
+
+  private atualizarTextoItem(
+    ent: EntradaVisual,
+    item: Item,
+    todos: ReadonlyMap<string, Item>,
+    paleta: PaletaDaCampanha,
+    zoom: number,
+    dpr: number,
+  ): void {
+    const pedido = montarPedidoTexto(item, todos, paleta, zoom);
+    if (!pedido) {
+      if (ent.spriteTexto) ent.spriteTexto.visible = false;
+      return;
+    }
+
+    const res = this.cacheTextos.obter(pedido.pedido, zoom, dpr);
+    if (!res) {
+      if (ent.spriteTexto) ent.spriteTexto.visible = false;
+      return;
+    }
+
+    if (!ent.spriteTexto) {
+      ent.spriteTexto = new Sprite();
+      ent.container.addChild(ent.spriteTexto);
+    }
+    if (ent.spriteTexto.texture !== res.textura) ent.spriteTexto.texture = res.textura;
+    ent.spriteTexto.position.set(pedido.x, pedido.y);
+    ent.spriteTexto.width = res.larguraCss;
+    ent.spriteTexto.height = res.alturaCss;
+    ent.spriteTexto.visible = true;
   }
 
   private camadaPara(tipo: Item['tipo']): Container {
@@ -483,7 +530,130 @@ export class GerenciadorItensPixi {
       ent.container.destroy({ children: true });
     }
     this.entradas.clear();
+    this.cacheTextos.destruir();
     this.indice = null;
     this.itensAnteriores = null;
   }
+}
+
+function montarPedidoTexto(
+  item: Item,
+  todos: ReadonlyMap<string, Item>,
+  paleta: PaletaDaCampanha,
+  zoom: number,
+): { pedido: PedidoTextoPixi; x: number; y: number } | null {
+  if (item.tipo === 'texto') {
+    const pal = item.semantica && !item.caixa.fundo ? paleta : PALETA_PADRAO;
+    const fundo = fundoEfetivo(item, pal);
+    const corPadrao = item.semantica && !item.caixa.fundo && fundo ? corDoTexto(fundo) : item.texto.cor;
+    return {
+      x: 0,
+      y: 0,
+      pedido: {
+        chave: item.id,
+        versaoItem: item,
+        doc: item.doc,
+        largura: item.largura,
+        altura: item.altura,
+        padding: item.caixa.padding,
+        fonte: item.texto.fonte,
+        tamanhoFonte: item.texto.tamanho,
+        corPadrao,
+        alinhamento: item.texto.alinhamento,
+        vertical: item.texto.vertical,
+      },
+    };
+  }
+
+  if (item.tipo === 'forma') {
+    const pal = item.semantica && !item.caixa.fundo ? paleta : PALETA_PADRAO;
+    const fundo = fundoEfetivo(item, pal);
+    const corPadrao = item.semantica && !item.caixa.fundo && fundo ? corDoTexto(fundo) : item.texto.cor;
+    const util = areaUtil(item.forma, { x: 0, y: 0, largura: item.largura, altura: item.altura });
+    return {
+      x: util.x,
+      y: util.y,
+      pedido: {
+        chave: item.id,
+        versaoItem: item,
+        doc: item.doc,
+        largura: util.largura,
+        altura: util.altura,
+        padding: item.caixa.padding,
+        fonte: item.texto.fonte,
+        tamanhoFonte: item.texto.tamanho,
+        corPadrao,
+        alinhamento: item.texto.alinhamento,
+        vertical: item.texto.vertical,
+      },
+    };
+  }
+
+  if (item.tipo === 'moldura' && item.titulo.trim()) {
+    const invZoom = 1 / Math.max(ZOOM_MIN, zoom);
+    const tamFonte = 14 * invZoom;
+    return {
+      x: 0,
+      y: -26 * invZoom,
+      pedido: {
+        chave: item.id,
+        versaoItem: `${item.titulo}:${Math.round(invZoom * 100)}`,
+        doc: docDeTexto(item.titulo),
+        largura: Math.max(140 * invZoom, Math.min(item.largura, item.titulo.length * 10 * invZoom)),
+        altura: 24 * invZoom,
+        padding: 4 * invZoom,
+        fonte: 'hanken',
+        tamanhoFonte: tamFonte,
+        corPadrao: '#e8efe9',
+        alinhamento: 'esquerda',
+        vertical: 'meio',
+      },
+    };
+  }
+
+  if (item.tipo === 'seta' && item.rotulo.trim()) {
+    const cam = caminhoDaSeta(item, todos);
+    const larg = Math.max(60, Math.min(260, item.rotulo.length * 9 + 16));
+    const alt = 24;
+    return {
+      x: cam.meio[0] - larg / 2,
+      y: cam.meio[1] - alt / 2,
+      pedido: {
+        chave: item.id,
+        versaoItem: item,
+        doc: docDeTexto(item.rotulo),
+        largura: larg,
+        altura: alt,
+        padding: 4,
+        fonte: 'hanken',
+        tamanhoFonte: 13,
+        corPadrao: '#e8efe9',
+        alinhamento: 'centro',
+        vertical: 'meio',
+      },
+    };
+  }
+
+  if (item.tipo === 'ref') {
+    const texto = item.rotulo?.trim() || `${item.ref.tipo}: ${item.ref.id}`;
+    return {
+      x: 0,
+      y: 0,
+      pedido: {
+        chave: item.id,
+        versaoItem: item,
+        doc: docDeTexto(texto),
+        largura: item.largura,
+        altura: item.altura,
+        padding: 10,
+        fonte: 'hanken',
+        tamanhoFonte: 14,
+        corPadrao: '#e8efe9',
+        alinhamento: 'esquerda',
+        vertical: 'meio',
+      },
+    };
+  }
+
+  return null;
 }
