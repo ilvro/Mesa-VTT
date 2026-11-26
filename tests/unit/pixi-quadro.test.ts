@@ -20,6 +20,13 @@ import {
   CacheTextosPixi,
   extrairBlocosDeTexto,
 } from '../../src/ui/quadro/pixi/render-textos.ts';
+import { criarIndiceEspacial } from '../../src/dominio/indice-espacial.ts';
+import { caixaDaSeta } from '../../src/dominio/setas.ts';
+import {
+  distanciaPontoSeta,
+  itemNoPontoEspacial,
+} from '../../src/ui/quadro/pixi/hittest-pixi.ts';
+import { CamadaSelecaoPixi } from '../../src/ui/quadro/pixi/selecao-pixi.ts';
 import { GerenciadorItensPixi } from '../../src/ui/quadro/pixi/render-itens.ts';
 
 const origCreateImageBitmap = globalThis.createImageBitmap;
@@ -268,5 +275,55 @@ describe('pixi-quadro (QW5)', () => {
     assert.ok(cache.bytesEmUso() <= 1024 * 1024);
     assert.ok(cache.quantidade() < 6);
     cache.destruir();
+  });
+
+  it('QW8: itemNoPontoEspacial acerta curva manual, traço, item rotacionado e ordem z', () => {
+    const mold = novaMoldura({ quadroId: 'q1', x: 0, y: 0, largura: 800, altura: 600, z: 1 }, 1, 'm1');
+    const txt = {
+      ...novoTexto({ quadroId: 'q1', x: 100, y: 100, largura: 200, altura: 40, z: 2 }, 1, 't1'),
+      rotacao: 90,
+    };
+    const setaBase = novaSeta(
+      {
+        quadroId: 'q1',
+        de: { ponto: [300, 300] },
+        para: { ponto: [500, 300] },
+        rota: 'curva',
+        curva: [400, 200],
+        espessura: 6,
+        z: 3,
+      },
+      1,
+      's1',
+    );
+    const mapa = new Map<string, Item>([mold, txt, setaBase].map((i) => [i.id, i]));
+    const seta = { ...setaBase, ...caixaDaSeta(setaBase, mapa) };
+    mapa.set(seta.id, seta);
+    const indice = criarIndiceEspacial(mapa.values());
+
+    // Curva passa exatamente em [400, 200] (e não na linha reta [400, 300]).
+    assert.ok(distanciaPontoSeta(seta, mapa, { x: 400, y: 200 }) < 1);
+    assert.ok(distanciaPontoSeta(seta, mapa, { x: 400, y: 300 }) > 80);
+    assert.equal(itemNoPontoEspacial(indice, mapa, { x: 400, y: 200 }, 1)?.id, 's1');
+    assert.equal(itemNoPontoEspacial(indice, mapa, { x: 200, y: 120 }, 1)?.id, 't1');
+    assert.equal(itemNoPontoEspacial(indice, mapa, { x: 50, y: 50 }, 1, false), null);
+    assert.equal(itemNoPontoEspacial(indice, mapa, { x: 50, y: 50 }, 1, true)?.id, 'm1');
+
+    const camada = new Container();
+    const selPixi = new CamadaSelecaoPixi(camada);
+    selPixi.atualizar({
+      zoom: 1,
+      retanguloSelecao: { x: 10, y: 10, largura: 100, altura: 80 },
+      linhasGuia: [{ eixo: 'x', pos: 50, de: 0, ate: 100 }],
+      tracoEmDesenho: {
+        ferramenta: 'caneta',
+        cor: '#ffffff',
+        espessura: 4,
+        opacidade: 1,
+        pontos: [[0, 0, 0.5], [20, 20, 0.5]],
+      },
+    });
+    assert.equal(camada.children.length, 1);
+    selPixi.destruir();
   });
 });
