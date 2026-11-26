@@ -515,6 +515,10 @@ export class GerenciadorItensPixi {
     }
   }
 
+  obterIndice(): IndiceEspacial<Item> | null {
+    return this.indice;
+  }
+
   quantidadeVisual(): number {
     return this.entradas.size;
   }

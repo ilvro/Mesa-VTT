@@ -2,7 +2,58 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { strToU8, zipSync } from 'fflate';
+import type { Page } from 'playwright';
 import { iniciarAmbiente, type Ambiente } from './apoio.ts';
+
+interface ItemSnapshot {
+  id: string;
+  tipo: string;
+  x: number;
+  y: number;
+  largura?: number;
+  altura?: number;
+  larguraOriginal?: number;
+  espessura?: number;
+  rota?: string;
+  curva?: [number, number];
+  caixa?: { fundo?: string | null };
+  doc?: { content?: { content?: { text?: string; marks?: { type: string; attrs?: Record<string, unknown> }[] }[] }[] };
+}
+
+function textoDeSnapshot(it: ItemSnapshot): string {
+  return (it.doc?.content ?? [])
+    .map((p) => (p.content ?? []).map((n) => n.text ?? '').join(''))
+    .join('\n');
+}
+
+async function centroNaTela(page: Page, it: ItemSnapshot): Promise<{ x: number; y: number }> {
+  const area = await page.locator('[data-testid="area-quadro"]').boundingBox();
+  assert.ok(area);
+  const cam = await page.evaluate(() => {
+    const w = window as unknown as { __mesaQuadro?: { camera: () => { x: number; y: number; zoom: number } } };
+    return w.__mesaQuadro?.camera() ?? { x: 0, y: 0, zoom: 1 };
+  });
+  const w = it.largura ?? 120;
+  const h = it.altura ?? 60;
+  return {
+    x: area.x + (it.x + w / 2 - cam.x) * cam.zoom,
+    y: area.y + (it.y + h / 2 - cam.y) * cam.zoom,
+  };
+}
+
+async function itensDoQuadro(page: Page): Promise<ItemSnapshot[]> {
+  return page.evaluate(() => {
+    const w = window as unknown as { __mesaQuadro?: { itens: () => ItemSnapshot[] } };
+    return w.__mesaQuadro?.itens() ?? [];
+  });
+}
+
+async function selecaoDoQuadro(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const w = window as unknown as { __mesaQuadro?: { selecao: () => string[] } };
+    return w.__mesaQuadro?.selecao() ?? [];
+  });
+}
 
 let amb: Ambiente;
 before(async () => {
@@ -103,16 +154,11 @@ test('Q2a: criar 2 notas, selecionar com retângulo, mover, desfazer, refazer e 
     await page.keyboard.press('Escape');
     await page.waitForSelector('[data-testid="editor-rico"]', { state: 'detached' });
 
-    const itens = page.locator('[data-testid^="item-"]');
-    assert.equal(await itens.count(), 2);
+    await page.waitForSelector('[data-testid="canvas-quadro"]');
+    const itens1 = await itensDoQuadro(page);
+    assert.equal(itens1.length, 2);
 
-    const posAntes = await itens.evaluateAll((els) =>
-      els.map((el) => ({
-        id: el.getAttribute('data-item-id'),
-        left: parseFloat((el as HTMLElement).style.left),
-        top: parseFloat((el as HTMLElement).style.top),
-      })),
-    );
+    const posAntes = itens1.map((it) => ({ id: it.id, left: it.x, top: it.y }));
 
     // Selecionar as duas com retângulo de seleção
     await page.mouse.move(area.x + 200, area.y + 150);
@@ -126,37 +172,28 @@ test('Q2a: criar 2 notas, selecionar com retângulo, mover, desfazer, refazer e 
     await page.mouse.move(area.x + 400, area.y + 310, { steps: 5 });
     await page.mouse.up();
 
-    const posDepois = await itens.evaluateAll((els) =>
-      els.map((el) => ({
-        id: el.getAttribute('data-item-id'),
-        left: parseFloat((el as HTMLElement).style.left),
-        top: parseFloat((el as HTMLElement).style.top),
-      })),
-    );
+    const posDepois = (await itensDoQuadro(page)).map((it) => ({ id: it.id, left: it.x, top: it.y }));
     assert.ok(Math.abs(posDepois[0]!.left - (posAntes[0]!.left + 100)) < 2);
     assert.ok(Math.abs(posDepois[1]!.left - (posAntes[1]!.left + 100)) < 2);
 
     // Desfazer (Ctrl+Z)
     await page.keyboard.press('Control+z');
-    const posDesfeito = await itens.evaluateAll((els) =>
-      els.map((el) => parseFloat((el as HTMLElement).style.left)),
-    );
+    const posDesfeito = (await itensDoQuadro(page)).map((it) => it.x);
     assert.deepEqual(posDesfeito, [posAntes[0]!.left, posAntes[1]!.left]);
 
     // Refazer (Ctrl+Y)
     await page.keyboard.press('Control+y');
-    const posRefeito = await itens.evaluateAll((els) =>
-      els.map((el) => parseFloat((el as HTMLElement).style.left)),
-    );
+    const posRefeito = (await itensDoQuadro(page)).map((it) => it.x);
     assert.deepEqual(posRefeito, [posDepois[0]!.left, posDepois[1]!.left]);
 
     // Aguardar gravação adiada (400ms) e recarregar
     await page.waitForTimeout(600);
     await page.reload();
-    await page.waitForSelector('[data-testid^="item-"]');
-    const posRecarregado = await page.locator('[data-testid^="item-"]').evaluateAll((els) =>
-      els.map((el) => parseFloat((el as HTMLElement).style.left)),
-    );
+    await page.waitForFunction(() => {
+      const w = window as unknown as { __mesaQuadro?: { itens: () => unknown[] } };
+      return (w.__mesaQuadro?.itens().length ?? 0) === 2;
+    });
+    const posRecarregado = (await itensDoQuadro(page)).map((it) => it.x);
     assert.deepEqual(posRecarregado.sort((a, b) => a - b), [posDepois[0]!.left, posDepois[1]!.left].sort((a, b) => a - b));
 
     assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
@@ -203,15 +240,20 @@ test('Q2b: editar uma nota com negrito e itálico, sair, recarregar e ver igual'
     await page.keyboard.type('Italico');
     await page.keyboard.press('Escape');
 
-    await page.waitForSelector('[data-testid^="item-"] strong');
-    assert.equal(await page.locator('[data-testid^="item-"] strong').textContent(), 'Negrito');
-    assert.equal(await page.locator('[data-testid^="item-"] em').textContent(), 'Italico');
+    await page.waitForSelector('[data-testid="editor-rico"]', { state: 'detached' });
+    const nosAntes = (await itensDoQuadro(page))[0]?.doc?.content?.[0]?.content ?? [];
+    assert.ok(nosAntes.some((n) => n.text === 'Negrito' && n.marks?.some((m) => m.type === 'bold')));
+    assert.ok(nosAntes.some((n) => n.text === 'Italico' && n.marks?.some((m) => m.type === 'italic')));
 
     await page.waitForTimeout(600);
     await page.reload();
-    await page.waitForSelector('[data-testid^="item-"] strong');
-    assert.equal(await page.locator('[data-testid^="item-"] strong').textContent(), 'Negrito');
-    assert.equal(await page.locator('[data-testid^="item-"] em').textContent(), 'Italico');
+    await page.waitForFunction(() => {
+      const w = window as unknown as { __mesaQuadro?: { itens: () => unknown[] } };
+      return (w.__mesaQuadro?.itens().length ?? 0) === 1;
+    });
+    const nosDepois = (await itensDoQuadro(page))[0]?.doc?.content?.[0]?.content ?? [];
+    assert.ok(nosDepois.some((n) => n.text === 'Negrito' && n.marks?.some((m) => m.type === 'bold')));
+    assert.ok(nosDepois.some((n) => n.text === 'Italico' && n.marks?.some((m) => m.type === 'italic')));
 
     assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
   } finally {
@@ -265,17 +307,13 @@ test('Q2c: barra de formatação muda fundo de 2 notas com desfazer e destaca pa
     await page.click('[data-testid="fmt-fundo-abrir"]');
     await page.click('[data-testid="fmt-fundo-cor-7aa7f0"]');
 
-    const coresDepois = await page.locator('[data-testid^="item-"]').evaluateAll((els) =>
-      els.map((el) => (el as HTMLElement).style.backgroundColor),
-    );
-    assert.deepEqual(coresDepois, ['rgb(122, 167, 240)', 'rgb(122, 167, 240)']);
+    const coresDepois = (await itensDoQuadro(page)).map((it) => it.caixa?.fundo);
+    assert.deepEqual(coresDepois, ['#7aa7f0', '#7aa7f0']);
 
     // Desfazer volta as duas para amarelo (#f7e48c)
     await page.keyboard.press('Control+z');
-    const coresDesfeitas = await page.locator('[data-testid^="item-"]').evaluateAll((els) =>
-      els.map((el) => (el as HTMLElement).style.backgroundColor),
-    );
-    assert.deepEqual(coresDesfeitas, ['rgb(247, 228, 140)', 'rgb(247, 228, 140)']);
+    const coresDesfeitas = (await itensDoQuadro(page)).map((it) => it.caixa?.fundo);
+    assert.deepEqual(coresDesfeitas, ['#f7e48c', '#f7e48c']);
 
     // Editar primeira nota, selecionar palavra e aplicar fundo de texto amarelo
     await page.keyboard.press('Escape');
@@ -287,8 +325,10 @@ test('Q2c: barra de formatação muda fundo de 2 notas com desfazer e destaca pa
     await page.keyboard.press('Escape');
     await page.waitForSelector('[data-testid="editor-rico"]', { state: 'detached' });
 
-    const html = await page.locator('[data-testid^="item-"] .doc-rico-html').first().innerHTML();
-    assert.match(html, /background-color/i);
+    const nosDestaque = (await itensDoQuadro(page))[0]?.doc?.content?.[0]?.content ?? [];
+    assert.ok(
+      nosDestaque.some((n) => n.marks?.some((m) => m.type === 'textStyle' && m.attrs?.backgroundColor)),
+    );
 
     assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
   } finally {
@@ -338,19 +378,21 @@ test('Q2f: colar uma imagem aparece no quadro e persiste ao recarregar', async (
       window.dispatchEvent(ev);
     });
 
-    await page.waitForSelector('[data-testid^="item-"] img');
-    const naturalWidth = await page
-      .locator('[data-testid^="item-"] img')
-      .evaluate((el: HTMLImageElement) => el.naturalWidth);
-    assert.equal(naturalWidth, 120);
+    await page.waitForFunction(() => {
+      const w = window as unknown as { __mesaQuadro?: { itens: () => ItemSnapshot[] } };
+      return w.__mesaQuadro?.itens().some((it) => it.tipo === 'imagem') ?? false;
+    });
+    const imgAntes = (await itensDoQuadro(page)).find((it) => it.tipo === 'imagem');
+    assert.equal(imgAntes?.larguraOriginal, 120);
 
     await page.waitForTimeout(600);
     await page.reload();
-    await page.waitForSelector('[data-testid^="item-"] img');
-    const naturalWidthDepois = await page
-      .locator('[data-testid^="item-"] img')
-      .evaluate((el: HTMLImageElement) => el.naturalWidth);
-    assert.equal(naturalWidthDepois, 120);
+    await page.waitForFunction(() => {
+      const w = window as unknown as { __mesaQuadro?: { itens: () => ItemSnapshot[] } };
+      return w.__mesaQuadro?.itens().some((it) => it.tipo === 'imagem') ?? false;
+    });
+    const imgDepois = (await itensDoQuadro(page)).find((it) => it.tipo === 'imagem');
+    assert.equal(imgDepois?.larguraOriginal, 120);
 
     assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
   } finally {
@@ -562,10 +604,14 @@ test('E1c: atualizar do Miro -> relatório, conflito na fila e Ctrl+Z volta tudo
     });
     await page.waitForSelector('[data-testid="area-quadro"]');
     await page.waitForSelector('[data-testid="botao-atualizar-miro"]', { state: 'attached' });
-    assert.equal(await page.locator('[data-testid^="item-"]').count(), 3);
+    const itensV1 = await itensDoQuadro(page);
+    assert.equal(itensV1.length, 3);
 
     // Editar "Nota alfa" aqui (ela também muda no Miro: conflito).
-    await page.locator('[data-testid^="item-"]', { hasText: 'Nota alfa' }).dblclick();
+    const notaAlfa = itensV1.find((it) => textoDeSnapshot(it).includes('Nota alfa'));
+    assert.ok(notaAlfa);
+    const ptAlfa = await centroNaTela(page, notaAlfa);
+    await page.mouse.dblclick(ptAlfa.x, ptAlfa.y);
     await page.waitForSelector('[data-testid="editor-rico"]');
     await page.keyboard.press('Control+a');
     await page.keyboard.type('Alfa editada na Mesa');
@@ -582,7 +628,7 @@ test('E1c: atualizar do Miro -> relatório, conflito na fila e Ctrl+Z volta tudo
     assert.match(aviso ?? '', /1 novos, 1 atualizados, 1 removidos, 2 para revisar/);
 
     await page.waitForSelector('[data-testid="painel-fila-revisao"]');
-    const textos = await page.locator('[data-testid^="item-"]').allTextContents();
+    const textos = (await itensDoQuadro(page)).map(textoDeSnapshot);
     assert.equal(textos.length, 3);
     assert.ok(textos.some((t) => t.includes('Alfa editada na Mesa')));
     assert.ok(textos.some((t) => t.includes('Nota beta revisada')));
@@ -591,7 +637,7 @@ test('E1c: atualizar do Miro -> relatório, conflito na fila e Ctrl+Z volta tudo
     assert.equal(await page.locator('[data-testid="contador-revisao"]').textContent(), 'faltam 3');
 
     await page.keyboard.press('Control+z');
-    const antes = await page.locator('[data-testid^="item-"]').allTextContents();
+    const antes = (await itensDoQuadro(page)).map(textoDeSnapshot);
     assert.ok(antes.some((t) => t.includes('Nota gama')));
     assert.ok(antes.some((t) => t.includes('Nota beta') && !t.includes('revisada')));
     assert.ok(!antes.some((t) => t.includes('Nota delta')));
@@ -630,8 +676,10 @@ test('Q5c: âncora em um cartão -> emitir mesa.focar na janela -> o painel Espi
     await page.type('[data-testid="editor-rico"]', 'Gaveta com fundo falso');
     await page.keyboard.press('Escape');
 
-    const itemEl = page.locator('[data-testid^="item-"]').first();
-    await itemEl.click({ button: 'right' });
+    const cartaoQ5c = (await itensDoQuadro(page))[0];
+    assert.ok(cartaoQ5c);
+    const ptQ5c = await centroNaTela(page, cartaoQ5c);
+    await page.mouse.click(ptQ5c.x, ptQ5c.y, { button: 'right' });
     await page.waitForSelector('[data-testid="menu-do-item"]');
     await page.click('[data-testid="menu-ancorar-mapa"]');
     await page.fill('[data-testid="menu-ancorar-input"]', 'mesa:atlas/objeto/m1/escrivaninha');
@@ -692,9 +740,10 @@ test('Q5d: modo sessão com painel Quadro e os três modos (Desligado, Espiar e 
     await page.type('[data-testid="editor-rico"]', 'Segredo do balcão');
     await page.keyboard.press('Escape');
 
-    const itemEl = page.locator('[data-testid^="item-"]').first();
-
-    await itemEl.click({ button: 'right' });
+    const cartaoQ5d = (await itensDoQuadro(page))[0];
+    assert.ok(cartaoQ5d);
+    const ptQ5d = await centroNaTela(page, cartaoQ5d);
+    await page.mouse.click(ptQ5d.x, ptQ5d.y, { button: 'right' });
     await page.waitForSelector('[data-testid="menu-do-item"]');
     await page.click('[data-testid="menu-ancorar-mapa"]');
     await page.fill('[data-testid="menu-ancorar-input"]', 'mesa:atlas/objeto/m1/balcao');
@@ -820,7 +869,7 @@ test('Q5e: no modo sessão os atalhos do quadro só valem depois de clicar nele'
     await page.click('[data-testid="ferramenta-nota"]');
     const area = await page.locator('[data-testid="area-quadro"]').boundingBox();
     assert.ok(area);
-    await page.mouse.click(area.x + 300, area.y + 250);
+    await page.mouse.click(area.x + 120, area.y + 120);
     await page.waitForSelector('[data-testid="editor-rico"]');
     await page.keyboard.type('Nota Q5e');
     await page.keyboard.press('Escape');
@@ -832,24 +881,28 @@ test('Q5e: no modo sessão os atalhos do quadro só valem depois de clicar nele'
     await page.click('[data-testid="preset-com-quadro"]');
     await page.waitForSelector('[data-testid="area-quadro"]');
     const secao = page.locator('[data-testid="tela-quadro"]');
-    const itens = page.locator('[data-testid^="item-"]');
     assert.equal(await secao.getAttribute('data-ativo'), 'false', 'começa inativo na sessão');
-    const antes = await itens.count();
+    const itensQ5e = await itensDoQuadro(page);
+    const antes = itensQ5e.length;
     assert.ok(antes >= 1);
+    const ptQ5e = await centroNaTela(page, itensQ5e[0]!);
 
     // Clica no item (ativa e seleciona), depois num botão de outro painel: Delete não apaga.
-    await itens.first().click();
+    await page.mouse.click(ptQ5e.x, ptQ5e.y);
     assert.equal(await secao.getAttribute('data-ativo'), 'true');
     await page.click('[data-testid="abrir-menu-paineis"]');
     assert.equal(await secao.getAttribute('data-ativo'), 'false');
     await page.keyboard.press('Delete');
     await page.waitForTimeout(200);
-    assert.equal(await itens.count(), antes, 'Delete fora do quadro não apaga');
+    assert.equal((await itensDoQuadro(page)).length, antes, 'Delete fora do quadro não apaga');
 
     // Clica no quadro de novo: Delete apaga.
-    await itens.first().click();
+    await page.mouse.click(ptQ5e.x, ptQ5e.y);
     await page.keyboard.press('Delete');
-    await page.waitForFunction((n) => document.querySelectorAll('[data-testid^="item-"]').length < n, antes);
+    await page.waitForFunction((n) => {
+      const w = window as unknown as { __mesaQuadro?: { itens: () => unknown[] } };
+      return (w.__mesaQuadro?.itens().length ?? 0) < n;
+    }, antes);
   } finally {
     await ctx.close();
   }
@@ -901,7 +954,9 @@ test('E2b: importar só uma moldura do Miro e atualizar respeitando o filtro', a
 
     await page.waitForSelector('[data-testid="area-quadro"]');
     assert.equal(await page.locator('[data-testid="quadro-nome"]').inputValue(), 'Ato 1 (importado)');
-    const textos = await page.locator('[data-testid^="item-"]').allTextContents();
+    const extrairTextos = (lista: ItemSnapshot[]) =>
+      lista.flatMap((it) => (it.doc?.content ?? []).flatMap((b) => (b.content ?? []).map((n) => n.text ?? '')));
+    const textos = extrairTextos(await itensDoQuadro(page));
     assert.ok(textos.some((t) => t.includes('Nota a1')));
     assert.ok(textos.some((t) => t.includes('Nota a2')));
     assert.ok(!textos.some((t) => t.includes('Nota b1') || t.includes('solta')));
@@ -913,7 +968,7 @@ test('E2b: importar só uma moldura do Miro e atualizar respeitando o filtro', a
       buffer: pacote,
     });
     await page.locator('[data-testid="aviso"]', { hasText: 'Nada mudou no Miro' }).waitFor();
-    const depois = await page.locator('[data-testid^="item-"]').allTextContents();
+    const depois = extrairTextos(await itensDoQuadro(page));
     assert.ok(!depois.some((t) => t.includes('Nota b1')));
 
     assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
@@ -985,9 +1040,13 @@ test('E3a: alternar para Ler, clicar numa moldura do índice e voltar ao quadro 
     await itemB1.locator('[data-testid^="ver-no-quadro-"]').click();
     await page.waitForSelector('[data-testid="area-quadro"]');
     assert.equal(await page.locator('[data-testid="leitura-quadro"]').count(), 0);
-    const alvo = page.locator('[data-testid^="item-"]', { hasText: 'Nota b1' }).first();
-    await alvo.waitFor();
-    assert.equal(await alvo.isVisible(), true);
+    await page.waitForSelector('[data-testid="caixa-selecao"]');
+    const selE3a = await selecaoDoQuadro(page);
+    const itemSelecionado = (await itensDoQuadro(page)).find((it) => it.id === selE3a[0]);
+    const txtSel = (itemSelecionado?.doc?.content ?? [])
+      .flatMap((b) => (b.content ?? []).map((n) => n.text ?? ''))
+      .join(' ');
+    assert.ok(txtSel.includes('Nota b1'));
 
     assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
   } finally {
@@ -1157,11 +1216,8 @@ test('QW3: curvar seta arrastando o meio e ajustar espessura acima de 12 px', as
     await page.fill('[data-testid="fmt-seta-espessura"]', '24');
     await page.locator('[data-testid="fmt-seta-espessura"]').press('Enter');
 
-    const espessura = await page
-      .locator('[data-testid^="item-"] path[stroke-width]')
-      .nth(1)
-      .getAttribute('stroke-width');
-    assert.equal(espessura, '24');
+    const setaAntes = (await itensDoQuadro(page)).find((it) => it.tipo === 'seta');
+    assert.equal(setaAntes?.espessura, 24);
 
     // Arrasta a alça de curva para baixo.
     const alca = page.locator('[data-testid="alca-curva-seta"]');
@@ -1174,19 +1230,21 @@ test('QW3: curvar seta arrastando o meio e ajustar espessura acima de 12 px', as
     await page.mouse.move(cx, cy + 80, { steps: 5 });
     await page.mouse.up();
 
-    const dDepois = await page
-      .locator('[data-testid^="item-"] path[stroke-width]')
-      .nth(1)
-      .getAttribute('d');
-    assert.match(dDepois ?? '', /^M .* Q .*$/);
+    const setaDepois = (await itensDoQuadro(page)).find((it) => it.tipo === 'seta');
+    assert.equal(setaDepois?.rota, 'curva');
+    assert.ok(Array.isArray(setaDepois?.curva) && setaDepois!.curva.length === 2);
 
     // Aguarda gravação adiada (400ms), recarrega e confirma persistência.
     await page.waitForTimeout(600);
     await page.reload();
-    await page.waitForSelector('[data-testid="area-quadro"]');
-    const pathPersistido = page.locator('[data-testid^="item-"] path[stroke-width]').nth(1);
-    assert.equal(await pathPersistido.getAttribute('stroke-width'), '24');
-    assert.match((await pathPersistido.getAttribute('d')) ?? '', /^M .* Q .*$/);
+    await page.waitForFunction(() => {
+      const w = window as unknown as { __mesaQuadro?: { itens: () => ItemSnapshot[] } };
+      return w.__mesaQuadro?.itens().some((it) => it.tipo === 'seta') ?? false;
+    });
+    const setaPersistida = (await itensDoQuadro(page)).find((it) => it.tipo === 'seta');
+    assert.equal(setaPersistida?.espessura, 24);
+    assert.equal(setaPersistida?.rota, 'curva');
+    assert.ok(Array.isArray(setaPersistida?.curva) && setaPersistida!.curva.length === 2);
     assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
   } finally {
     await ctx.close();

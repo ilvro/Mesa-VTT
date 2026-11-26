@@ -1,8 +1,7 @@
 import type { Editor } from '@tiptap/core';
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef } from 'preact/hooks';
 import {
   caixaVisivel,
-  itensVisiveis,
   ZOOM_MIN,
   type Caixa,
   type Camera,
@@ -11,13 +10,22 @@ import {
 import type { LinhaGuia } from '../../dominio/alinhamento.ts';
 import type { Alca } from '../../dominio/geometria.ts';
 import { itemEhSecreto, itemPassaNoFiltro } from '../../dominio/busca-quadro.ts';
-import type { DocRico, Item as ItemModelo, TipoSemantico } from '../../dominio/quadro.ts';
-import { paletaDaCampanha } from '../../app/quadros.ts';
+import { condicoesDoItem } from '../../dominio/estado-do-mundo.ts';
+import {
+  textoPuro,
+  type DocRico,
+  type Item as ItemModelo,
+  type TipoSemantico,
+} from '../../dominio/quadro.ts';
+import { ligacoes } from '../../app/campanha.ts';
+import { estadoDoMundo, paletaDaCampanha, quadroAberto } from '../../app/quadros.ts';
+import { ancorasDoItem } from '../../app/foco-do-quadro.ts';
 import type { LadoResolvido } from '../../dominio/setas.ts';
-import { caminhoDoTraco, type PontoTraco } from '../../dominio/tracos.ts';
+import type { PontoTraco } from '../../dominio/tracos.ts';
 import { Item } from './Item.tsx';
 import { Selecao } from './Selecao.tsx';
-import { desenharLod, esquecerImagensLod } from './desenho-lod.ts';
+import type { ConfigFundoGrade } from './pixi/grade-pixi.ts';
+import { ViewportQuadro } from './pixi/viewport-quadro.ts';
 
 export interface TracoPreview {
   ferramenta: 'caneta' | 'marca-texto';
@@ -27,9 +35,31 @@ export interface TracoPreview {
   opacidade: number;
 }
 
+const FUNDO_PADRAO: ConfigFundoGrade = { cor: '#181a18', grade: 'pontos', passo: 40 };
+
+function docTemLink(doc: DocRico): boolean {
+  for (const bloco of doc.content ?? []) {
+    for (const no of bloco.content ?? []) {
+      if (no.marks?.some((m) => m.type === 'link')) return true;
+    }
+  }
+  return false;
+}
+
+function itemPrecisaOverlayInterativo(item: ItemModelo): boolean {
+  if (item.tipo === 'ref') return true;
+  if (item.tipo === 'texto' || item.tipo === 'forma') {
+    if (condicoesDoItem(item).length > 0) return true;
+    if (docTemLink(item.doc)) return true;
+    if (/\[\[[^[\]]+\]\]/.test(textoPuro(item.doc))) return true;
+  }
+  return false;
+}
+
 interface MundoProps {
   camera: Camera;
   tamanhoTela: Tamanho;
+  fundo?: ConfigFundoGrade;
   itens: ReadonlyMap<string, ItemModelo>;
   selecao: ReadonlySet<string>;
   editandoId: string | null;
@@ -38,6 +68,7 @@ interface MundoProps {
   linhasGuia?: readonly LinhaGuia[];
   tiposFiltro?: ReadonlySet<TipoSemantico>;
   esconderSegredos?: boolean;
+  onViewportPronto?: (vp: ViewportQuadro | null) => void;
   onSairEdicao: (id: string, novoDoc?: DocRico, novaAltura?: number) => void;
   onSairRotulo: (id: string, novoRotulo: string) => void;
   onSairTitulo: (id: string, novoTitulo: string) => void;
@@ -53,6 +84,7 @@ interface MundoProps {
 export function Mundo({
   camera,
   tamanhoTela,
+  fundo = FUNDO_PADRAO,
   itens,
   selecao,
   editandoId,
@@ -61,6 +93,7 @@ export function Mundo({
   linhasGuia,
   tiposFiltro,
   esconderSegredos = false,
+  onViewportPronto,
   onSairEdicao,
   onSairRotulo,
   onSairTitulo,
@@ -72,39 +105,76 @@ export function Mundo({
   onIniciarCurvaSeta,
   onResetarCurvaSeta,
 }: MundoProps) {
-  // A ordem (molduras atrás, depois z) só muda quando entra/sai item ou muda um z.
-  // Num arrasto, o mapa muda a cada movimento: reaproveitar a ordem evita reordenar o quadro todo.
-  const ordemRef = useRef<{ ids: string[]; z: number[] } | null>(null);
-  const itensOrdenados = useMemo(() => {
-    const anterior = ordemRef.current;
-    if (anterior && anterior.ids.length === itens.size) {
-      const lista: ItemModelo[] = new Array(anterior.ids.length);
-      let igual = true;
-      for (let i = 0; i < anterior.ids.length; i++) {
-        const it = itens.get(anterior.ids[i]!);
-        if (!it || it.z !== anterior.z[i]) {
-          igual = false;
-          break;
-        }
-        lista[i] = it;
-      }
-      if (igual) return lista;
-    }
-    const lista = [...itens.values()].sort(
-      (a, b) =>
-        (a.tipo === 'moldura' ? 0 : 1) - (b.tipo === 'moldura' ? 0 : 1) ||
-        a.z - b.z ||
-        (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-    );
-    ordemRef.current = { ids: lista.map((i) => i.id), z: lista.map((i) => i.z) };
-    return lista;
-  }, [itens]);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const vpRef = useRef<ViewportQuadro | null>(null);
 
-  const visiveis = useMemo(() => {
-    const caixa = caixaVisivel(camera, tamanhoTela);
-    const margem = 120 / Math.max(ZOOM_MIN, camera.zoom);
-    return itensVisiveis(itensOrdenados, caixa, margem);
-  }, [camera, tamanhoTela, itensOrdenados]);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const vp = new ViewportQuadro({
+      canvas,
+      tamanho: tamanhoTela,
+      camera,
+      fundo,
+    });
+    vpRef.current = vp;
+    onViewportPronto?.(vp);
+    void vp.iniciar();
+
+    return () => {
+      onViewportPronto?.(null);
+      vpRef.current = null;
+      vp.destruir();
+    };
+  }, []);
+
+  useEffect(() => {
+    vpRef.current?.definirTamanho(tamanhoTela);
+  }, [tamanhoTela.largura, tamanhoTela.altura]);
+
+  useEffect(() => {
+    vpRef.current?.definirFundo(fundo);
+  }, [fundo.cor, fundo.grade, fundo.passo]);
+
+  const paleta = paletaDaCampanha.value;
+  const estadoMundo = estadoDoMundo.value;
+
+  useEffect(() => {
+    vpRef.current?.sincronizarCena(
+      {
+        itens,
+        camera,
+        tamanho: tamanhoTela,
+        paleta,
+        estadoDoMundo: estadoMundo,
+        tiposFiltro,
+        esconderSegredos,
+        pular: (it) =>
+          it.id === editandoId ||
+          it.tipo === 'ref' ||
+          (selecao.size === 1 && selecao.has(it.id) && itemPrecisaOverlayInterativo(it)),
+      },
+      {
+        zoom: camera.zoom,
+        retanguloSelecao,
+        linhasGuia,
+        tracoEmDesenho,
+      },
+    );
+  }, [
+    itens,
+    camera,
+    tamanhoTela,
+    paleta,
+    estadoMundo,
+    tiposFiltro,
+    esconderSegredos,
+    editandoId,
+    selecao,
+    retanguloSelecao,
+    linhasGuia,
+    tracoEmDesenho,
+  ]);
 
   const selecionados = useMemo(() => {
     const lista: ItemModelo[] = [];
@@ -115,54 +185,61 @@ export function Mundo({
     return lista;
   }, [selecao, itens]);
 
-  const lodSimples = camera.zoom < 0.08;
-  const usarCanvasLod =
-    (camera.zoom < 0.25 && visiveis.length > 80) ||
-    (camera.zoom < 0.45 && visiveis.length > 350);
-  const canvasLodRef = useRef<HTMLCanvasElement | null>(null);
+  const listaLigacoes = ligacoes.value;
+  // Só monta nós DOM para: o item em edição, cartões `ref`/ancorados visíveis ou item único selecionado com links/condições.
+  const itensOverlay = useMemo(() => {
+    void listaLigacoes;
+    const vis = caixaVisivel(camera, tamanhoTela);
+    const margem = 120 / Math.max(ZOOM_MIN, camera.zoom);
+    const vx1 = vis.x - margem;
+    const vy1 = vis.y - margem;
+    const vx2 = vis.x + vis.largura + margem;
+    const vy2 = vis.y + vis.altura + margem;
 
-  const [, setImagensProntas] = useState(0);
-  useEffect(() => () => esquecerImagensLod(), []);
+    const lista: ItemModelo[] = [];
+    const vistos = new Set<string>();
+    const adicionar = (it: ItemModelo | undefined) => {
+      if (!it || vistos.has(it.id)) return;
+      if (esconderSegredos && itemEhSecreto(it)) return;
+      vistos.add(it.id);
+      lista.push(it);
+    };
 
-  useEffect(() => {
-    if (!usarCanvasLod) return;
-    const canvas = canvasLodRef.current;
-    if (!canvas) return;
-    desenharLod(canvas, {
-      camera,
-      tamanho: tamanhoTela,
-      itens: visiveis,
-      todos: itens,
-      pular: (it) => it.tipo === 'moldura' || selecao.has(it.id) || editandoId === it.id,
-      paleta: paletaDaCampanha.value,
-      tiposFiltro,
-      esconderSegredos,
-      aoCarregarImagem: () => setImagensProntas((n) => n + 1),
-    });
-  });
-
-  const itensDom = usarCanvasLod
-    ? visiveis.filter(
-        (it) => it.tipo === 'moldura' || selecao.has(it.id) || editandoId === it.id,
-      )
-    : visiveis;
+    if (editandoId) adicionar(itens.get(editandoId));
+    if (selecao.size === 1) {
+      const unicoId = selecao.values().next().value;
+      const unico = unicoId ? itens.get(unicoId) : undefined;
+      if (unico && itemPrecisaOverlayInterativo(unico)) adicionar(unico);
+    }
+    const quadroId = quadroAberto.value?.id ?? null;
+    for (const it of itens.values()) {
+      const temAncora = quadroId !== null && ancorasDoItem(quadroId, it.id).length > 0;
+      if (it.tipo !== 'ref' && !temAncora) continue;
+      if (
+        it.x + it.largura >= vx1 &&
+        it.x <= vx2 &&
+        it.y + it.altura >= vy1 &&
+        it.y <= vy2
+      ) {
+        adicionar(it);
+      }
+    }
+    return lista;
+  }, [itens, editandoId, selecao, camera, tamanhoTela, esconderSegredos, listaLigacoes]);
 
   return (
     <>
-      {usarCanvasLod ? (
-        <canvas
-          ref={canvasLodRef}
-          data-testid="canvas-lod"
-          style={{
-            position: 'absolute',
-            left: '0px',
-            top: '0px',
-            width: `${tamanhoTela.largura}px`,
-            height: `${tamanhoTela.altura}px`,
-            pointerEvents: 'none',
-          }}
-        />
-      ) : null}
+      <canvas
+        ref={canvasRef}
+        data-testid="canvas-quadro"
+        style={{
+          position: 'absolute',
+          inset: '0px',
+          width: '100%',
+          height: '100%',
+          display: 'block',
+        }}
+      />
       <div
         class="mundo-quadro"
         data-testid="mundo-quadro"
@@ -171,16 +248,16 @@ export function Mundo({
           transformOrigin: '0 0',
         }}
       >
-        {itensDom.map((item) => {
-          if (esconderSegredos && itemEhSecreto(item)) return null;
-          const esmaecido = tiposFiltro && tiposFiltro.size > 0 && !itemPassaNoFiltro(item, tiposFiltro);
+        {itensOverlay.map((item) => {
+          const esmaecido =
+            tiposFiltro && tiposFiltro.size > 0 && !itemPassaNoFiltro(item, tiposFiltro);
           const el = (
             <Item
               key={item.id}
               item={item}
               todosItens={itens}
               zoom={camera.zoom}
-              lodSimples={lodSimples}
+              lodSimples={false}
               editando={editandoId === item.id}
               onSairEdicao={(novoDoc, novaAltura) => onSairEdicao(item.id, novoDoc, novaAltura)}
               onSairRotulo={(novoRotulo) => onSairRotulo(item.id, novoRotulo)}
@@ -195,75 +272,18 @@ export function Mundo({
             </div>
           );
         })}
-      {tracoEmDesenho && tracoEmDesenho.pontos.length > 0 ? (
-        <svg
-          class="traco-preview"
-          style={{
-            position: 'absolute',
-            left: '0px',
-            top: '0px',
-            width: '1px',
-            height: '1px',
-            overflow: 'visible',
-            pointerEvents: 'none',
-            opacity: tracoEmDesenho.opacidade,
-          }}
-        >
-          <path d={caminhoDoTraco(tracoEmDesenho)} fill={tracoEmDesenho.cor} />
-        </svg>
-      ) : null}
-      <Selecao
-        selecionados={selecionados}
-        todosItens={itens}
-        zoom={camera.zoom}
-        retanguloSelecao={retanguloSelecao}
-        onIniciarRedimensionar={onIniciarRedimensionar}
-        onIniciarGirar={onIniciarGirar}
-        onIniciarConector={onIniciarConector}
-        onIniciarPontaSeta={onIniciarPontaSeta}
-        onIniciarCurvaSeta={onIniciarCurvaSeta}
-        onResetarCurvaSeta={onResetarCurvaSeta}
-      />
-      {linhasGuia && linhasGuia.length > 0 ? (
-        <svg
-          class="linhas-guia"
-          style={{
-            position: 'absolute',
-            left: '0px',
-            top: '0px',
-            width: '1px',
-            height: '1px',
-            overflow: 'visible',
-            pointerEvents: 'none',
-          }}
-        >
-          {linhasGuia.map((l, idx) =>
-            l.eixo === 'x' ? (
-              <line
-                key={idx}
-                x1={l.pos}
-                y1={l.de}
-                x2={l.pos}
-                y2={l.ate}
-                stroke="var(--acento)"
-                strokeWidth={1 / Math.max(0.05, camera.zoom)}
-                strokeDasharray={`${4 / Math.max(0.05, camera.zoom)} ${4 / Math.max(0.05, camera.zoom)}`}
-              />
-            ) : (
-              <line
-                key={idx}
-                x1={l.de}
-                y1={l.pos}
-                x2={l.ate}
-                y2={l.pos}
-                stroke="var(--acento)"
-                strokeWidth={1 / Math.max(0.05, camera.zoom)}
-                strokeDasharray={`${4 / Math.max(0.05, camera.zoom)} ${4 / Math.max(0.05, camera.zoom)}`}
-              />
-            ),
-          )}
-        </svg>
-      ) : null}
+        <Selecao
+          selecionados={selecionados}
+          todosItens={itens}
+          zoom={camera.zoom}
+          retanguloSelecao={null}
+          onIniciarRedimensionar={onIniciarRedimensionar}
+          onIniciarGirar={onIniciarGirar}
+          onIniciarConector={onIniciarConector}
+          onIniciarPontaSeta={onIniciarPontaSeta}
+          onIniciarCurvaSeta={onIniciarCurvaSeta}
+          onResetarCurvaSeta={onResetarCurvaSeta}
+        />
       </div>
     </>
   );

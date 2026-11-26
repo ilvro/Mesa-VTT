@@ -122,6 +122,7 @@ import { BuscaNoQuadro } from './BuscaNoQuadro.tsx';
 import { FilaDeRevisao } from './FilaDeRevisao.tsx';
 import { LinhaDoTempo } from './LinhaDoTempo.tsx';
 import { Mundo, type TracoPreview } from './Mundo.tsx';
+import type { ViewportQuadro } from './pixi/viewport-quadro.ts';
 import { MenuDoItem } from './MenuDoItem.tsx';
 import { PainelDeModelos } from './PainelDeModelos.tsx';
 import { carimbarModeloNoQuadro, modeloEscolhidoId } from '../../app/modelos.ts';
@@ -136,7 +137,6 @@ import { PainelEspiar } from './PainelEspiar.tsx';
 import {
   CAMERA_PADRAO,
   emCampoDeTexto,
-  estiloGrade,
   gravarCamera,
   gravarConfigTracos,
   gravarModoRoda,
@@ -278,6 +278,10 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
   }
   const rafMoverRef = useRef<number | null>(null);
   const ultimoUpDireitoEmRef = useRef(0);
+  const viewportRef = useRef<ViewportQuadro | null>(null);
+  const acharItemNoPonto = (p: Ponto, permitirMoldura = false): Item | null =>
+    viewportRef.current?.itemNoPonto(p, permitirMoldura, esconderSegredos.value) ??
+    itemNoPonto(itens.value, p, permitirMoldura);
   const moverPendenteRef = useRef<{
     clientX: number;
     clientY: number;
@@ -432,6 +436,28 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
       ed.off('transaction', atualizar);
     };
   }, [editorAtivo.value]);
+
+  useEffect(() => {
+    const w = window as unknown as {
+      __mesaQuadro?: {
+        quadroId: string;
+        camera: () => Camera;
+        selecao: () => string[];
+        itens: () => Item[];
+        visiveis: () => number;
+      };
+    };
+    w.__mesaQuadro = {
+      quadroId: q.id,
+      camera: () => camera.value,
+      selecao: () => [...selecao.value],
+      itens: () => [...itens.value.values()],
+      visiveis: () => viewportRef.current?.gerenciadorItens.quantidadeVisiveis() ?? 0,
+    };
+    return () => {
+      if (w.__mesaQuadro?.quadroId === q.id) delete w.__mesaQuadro;
+    };
+  }, [q.id]);
 
   useEffect(() => {
     camera.value = lerCameraSalva(q.id);
@@ -1025,7 +1051,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
     if (ferramenta.value === 'seta') {
       const agora = Date.now();
       const maxZ = Math.max(0, ...[...itens.value.values()].map((i) => i.z));
-      const origem = itemNoPonto(itens.value, p, true);
+      const origem = acharItemNoPonto(p, true);
       const de: Ponta = origem
         ? { itemId: origem.id, lado: 'auto' }
         : { ponto: [p.x, p.y] };
@@ -1056,7 +1082,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
         ?.closest?.('[data-item-id]')
         ?.getAttribute('data-item-id');
       const alvoDom = idAlvoDom ? (itens.value.get(idAlvoDom) ?? null) : null;
-      const alvo = alvoDom ?? itemNoPonto(itens.value, p, true);
+      const alvo = alvoDom ?? acharItemNoPonto(p, true);
       if (alvo) {
         if (e.shiftKey) {
           const prox = new Set(selecao.value);
@@ -1303,7 +1329,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
       const atual = itens.value.get(g.id);
       if (!atual || atual.tipo !== 'seta') return;
       const campo = g.tipo === 'criar-seta' ? 'para' : g.ponta;
-      const sob = itemNoPonto(itens.value, p, true);
+      const sob = acharItemNoPonto(p, true);
       const novaPonta: Ponta =
         sob && (g.tipo !== 'criar-seta' || sob.id !== g.origemItemId)
           ? { itemId: sob.id, lado: 'auto' }
@@ -1416,7 +1442,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
     const p = pontoMundoDe({ clientX, clientY });
     const idAlvoDom = alvoEl?.closest?.('[data-item-id]')?.getAttribute('data-item-id');
     const alvoDom = idAlvoDom ? (itens.value.get(idAlvoDom) ?? null) : null;
-    const alvo = alvoDom ?? itemNoPonto(itens.value, p, true);
+    const alvo = alvoDom ?? acharItemNoPonto(p, true);
     if (alvo && !selecao.value.has(alvo.id)) {
       selecao.value = new Set([alvo.id]);
     }
@@ -1662,7 +1688,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
       ?.closest?.('[data-item-id]')
       ?.getAttribute('data-item-id');
     const alvoDom = idAlvoDom ? (itens.value.get(idAlvoDom) ?? null) : null;
-    const alvo = alvoDom ?? itemNoPonto(itens.value, p, true);
+    const alvo = alvoDom ?? acharItemNoPonto(p, true);
     if (alvo && alvo.grupoId && grupoAberto.value !== alvo.grupoId) {
       grupoAberto.value = alvo.grupoId;
       selecao.value = new Set([alvo.id]);
@@ -2063,7 +2089,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
         )}
         data-testid="area-quadro"
         style={{
-          ...estiloGrade(q.fundo, camera.value),
+          backgroundColor: q.fundo.cor,
           display: modoQuadro.value === 'ler' ? 'none' : undefined,
         }}
         onPointerDown={aoPressionarArea}
@@ -2107,6 +2133,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
         <Mundo
           camera={camera.value}
           tamanhoTela={tamanhoTela.value}
+          fundo={q.fundo}
           itens={itens.value}
           selecao={selecao.value}
           editandoId={editandoId.value}
@@ -2115,6 +2142,9 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
           linhasGuia={linhasGuia.value}
           tiposFiltro={tiposFiltro.value}
           esconderSegredos={esconderSegredos.value}
+          onViewportPronto={(vp) => {
+            viewportRef.current = vp;
+          }}
           onSairEdicao={aoSairEdicao}
           onSairRotulo={aoSairRotulo}
           onSairTitulo={aoSairTitulo}
