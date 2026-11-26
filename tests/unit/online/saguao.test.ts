@@ -70,8 +70,18 @@ test('urlDoAvatarDiscord e estadoDoSaguao respeitam baseAvatar customizada (prox
   assert.equal(res.membros[0]?.avatarUrl, '/.proxy/cdn/avatars/10/hash123.png?size=128');
 });
 
-test('retratoDaFicha resolve caminhos relativos contra a base do Dossiê', () => {
+test('retratoDaFicha resolve caminhos relativos e iniciados por / contra a base do Dossiê', () => {
   const f = { id: 'f1', name: 'Muirenn', tokenImage: 'portraits/muirenn.webp' };
   assert.equal(retratoDaFicha(f, 'https://123.discordsays.com/.proxy/Dossie/'), 'https://123.discordsays.com/.proxy/Dossie/portraits/muirenn.webp');
+  assert.equal(
+    retratoDaFicha({ id: 'f1b', name: 'Muirenn', tokenImage: '/assets/vigilia/token-muirenn-portrait.png' }, 'https://123.discordsays.com/.proxy/Dossie/'),
+    'https://123.discordsays.com/.proxy/Dossie/assets/vigilia/token-muirenn-portrait.png',
+  );
+  assert.equal(
+    retratoDaFicha({ id: 'f1c', name: 'Muirenn', tokenImage: '/assets/vigilia/token-muirenn-portrait.png' }, 'https://ilvro.github.io/Dossie/'),
+    'https://ilvro.github.io/Dossie/assets/vigilia/token-muirenn-portrait.png',
+  );
   assert.equal(retratoDaFicha({ id: 'f2', name: 'A', tokenImage: 'data:image/png;base64,abc' }, 'https://x/Dossie/'), 'data:image/png;base64,abc');
+  assert.equal(retratoDaFicha({ id: 'f3', name: 'B', tokenImage: '/.proxy/Dossie/assets/a.png' }, 'https://x/Dossie/'), '/.proxy/Dossie/assets/a.png');
+  assert.equal(retratoDaFicha({ id: 'f4', name: 'C', tokenImage: '   ' }, 'https://x/Dossie/'), null);
 });

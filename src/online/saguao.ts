@@ -40,10 +40,12 @@ export function nomeDaFicha(ficha: FichaDaSala): string {
 }
 
 export function retratoDaFicha(ficha: FichaDaSala, baseDossie?: string): string | null {
-  if (typeof ficha.tokenImage !== 'string' || !ficha.tokenImage) return null;
-  const img = ficha.tokenImage;
-  if (/^(data:|blob:|https?:\/\/|\/)/i.test(img) || !baseDossie) return img;
-  try { return new URL(img, baseDossie).href; } catch { return img; }
+  if (typeof ficha.tokenImage !== 'string') return null;
+  const img = ficha.tokenImage.trim();
+  if (!img) return null;
+  if (/^(data:|blob:|https?:\/\/|\/\/|\/\.proxy\/)/i.test(img) || !baseDossie) return img;
+  const relativo = img.startsWith('/') ? img.slice(1) : img;
+  try { return new URL(relativo, baseDossie).href; } catch { return img; }
 }
 
 /**

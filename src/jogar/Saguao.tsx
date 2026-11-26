@@ -1,5 +1,5 @@
 /** Saguão da mesa online (R12b): capa e nome da campanha, membros presentes e escolha de personagem. */
-import { useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { iniciais } from '../online/feed.ts';
 import type { FichaDaSala } from '../online/protocolo.ts';
 import {
@@ -29,14 +29,25 @@ export interface SaguaoProps {
 
 function Avatar({ m }: { m: MembroNoSaguao }) {
   const [falhou, setFalhou] = useState(false);
+  useEffect(() => { setFalhou(false); }, [m.avatarUrl]);
   if (m.avatarUrl && !falhou) {
     return <img class="saguao-avatar" src={m.avatarUrl} alt="" onError={() => setFalhou(true)} />;
   }
   return <span class="saguao-avatar saguao-iniciais" aria-hidden="true">{iniciais(m.nome)}</span>;
 }
 
+function RetratoDaFicha({ retrato, nome }: { retrato: string | null; nome: string }) {
+  const [falhou, setFalhou] = useState(false);
+  useEffect(() => { setFalhou(false); }, [retrato]);
+  if (retrato && !falhou) {
+    return <img class="saguao-ficha-retrato" src={retrato} alt="" onError={() => setFalhou(true)} />;
+  }
+  return <span class="saguao-ficha-retrato saguao-iniciais" aria-hidden="true">{iniciais(nome)}</span>;
+}
+
 export function MembroLinha({ m }: { m: MembroNoSaguao }) {
   const [retratoFalhou, setRetratoFalhou] = useState(false);
+  useEffect(() => { setRetratoFalhou(false); }, [m.personagemRetrato]);
   return (
     <li class="saguao-membro" data-testid="saguao-membro" data-papel={m.papel}>
       <Avatar m={m} />
@@ -157,9 +168,7 @@ export function Saguao({
                         aria-pressed={ativa}
                         onClick={() => aoEscolher(f.id)}
                       >
-                        {retrato
-                          ? <img class="saguao-ficha-retrato" src={retrato} alt="" />
-                          : <span class="saguao-ficha-retrato saguao-iniciais" aria-hidden="true">{iniciais(nome)}</span>}
+                        <RetratoDaFicha retrato={retrato} nome={nome} />
                         <span class="saguao-ficha-nome">{nome}</span>
                         {ativa && <span class="saguao-ficha-selo">Escolhido</span>}
                       </button>

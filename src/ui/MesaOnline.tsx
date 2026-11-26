@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { campanhaAtiva } from '../app/campanha.ts';
+import { baseDoApp } from '../app/inventario.ts';
 import { abrirMesaOnline, confirmarSemNevoa, conexaoOnline, estadoDaPonte, fecharMesaOnline, salaConectadaId } from '../app/online.ts';
 import {
   abrirLoginDiscord, aguardandoLoginExterno, cancelarLoginExterno, carregarSessaoOnline, erroDoLogin, sairDoOnline, sessaoOnline,
@@ -228,7 +229,7 @@ function PainelDoMestre({ sessao }: { sessao: string }) {
           <h3 class="faixa pequena">Conectados ({ponte.membros.length})</h3>
           <ul class="lista online-membros saguao-membros" data-testid="online-membros">
             {ponte.membros.length === 0 && <li class="meta">Ninguém por aqui ainda.</li>}
-            {estadoDoSaguao(ponte.membros, ponte.fichas, false).membros.map(m => <MembroLinha key={m.discordId} m={m} />)}
+            {estadoDoSaguao(ponte.membros, ponte.fichas, false, baseDoApp('ficha')).membros.map(m => <MembroLinha key={m.discordId} m={m} />)}
           </ul>
         </>
       )}
