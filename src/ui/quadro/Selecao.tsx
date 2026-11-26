@@ -12,6 +12,8 @@ interface SelecaoProps {
   onIniciarGirar: (e: PointerEvent) => void;
   onIniciarConector: (itemId: string, lado: LadoResolvido, e: PointerEvent) => void;
   onIniciarPontaSeta: (setaId: string, ponta: 'de' | 'para', e: PointerEvent) => void;
+  onIniciarCurvaSeta?: (setaId: string, e: PointerEvent) => void;
+  onResetarCurvaSeta?: (setaId: string) => void;
 }
 
 const CONECTORES: { lado: LadoResolvido; left: string; top: string; dx: number; dy: number }[] = [
@@ -57,6 +59,8 @@ export function Selecao({
   onIniciarGirar,
   onIniciarConector,
   onIniciarPontaSeta,
+  onIniciarCurvaSeta,
+  onResetarCurvaSeta,
 }: SelecaoProps) {
   const invZoom = 1 / Math.max(ZOOM_MIN, zoom);
   const todosTravados = selecionados.length > 0 && selecionados.every((i) => i.travado);
@@ -181,6 +185,28 @@ export function Selecao({
               onIniciarPontaSeta(unicaSeta.id, 'para', e);
             }}
           />
+          {unicaSeta.rota === 'curva' || unicaSeta.rota === 'reta' ? (
+            <div
+              class="alca-ponta-seta alca-curva-seta"
+              data-testid="alca-curva-seta"
+              title="Arrastar para curvar (duplo clique para centralizar)"
+              style={{
+                left: `${caminhoSeta.meio[0]}px`,
+                top: `${caminhoSeta.meio[1]}px`,
+                width: `${11 * invZoom}px`,
+                height: `${11 * invZoom}px`,
+                borderWidth: `${2 * invZoom}px`,
+              }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                onIniciarCurvaSeta?.(unicaSeta.id, e);
+              }}
+              onDblClick={(e) => {
+                e.stopPropagation();
+                onResetarCurvaSeta?.(unicaSeta.id);
+              }}
+            />
+          ) : null}
         </>
       ) : null}
 

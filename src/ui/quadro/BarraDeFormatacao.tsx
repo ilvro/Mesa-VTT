@@ -409,15 +409,28 @@ export function BarraDeFormatacao({
             }}
           />
           <input
+            type="range"
+            data-testid="fmt-seta-espessura-range"
+            title="Espessura (1–48)"
+            min={1}
+            max={48}
+            style={{ width: '68px' }}
+            value={valorComum(setas.map((s) => s.espessura)) ?? 2}
+            onInput={(e) => {
+              const espessura = Math.max(1, Math.min(48, Number(e.currentTarget.value) || 2));
+              alterarSetas('Espessura da seta', () => ({ espessura }));
+            }}
+          />
+          <input
             type="number"
             class="fmt-input-num"
             data-testid="fmt-seta-espessura"
-            title="Espessura (1–12)"
+            title="Espessura (1–48)"
             min={1}
-            max={12}
+            max={48}
             value={valorComum(setas.map((s) => s.espessura)) ?? 2}
             onChange={(e) => {
-              const espessura = Math.max(1, Math.min(12, Number(e.currentTarget.value) || 2));
+              const espessura = Math.max(1, Math.min(48, Number(e.currentTarget.value) || 2));
               alterarSetas('Espessura da seta', () => ({ espessura }));
             }}
           />

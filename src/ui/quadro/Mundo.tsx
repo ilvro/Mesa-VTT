@@ -46,6 +46,8 @@ interface MundoProps {
   onIniciarGirar: (e: PointerEvent) => void;
   onIniciarConector: (itemId: string, lado: LadoResolvido, e: PointerEvent) => void;
   onIniciarPontaSeta: (setaId: string, ponta: 'de' | 'para', e: PointerEvent) => void;
+  onIniciarCurvaSeta?: (setaId: string, e: PointerEvent) => void;
+  onResetarCurvaSeta?: (setaId: string) => void;
 }
 
 export function Mundo({
@@ -67,6 +69,8 @@ export function Mundo({
   onIniciarGirar,
   onIniciarConector,
   onIniciarPontaSeta,
+  onIniciarCurvaSeta,
+  onResetarCurvaSeta,
 }: MundoProps) {
   // A ordem (molduras atrás, depois z) só muda quando entra/sai item ou muda um z.
   // Num arrasto, o mapa muda a cada movimento: reaproveitar a ordem evita reordenar o quadro todo.
@@ -217,6 +221,8 @@ export function Mundo({
         onIniciarGirar={onIniciarGirar}
         onIniciarConector={onIniciarConector}
         onIniciarPontaSeta={onIniciarPontaSeta}
+        onIniciarCurvaSeta={onIniciarCurvaSeta}
+        onResetarCurvaSeta={onResetarCurvaSeta}
       />
       {linhasGuia && linhasGuia.length > 0 ? (
         <svg

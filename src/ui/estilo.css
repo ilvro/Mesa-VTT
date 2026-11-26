@@ -817,6 +817,11 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   border: 2px solid var(--acento);
   cursor: move;
   pointer-events: auto;
+  z-index: 10000;
+}
+.alca-curva-seta {
+  background: var(--acento);
+  border-color: var(--superficie-1);
 }
 .item-seta-rotulo,
 .item-seta-rotulo-input {
@@ -1344,6 +1349,11 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   border: 2px solid var(--acento);
   cursor: move;
   pointer-events: auto;
+  z-index: 10000;
+}
+.alca-curva-seta {
+  background: var(--acento);
+  border-color: var(--superficie-1);
 }
 .item-seta-rotulo,
 .item-seta-rotulo-input {
@@ -2149,6 +2159,10 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 
 .sessao-zona { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .sessao-zona-direita { margin-left: auto; padding-left: 16px; border-left: 1px solid var(--linha); }
+.sessao-controle-jogadores { display: inline-flex; border: 1px solid var(--linha); border-radius: 999px; background: var(--fundo); padding: 2px; gap: 2px; }
+.sessao-controle-btn { border: 0; background: transparent; color: var(--texto-suave); font: inherit; font-size: 0.85rem; padding: 4px 10px; border-radius: 999px; cursor: pointer; transition: background 0.15s, color 0.15s; }
+.sessao-controle-btn:hover { color: var(--texto); }
+.sessao-controle-btn.ativo { background: var(--acento); color: var(--sobre-acento, #fff); font-weight: 600; }
 .sessao-guia { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; padding: 6px 14px; background: var(--superficie); border-bottom: 1px solid var(--linha); font-size: 12.5px; }
 .sessao-guia-passos { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; padding: 0; list-style: none; }
 .sessao-guia-passo.feito { opacity: 0.5; }

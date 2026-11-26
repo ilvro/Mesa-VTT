@@ -164,6 +164,7 @@ type Gesto =
   | { tipo: 'criar-moldura'; inicio: Ponto; id: string }
   | { tipo: 'criar-seta'; id: string; chave: string; origemItemId?: string }
   | { tipo: 'ponta-seta'; id: string; chave: string; ponta: 'de' | 'para' }
+  | { tipo: 'curva-seta'; id: string; chave: string }
   | {
       tipo: 'desenhar';
       ferramenta: 'caneta' | 'marca-texto';
@@ -817,6 +818,47 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
     gestoRef.current = { tipo: 'ponta-seta', id: setaId, chave, ponta };
   };
 
+  const iniciarCurvaSeta = (setaId: string, e: PointerEvent) => {
+    const el = areaRef.current;
+    if (!el) return;
+    el.setPointerCapture(e.pointerId);
+    const chave = `curva-seta-${setaId}-${Date.now()}`;
+    historico.agrupar(chave);
+    gestoRef.current = { tipo: 'curva-seta', id: setaId, chave };
+  };
+
+  const resetarCurvaSeta = (setaId: string) => {
+    const atual = itens.value.get(setaId);
+    if (!atual || atual.tipo !== 'seta' || atual.curva === undefined) return;
+    const setaSemCurva = { ...atual, curva: undefined };
+    const novaCaixa = caixaDaSeta(setaSemCurva, itens.value);
+    executar({
+      rotulo: 'Centralizar curva da seta',
+      ops: [
+        {
+          alterar: [
+            {
+              id: atual.id,
+              antes: {
+                curva: atual.curva,
+                x: atual.x,
+                y: atual.y,
+                largura: atual.largura,
+                altura: atual.altura,
+                atualizadoEm: atual.atualizadoEm,
+              },
+              depois: {
+                curva: undefined,
+                ...novaCaixa,
+                atualizadoEm: Date.now(),
+              },
+            },
+          ],
+        },
+      ],
+    });
+  };
+
   const aoPressionar = (e: PointerEvent) => {
     const ehBotaoMeio = e.button === 1;
     const ehBotaoDireito = e.button === 2;
@@ -1296,6 +1338,45 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
         },
         g.chave,
       );
+      return;
+    }
+
+    if (g.tipo === 'curva-seta') {
+      const atual = itens.value.get(g.id);
+      if (!atual || atual.tipo !== 'seta') return;
+      const novaCurva: [number, number] = [Math.round(p.x), Math.round(p.y)];
+      const setaAtualizada = { ...atual, rota: 'curva' as const, curva: novaCurva };
+      const novaCaixa = caixaDaSeta(setaAtualizada, itens.value);
+      executar(
+        {
+          rotulo: 'Curvar seta',
+          ops: [
+            {
+              alterar: [
+                {
+                  id: atual.id,
+                  antes: {
+                    rota: atual.rota,
+                    curva: atual.curva,
+                    x: atual.x,
+                    y: atual.y,
+                    largura: atual.largura,
+                    altura: atual.altura,
+                    atualizadoEm: atual.atualizadoEm,
+                  },
+                  depois: {
+                    rota: 'curva',
+                    curva: novaCurva,
+                    ...novaCaixa,
+                    atualizadoEm: Date.now(),
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        g.chave,
+      );
     }
   };
 
@@ -1562,6 +1643,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
       g.tipo === 'redimensionar' ||
       g.tipo === 'girar' ||
       g.tipo === 'ponta-seta' ||
+      g.tipo === 'curva-seta' ||
       g.tipo === 'borracha'
     ) {
       historico.agrupar(null);
@@ -2043,6 +2125,8 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
           onIniciarGirar={iniciarGirar}
           onIniciarConector={iniciarConector}
           onIniciarPontaSeta={iniciarPontaSeta}
+          onIniciarCurvaSeta={iniciarCurvaSeta}
+          onResetarCurvaSeta={resetarCurvaSeta}
         />
         ) : null}
 

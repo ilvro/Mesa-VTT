@@ -1122,3 +1122,73 @@ test('QW1: arrastar com o botão direito move o quadro e clique direito parado a
     await ctx.close();
   }
 });
+
+test('QW3: curvar seta arrastando o meio e ajustar espessura acima de 12 px', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  const erros: string[] = [];
+  page.on('pageerror', (e) => erros.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') erros.push(m.text()); });
+
+  try {
+    await page.goto(`${amb.origem}/Mesa/`);
+    await page.waitForSelector('[data-testid="campanha-select"]');
+    await page.click('[data-testid="aba-campanhas"]');
+    await page.fill('[data-testid="nova-campanha-nome"]', 'Campanha QW3');
+    await page.click('[data-testid="criar-campanha"]');
+    await page.waitForSelector('[data-testid="tela-entidades"]');
+    await page.click('[data-testid="aba-quadros"]');
+    await page.waitForSelector('[data-testid="tela-quadros"]');
+    await page.fill('[data-testid="novo-quadro-nome"]', 'Linhas Curvas');
+    await page.click('[data-testid="criar-quadro"]');
+    await page.waitForSelector('[data-testid="area-quadro"]');
+
+    const area = (await page.locator('[data-testid="area-quadro"]').boundingBox())!;
+
+    // Desenha uma seta livre no centro da área do quadro.
+    await page.click('[data-testid="ferramenta-seta"]');
+    await page.mouse.move(area.x + 250, area.y + 250);
+    await page.mouse.down();
+    await page.mouse.move(area.x + 550, area.y + 250, { steps: 5 });
+    await page.mouse.up();
+
+    // Seleciona a seta criada (ao soltar, já volta para selecionar).
+    await page.waitForSelector('[data-testid="fmt-seta-espessura"]');
+    await page.fill('[data-testid="fmt-seta-espessura"]', '24');
+    await page.locator('[data-testid="fmt-seta-espessura"]').press('Enter');
+
+    const espessura = await page
+      .locator('[data-testid^="item-"] path[stroke-width]')
+      .nth(1)
+      .getAttribute('stroke-width');
+    assert.equal(espessura, '24');
+
+    // Arrasta a alça de curva para baixo.
+    const alca = page.locator('[data-testid="alca-curva-seta"]');
+    await alca.waitFor();
+    const box = (await alca.boundingBox())!;
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx, cy + 80, { steps: 5 });
+    await page.mouse.up();
+
+    const dDepois = await page
+      .locator('[data-testid^="item-"] path[stroke-width]')
+      .nth(1)
+      .getAttribute('d');
+    assert.match(dDepois ?? '', /^M .* Q .*$/);
+
+    // Aguarda gravação adiada (400ms), recarrega e confirma persistência.
+    await page.waitForTimeout(600);
+    await page.reload();
+    await page.waitForSelector('[data-testid="area-quadro"]');
+    const pathPersistido = page.locator('[data-testid^="item-"] path[stroke-width]').nth(1);
+    assert.equal(await pathPersistido.getAttribute('stroke-width'), '24');
+    assert.match((await pathPersistido.getAttribute('d')) ?? '', /^M .* Q .*$/);
+    assert.deepEqual(erros.filter((e) => !/__ponte|Failed to load resource|favicon/.test(e)), []);
+  } finally {
+    await ctx.close();
+  }
+});
