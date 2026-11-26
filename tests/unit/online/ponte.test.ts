@@ -507,7 +507,7 @@ test('sala.fichas: sem a sala conectada é recusada; depois do bem-vindo traz fi
   const { dossie, emitir, conexoes, ponte } = comDossie();
   const antes = await dossie.pedir('sala.fichas', {}, { prazoMs: 100 });
   assert.equal(antes.ok, false);
-  emitir({ ...bemVindo([membro('1', 'mestre'), membro('2', 'jogador')]), fichas: [fichaX('a'), fichaX('b')], revs: { a: 2, b: 1 }, donos: { a: '2', b: '1' } } as MensagemDaSala);
+  emitir({ ...bemVindo([membro('1', 'mestre'), { ...membro('2', 'jogador'), personagem: 'a' }]), fichas: [fichaX('a'), fichaX('b')], revs: { a: 2, b: 1 }, donos: { a: '2', b: '1' } } as MensagemDaSala);
   assert.deepEqual(conexoes, [true], 'a Mesa avisa que a sala abriu');
   const r = await dossie.pedir('sala.fichas', {}) as unknown as { ok: boolean; resposta: Record<string, any> };
   assert.equal(r.ok, true);
@@ -516,7 +516,7 @@ test('sala.fichas: sem a sala conectada é recusada; depois do bem-vindo traz fi
   assert.deepEqual(r.resposta.donos, { a: '2', b: '1' });
   assert.deepEqual(r.resposta.eu, { discordId: '1', nome: 'Mestre' });
   assert.equal(r.resposta.nome, 'teste-1');
-  assert.deepEqual(r.resposta.membros.map((m: { discordId: string }) => m.discordId), ['1', '2']);
+  assert.deepEqual(r.resposta.membros.map((m: { discordId: string; personagem: string | null }) => `${m.discordId}:${m.personagem}`), ['1:null', '2:a']);
   assert.equal(r.resposta.nomes['2'], '2');
   ponte.fechar();
   assert.deepEqual(conexoes, [true, false], 'fechar a ponte avisa que a sala saiu');

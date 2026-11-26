@@ -459,9 +459,14 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     return {
       ok: true, nome: nome ?? 'Sala', ...(euMesmo ? { eu: { discordId: euMesmo.discordId, nome: euMesmo.nome } } : {}),
       fichas: [...fichasDaSala.values()], revs: Object.fromEntries(revsDaSala), donos: Object.fromEntries(donosDaSala),
-      membros: estado.membros.map(m => ({ discordId: m.discordId, nome: m.nome, papel: m.papel })), nomes: Object.fromEntries(nomes),
+      membros: estado.membros.map(m => ({ discordId: m.discordId, nome: m.nome, papel: m.papel, personagem: m.personagem })), nomes: Object.fromEntries(nomes),
     };
   });
+  const avisarSalaAtualizada = (): void => {
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.setItem('mesa:sala-atualizada', String(Date.now()));
+    } catch { /* ignora */ }
+  };
   dossie.atender('sala.salvar-ficha', dados => {
     const { ficha, rev } = dados as { ficha: FichaDaSala; rev?: number };
     const revAtual = revsDaSala.get(ficha.id) ?? (typeof rev === 'number' ? rev : 0);
@@ -473,6 +478,7 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     const { fichaId, dono } = dados as { fichaId: string; dono: string };
     if (!conectada || !cliente.enviar({ tipo: 'ficha.entregar', fichaId, dono })) return { ok: false, motivo: 'A sala não está conectada.' };
     donosDaSala.set(fichaId, dono);
+    avisarSalaAtualizada();
     return { ok: true };
   });
 
@@ -484,6 +490,7 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     else if (!querPublicar && estado.publicando) projetor.postMessage({ tipo: 'tchau' });
     estado.publicando = querPublicar;
     mudou();
+    avisarSalaAtualizada();
   }
 
   soltar.push(
@@ -511,6 +518,7 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
       nomes.set(m.autor.discordId, m.autor.nome);
       fato('sala.ficha-atualizada', { ficha: m.ficha, rev: m.rev, ...(m.conflito ? { conflito: true } : {}), ...(m.dono ? { dono: m.dono } : {}) }, m.autor);
       mudou();
+      avisarSalaAtualizada();
     }),
     cliente.aoMudarEstado(e => {
       if (e === 'caiu' && estado.publicando) { estado.publicando = false; }
@@ -539,6 +547,7 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
       pedirParaOuvir(false);
       if (conectada) { conectada = false; avisarConexao(); }
       fechada = true;
+      avisarSalaAtualizada();
       for (const f of soltar) f();
       dossie.fechar();
       largarGestosPendentes();
