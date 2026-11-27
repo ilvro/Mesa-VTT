@@ -27,7 +27,7 @@ Regras para o executor: as mesmas da [fase-4.md](fase-4.md) (`src/dominio` puro 
 
 ## Bloco 1 — Miniaturas Vivas e Inspeção UV na Mesa
 
-### M8.1a — Ateliê publica miniatura da pista na campanha e leitor de handouts na Mesa  ⬜
+### M8.1a — Ateliê publica miniatura da pista na campanha e leitor de handouts na Mesa  ✅
 Objetivo: toda pista criada ou arquivada pelo Ateliê tem miniatura em `entidade.retrato`, e a Mesa sabe ler os assados `normal` e `uv` do banco compartilhado `mesa-handouts-v1`.
 Depende de: —.
 Ler: `Atelie/src/mesa.js`, `Atelie/src/data/exchange.js` (como grava em `mesa-handouts-v1`), `Atlas/src/data/pistas.ts` (como o Atlas lê `mesa-handouts-v1`: stores `handouts` e `bakes`), `Atlas/src/app/campanha.ts` (`sincronizarMapaComCampanha`).
@@ -42,6 +42,7 @@ Como:
 Testes: `obterPistaDoAtelie` com `fake-indexeddb` lê metadados e blobs `normal`/`uv` de `mesa-handouts-v1` e retorna `null` quando ausente; `registrarPista` no Ateliê salva `retrato`.
 Pronto quando: pistas novas e antigas do Ateliê fornecem imagem de prévia e camada UV para a Mesa.
 Commit: `(feature) publish atelie handout thumbnails and read handout bakes in mesa`
+Nota: implementado `gerarMiniatura` e gravação de `retrato` em `registrarPista` (`Atelie/src/mesa.js`, com fallback de leitura do bake `normal` de `mesa-handouts-v1`), e leitor `Mesa/src/app/pistas-atelie.ts` (`idDaPistaDoAtelie`, `obterPistaDoAtelie`, `miniaturaDaPista` com cache leve por `IDBFactory` e `limparCacheDePistas`), cobertos por testes em `Atelie/tests/mesa.test.js` e `Mesa/tests/unit/pistas-atelie.test.ts`.
 
 ---
 
