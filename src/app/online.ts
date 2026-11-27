@@ -12,7 +12,7 @@ import { barramentoDaMesa } from './barramento.ts';
 import { campanhaAtiva, entidades } from './campanha.ts';
 
 /** No máximo isto de mensagens de gesto (`emGesto`, `peca-gesto`) por segundo; a última sempre sai. */
-export const GESTOS_POR_SEGUNDO = 15;
+export const GESTOS_POR_SEGUNDO = 25;
 const INTERVALO_GESTO_MS = Math.ceil(1000 / GESTOS_POR_SEGUNDO);
 /** Quanto a ponte espera a resposta do `blob.tem` antes de subir o blob assim mesmo. */
 const ESPERA_BLOB_TEM_MS = 5000;

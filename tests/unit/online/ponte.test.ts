@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { criarPonte, fichaEhAmeaca, LIMITE_SOM_BYTES, type CanalLocal } from '../../../src/app/online.ts';
+import { criarPonte, fichaEhAmeaca, GESTOS_POR_SEGUNDO, LIMITE_SOM_BYTES, type CanalLocal } from '../../../src/app/online.ts';
 import { descomprimirEstado } from '../../../src/online/estado-comprimido.ts';
 import { criarBarramento } from '#mesa';
 import type { ClienteDaSala } from '../../../src/online/cliente.ts';
@@ -233,7 +233,7 @@ function relogioFalso() {
   return { agora: () => t, agendar, avancar };
 }
 
-test('gestos saem no máximo 15 por segundo e o último sempre sai', async () => {
+test('gestos saem dentro do limite por segundo e o último sempre sai', async () => {
   const r = relogioFalso();
   const { atlas, enviadas, ponte } = montar('teste-1', { agora: r.agora, agendar: r.agendar });
   // 100 quadros de 10 ms (1 s de arrasto) da mesma peça, alternando com o estado de gesto
@@ -244,9 +244,9 @@ test('gestos saem no máximo 15 por segundo e o último sempre sai', async () =>
     await ponte.esvaziar();
   }
   const pecas = () => enviadas.filter(m => (m as { msg: { tipo: string } }).msg.tipo === 'peca-gesto').map(m => (m as { msg: { position: number[] } }).msg.position[0]);
-  assert.ok(pecas().length <= 16, `saíram ${pecas().length} peca-gesto em 1 s`);
+  assert.ok(pecas().length <= GESTOS_POR_SEGUNDO + 1, `saíram ${pecas().length} peca-gesto em 1 s`);
   assert.ok(pecas().length >= 10);
-  assert.ok(enviadas.filter(m => (m as { msg: { tipo: string } }).msg.tipo === 'estado').length <= 16);
+  assert.ok(enviadas.filter(m => (m as { msg: { tipo: string } }).msg.tipo === 'estado').length <= GESTOS_POR_SEGUNDO + 1);
   r.avancar(2000); // o gesto parou: o que esperava sai
   await ponte.esvaziar();
   assert.equal(pecas().at(-1), 99, 'o último quadro do gesto sai, não fica parado no meio');
