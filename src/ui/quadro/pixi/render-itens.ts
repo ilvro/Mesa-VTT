@@ -7,8 +7,8 @@ import {
 } from '../../../dominio/camera.ts';
 import { itemEhSecreto, itemPassaNoFiltro } from '../../../dominio/busca-quadro.ts';
 import {
+  avaliarCondicao,
   condicoesDoItem,
-  itemAtendeCondicoes,
   type EstadoDoMundo,
 } from '../../../dominio/estado-do-mundo.ts';
 import {
@@ -33,6 +33,7 @@ import { desenharTracoPixi } from './render-tracos.ts';
 
 interface EntradaVisual {
   item: Item;
+  condicoes: string[];
   container: Container;
   spriteImagem?: Sprite;
   spriteTexto?: Sprite;
@@ -187,6 +188,7 @@ export class GerenciadorItensPixi {
   private readonly cacheImagens: CacheImagensPixi;
   private readonly cacheTextos: CacheTextosPixi;
   private readonly entradas = new Map<string, EntradaVisual>();
+  private visiveisAnteriores = new Set<string>();
   private itensAnteriores: ReadonlyMap<string, Item> | null = null;
   private paletaAnterior: PaletaDaCampanha | null = null;
   private indice: IndiceEspacial<Item> | null = null;
@@ -235,16 +237,15 @@ export class GerenciadorItensPixi {
         continue;
       }
 
-      conjuntoVisiveis.add(item.id);
       const ent = this.entradas.get(item.id);
       if (!ent) continue;
 
+      conjuntoVisiveis.add(item.id);
       ent.container.visible = true;
       const passaFiltro = !temFiltro || itemPassaNoFiltro(item, op.tiposFiltro!);
-      const conds = condicoesDoItem(item);
       const condOk =
-        conds.length > 0 && op.estadoDoMundo
-          ? itemAtendeCondicoes(item, op.estadoDoMundo)
+        ent.condicoes.length > 0 && op.estadoDoMundo
+          ? ent.condicoes.every((c) => avaliarCondicao(c, op.estadoDoMundo!))
           : true;
       ent.container.alpha = (passaFiltro ? 1 : 0.15) * (condOk ? 1 : 0.35);
 
@@ -264,11 +265,13 @@ export class GerenciadorItensPixi {
       }
     }
 
-    for (const [id, ent] of this.entradas) {
+    for (const id of this.visiveisAnteriores) {
       if (!conjuntoVisiveis.has(id)) {
-        ent.container.visible = false;
+        const ent = this.entradas.get(id);
+        if (ent) ent.container.visible = false;
       }
     }
+    this.visiveisAnteriores = conjuntoVisiveis;
 
     if (this.ordemMudou) {
       this.camadaMolduras.sortChildren();
@@ -292,6 +295,10 @@ export class GerenciadorItensPixi {
     zoom: number,
     dpr: number,
   ): void {
+    if ((item.tipo === 'texto' || item.tipo === 'forma') && item.texto.tamanho * zoom < 2) {
+      if (ent.spriteTexto) ent.spriteTexto.visible = false;
+      return;
+    }
     const pedido = montarPedidoTexto(item, todos, paleta, zoom);
     if (!pedido) {
       if (ent.spriteTexto) ent.spriteTexto.visible = false;
@@ -373,6 +380,7 @@ export class GerenciadorItensPixi {
     paleta: PaletaDaCampanha,
   ): EntradaVisual {
     const container = new Container();
+    container.visible = false;
     container.zIndex = item.z;
     const graficos = new Graphics();
     container.addChild(graficos);
@@ -386,7 +394,13 @@ export class GerenciadorItensPixi {
       container.addChild(spriteImagem);
     }
 
-    const ent: EntradaVisual = { item, container, graficos, spriteImagem };
+    const ent: EntradaVisual = {
+      item,
+      condicoes: condicoesDoItem(item),
+      container,
+      graficos,
+      spriteImagem,
+    };
     this.atualizarEntrada(ent, item, todos, paleta);
     return ent;
   }
@@ -397,6 +411,7 @@ export class GerenciadorItensPixi {
     todos: ReadonlyMap<string, Item>,
     paleta: PaletaDaCampanha,
   ): void {
+    ent.condicoes = condicoesDoItem(item);
     ent.container.zIndex = item.z;
     aplicarRotacaoEPosicao(ent.container, item);
     const g = ent.graficos!;
@@ -534,6 +549,7 @@ export class GerenciadorItensPixi {
       ent.container.destroy({ children: true });
     }
     this.entradas.clear();
+    this.visiveisAnteriores.clear();
     this.cacheTextos.destruir();
     this.indice = null;
     this.itensAnteriores = null;
