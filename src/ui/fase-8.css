@@ -1,0 +1,69 @@
+/* Fase 8 — Miniaturas vivas de Mapas (Atlas) e Pistas (Ateliê) nos cartões do Quadro e da Leitura */
+
+.item-ref-miniatura {
+  width: 100%;
+  border-radius: var(--raio);
+  overflow: hidden;
+  border: 1px solid var(--borda);
+  background: var(--superficie-2);
+  flex: none;
+}
+
+.item-ref-miniatura img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.item-ref-miniatura-mapa {
+  aspect-ratio: 16 / 10;
+}
+
+.item-ref-miniatura-mapa img {
+  object-fit: cover;
+}
+
+.item-ref-miniatura-pista {
+  max-height: 180px;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--fundo), var(--superficie-2) 55%);
+}
+
+.item-ref-miniatura-pista img {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 166px;
+  object-fit: contain;
+  border-radius: 3px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.52);
+}
+
+/* Na coluna de leitura, empilha o cabeçalho acima da miniatura sem afetar cartões sem prévia */
+.leitura-ref.leitura-ref-com-miniatura {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.leitura-ref-cabecalho {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.leitura-ref.leitura-ref-com-miniatura .item-ref-miniatura-mapa {
+  max-height: 220px;
+}
+
+.leitura-ref.leitura-ref-com-miniatura .item-ref-miniatura-pista {
+  max-height: 220px;
+}
+
+.leitura-ref.leitura-ref-com-miniatura .item-ref-miniatura-pista img {
+  max-height: 206px;
+}

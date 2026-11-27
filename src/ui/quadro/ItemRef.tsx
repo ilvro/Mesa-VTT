@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'preact/hooks';
+import type { Entidade, Ref } from '#mesa';
 import { abrirNoApp } from '../../app/barramento.ts';
 import { entidades } from '../../app/campanha.ts';
+import { idDaPistaDoAtelie, miniaturaDaPista } from '../../app/pistas-atelie.ts';
 import { recursosDasFichas } from '../../app/recursos-das-fichas.ts';
 import { abrirEntidade } from '../../app/rotas.ts';
 import { entidadePorRef } from '../../dominio/cenas.ts';
@@ -13,9 +15,88 @@ import { ehRefDeEntidadeDaMesa } from '../../dominio/notas.ts';
 import { decorarMarcadores } from '../../dominio/paleta.ts';
 import type { Item } from '../../dominio/quadro.ts';
 import { fracao, recursosDaEntidade, tomDoPv } from '../../dominio/recursos-das-fichas.ts';
+import '../fase-8.css';
 
 interface ItemRefProps {
   item: Extract<Item, { tipo: 'ref' }>;
+}
+
+function criarUrlDeBlob(blob: Blob): string | null {
+  try {
+    if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+      return URL.createObjectURL(blob);
+    }
+  } catch {
+    // ambiente sem suporte a createObjectURL
+  }
+  return null;
+}
+
+function revogarUrlDeBlob(url: string | null): void {
+  if (!url) return;
+  try {
+    URL.revokeObjectURL(url);
+  } catch {
+    // ignora
+  }
+}
+
+export function useMiniaturaDoRef(
+  entidade: Entidade | undefined,
+  ref: Ref,
+): { url: string | null; ehPista: boolean } {
+  const [url, setUrl] = useState<string | null>(null);
+
+  const docIdDaRef = idDaPistaDoAtelie(ref);
+  const ehPista = entidade ? entidade.tipo === 'pista' : docIdDaRef !== null;
+  const suportaMiniatura = entidade
+    ? entidade.tipo === 'lugar' || entidade.tipo === 'pista'
+    : docIdDaRef !== null;
+
+  const docIdAtelie = ehPista
+    ? (docIdDaRef ??
+        entidade?.refs.map(idDaPistaDoAtelie).find((id): id is string => id !== null) ??
+        null)
+    : null;
+
+  const retrato = suportaMiniatura ? entidade?.retrato : undefined;
+
+  useEffect(() => {
+    if (!suportaMiniatura) {
+      setUrl(null);
+      return;
+    }
+
+    if (retrato) {
+      const objUrl = criarUrlDeBlob(retrato);
+      setUrl(objUrl);
+      return () => revogarUrlDeBlob(objUrl);
+    }
+
+    if (!docIdAtelie) {
+      setUrl(null);
+      return;
+    }
+
+    let ativo = true;
+    let objUrl: string | null = null;
+    void miniaturaDaPista(docIdAtelie).then((blob) => {
+      if (!ativo) return;
+      if (!blob) {
+        setUrl(null);
+        return;
+      }
+      objUrl = criarUrlDeBlob(blob);
+      setUrl(objUrl);
+    });
+
+    return () => {
+      ativo = false;
+      revogarUrlDeBlob(objUrl);
+    };
+  }, [suportaMiniatura, retrato, docIdAtelie]);
+
+  return { url, ehPista };
 }
 
 function Retrato({ nome, blob }: { nome: string; blob?: Blob }) {
@@ -43,6 +124,7 @@ function Retrato({ nome, blob }: { nome: string; blob?: Blob }) {
 export function ItemRef({ item }: ItemRefProps) {
   const listaEntidades = entidades.value;
   const entidade = entidadePorRef(item.ref, listaEntidades);
+  const { url: urlMiniatura, ehPista } = useMiniaturaDoRef(entidade, item.ref);
 
   const aoClicarConteudo = (e: MouseEvent) => {
     const alvo = e.target as HTMLElement | null;
@@ -90,6 +172,18 @@ export function ItemRef({ item }: ItemRefProps) {
           <span class="meta">{nomeTipo}</span>
         </div>
         <div class="item-ref-nome">{item.ref.id}</div>
+        {urlMiniatura ? (
+          <div
+            class={
+              ehPista
+                ? 'item-ref-miniatura item-ref-miniatura-pista'
+                : 'item-ref-miniatura item-ref-miniatura-mapa'
+            }
+            data-testid={`miniatura-${item.id}`}
+          >
+            <img src={urlMiniatura} alt="Prévia" loading="lazy" />
+          </div>
+        ) : null}
         <div class="item-ref-acoes" onPointerDown={(e) => e.stopPropagation()}>
           <button
             type="button"
@@ -128,12 +222,25 @@ export function ItemRef({ item }: ItemRefProps) {
       }}
     >
       <div class="item-ref-topo">
-        <Retrato nome={entidade.nome} blob={entidade.retrato} />
+        {!urlMiniatura ? <Retrato nome={entidade.nome} blob={entidade.retrato} /> : null}
         <div class="item-ref-titulos">
           <div class="item-ref-nome">{entidade.nome}</div>
           <div class="meta">{ROTULO_DO_TIPO[entidade.tipo].singular}</div>
         </div>
       </div>
+
+      {urlMiniatura ? (
+        <div
+          class={
+            ehPista
+              ? 'item-ref-miniatura item-ref-miniatura-pista'
+              : 'item-ref-miniatura item-ref-miniatura-mapa'
+          }
+          data-testid={`miniatura-${item.id}`}
+        >
+          <img src={urlMiniatura} alt={entidade.nome} loading="lazy" />
+        </div>
+      ) : null}
 
       {recursos ? (
         <div class="item-ref-recursos" data-testid={`recursos-${item.id}`}>

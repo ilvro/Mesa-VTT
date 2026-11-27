@@ -15,6 +15,8 @@ import { PALETA_PADRAO, corComOpacidade, corDoTexto, fundoEfetivo } from '../../
 import type { Item } from '../../dominio/quadro.ts';
 import { roteiroDoQuadro } from '../../dominio/roteiro-do-quadro.ts';
 import { abrirMenuContexto, acoesParaEntidade, acoesParaRef } from '../MenuDeContexto.tsx';
+import '../fase-8.css';
+import { useMiniaturaDoRef } from './ItemRef.tsx';
 import { ConteudoDecorado } from './TextoDecorado.tsx';
 
 interface LeituraProps {
@@ -43,27 +45,45 @@ function ImagemDeLeitura({ item }: { item: Extract<Item, { tipo: 'imagem' }> }) 
 
 function CartaoDeRef({ item }: { item: Extract<Item, { tipo: 'ref' }> }) {
   const entidade = entidadePorRef(item.ref, entidades.value);
+  const { url: urlMiniatura, ehPista } = useMiniaturaDoRef(entidade, item.ref);
+
+  const miniaturaEl = urlMiniatura ? (
+    <div
+      class={
+        ehPista
+          ? 'item-ref-miniatura item-ref-miniatura-pista'
+          : 'item-ref-miniatura item-ref-miniatura-mapa'
+      }
+      data-testid={`miniatura-${item.id}`}
+    >
+      <img src={urlMiniatura} alt={entidade?.nome ?? 'Prévia'} loading="lazy" />
+    </div>
+  ) : null;
+
   if (!entidade) {
-    return (
-      <div
-        class="leitura-ref"
-        onContextMenu={(ev) => abrirMenuContexto(ev, acoesParaRef(item.ref), item.ref.id)}
-      >
+    const cabecalho = (
+      <>
         <span class="selo">{NOME_DO_APP[item.ref.app] ?? item.ref.app}</span>
         <strong>{item.ref.id}</strong>
         <span class="meta">{NOME_DO_TIPO_DE_REF[item.ref.tipo] ?? item.ref.tipo}</span>
         <button type="button" class="botao-pilula" onClick={() => void abrirNoApp(item.ref)}>
           Abrir no app ↗
         </button>
+      </>
+    );
+    return (
+      <div
+        class={miniaturaEl ? 'leitura-ref leitura-ref-com-miniatura' : 'leitura-ref'}
+        onContextMenu={(ev) => abrirMenuContexto(ev, acoesParaRef(item.ref), item.ref.id)}
+      >
+        {miniaturaEl ? <div class="leitura-ref-cabecalho">{cabecalho}</div> : cabecalho}
+        {miniaturaEl}
       </div>
     );
   }
   const refExterno = entidade.refs.find((r) => r.app !== 'mesa');
-  return (
-    <div
-      class="leitura-ref"
-      onContextMenu={(ev) => abrirMenuContexto(ev, acoesParaEntidade(entidade), entidade.nome)}
-    >
+  const cabecalho = (
+    <>
       <strong>{entidade.nome}</strong>
       <span class="meta">{ROTULO_DO_TIPO[entidade.tipo].singular}</span>
       {refExterno ? (
@@ -74,6 +94,15 @@ function CartaoDeRef({ item }: { item: Extract<Item, { tipo: 'ref' }> }) {
       <button type="button" class="botao-pilula" onClick={() => abrirEntidade(entidade.id)}>
         Abrir
       </button>
+    </>
+  );
+  return (
+    <div
+      class={miniaturaEl ? 'leitura-ref leitura-ref-com-miniatura' : 'leitura-ref'}
+      onContextMenu={(ev) => abrirMenuContexto(ev, acoesParaEntidade(entidade), entidade.nome)}
+    >
+      {miniaturaEl ? <div class="leitura-ref-cabecalho">{cabecalho}</div> : cabecalho}
+      {miniaturaEl}
     </div>
   );
 }

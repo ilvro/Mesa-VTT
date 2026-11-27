@@ -5,6 +5,7 @@ import { filtroTipo, selecionadaId } from '../app/campanha.ts';
 import { entidadesDestacadas } from '../app/assistente-slot.ts';
 import { abrirEntidade } from '../app/rotas.ts';
 import { abrirNoApp } from '../app/barramento.ts';
+import { idDaPistaDoAtelie, miniaturaDaPista } from '../app/pistas-atelie.ts';
 import { ativarCena } from '../app/sessao.ts';
 import { ehRefDeEntidadeDaMesa } from '../dominio/notas.ts';
 import {
@@ -126,24 +127,56 @@ export function ArteDoTipo({ tipo, encontro }: { tipo: TipoEntidade; encontro?: 
 function Miniatura({ e }: { e: Entidade }) {
   const [url, setUrl] = useState<string | null>(null);
   const encontro = ehEncontro(e);
+  const docIdAtelie =
+    e.tipo === 'pista'
+      ? (e.refs.map(idDaPistaDoAtelie).find((id): id is string => id !== null) ?? null)
+      : null;
 
   useEffect(() => {
-    if (!e.retrato) {
+    const criarUrl = (blob: Blob): string | null => {
+      try {
+        if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+          return URL.createObjectURL(blob);
+        }
+      } catch {
+        // ignora
+      }
+      return null;
+    };
+
+    const revogar = (u: string | null) => {
+      if (!u) return;
+      try { URL.revokeObjectURL(u); } catch { /* ignora */ }
+    };
+
+    if (e.retrato) {
+      const u = criarUrl(e.retrato);
+      setUrl(u);
+      return () => revogar(u);
+    }
+
+    if (!docIdAtelie) {
       setUrl(null);
       return;
     }
-    try {
-      if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
-        const u = URL.createObjectURL(e.retrato);
-        setUrl(u);
-        return () => {
-          try { URL.revokeObjectURL(u); } catch { /* ignora */ }
-        };
+
+    let ativo = true;
+    let objUrl: string | null = null;
+    void miniaturaDaPista(docIdAtelie).then(blob => {
+      if (!ativo) return;
+      if (!blob) {
+        setUrl(null);
+        return;
       }
-    } catch {
-      setUrl(null);
-    }
-  }, [e.retrato]);
+      objUrl = criarUrl(blob);
+      setUrl(objUrl);
+    });
+
+    return () => {
+      ativo = false;
+      revogar(objUrl);
+    };
+  }, [e.retrato, docIdAtelie]);
 
   if (url) {
     return (

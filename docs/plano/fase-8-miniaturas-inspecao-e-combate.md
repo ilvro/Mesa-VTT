@@ -46,7 +46,7 @@ Nota: implementado `gerarMiniatura` e gravação de `retrato` em `registrarPista
 
 ---
 
-### M8.1b — Miniatura viva de Mapas e Pistas nos cartões do Quadro e da Coleção  ⬜
+### M8.1b — Miniatura viva de Mapas e Pistas nos cartões do Quadro e da Coleção  ✅
 Objetivo: cartões `ItemRef` de mapas (`lugar`) e documentos (`pista`) no Quadro (e na Leitura do Quadro) exibem a miniatura viva do mapa ou da pista no corpo do cartão.
 Depende de: M8.1a.
 Ler: `Mesa/src/ui/quadro/ItemRef.tsx`, `Mesa/src/ui/quadro/LeituraDoQuadro.tsx`, `Mesa/src/ui/GradeDeColecao.tsx`, `Mesa/src/ui/estilo.css`.
@@ -62,6 +62,7 @@ Como:
 Testes: e2e em `quadro-cartoes.test.ts`: um `ItemRef` de `lugar` com `retrato` e um `ItemRef` de `pista` exibem `.item-ref-miniatura img` no quadro.
 Pronto quando: arrastar um Lugar (mapa) ou Pista (documento) para o Quadro mostra a miniatura visual do mapa/documento dentro do cartão.
 Commit: `(feature) live map and handout thumbnails on board cards`
+Nota: estilos isolados em `Mesa/src/ui/fase-8.css` (importado em `ItemRef.tsx` e `LeituraDoQuadro.tsx`) para evitar conflito com edições paralelas em `estilo.css`; implementado `useMiniaturaDoRef` em `ItemRef.tsx` (reaproveitado em `LeituraDoQuadro.tsx`) com suporte a `entidade.retrato` e fallback assíncrono via `miniaturaDaPista`, omissão do avatar circular `Retrato` quando a miniatura grande está visível, e fallback `miniaturaDaPista` na `GradeDeColecao.tsx`. O botão "Inspecionar (UV)" fica para a `M8.1c` junto ao modal.
 
 ---
 
