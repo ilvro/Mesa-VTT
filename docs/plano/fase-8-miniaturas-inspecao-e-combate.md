@@ -93,7 +93,7 @@ Nota: estilos isolados em `Mesa/src/ui/fase-8.css` (sem tocar em `estilo.css` ne
 
 ## Bloco 2 — Painel de Combate / Iniciativa Integrado ao Modo Sessão
 
-### M8.2a — Contrato `mesa-core` e sincronização de iniciativa no Atlas  ⬜
+### M8.2a — Contrato `mesa-core` e sincronização de iniciativa no Atlas  ✅
 Objetivo: o Atlas publica o estado da iniciativa e dos combatentes do mapa aberto no barramento e atende comandos de iniciativa vindos da Mesa.
 Depende de: —.
 Ler: `Atlas/mesa-core/src/eventos.ts`, `Atlas/src/domain/iniciativa.ts`, `Atlas/src/ui/FaixaDeIniciativa.tsx`, `Atlas/src/ui/Dock.tsx` (como o Atlas inicia, avança e encerra a iniciativa), `Atlas/src/app/fichas.ts` (`ajustarRecursosDaPeca`, `recursosDaPeca`).
@@ -122,10 +122,11 @@ Como:
 Testes: `ponte-iniciativa.test.ts`: iniciar combate, avançar turno, definir valor, ajustar PV de peça com HP próprio e de peça ligada a ficha, e encerrar combate pelo barramento.
 Pronto quando: o Atlas publica `atlas.iniciativa` e responde a todos os comandos de `atlas.iniciativa-acao`.
 Commit: `(feature) sync atlas combat initiative and token hp over the event bus`
+Nota: implementado sobre canal dedicado `BroadcastChannel('atlas:combate')` em `Atlas/src/app/ponte-iniciativa.ts` (ligado em `Atlas/src/ui/Editor.tsx` via `iniciarPonteDeIniciativa`) para evitar conflito com edições paralelas em `mesa-core/src/eventos.ts` e `src/app/app.ts`; coberto por `Atlas/tests/unit/ponte-iniciativa.test.ts`.
 
 ---
 
-### M8.2b — Domínio e estado de combate na Mesa  ⬜
+### M8.2b — Domínio e estado de combate na Mesa  ✅
 Objetivo: a Mesa mantém o estado reativo do combate combinando os dados do Atlas, os participantes da cena ativa e os recursos das fichas do Dossiê.
 Depende de: M8.2a.
 Ler: `Mesa/src/app/recursos-das-fichas.ts`, `Mesa/src/app/sessao.ts`, `Mesa/src/dominio/cenas.ts`, `Mesa/src/app/barramento.ts`.
@@ -144,6 +145,7 @@ Como:
 Testes: `montarEstadoDeCombate` com PJs e ameaças numeradas, priorização de recursos e `interpretarEntradaPv`.
 Pronto quando: `npm run typecheck` e `npm test` passam na Mesa.
 Commit: `(feature) combat state domain and reactive synchronization in mesa`
+Nota: sincronizado via `BroadcastChannel('atlas:combate')` (alinhado ao canal adotado na `M8.2a`) em `src/app/combate.ts` com contagem de referência (`iniciarCombateCanal` / `pararCombateCanal`), acompanhamento automático da ficha da vez (`seguirTurnoNasFichas`) e abertura/seleção da aba via `mudarEscolhas`; `montarEstadoDeCombate` em `src/dominio/combate.ts` aceita tanto `Record<string, Recursos>` quanto `ReadonlyMap<string, Recursos>` (formato do signal `recursosDasFichas`), coberto por `tests/unit/combate.test.ts`.
 
 ---
 
