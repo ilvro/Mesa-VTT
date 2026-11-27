@@ -326,4 +326,106 @@ describe('pixi-quadro (QW5)', () => {
     assert.equal(camada.children.length, 1);
     selPixi.destruir();
   });
+
+  it('QW10: sincroniza e faz culling rápido em quadro massivo com 7.500 itens e 4.000 traços', () => {
+    const cache = new CacheImagensPixi({
+      aoCarregar: () => {},
+      carregarBlob: async () => null,
+    });
+    const textos = new CacheTextosPixi(2 * 1024 * 1024);
+    const camadaMolduras = new Container();
+    const camadaItens = new Container();
+    const camadaSetas = new Container();
+    const ger = new GerenciadorItensPixi({
+      camadaMolduras,
+      camadaItens,
+      camadaSetas,
+      cacheImagens: cache,
+      cacheTextos: textos,
+    });
+
+    const mapa = new Map<string, Item>();
+    for (let i = 0; i < 7500; i++) {
+      const col = i % 100;
+      const lin = Math.floor(i / 100);
+      const it =
+        i % 3 === 0
+          ? novaForma({ quadroId: 'q-mass', x: col * 300, y: lin * 200, largura: 200, altura: 120, z: i + 1 }, 1, `it-${i}`)
+          : novoTexto({ quadroId: 'q-mass', x: col * 300, y: lin * 200, largura: 200, altura: 120, z: i + 1 }, 1, `it-${i}`);
+      mapa.set(it.id, it);
+    }
+    for (let i = 0; i < 4000; i++) {
+      const col = i % 100;
+      const lin = Math.floor(i / 100);
+      const tr = novoTraco(
+        {
+          quadroId: 'q-mass',
+          x: col * 300 + 20,
+          y: lin * 200 + 20,
+          largura: 80,
+          altura: 40,
+          pontos: [[0, 0, 0.5], [40, 20, 0.5], [80, 40, 0.5]],
+          z: 7500 + i + 1,
+        },
+        1,
+        `tr-${i}`,
+      );
+      mapa.set(tr.id, tr);
+    }
+
+    ger.sincronizar({
+      itens: mapa,
+      camera: { x: 0, y: 0, zoom: 1 },
+      tamanho: { largura: 1280, altura: 720 },
+      paleta: PALETA_PADRAO,
+      esconderSegredos: false,
+    });
+    assert.ok(ger.quantidadeVisiveis() < 200);
+
+    // Pan subsequente com o mesmo mapa não reconstrói itens e faz culling via índice espacial.
+    const tPan0 = performance.now();
+    for (let passo = 1; passo <= 10; passo++) {
+      ger.sincronizar({
+        itens: mapa,
+        camera: { x: passo * 400, y: passo * 300, zoom: 1 },
+        tamanho: { largura: 1280, altura: 720 },
+        paleta: PALETA_PADRAO,
+        esconderSegredos: false,
+      });
+    }
+    const duracaoPan = performance.now() - tPan0;
+    assert.ok(duracaoPan < 500, `10 pans em quadro de 11.500 itens levaram ${duracaoPan.toFixed(1)} ms`);
+
+    const indice = ger.obterIndice()!;
+    assert.ok(indice);
+    const tHit0 = performance.now();
+    const hit = itemNoPontoEspacial(indice, mapa, { x: 40, y: 40 }, 1);
+    const duracaoHit = performance.now() - tHit0;
+    assert.ok(hit);
+    assert.ok(duracaoHit < 20, `hit-test em quadro de 11.500 itens levou ${duracaoHit.toFixed(2)} ms`);
+
+    // Sub-pixel culling a zoom 0.001 oculta itens < 1.2 px sem perder estado; zoom 0.02 enquadra os 11.500 itens inteiros.
+    ger.sincronizar({
+      itens: mapa,
+      camera: { x: -5000, y: -5000, zoom: 0.001 },
+      tamanho: { largura: 1280, altura: 720 },
+      paleta: PALETA_PADRAO,
+      esconderSegredos: false,
+    });
+    assert.equal(ger.quantidadeVisiveis(), 0);
+
+    ger.sincronizar({
+      itens: mapa,
+      camera: { x: -1000, y: -1000, zoom: 0.02 },
+      tamanho: { largura: 1280, altura: 720 },
+      paleta: PALETA_PADRAO,
+      esconderSegredos: false,
+    });
+    assert.equal(ger.quantidadeVisiveis(), 11500);
+
+    ger.destruir();
+    assert.equal(ger.quantidadeVisual(), 0);
+    textos.destruir();
+    cache.destruir();
+  });
 });

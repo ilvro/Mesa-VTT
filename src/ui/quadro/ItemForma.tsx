@@ -23,7 +23,6 @@ import {
 interface ItemFormaProps {
   item: Extract<Item, { tipo: 'forma' }>;
   editando: boolean;
-  lodSimples?: boolean;
   onSairEdicao: (novoDoc?: DocRico, novaAltura?: number) => void;
   onEditorPronto?: (editor: Editor | null) => void;
 }
@@ -31,7 +30,6 @@ interface ItemFormaProps {
 export function ItemForma({
   item,
   editando,
-  lodSimples = false,
   onSairEdicao,
   onEditorPronto,
 }: ItemFormaProps) {
@@ -116,11 +114,6 @@ export function ItemForma({
             onSair={(novoDoc) => onSairEdicao(novoDoc)}
             onEditorPronto={onEditorPronto}
           />
-        ) : lodSimples ? (
-          <div class="item-lod-linhas" aria-hidden="true">
-            <span />
-            <span />
-          </div>
         ) : (
           <ConteudoDecorado doc={item.doc} estado={estado} />
         )}

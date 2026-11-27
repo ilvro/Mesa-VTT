@@ -1013,22 +1013,6 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   flex-wrap: wrap;
   gap: 2px;
 }
-.item-lod-linhas {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-  padding: 4px 0;
-}
-.item-lod-linhas span {
-  display: block;
-  height: 10px;
-  border-radius: 4px;
-  background: rgba(160, 175, 165, 0.35);
-}
-.item-lod-linhas span:last-child {
-  width: 65%;
-}
 .minimapa-quadro {
   position: absolute;
   right: 12px;
@@ -1544,22 +1528,6 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
-}
-.item-lod-linhas {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-  padding: 4px 0;
-}
-.item-lod-linhas span {
-  display: block;
-  height: 10px;
-  border-radius: 4px;
-  background: rgba(160, 175, 165, 0.35);
-}
-.item-lod-linhas span:last-child {
-  width: 65%;
 }
 .minimapa-quadro {
   position: absolute;
@@ -2160,9 +2128,9 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .sessao-zona { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .sessao-zona-direita { margin-left: auto; padding-left: 16px; border-left: 1px solid var(--linha); }
 .sessao-controle-jogadores { display: inline-flex; border: 1px solid var(--linha); border-radius: 999px; background: var(--fundo); padding: 2px; gap: 2px; }
-.sessao-controle-btn { border: 0; background: transparent; color: var(--texto-suave); font: inherit; font-size: 0.85rem; padding: 4px 10px; border-radius: 999px; cursor: pointer; transition: background 0.15s, color 0.15s; }
+.sessao-controle-btn { border: 0; background: transparent; color: var(--apagado); font: inherit; font-size: 0.85rem; padding: 4px 10px; border-radius: 999px; cursor: pointer; transition: background 0.15s, color 0.15s; }
 .sessao-controle-btn:hover { color: var(--texto); }
-.sessao-controle-btn.ativo { background: var(--acento); color: var(--sobre-acento, #fff); font-weight: 600; }
+.sessao-controle-btn.ativo { background: var(--acento); color: var(--acento-texto); font-weight: 600; }
 .sessao-guia { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; padding: 6px 14px; background: var(--superficie); border-bottom: 1px solid var(--linha); font-size: 12.5px; }
 .sessao-guia-passos { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; padding: 0; list-style: none; }
 .sessao-guia-passo.feito { opacity: 0.5; }

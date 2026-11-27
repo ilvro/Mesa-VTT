@@ -257,7 +257,6 @@ export function Mundo({
               item={item}
               todosItens={itens}
               zoom={camera.zoom}
-              lodSimples={false}
               editando={editandoId === item.id}
               onSairEdicao={(novoDoc, novaAltura) => onSairEdicao(item.id, novoDoc, novaAltura)}
               onSairRotulo={(novoRotulo) => onSairRotulo(item.id, novoRotulo)}
