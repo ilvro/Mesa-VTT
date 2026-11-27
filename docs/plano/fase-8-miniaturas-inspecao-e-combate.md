@@ -66,7 +66,7 @@ Nota: estilos isolados em `Mesa/src/ui/fase-8.css` (importado em `ItemRef.tsx` e
 
 ---
 
-### M8.1c — Modal de Inspeção 3D com Lanterna UV dentro da Mesa e do Modo Sessão  ⬜
+### M8.1c — Modal de Inspeção 3D com Lanterna UV dentro da Mesa e do Modo Sessão  ✅
 Objetivo: inspecionar qualquer pista do Ateliê com zoom, inclinação 3D e lanterna UV diretamente num modal dentro da Mesa (no Modo Sessão, no Quadro ou na Coleção), sem precisar abrir a aba do Ateliê.
 Depende de: M8.1a, M8.1b.
 Ler: `Atlas/src/ui/Inspecao.tsx`, `Atlas/src/ui/VisorDeDocumento.tsx`, `Atlas/src/domain/inspecao.ts`, `Mesa/src/ui/App.tsx`, `Mesa/src/ui/ModoSessao.tsx`, `Mesa/src/ui/MenuDeContexto.tsx`.
@@ -87,6 +87,7 @@ Como:
 Testes: unitários de `zoomEm`, `arrastar` e `paraFracao`; teste e2e abrindo uma pista de `mesa-handouts-v1` no modal da Mesa, ligando o botão `Luz UV` e fechando com `Esc`.
 Pronto quando: no Modo Sessão ou no Quadro, clicar em "Inspecionar pista (Luz UV)" abre o documento com lanterna UV funcional sem sair da Mesa.
 Commit: `(feature) 3d handout inspection modal with uv flashlight inside mesa`
+Nota: estilos isolados em `Mesa/src/ui/fase-8.css` (sem tocar em `estilo.css` nem `ModoSessao.tsx`); criado `src/dominio/inspecao.ts` (puro, com `VISTA_INICIAL`, `encaixe`, `arrastar`, `zoomEm`, `paraFracao`, `paraTela`) e `src/ui/InspecaoDePista.tsx` com modal 3D, lanterna UV em canvas 2D e projeção sincronizada nos canais `atlas:projetor:ativo` e `atlas:projetor:remoto` no formato compatível com o projetor do Atlas e a ponte online (`{ tipo: 'inspecao', nome, normal, uv }`, `inspecao-estado`, `inspecao-fim`); integrado em `App.tsx`, `MenuDeContexto.tsx`, `ItemRef.tsx` e `Entidades.tsx`, com testes unitários em `tests/unit/inspecao.test.ts`.
 
 ---
 

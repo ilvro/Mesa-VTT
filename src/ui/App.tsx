@@ -11,6 +11,7 @@ import { Entidades } from './Entidades.tsx';
 import { MesaOnline } from './MesaOnline.tsx';
 import { ModoSessao } from './ModoSessao.tsx';
 import { BuscaRapida, buscaRapidaAberta } from './BuscaRapida.tsx';
+import { InspecaoDePista } from './InspecaoDePista.tsx';
 import { MenuDeContexto } from './MenuDeContexto.tsx';
 import { quadroAberto } from '../app/quadros.ts';
 import { Quadro } from './quadro/Quadro.tsx';
@@ -65,6 +66,7 @@ function AppDoMestre() {
       <Avisos />
       <BuscaRapida />
       <MenuDeContexto />
+      <InspecaoDePista />
     </>
   );
 }

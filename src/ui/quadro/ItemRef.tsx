@@ -15,6 +15,7 @@ import { ehRefDeEntidadeDaMesa } from '../../dominio/notas.ts';
 import { decorarMarcadores } from '../../dominio/paleta.ts';
 import type { Item } from '../../dominio/quadro.ts';
 import { fracao, recursosDaEntidade, tomDoPv } from '../../dominio/recursos-das-fichas.ts';
+import { abrirInspecaoNaMesa } from '../InspecaoDePista.tsx';
 import '../fase-8.css';
 
 interface ItemRefProps {
@@ -153,6 +154,7 @@ export function ItemRef({ item }: ItemRefProps) {
   if (!entidade) {
     const nomeApp = NOME_DO_APP[item.ref.app] ?? item.ref.app;
     const nomeTipo = NOME_DO_TIPO_DE_REF[item.ref.tipo] ?? item.ref.tipo;
+    const docIdAtelie = idDaPistaDoAtelie(item.ref);
     return (
       <div
         class="item-quadro item-ref"
@@ -176,15 +178,37 @@ export function ItemRef({ item }: ItemRefProps) {
           <div
             class={
               ehPista
-                ? 'item-ref-miniatura item-ref-miniatura-pista'
+                ? `item-ref-miniatura item-ref-miniatura-pista${docIdAtelie ? ' clicavel' : ''}`
                 : 'item-ref-miniatura item-ref-miniatura-mapa'
             }
             data-testid={`miniatura-${item.id}`}
+            title={docIdAtelie ? 'Inspecionar pista (Luz UV)' : undefined}
+            onClick={
+              docIdAtelie
+                ? (e) => {
+                    e.stopPropagation();
+                    void abrirInspecaoNaMesa(docIdAtelie);
+                  }
+                : undefined
+            }
           >
             <img src={urlMiniatura} alt="Prévia" loading="lazy" />
           </div>
         ) : null}
         <div class="item-ref-acoes" onPointerDown={(e) => e.stopPropagation()}>
+          {docIdAtelie ? (
+            <button
+              type="button"
+              class="botao-pilula destaque"
+              data-testid={`ref-inspecionar-${item.id}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                void abrirInspecaoNaMesa(docIdAtelie);
+              }}
+            >
+              🔬 Inspecionar
+            </button>
+          ) : null}
           <button
             type="button"
             class="botao-pilula"
@@ -202,6 +226,10 @@ export function ItemRef({ item }: ItemRefProps) {
   }
 
   const refExterno = entidade.refs.find((r) => !ehRefDeEntidadeDaMesa(r));
+  const docIdAtelie =
+    idDaPistaDoAtelie(item.ref) ??
+    entidade.refs.map(idDaPistaDoAtelie).find((id): id is string => id !== null) ??
+    null;
   const recursos = item.aparencia === 'cartao' ? recursosDaEntidade(entidade.refs, recursosDasFichas.value) : undefined;
   const resumoBruto = entidade.notas.trim();
   const resumo =
@@ -233,10 +261,19 @@ export function ItemRef({ item }: ItemRefProps) {
         <div
           class={
             ehPista
-              ? 'item-ref-miniatura item-ref-miniatura-pista'
+              ? `item-ref-miniatura item-ref-miniatura-pista${docIdAtelie ? ' clicavel' : ''}`
               : 'item-ref-miniatura item-ref-miniatura-mapa'
           }
           data-testid={`miniatura-${item.id}`}
+          title={docIdAtelie ? 'Inspecionar pista (Luz UV)' : undefined}
+          onClick={
+            docIdAtelie
+              ? (e) => {
+                  e.stopPropagation();
+                  void abrirInspecaoNaMesa(docIdAtelie);
+                }
+              : undefined
+          }
         >
           <img src={urlMiniatura} alt={entidade.nome} loading="lazy" />
         </div>
@@ -293,6 +330,19 @@ export function ItemRef({ item }: ItemRefProps) {
       ) : null}
 
       <div class="item-ref-acoes" onPointerDown={(e) => e.stopPropagation()}>
+        {docIdAtelie ? (
+          <button
+            type="button"
+            class="botao-pilula destaque"
+            data-testid={`ref-inspecionar-${item.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              void abrirInspecaoNaMesa(docIdAtelie);
+            }}
+          >
+            🔬 Inspecionar
+          </button>
+        ) : null}
         <button
           type="button"
           class="botao-pilula"

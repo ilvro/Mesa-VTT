@@ -50,9 +50,11 @@ import {
 } from '../dominio/entidades.ts';
 import { abrirNoApp } from '../app/barramento.ts';
 import { descobrirApp, enderecoDe } from '../app/aplicativos.ts';
+import { idDaPistaDoAtelie } from '../app/pistas-atelie.ts';
 import { ehRefDeEntidadeDaMesa } from '../dominio/notas.ts';
 import { GradeDeColecao, modoExibicao } from './GradeDeColecao.tsx';
 import { EditorDeCena } from './EditorDeCena.tsx';
+import { abrirInspecaoNaMesa } from './InspecaoDePista.tsx';
 import { abrirMenuContexto, acoesParaEntidade, acoesParaRef } from './MenuDeContexto.tsx';
 import { cx } from './cx.ts';
 import { CampoDeEtiquetas } from './CampoDeEtiquetas.tsx';
@@ -570,6 +572,7 @@ function NosQuadros({ e }: { e: Entidade }) {
 function Detalhe({ e }: { e: Entidade }) {
   const editavel = podeEditar(e), removivel = podeRemover(e), conteudo = podeEditarConteudo(e), refsVisiveis = e.refs.filter(r => !ehRefDeEntidadeDaMesa(r));
   const refDoDono = e.refs.find(r => r.app === e.criadaPor), enderecoDoDono = !editavel && refDoDono ? enderecoDe(refDoDono) : null;
+  const refPistaAtelie = e.tipo === 'pista' ? e.refs.find(r => idDaPistaDoAtelie(r) !== null) : undefined;
   if (!editavel) void descobrirApp(e.criadaPor);
   return (
     <section
@@ -585,6 +588,16 @@ function Detalhe({ e }: { e: Entidade }) {
         <span class="selo">{ROTULO_DO_TIPO[e.tipo].singular}</span>
         <span class="meta">criada por {NOME_DO_APP[e.criadaPor]}</span>
         <span class="espaco" />
+        {refPistaAtelie && (
+          <button
+            type="button"
+            class="botao-pilula destaque"
+            data-testid="detalhe-inspecionar-pista"
+            onClick={() => void abrirInspecaoNaMesa(refPistaAtelie)}
+          >
+            🔬 Inspecionar (UV)
+          </button>
+        )}
         {removivel && (confirmando.value === e.id
           ? <>
               <button type="button" class="botao-pilula perigo" data-testid="confirmar-remover" onClick={() => { confirmando.value = null; void removerEntidade(e); }}>Remover mesmo</button>

@@ -67,3 +67,121 @@
 .leitura-ref.leitura-ref-com-miniatura .item-ref-miniatura-pista img {
   max-height: 206px;
 }
+
+.item-ref-miniatura-pista.clicavel {
+  cursor: zoom-in;
+  transition: border-color 0.14s ease, filter 0.14s ease;
+}
+
+.item-ref-miniatura-pista.clicavel:hover {
+  border-color: var(--acento);
+  filter: brightness(1.06);
+}
+
+/* Fase 8 (M8.1c) — Modal de Inspeção 3D com Lanterna UV dentro da Mesa */
+.mesa-inspecao {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(circle at 50% 50%, rgba(18, 14, 28, 0.94) 0%, rgba(4, 3, 8, 0.98) 100%);
+  backdrop-filter: blur(8px);
+  color: var(--texto);
+}
+
+.mesa-inspecao-barra {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--borda);
+  background: rgba(8, 7, 14, 0.72);
+  backdrop-filter: blur(6px);
+}
+
+.mesa-inspecao-barra .espaco {
+  flex: 1;
+}
+
+.mesa-inspecao-nome {
+  font: 700 15px var(--titulo);
+  margin-right: 8px;
+  letter-spacing: 0.02em;
+  color: var(--texto);
+}
+
+.mesa-inspecao-area {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  cursor: grab;
+  touch-action: none;
+  perspective: 1200px;
+  overflow: hidden;
+}
+
+.mesa-inspecao-area:active {
+  cursor: grabbing;
+}
+
+.mesa-inspecao-palco-3d {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1200px;
+  transform-style: preserve-3d;
+  animation: mesa-inspecao-entra-3d 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes mesa-inspecao-entra-3d {
+  0% {
+    opacity: 0;
+    transform: perspective(1200px) rotateX(16deg) rotateY(-12deg) scale(0.72) translateZ(-80px);
+    filter: blur(6px) brightness(0.55);
+  }
+  100% {
+    opacity: 1;
+    transform: perspective(1200px) rotateX(0deg) rotateY(0deg) scale(1) translateZ(0);
+    filter: blur(0) brightness(1);
+  }
+}
+
+.mesa-inspecao-visor {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  transform: perspective(1200px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+  transform-style: preserve-3d;
+  transition: transform 0.08s ease-out;
+  will-change: transform;
+}
+
+.mesa-inspecao-glare {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at var(--glare-x, 50%) var(--glare-y, 50%),
+    rgba(255, 255, 255, 0.08) 0%,
+    transparent 60%
+  );
+  mix-blend-mode: overlay;
+  transition: background 0.08s ease-out;
+}
+
+.mesa-inspecao-dica {
+  margin: 0;
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--apagado);
+  text-align: center;
+  background: rgba(8, 7, 14, 0.72);
+  border-top: 1px solid var(--borda);
+}

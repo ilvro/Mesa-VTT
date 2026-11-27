@@ -3,10 +3,12 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Entidade, Ref } from '#mesa';
 import { abrirNoApp } from '../app/barramento.ts';
 import { removerEntidade } from '../app/campanha.ts';
+import { idDaPistaDoAtelie } from '../app/pistas-atelie.ts';
 import { abrirEntidade } from '../app/rotas.ts';
 import { ativarCena } from '../app/sessao.ts';
 import { ehEncontro, NOME_DO_APP, NOME_DO_TIPO_DE_REF } from '../dominio/entidades.ts';
 import { ehRefDeEntidadeDaMesa } from '../dominio/notas.ts';
+import { abrirInspecaoNaMesa } from './InspecaoDePista.tsx';
 
 export type AcaoMenuContexto = {
   id: string;
@@ -47,14 +49,23 @@ export function acoesParaRef(
 ): AcaoMenuContexto[] {
   const appNome = NOME_DO_APP[r.app] ?? r.app;
   const tipoNome = NOME_DO_TIPO_DE_REF[r.tipo] ?? r.tipo;
-  return [
+  const acoes: AcaoMenuContexto[] = [];
+  if (idDaPistaDoAtelie(r)) {
+    acoes.push({
+      id: `inspecionar-pista-${r.id}`,
+      rotulo: '🔬 Inspecionar pista (Luz UV)',
+      executar: () => abrirInspecaoNaMesa(r),
+    });
+  }
+  acoes.push(
     {
       id: `abrir-ref-${r.app}-${r.id}`,
       rotulo: `Abrir ${tipoNome} no ${appNome} ↗`,
       executar: () => abrirNoApp(r),
     },
     ...extras,
-  ];
+  );
+  return acoes;
 }
 
 /** Monta as ações padrão de botão direito para uma entidade da campanha (Abrir no app dono, Abrir na Mesa, Ativar cena e Deletar). */
@@ -64,6 +75,15 @@ export function acoesParaEntidade(
 ): AcaoMenuContexto[] {
   const acoes: AcaoMenuContexto[] = [];
   const refsExternas = e.refs.filter(r => !ehRefDeEntidadeDaMesa(r));
+  const refPista = refsExternas.find(r => idDaPistaDoAtelie(r) !== null);
+
+  if (refPista) {
+    acoes.push({
+      id: `inspecionar-pista-${refPista.id}`,
+      rotulo: '🔬 Inspecionar pista (Luz UV)',
+      executar: () => abrirInspecaoNaMesa(refPista),
+    });
+  }
 
   for (const r of refsExternas) {
     const appNome = NOME_DO_APP[r.app] ?? r.app;
