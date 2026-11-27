@@ -47,8 +47,12 @@ test('E4b: salvar uma moldura com duas notas como modelo e carimbar em outro pon
       await page.keyboard.press('Escape');
       await page.waitForSelector('[data-testid="editor-rico"]', { state: 'detached' });
     }
-    const itens = page.locator('[data-testid^="item-"]');
-    assert.equal(await itens.count(), 3);
+    const contarItens = () =>
+      page.evaluate(() => {
+        const w = window as unknown as { __mesaQuadro?: { itens: () => unknown[] } };
+        return w.__mesaQuadro?.itens().length ?? 0;
+      });
+    assert.equal(await contarItens(), 3);
 
     // Salvar como modelo (esta campanha).
     await page.keyboard.press('Control+a');
@@ -64,16 +68,25 @@ test('E4b: salvar uma moldura com duas notas como modelo e carimbar em outro pon
     await page.waitForSelector('[data-testid="painel-modelos"]');
     await page.locator('[data-testid^="modelo-escolher-"]').first().click();
     await page.mouse.click(area.x + 900, area.y + 450);
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid^="item-"]').length === 6);
-    assert.equal(await itens.count(), 6);
+    await page.waitForFunction(() => {
+      const w = window as unknown as { __mesaQuadro?: { itens: () => unknown[] } };
+      return (w.__mesaQuadro?.itens().length ?? 0) === 6;
+    });
+    assert.equal(await contarItens(), 6);
 
     // Um Ctrl+Z desfaz o carimbo inteiro.
     await page.keyboard.press('Control+z');
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid^="item-"]').length === 3);
+    await page.waitForFunction(() => {
+      const w = window as unknown as { __mesaQuadro?: { itens: () => unknown[] } };
+      return (w.__mesaQuadro?.itens().length ?? 0) === 3;
+    });
 
     // Carimbar de novo e conferir que o modelo sobrevive a recarregar a página.
     await page.mouse.click(area.x + 900, area.y + 450);
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid^="item-"]').length === 6);
+    await page.waitForFunction(() => {
+      const w = window as unknown as { __mesaQuadro?: { itens: () => unknown[] } };
+      return (w.__mesaQuadro?.itens().length ?? 0) === 6;
+    });
     await page.reload();
     await page.waitForSelector('[data-testid="area-quadro"]');
     await page.click('[data-testid="ferramenta-modelo"]');

@@ -63,7 +63,10 @@ async function montarQuadro(ctx: BrowserContext, nomeCampanha: string): Promise<
   // recarrega o quadro com os itens gravados
   await page.goto(`${amb.origem}/Mesa/#/quadro/${quadroId}`);
   await page.reload();
-  await page.waitForSelector('[data-testid="item-normal"]');
+  await page.waitForFunction(() => {
+    const w = window as unknown as { __mesaQuadro?: { itens: () => { id: string }[] } };
+    return w.__mesaQuadro?.itens().some((it) => it.id === 'normal') ?? false;
+  });
   return { page, quadroId, erros };
 }
 
@@ -77,10 +80,27 @@ test('E3b: "Mostrar aos jogadores" abre a projeção só com o que é dos jogado
     const { page, erros } = await montarQuadro(ctx, 'Campanha Projecao');
 
     // Mestre: o segredo e o teste aparecem no quadro dele.
-    assert.match((await page.locator('[data-testid="item-teste"]').textContent()) ?? '', /PERCEPÇÃO/);
+    const textoTeste = await page.evaluate(() => {
+      const w = window as unknown as {
+        __mesaQuadro?: {
+          itens: () => { id: string; doc?: { content?: { content?: { text?: string }[] }[] } }[];
+        };
+      };
+      const it = w.__mesaQuadro?.itens().find((x) => x.id === 'teste');
+      return (it?.doc?.content ?? [])
+        .map((p) => (p.content ?? []).map((n) => n.text ?? '').join(''))
+        .join('\n');
+    });
+    assert.match(textoTeste, /PERCEPÇÃO/);
 
     // Menu da moldura -> Mostrar aos jogadores (abre a janela de projeção)
-    await page.locator('[data-testid="item-M"]').click({ button: 'right', position: { x: 6, y: 6 } });
+    const area = await page.locator('[data-testid="area-quadro"]').boundingBox();
+    assert.ok(area);
+    const cam = await page.evaluate(() => {
+      const w = window as unknown as { __mesaQuadro?: { camera: () => { x: number; y: number; zoom: number } } };
+      return w.__mesaQuadro?.camera() ?? { x: 0, y: 0, zoom: 1 };
+    });
+    await page.mouse.click(area.x + (6 - cam.x) * cam.zoom, area.y + (6 - cam.y) * cam.zoom, { button: 'right' });
     await page.waitForSelector('[data-testid="menu-do-item"]');
     const [proj] = await Promise.all([ctx.waitForEvent('page'), page.click('[data-testid="menu-mostrar-aos-jogadores"]')]);
     const errosProj: string[] = [];

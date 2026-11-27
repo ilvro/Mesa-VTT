@@ -40,8 +40,22 @@ test('L4a: proposta do assistente vira moldura e notas na fila "Do assistente"; 
       return r.moldura.id as string;
     }, { q: QUADROS, p: PROPOSTA });
 
-    await page.waitForSelector(`[data-testid="item-${n}"].em-revisao-assistente`);
-    assert.equal(await page.locator('.item-texto.em-revisao-assistente').count(), 3);
+    await page.waitForFunction(
+      (id) => {
+        const w = window as unknown as {
+          __mesaQuadro?: { itens: () => { id: string; revisao?: { origem: string } | null }[] };
+        };
+        return w.__mesaQuadro?.itens().some((it) => it.id === id && it.revisao?.origem === 'assistente') ?? false;
+      },
+      n,
+    );
+    const emRevAntes = await page.evaluate(() => {
+      const w = window as unknown as {
+        __mesaQuadro?: { itens: () => { tipo: string; revisao?: { origem: string } | null }[] };
+      };
+      return (w.__mesaQuadro?.itens() ?? []).filter((it) => it.tipo === 'texto' && it.revisao?.origem === 'assistente').length;
+    });
+    assert.equal(emRevAntes, 3);
 
     await page.click('[data-testid="botao-fila-revisao"]');
     await page.waitForSelector('[data-testid="revisao-grupo-assistente"]');
@@ -49,12 +63,32 @@ test('L4a: proposta do assistente vira moldura e notas na fila "Do assistente"; 
 
     await page.click('[data-testid="revisao-assistente-aceitar"]');
     await page.waitForSelector('[data-testid="revisao-vazia"]');
-    assert.equal(await page.locator('.em-revisao-assistente').count(), 0);
+    const emRevDepois = await page.evaluate(() => {
+      const w = window as unknown as {
+        __mesaQuadro?: { itens: () => { revisao?: { origem: string } | null }[] };
+      };
+      return (w.__mesaQuadro?.itens() ?? []).filter((it) => it.revisao?.origem === 'assistente').length;
+    });
+    assert.equal(emRevDepois, 0);
 
     await page.click('[data-testid="fechar-fila-revisao"]');
     await page.keyboard.press('Control+z');
-    await page.waitForSelector('[data-testid="revisao-grupo-assistente"], [data-testid="item-' + n + '"].em-revisao-assistente');
-    assert.equal(await page.locator('.item-texto.em-revisao-assistente').count(), 3);
+    await page.waitForFunction(
+      (id) => {
+        const w = window as unknown as {
+          __mesaQuadro?: { itens: () => { id: string; revisao?: { origem: string } | null }[] };
+        };
+        return w.__mesaQuadro?.itens().some((it) => it.id === id && it.revisao?.origem === 'assistente') ?? false;
+      },
+      n,
+    );
+    const emRevDesfeito = await page.evaluate(() => {
+      const w = window as unknown as {
+        __mesaQuadro?: { itens: () => { tipo: string; revisao?: { origem: string } | null }[] };
+      };
+      return (w.__mesaQuadro?.itens() ?? []).filter((it) => it.tipo === 'texto' && it.revisao?.origem === 'assistente').length;
+    });
+    assert.equal(emRevDesfeito, 3);
     assert.deepEqual(erros, []);
   } finally {
     await ctx.close();
