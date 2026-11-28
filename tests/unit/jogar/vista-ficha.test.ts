@@ -48,3 +48,10 @@ test('dossiePronto só aceita mensagem do iframe do Dossiê na mesma origem', ()
   assert.equal(dossiePronto({ source: janela, origin: 'http://a', data: null }, janela, 'http://a'), false);
   assert.equal(dossiePronto({ source: janela, origin: 'http://a', data: { tipo: 'dossie.pronto' } }, null, 'http://a'), false);
 });
+
+test('quando projetando é true, a ficha fica completa e cobre o mapa inclusive no celular vertical', () => {
+  assert.equal(vistaDaFicha({ celularVertical: true, aba: 'mapa', aberta: false, projetando: true }), 'completa');
+  assert.equal(vistaDaFicha({ celularVertical: false, aba: 'mapa', aberta: false, projetando: true }), 'completa');
+  assert.equal(fichaCobreOMapa({ celularVertical: true, aberta: false, projetando: true }), true);
+  assert.equal(fichaCobreOMapa({ celularVertical: false, aberta: false, projetando: true }), true);
+});

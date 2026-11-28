@@ -262,11 +262,16 @@ function Sala({
   const capaBlobIdRef = useRef<string | null>(null);
   const capaUrlRef = useRef<string | null>(null);
   const [aberta, setAberta] = useState(false);   // a ficha completa pediu a tela toda (fora do celular)
+  const [fichaRecolhida, setFichaRecolhida] = useState(false);
+  const [fichaProjetada, setFichaProjetada] = useState<{ fichaId: string; ficha?: FichaDaSala } | null>(null);
+  const fichaProjetadaAtual = useRef<{ fichaId: string; ficha?: FichaDaSala } | null>(null);
+  fichaProjetadaAtual.current = fichaProjetada;
   const celular = useCelularVertical();
   const quadro = useRef<HTMLIFrameElement>(null);
   const projetorQuadro = useRef<HTMLIFrameElement>(null);
-  const vista = vistaDaFicha({ celularVertical: celular, aba, aberta });
-  const cobre = fichaCobreOMapa({ celularVertical: celular, aberta });
+  const projetandoFicha = fichaProjetada !== null;
+  const vista = vistaDaFicha({ celularVertical: celular, aba, aberta, projetando: projetandoFicha });
+  const cobre = fichaCobreOMapa({ celularVertical: celular, aberta, projetando: projetandoFicha });
   const vistaAtual = useRef(vista);
   vistaAtual.current = vista;
   const invalida = useRef(aoSessaoInvalida);
@@ -279,7 +284,7 @@ function Sala({
   const baseFicha = emDiscord ? baseDoAppNoDiscord('ficha') : baseDoApp('ficha');
 
   useEffect(() => {
-    setErro(null); setTemMapa(false); setConstrucaoResumo({ temMapa: false, rev: 0 });
+    setErro(null); setTemMapa(false); setFichaProjetada(null); setConstrucaoResumo({ temMapa: false, rev: 0 });
     let cliente: ClienteDaSala | null = null;
     const wsUrl = emDiscord ? urlDoWebSocket(salaId, `${location.origin}${BASE_PROXY_DISCORD}`) : urlDoWebSocket(salaId);
     cliente = conectarSala({
@@ -355,6 +360,7 @@ function Sala({
       aoTerMapa: () => setTemMapa(true),
       aoSemMapa: () => setTemMapa(false),
       aoDossiePronto: () => mandarVistaAtual.current(),
+      aoProjetarFicha: setFichaProjetada,
     });
     const baseJukebox = emDiscord ? baseDoAppNoDiscord('jukebox') : baseDoApp('jukebox');
     const som = criarSomDaCasca({ cliente, baseJukebox });
@@ -393,17 +399,37 @@ function Sala({
     papel: eu?.papel ?? 'jogador',
     personagem: meuPersonagemId,
   });
-  const editandoFicha = modo === 'sessao' && (aberta || (celular && aba === 'ficha'));
-  const mostrarSaguao = erro !== 'sala' && !editandoFicha && (saguaoAberto || saguaoObrigatorio);
+  const editandoFicha = modo === 'sessao' && !projetandoFicha && (aberta || (celular && aba === 'ficha'));
+  const mostrarSaguao = erro !== 'sala' && !editandoFicha && !projetandoFicha && (saguaoAberto || saguaoObrigatorio);
   const mandarFichaAtiva = (id: string | null = meuPersonagemAtual.current) => {
-    if (!id) return;
+    if (!id || fichaProjetadaAtual.current) return;
     try { quadro.current?.contentWindow?.postMessage({ tipo: 'dossie:abrir-ficha', fichaId: id }, location.origin); } catch { /* o Dossiê ainda não carregou */ }
   };
+  const mandarProjecaoFicha = (p: { fichaId: string; ficha?: FichaDaSala } | null = fichaProjetadaAtual.current) => {
+    try {
+      quadro.current?.contentWindow?.postMessage(
+        p
+          ? { tipo: 'dossie:projetar-ficha', fichaId: p.fichaId, ...(p.ficha ? { ficha: p.ficha } : {}) }
+          : { tipo: 'dossie:projetar-ficha', fichaId: null },
+        location.origin,
+      );
+    } catch { /* o Dossiê ainda não carregou */ }
+  };
   useEffect(() => { mandarFichaAtiva(meuPersonagemId); }, [meuPersonagemId, fichasChave, mostrarSaguao]);
+  useEffect(() => {
+    try { quadro.current?.contentWindow?.postMessage(mensagemDeVista(vistaAtual.current), location.origin); } catch { /* */ }
+    if (fichaProjetada) {
+      mandarProjecaoFicha(fichaProjetada);
+    } else {
+      mandarProjecaoFicha(null);
+      mandarFichaAtiva(meuPersonagemAtual.current);
+    }
+  }, [fichaProjetada]);
   // A vista muda por mensagem, sem recarregar o `iframe`.
   const mandarVista = () => {
     try { quadro.current?.contentWindow?.postMessage(mensagemDeVista(vistaAtual.current), location.origin); } catch { /* o Dossiê ainda não carregou */ }
-    mandarFichaAtiva();
+    if (fichaProjetadaAtual.current) mandarProjecaoFicha(fichaProjetadaAtual.current);
+    else mandarFichaAtiva();
   };
   mandarVistaAtual.current = mandarVista;
   useEffect(mandarVista, [vista]);
@@ -419,18 +445,17 @@ function Sala({
   };
   mandarJogadorAtual.current = mandarJogador;
   useEffect(mandarJogador, [fichasChave, espectador]);
-  // Esc volta ao mapa, com o foco na casca ou dentro do Dossiê (mesma origem).
+  // Esc volta ao mapa, com o foco na casca ou dentro do Dossiê (mesma origem), exceto quando o mestre projeta uma ficha.
   useEffect(() => {
-    if (!cobre) return;
+    if (!cobre || projetandoFicha) return;
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAberta(false); };
     addEventListener('keydown', esc);
     let dentro: Window | null = null;
     try { dentro = quadro.current?.contentWindow ?? null; dentro?.addEventListener('keydown', esc); } catch { dentro = null; }
     return () => { removeEventListener('keydown', esc); try { dentro?.removeEventListener('keydown', esc); } catch { /* */ } };
-  }, [cobre]);
+  }, [cobre, projetandoFicha]);
 
   if (erro === 'sessao') return null;   // volta para "Entrar" com o aviso
-  const selo = conexao === 'aberta' ? 'Conectado' : 'Reconectando…';
   const baseAvatar = emDiscord ? `${BASE_PROXY_DISCORD}/sala/cdn` : undefined;
   const resumoSaguao = estadoDoSaguao(membros, fichas, temMapa, baseFicha, baseAvatar);
 
@@ -459,7 +484,15 @@ function Sala({
   };
 
   return (
-    <main class="casca" data-testid="casca" data-aba={aba} data-ficha={cobre ? 'completa' : 'painel'} data-espectador={espectador ? '1' : undefined}>
+    <main
+      class="casca"
+      data-testid="casca"
+      data-aba={aba}
+      data-ficha={cobre ? 'completa' : 'painel'}
+      data-ficha-recolhida={fichaRecolhida && !cobre ? '1' : undefined}
+      data-projetando-ficha={projetandoFicha ? '1' : undefined}
+      data-espectador={espectador ? '1' : undefined}
+    >
       <section class="casca-mapa" data-testid="casca-mapa" aria-label="Mapa">
         <iframe ref={projetorQuadro} class="casca-iframe" data-testid="casca-iframe" title="Mapa" src={enderecoDoProjetorRemoto(baseAtlas, salaId)} onLoad={mandarJogador} allow="fullscreen; autoplay" />
         {erro === 'sala' && (
@@ -555,7 +588,26 @@ function Sala({
             </button>
           </div>
         )}
-        <span class={`casca-selo ${erro ? 'caiu' : conexao}`} data-testid="casca-selo" title={`Entrou como ${nome}`}>{erro === 'sala' ? 'Sem sala' : selo}</span>
+        {!espectador && !cobre && !mostrarSaguao && erro !== 'sala' && (
+          <button
+            type="button"
+            class="casca-recolher-ficha"
+            data-testid="casca-recolher-ficha"
+            aria-expanded={!fichaRecolhida}
+            aria-label={fichaRecolhida ? 'Mostrar ficha' : 'Esconder ficha'}
+            title={fichaRecolhida ? 'Mostrar ficha' : 'Esconder ficha'}
+            onClick={() => setFichaRecolhida(v => !v)}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              {fichaRecolhida
+                ? <polyline points="15 18 9 12 15 6" />
+                : <polyline points="9 18 15 12 9 6" />}
+            </svg>
+          </button>
+        )}
+        {(erro || conexao !== 'aberta') && (
+          <span class={`casca-selo ${erro ? 'caiu' : conexao}`} data-testid="casca-selo" title={`Entrou como ${nome}`}>{erro === 'sala' ? 'Sem sala' : 'Reconectando…'}</span>
+        )}
       </section>
       {mostrarSaguao && (
         <Saguao
@@ -580,11 +632,12 @@ function Sala({
           aoFechar={() => setSaguaoAberto(false)}
         />
       )}
+      {(!espectador || projetandoFicha) && (
+        <iframe ref={quadro} class="casca-ficha" data-testid="casca-ficha" data-vista={vista} title="Ficha" src={enderecoDoDossie(baseFicha, salaId)} onLoad={mandarVista} allow="fullscreen; autoplay" />
+      )}
       {!espectador && (
         <>
-          {/* Um só `iframe`, filho direto da casca: o CSS (`data-ficha`) o move entre o painel e a tela toda, sem remontar. O feed fica por baixo na ficha completa. */}
-          <iframe ref={quadro} class="casca-ficha" data-testid="casca-ficha" data-vista={vista} title="Ficha" src={enderecoDoDossie(baseFicha, salaId)} onLoad={mandarVista} allow="fullscreen; autoplay" />
-          {cobre && <button type="button" class="casca-voltar" data-testid="casca-voltar" onClick={() => setAberta(false)}>Voltar ao mapa</button>}
+          {cobre && !projetandoFicha && <button type="button" class="casca-voltar" data-testid="casca-voltar" onClick={() => setAberta(false)}>Voltar ao mapa</button>}
           <nav class="casca-abas" role="tablist" aria-label="Seções">
             <button type="button" role="tab" aria-selected={aba === 'mapa'} data-testid="casca-aba-mapa" onClick={() => setAba('mapa')}>Mapa</button>
             <button type="button" role="tab" aria-selected={aba === 'ficha'} data-testid="casca-aba-ficha" onClick={() => setAba('ficha')}>Ficha</button>

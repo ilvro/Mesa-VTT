@@ -330,3 +330,71 @@ test('os pedidos de ficha e as respostas ficam só no canal da sala, e nada diss
   assert.equal((enviadas[0] as unknown as { tipo: string }).tipo, 'evento');
   ponte.fechar();
 });
+
+test('projetar-ficha chama aoProjetarFicha com dados de outro jogador, reenvia no bem-vindo e limpa no null/encerrado', async () => {
+  const projecoes: Array<{ fichaId: string; ficha?: unknown } | null> = [];
+  const { emitir, ponte } = montar({ aoProjetarFicha: p => projecoes.push(p) });
+  const fichaOutro = ficha('outro', { name: 'Kael', pv: 10 });
+  emitir({
+    tipo: 'bem-vindo',
+    eu,
+    membros: [{ ...mestre, personagem: null }],
+    fichas: [ficha('a')],
+    ultimoEstado: {
+      'atlas:projetor:remoto': { tipo: 'estado', doc: { id: 'm' }, versao: 1 },
+      'atlas:projetor:remoto:ficha-projetada': { tipo: 'projetar-ficha', fichaId: 'outro', ficha: fichaOutro },
+    },
+  } as unknown as MensagemDaSala);
+  await ponte.esvaziar();
+  assert.deepEqual(projecoes, [{ fichaId: 'outro', ficha: fichaOutro }]);
+
+  emitir({ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'projetar-ficha', fichaId: null } });
+  await ponte.esvaziar();
+  assert.equal(projecoes.at(-1), null);
+
+  emitir({ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'projetar-ficha', fichaId: 'a' } });
+  await ponte.esvaziar();
+  assert.deepEqual(projecoes.at(-1), { fichaId: 'a', ficha: ficha('a') });
+
+  emitir({ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'encerrado' } });
+  await ponte.esvaziar();
+  assert.equal(projecoes.at(-1), null);
+  ponte.fechar();
+});
+
+test('pedir-retrato responde do cache local, entrega blob atrasado e pede à sala quando falta', async () => {
+  const { emitir, chegouBlob, ponte, projetor, vistos, enviadas } = montar();
+  const png = new Blob([new Uint8Array([4, 5])], { type: 'image/png' });
+  chegouBlob('h-ok', png);
+  emitir({ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'retrato', id: 'r-ok', blob: { blobId: 'h-ok' } } });
+  await ponte.esvaziar();
+  vistos.length = 0;
+
+  // Já está em cache local: devolve direto sem falar com a sala
+  projetor.postMessage({ tipo: 'pedir-retrato', id: 'r-ok' });
+  assert.equal(vistos.length, 1);
+  assert.equal((vistos[0] as { id: string; blob: Blob }).id, 'r-ok');
+  assert.equal((vistos[0] as { blob: Blob }).blob, png);
+  assert.deepEqual(enviadas, []);
+
+  // Não está em cache local: pede à sala (com deduplicação de repetição rápida)
+  projetor.postMessage({ tipo: 'pedir-retrato', id: 'r-falta' });
+  projetor.postMessage({ tipo: 'pedir-retrato', id: 'r-falta' });
+  assert.deepEqual(enviadas, [{ tipo: 'pedir-retrato', id: 'r-falta' }]);
+
+  // Se já chegou a mensagem de retrato com blobId e o blob chega depois, entrega automaticamente
+  const png2 = new Blob([new Uint8Array([7, 8])], { type: 'image/png' });
+  const agendadas: Array<() => void> = [];
+  const m2 = montar({ agendar: f => { agendadas.push(f); return () => {}; } });
+  m2.emitir({ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'retrato', id: 'r-tarde', blob: { blobId: 'h-tarde' } } });
+  await Promise.resolve();
+  agendadas[0]?.();
+  await m2.ponte.esvaziar();
+  assert.equal(m2.vistos.length, 0);
+  m2.chegouBlob('h-tarde', png2);
+  assert.equal(m2.vistos.length, 1);
+  assert.equal((m2.vistos[0] as { id: string; blob: Blob }).id, 'r-tarde');
+  assert.equal((m2.vistos[0] as { blob: Blob }).blob, png2);
+  ponte.fechar();
+  m2.ponte.fechar();
+});

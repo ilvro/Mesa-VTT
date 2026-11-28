@@ -43,6 +43,8 @@ export interface OpcoesDaPonteDoJogador {
   aoSemMapa?: () => void;
   /** Chamado quando o Dossiê pede `sala.fichas` (sinal de que carregou e registrou seus listeners). */
   aoDossiePronto?: () => void;
+  /** Chamado quando o mestre projeta ou fecha a projeção de uma ficha em tela cheia. */
+  aoProjetarFicha?: (projecao: { fichaId: string; ficha?: FichaDaSala } | null) => void;
   aviso?: (texto: string) => void;
 }
 
@@ -90,7 +92,35 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
   const esperando = new Map<string, Set<(b: Blob | null) => void>>();
   let fechada = false, temMapa = false;
   let ultimoEstado: unknown = null, ultimaCamera: unknown = null, ultimoControle: unknown = null;
+  let ultimaProjecaoFicha: { fichaId: string; ficha?: FichaDaSala } | null = null;
   const ultimosRetratos = new Map<string, unknown>();
+  const retratoBlobIds = new Map<string, string>();
+  const pedidosRetrato = new Map<string, number>();
+
+  function emitirRetratoSeTiver(id: string): boolean {
+    if (ultimosRetratos.has(id)) {
+      projetor.postMessage(ultimosRetratos.get(id));
+      return true;
+    }
+    const bid = retratoBlobIds.get(id);
+    if (bid && blobs.has(bid)) {
+      const m = { tipo: 'retrato', id, blob: blobs.get(bid)! };
+      ultimosRetratos.set(id, m);
+      projetor.postMessage(m);
+      return true;
+    }
+    return false;
+  }
+
+  function pedirRetratoFaltante(id: string): void {
+    if (!id || emitirRetratoSeTiver(id)) return;
+    const agora = Date.now();
+    if (agora - (pedidosRetrato.get(id) ?? 0) < 2000) return;
+    pedidosRetrato.set(id, agora);
+    const bid = retratoBlobIds.get(id);
+    if (bid) cliente.enviar({ tipo: 'blob.pedir', id: bid });
+    cliente.enviar({ tipo: 'pedir-retrato', id });
+  }
 
   /** O blob `id`: o que já chegou, ou o que chegar em até `prazo` ms; `null` depois disso. */
   function blob(id: string): Promise<Blob | null> {
@@ -130,12 +160,28 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
   async function entregar(msg: unknown): Promise<void> {
     if (ehObj(msg) && msg.tipo === 'encerrado') {
       ultimoEstado = null; ultimaCamera = null; ultimoControle = null; ultimosRetratos.clear();
+      if (ultimaProjecaoFicha !== null) { ultimaProjecaoFicha = null; o.aoProjetarFicha?.(null); }
       if (temMapa) { temMapa = false; o.aoSemMapa?.(); }
       return;
+    }
+    if (ehObj(msg) && msg.tipo === 'retrato' && typeof msg.id === 'string' && ehRefDeBlob(msg.blob)) {
+      retratoBlobIds.set(msg.id, msg.blob.blobId);
     }
     const pronta = await remontar(msg);
     if (!pronta || fechada) return;
     const tipo = (pronta as Obj).tipo;
+    if (tipo === 'projetar-ficha') {
+      const fichaId = typeof (pronta as Obj).fichaId === 'string' && (pronta as Obj).fichaId ? (pronta as Obj).fichaId as string : null;
+      if (fichaId) {
+        const f = ehObj((pronta as Obj).ficha) ? (pronta as Obj).ficha as FichaDaSala : fichas.get(fichaId);
+        ultimaProjecaoFicha = { fichaId, ...(f ? { ficha: f } : {}) };
+        o.aoProjetarFicha?.(ultimaProjecaoFicha);
+      } else {
+        ultimaProjecaoFicha = null;
+        o.aoProjetarFicha?.(null);
+      }
+      return;
+    }
     if (tipo === 'estado') { ultimoEstado = pronta; if (!temMapa) { temMapa = true; o.aoTerMapa?.(); } }
     else if (tipo === 'camera') ultimaCamera = pronta;
     else if (tipo === 'controle-jogadores') ultimoControle = pronta;
@@ -145,13 +191,25 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
   const enfileirar = (msg: unknown): void => { fila = fila.then(() => entregar(msg)).catch(() => { /* uma mensagem ruim não para a fila */ }); };
 
   // O projetor local fala `ola` enquanto não tem mapa; o `BroadcastChannel` não guarda mensagens, então a ponte reenvia o último estado e a câmera.
-  // Nenhuma `MensagemDoProjetor` sai para a sala.
+  // Nenhuma `MensagemDoProjetor` sai para a sala, exceto `pedir-retrato` quando o retrato ainda não está na ponte.
   projetor.onmessage = ({ data }) => {
-    if (!ehObj(data) || data.tipo !== 'ola') return;
+    if (!ehObj(data)) return;
+    if (data.tipo === 'pedir-retrato' && typeof data.id === 'string' && data.id) {
+      pedirRetratoFaltante(data.id);
+      return;
+    }
+    if (data.tipo !== 'ola') return;
     if (ultimoEstado) projetor.postMessage(ultimoEstado);
     if (ultimaCamera) projetor.postMessage(ultimaCamera);
     if (ultimoControle) projetor.postMessage(ultimoControle);
     for (const r of ultimosRetratos.values()) projetor.postMessage(r);
+    if (ehObj(ultimoEstado) && ehObj(ultimoEstado.doc) && ehObj(ultimoEstado.doc.tokens)) {
+      for (const t of Object.values(ultimoEstado.doc.tokens)) {
+        if (ehObj(t) && ehObj(t.portrait) && typeof t.portrait.id === 'string' && t.portrait.id && !ultimosRetratos.has(t.portrait.id)) {
+          emitirRetratoSeTiver(t.portrait.id);
+        }
+      }
+    }
   };
 
   eventos.onmessage = ({ data }) => { if (eventoPodeSair(data)) cliente.enviar({ tipo: 'evento', envelope: data }); };
@@ -206,13 +264,21 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
     cliente.ouvir('evento', m => { if (!fechada) eventos.postMessage(m.envelope); }),
     cliente.ouvir('bem-vindo', m => {
       const entradas = Object.entries(m.ultimoEstado ?? {}).filter(([nome]) => nome.startsWith('atlas:projetor:'));
-      for (const [nome, msg] of entradas) if (!nome.endsWith(':controle') && !nome.includes(':retrato:')) enfileirar(msg);
+      for (const [nome, msg] of entradas) if (!nome.endsWith(':controle') && !nome.includes(':retrato:') && !nome.endsWith(':ficha-projetada')) enfileirar(msg);
       for (const [nome, msg] of entradas) if (nome.includes(':retrato:')) enfileirar(msg);
       for (const [nome, msg] of entradas) if (nome.endsWith(':controle')) enfileirar(msg);
+      for (const [nome, msg] of entradas) if (nome.endsWith(':ficha-projetada')) enfileirar(msg);
     }),
     cliente.ouvirBlob((id, b) => {
       blobs.set(id, b);
       for (const f of [...(esperando.get(id) ?? [])]) f(b);
+      for (const [rid, bid] of retratoBlobIds) {
+        if (bid === id && !ultimosRetratos.has(rid)) {
+          const msg = { tipo: 'retrato', id: rid, blob: b };
+          ultimosRetratos.set(rid, msg);
+          projetor.postMessage(msg);
+        }
+      }
     }),
   ];
 

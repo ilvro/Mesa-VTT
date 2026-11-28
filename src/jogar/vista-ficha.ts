@@ -29,13 +29,15 @@ export function dossiePronto(ev: { source: unknown; origin: string; data: unknow
   return !!d && typeof d === 'object' && d.tipo === 'dossie.pronto';
 }
 
-/** A vista que o Dossiê mostra. No celular na vertical, as abas decidem (Ficha = completa); fora dele, vale o pedido (`aberta`). */
-export function vistaDaFicha(o: { celularVertical: boolean; aba: AbaDaCasca; aberta: boolean }): VistaDaFicha {
+/** A vista que o Dossiê mostra. Na projeção do mestre ou no celular na vertical (aba Ficha), é `completa`; fora disso, vale o pedido (`aberta`). */
+export function vistaDaFicha(o: { celularVertical: boolean; aba: AbaDaCasca; aberta: boolean; projetando?: boolean }): VistaDaFicha {
+  if (o.projetando) return 'completa';
   return o.celularVertical ? (o.aba === 'ficha' ? 'completa' : 'card') : (o.aberta ? 'completa' : 'card');
 }
 
-/** A ficha completa cobre o mapa (tela toda)? Só fora do celular; lá, a aba Ficha ocupa a área das abas. */
-export const fichaCobreOMapa = (o: { celularVertical: boolean; aberta: boolean }): boolean => !o.celularVertical && o.aberta;
+/** A ficha completa cobre o mapa (tela toda)? Quando projetada pelo mestre ou fora do celular com `aberta`. */
+export const fichaCobreOMapa = (o: { celularVertical: boolean; aberta: boolean; projetando?: boolean }): boolean =>
+  Boolean(o.projetando) || (!o.celularVertical && o.aberta);
 
 /** A mensagem que a casca manda ao `iframe` quando a vista muda. */
 export const mensagemDeVista = (vista: VistaDaFicha) => ({ tipo: 'dossie.vista' as const, vista });
