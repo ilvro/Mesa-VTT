@@ -750,7 +750,7 @@ def executar_js(wv, js):
 def ao_ler(canal, condicao):
     if condicao & GLib.IOCondition.IN:
         try:
-            status, linha, _ = canal.read_line()
+            status, linha, *_ = canal.read_line()
         except Exception:
             return False
         if status == GLib.IOStatus.EOF:
