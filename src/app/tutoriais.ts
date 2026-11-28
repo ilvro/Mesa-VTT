@@ -1,12 +1,14 @@
-import { signal } from '@preact/signals';
+import { effect, signal } from '@preact/signals';
+import type { Entidade } from '#mesa';
 import { presetDe, visiveis } from '../dominio/layout.ts';
 import { docDeTexto, novaMoldura, novaNotaAdesiva, novaRef, novoTexto, novoQuadro, type Item } from '../dominio/quadro.ts';
 import { refDaEntidade } from '../dominio/notas.ts';
+import { refParaLigacao } from '../dominio/cenas.ts';
 import { LICOES } from '../tutorial/licoes.ts';
 import type { EstadoDoTutor } from '../tutorial/condicoes.ts';
 import type { Semente } from '../tutorial/semente.ts';
 import { criarTutor } from '../tutorial/tutor.ts';
-import { alterarEntidade, campanhaAtiva, campanhas, criarCampanha, criarEntidade, entidades, escolherCampanha, ligacoes, removerCampanha } from './campanha.ts';
+import { alterarEntidade, campanhaAtiva, campanhas, criarCampanha, criarEntidade, entidades, escolherCampanha, ligacoes, ligarRefs, removerCampanha } from './campanha.ts';
 import { criarQuadroComItens } from './banco-quadros.ts';
 import { modoFocoSessao } from './foco-do-quadro.ts';
 import { carregarModelos, todosOsModelos } from './modelos.ts';
@@ -50,6 +52,13 @@ export function estadoDoTutor(): EstadoDoTutor {
 
 export const tutor = criarTutor({ licoes: LICOES, estado: estadoDoTutor });
 
+// A lição zera o Foco do quadro para o passo dele ter sentido; a preferência da pessoa volta quando a lição acaba.
+let focoAntes: typeof modoFocoSessao.value | null = null;
+effect(() => {
+  void tutor.versao.value;
+  if (!tutor.info() && focoAntes !== null) { modoFocoSessao.value = focoAntes; focoAntes = null; }
+});
+
 const CHAVE_DO_TREINO = 'mesa-tutoriais-treino-v1';
 interface Treino { id: string; nome: string; anterior: string | null }
 const lerTreino = (): Treino | null => { try { const v = localStorage.getItem(CHAVE_DO_TREINO); return v ? JSON.parse(v) as Treino : null; } catch { return null; } };
@@ -61,11 +70,15 @@ export const campanhaDeTreino = signal<Treino | null>(lerTreino());
 /** Planta a semente na campanha ativa: entidades da Mesa, depois o quadro com os itens (molduras primeiro, para os outros caberem nelas). */
 async function plantar(semente: Semente): Promise<string | null> {
   const c = campanhaAtiva.value; if (!c) return null;
-  const porNome = new Map<string, string>();
+  const porNome = new Map<string, string>(), criadas = new Map<string, Entidade>();
   for (const e of semente.entidades ?? []) {
     const criada = await criarEntidade(e.tipo, e.nome, false); if (!criada) continue;
-    porNome.set(e.nome, criada.id);
+    porNome.set(e.nome, criada.id); criadas.set(e.nome, criada);
     if (e.notas) await alterarEntidade(criada, { notas: e.notas });
+  }
+  for (const l of semente.ligacoes ?? []) {
+    const de = criadas.get(l.de), para = criadas.get(l.para);
+    if (de && para) await ligarRefs(refParaLigacao(de), refParaLigacao(para), l.tipo);
   }
   if (!semente.quadro) return null;
   const agora = Date.now(), q = novoQuadro(c.id, semente.quadro.nome, agora, `q-${crypto.randomUUID()}`), lista: Item[] = [], molduras = new Map<string, Item>();
@@ -97,6 +110,10 @@ export async function iniciarLicao(id: string, de = 0): Promise<boolean> {
   const anterior = campanhaAtiva.peek()?.id ?? null;
   await fecharQuadro();
   const c = await criarCampanha(`Treino · ${licao.titulo}`, { selecionar: true }); if (!c) return false;
+  // Estado global que não é da campanha: uma sessão aberta da campanha de antes não vale aqui, e a cena ativada ou o foco de antes não podem deixar um passo "já feito".
+  await carregarSessoes(); cenaAtivadaNestaVisita.value = false;
+  if (focoAntes === null) focoAntes = modoFocoSessao.peek();
+  modoFocoSessao.value = 'espiar';
   const treino: Treino = { id: c.id, nome: c.nome, anterior };
   gravarTreino(treino); campanhaDeTreino.value = treino;
   const semente = licao.semente;

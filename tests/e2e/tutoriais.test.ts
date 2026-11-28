@@ -153,3 +153,37 @@ test('MT3: quadro-ligacoes de ponta a ponta (link, entidade, seta, modelo, revis
     assert.deepEqual(erros, []);
   } finally { await ctx.close(); }
 });
+
+test('MT4: sessao-ao-vivo de ponta a ponta sem o Atlas (preset, sessão, Diário, foco, cena e parar)', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1440, height: 900 } });
+  try {
+    const mesa = await ctx.newPage(), erros: string[] = [];
+    mesa.on('pageerror', e => erros.push(`pageerror: ${e.message}`));
+    await mesa.goto(`${amb.origem}/Mesa/`);
+    await mesa.click('[data-testid="aba-campanhas"]');
+    await mesa.fill('[data-testid="nova-campanha-nome"]', 'Minha');
+    await mesa.click('[data-testid="criar-campanha"]');
+    await mesa.waitForSelector('[data-testid="tela-entidades"]');
+    await mesa.click('[data-testid="aba-aprender"]');
+    await mesa.click('[data-testid="licao-comecar-sessao-ao-vivo"]');
+    const passo = (n: number) => mesa.waitForSelector(`[data-testid="tutor"][data-passo="${n}"]`);
+    await passo(0); await mesa.click('[data-testid="aba-sessao"]');
+    await passo(1); await mesa.click('[data-testid="abrir-menu-paineis"]'); await mesa.click('[data-testid="preset-com-quadro"]');
+    await passo(2);
+    await mesa.fill('[data-testid="sessao-nome"]', 'Sessão de treino'); await mesa.click('[data-testid="sessao-iniciar"]');
+    await passo(3);
+    await mesa.fill('[data-testid="anotar"]', 'A porta rangeu'); await mesa.click('[data-testid="anotar-enviar"]');
+    await passo(4);
+    // O painel do quadro abriu o quadro da semente sozinho.
+    await mesa.waitForFunction(() => document.querySelector<HTMLSelectElement>('[data-testid="sessao-quadro-select"]')?.selectedOptions[0]?.textContent === 'Preparação');
+    await mesa.click('[data-testid="tutor-continuar"]');
+    await passo(5); await mesa.selectOption('[data-testid="sessao-modo-foco"]', 'seguir');
+    await passo(6); await mesa.click('[data-testid="tutor-continuar"]');
+    await passo(7);
+    await mesa.selectOption('[data-testid="sessao-cena"]', { label: '🎬 Chegada à casa' });
+    await passo(8); await mesa.click('[data-testid="tutor-continuar"]');
+    await passo(9); await mesa.click('[data-testid="sessao-encerrar"]');
+    await mesa.waitForSelector('[data-testid="tutor-fim"]');
+    assert.deepEqual(erros.filter(e => !/iframe|Atlas|Jukebox/i.test(e)), []);
+  } finally { await ctx.close(); }
+});

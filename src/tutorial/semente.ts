@@ -1,4 +1,4 @@
-import type { TipoEntidade } from '#mesa';
+import type { TipoEntidade, TipoLigacao } from '#mesa';
 import type { TipoSemantico } from '../dominio/quadro.ts';
 
 /**
@@ -25,6 +25,8 @@ export interface ItemDaSemente {
 
 export interface Semente {
   entidades?: { tipo: TipoEntidade; nome: string; notas?: string }[];
+  /** Ligações entre entidades da própria semente, pelo nome (`de` e `para` na ordem da ligação: ex. a cena `esta-em` o lugar). */
+  ligacoes?: { de: string; para: string; tipo: TipoLigacao }[];
   quadro?: { nome: string; itens?: ItemDaSemente[] };
   /** A tela em que a lição começa (padrão: Campanha). */
   tela?: string;

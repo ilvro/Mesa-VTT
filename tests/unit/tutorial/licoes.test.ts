@@ -7,6 +7,7 @@ import { CONDICOES, type Condicao } from '../../../src/tutorial/condicoes.ts';
 import { LICOES, NOTA_FALA, NOTA_LIGACAO, NOTA_LOOT, NOTA_SEGREDO, NOTA_TESTE, PASTAS_DE_LICOES } from '../../../src/tutorial/licoes.ts';
 
 const quadro = LICOES.filter(l => l.pasta === 'quadro');
+const visiveis = LICOES.filter(l => !l.oculta);
 
 /** Todas as condições de um `feito`, descendo pelos `e`. */
 const condicoesDe = (c: Condicao): Condicao[] => (c[0] === 'e' ? c.slice(1).flatMap(x => condicoesDe(x as Condicao)) : [c]);
@@ -54,7 +55,7 @@ const prefixosDeTemplate = [...fonteDaUi.matchAll(/data-testid=\{`([^`$]*)\$\{/g
 const testidExiste = (id: string, prefixo: boolean): boolean => fonteDaUi.includes(`data-testid="${id}"`) || prefixosDeTemplate.some(p => id.startsWith(p)) || (prefixo && (fonteDaUi.includes(`data-testid="${id}`) || prefixosDeTemplate.some(p => p.startsWith(id))));
 
 test('todo alvo data-testid existe na interface (prefixos de template aceitos)', () => {
-  for (const l of quadro) for (const [i, p] of l.passos.entries()) {
+  for (const l of visiveis) for (const [i, p] of l.passos.entries()) {
     if (!p.alvo) continue;
     const m = /^\[data-testid(\^)?="([^"]+)"\]$/.exec(p.alvo); assert.ok(m, `${l.id} passo ${i + 1}: alvo ${p.alvo} não é um data-testid`);
     assert.ok(testidExiste(m[2]!, !!m[1]), `${l.id} passo ${i + 1}: ${m[2]} não aparece em src/ui`);
@@ -62,7 +63,7 @@ test('todo alvo data-testid existe na interface (prefixos de template aceitos)',
 });
 
 test('as ações dos passos apontam para testids que existem', () => {
-  for (const l of quadro) for (const p of l.passos) for (const a of p.acao ? (Array.isArray(p.acao[0]) ? p.acao : [p.acao]) as readonly (readonly string[])[] : []) {
+  for (const l of visiveis) for (const p of l.passos) for (const a of p.acao ? (Array.isArray(p.acao[0]) ? p.acao : [p.acao]) as readonly (readonly string[])[] : []) {
     const m = /data-testid="([^"]+)"/.exec(a[1] ?? ''); if (m) assert.ok(testidExiste(m[1]!, false), m[1]);
   }
 });
@@ -74,4 +75,15 @@ test('a semente de quadro-ligacoes tem a moldura com duas notas e três em revis
   assert.equal(itens.filter(i => i.molduraDe === 'Casa abandonada').length, 2);
   assert.equal(itens.filter(i => i.revisao?.origem === 'miro').length, 3);
   assert.equal(s.tela, 'quadros'); assert.equal(s.abrirQuadro, true);
+});
+
+test('sessao-ao-vivo: a semente liga a cena à Casa abandonada, não abre o quadro e os passos seguem a ordem da tela', () => {
+  const l = LICOES.find(x => x.id === 'sessao-ao-vivo')!, s = l.semente!;
+  assert.equal(l.pasta, 'sessao');
+  assert.ok(s.entidades?.some(e => e.tipo === 'cena' && e.nome === 'Chegada à casa'));
+  assert.deepEqual(s.ligacoes?.map(x => `${x.de}>${x.tipo}>${x.para}`), ['Chegada à casa>esta-em>Casa abandonada', 'Joana>aparece-em>Chegada à casa']);
+  for (const x of s.ligacoes!) for (const n of [x.de, x.para]) assert.ok(s.entidades!.some(e => e.nome === n), `ligação cita ${n}`);
+  assert.ok(!s.abrirQuadro, 'o quadro abre pelo painel, para o passo do seletor fazer sentido');
+  assert.equal(s.quadro?.itens?.filter(i => i.tipo === 'moldura' && i.titulo === 'Casa abandonada').length, 1);
+  assert.deepEqual(l.passos.map(p => p.feito[0]), ['tela', 'preset', 'sessaoGravando', 'registro', 'ler', 'modoFoco', 'ler', 'cenaAtivada', 'ler', 'sessaoParada']);
 });

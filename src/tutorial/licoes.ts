@@ -83,6 +83,31 @@ const QUADRO_LIGACOES: Licao = {
 
 export const LICOES_DO_QUADRO: readonly Licao[] = [QUADRO_NOTAS, QUADRO_LIGACOES];
 
+/** A lição do Modo Sessão (a semente liga a cena à Casa abandonada e NÃO abre o quadro: o painel do quadro o abre ao aparecer). */
+const SESSAO_AO_VIVO: Licao = {
+  id: 'sessao-ao-vivo', titulo: 'Modo Sessão · seu escudo ao vivo', minutos: 5, pasta: 'sessao',
+  resumo: 'Painéis, sessão gravada, Diário, foco do quadro, ativar uma cena e a leitura do combate.',
+  semente: {
+    entidades: [{ tipo: 'personagem', nome: 'Joana' }, { tipo: 'lugar', nome: 'Casa abandonada' }, { tipo: 'cena', nome: 'Chegada à casa' }],
+    ligacoes: [{ de: 'Chegada à casa', para: 'Casa abandonada', tipo: 'esta-em' }, { de: 'Joana', para: 'Chegada à casa', tipo: 'aparece-em' }],
+    quadro: { nome: 'Preparação', itens: [{ tipo: 'moldura', x: 60, y: 60, largura: 640, altura: 340, titulo: 'Casa abandonada' }] },
+  },
+  passos: [
+    { diga: 'Abra a aba <b>Sessão</b>.', porque: 'O Modo Sessão junta, lado a lado, o que você usa à mesa: mapa, fichas, música, Diário e quadro.', alvo: tid('aba-sessao'), feito: ['tela', 'sessao'], acao: clicar('aba-sessao'), aprendeu: 'A aba Sessão é a tela de jogo.', etapa: 'Os painéis' },
+    { diga: 'Abra <b>Painéis ▾</b> e escolha o preset <b>Com quadro</b>.', porque: 'Cada preset mostra um conjunto de painéis. Você também pode ligar e desligar cada um, ou arrastar os divisores.', alvo: tid('abrir-menu-paineis'), feito: ['preset', 'com-quadro'], acao: [clicar('abrir-menu-paineis'), clicar('preset-com-quadro')] },
+    { diga: 'Dê um nome à sessão (<b>Sessão de treino</b>) e clique em <b>▶ Iniciar sessão</b>.', porque: 'A sessão grava o que acontece (rolagens, mapas, revelações) no Diário, que abre sozinho.', alvo: tid('sessao-iniciar'), valores: '<b>Nome da sessão</b>: Sessão de treino', feito: ['sessaoGravando'], acao: [['preencher', tid('sessao-nome'), 'Sessão de treino'], clicar('sessao-iniciar')], etapa: 'A sessão e o Diário' },
+    { diga: 'No Diário, escreva uma anotação (<b>A porta rangeu</b>) e clique em <b>Anotar</b>.', porque: 'Anotações do mestre ficam no registro junto com o que a Mesa grava sozinha, e saem na exportação.', alvo: tid('anotar'), valores: '<b>Anotar</b>: A porta rangeu', feito: ['registro', 1], acao: [['preencher', tid('anotar'), 'A porta rangeu'], clicar('anotar-enviar')], aprendeu: 'O Diário registra a sessão e aceita anotações suas.' },
+    { diga: 'O painel do <b>Quadro</b> abre o primeiro quadro da campanha sozinho. Para trocar de quadro, use este seletor.', porque: 'Aqui há só o quadro <b>Preparação</b>; com vários, você escolhe qual fica à mão durante o jogo.', alvo: tid('sessao-quadro-select'), feito: ['ler'], etapa: 'O quadro durante o jogo' },
+    { diga: 'No seletor <b>Foco:</b>, escolha <b>Acompanhar o mapa</b>.', porque: 'É o modo que faz o quadro seguir o mapa.', alvo: tid('sessao-modo-foco'), valores: '<b>Foco</b>: Acompanhar o mapa', feito: ['modoFoco', 'seguir'], acao: ['escolher', tid('sessao-modo-foco'), 'Acompanhar o mapa'] },
+    { diga: 'Com <b>Acompanhar o mapa</b>, quando o Atlas abre um cômodo ou você inspeciona algo no mapa, o quadro abre e foca a nota ligada a isso, e aplica as ações da moldura. <b>Mostrar o que está no mapa</b> só exibe as notas num painel, sem trocar de quadro, e <b>Quadro parado</b> ignora o mapa.', porque: 'Escolha o modo conforme o quanto quer que o quadro se mexa sozinho.', alvo: tid('sessao-modo-foco'), feito: ['ler'], aprendeu: 'O Foco decide se o quadro acompanha o que acontece no mapa.' },
+    { diga: 'Em <b>▶ Ativar Cena…</b>, escolha <b>Chegada à casa</b>.', porque: 'Ativar uma cena põe o mapa, as fichas e a música dela em jogo e anota no Diário. Sem o Atlas e o Jukebox abertos, só o Diário registra e a cena fica marcada como ativada.', alvo: tid('sessao-cena'), valores: '<b>Cena</b>: Chegada à casa', feito: ['cenaAtivada'], etapa: 'Cena e combate' },
+    { diga: 'Quando o mapa do Atlas tem peças, aparece sob o mapa uma faixa com <b>⚔ Iniciar combate</b>: ela monta a ordem de iniciativa, os PV e o turno. Neste treino não há mapa, então a faixa não aparece e você não precisa iniciar um combate.', porque: 'Com o Atlas aberto e peças no mapa, é nessa faixa que você conduz o combate sem sair da sessão.', feito: ['ler'] },
+    { diga: 'Para terminar, clique em <b>Parar</b>.', porque: 'Parar encerra a gravação, mas a sessão continua na lista do Diário; <b>Gravar</b> a retoma.', alvo: tid('sessao-encerrar'), feito: ['sessaoParada'], acao: clicar('sessao-encerrar'), aprendeu: 'Parar encerra a gravação; a sessão fica guardada.' },
+  ],
+};
+
+export const LICOES_DA_SESSAO: readonly Licao[] = [SESSAO_AO_VIVO];
+
 /** A lição de manutenção: só confere que o tutor, a campanha de treino e o cartão funcionam. Fica fora da lista (`?tutor-teste` a mostra). */
 const TESTE_DO_MOTOR: Licao = {
   id: 'teste-do-motor', titulo: 'Teste do motor', minutos: 1, oculta: true,
@@ -94,4 +119,4 @@ const TESTE_DO_MOTOR: Licao = {
   ],
 };
 
-export const LICOES: readonly Licao[] = [...LICOES_DO_QUADRO, TESTE_DO_MOTOR];
+export const LICOES: readonly Licao[] = [...LICOES_DO_QUADRO, ...LICOES_DA_SESSAO, TESTE_DO_MOTOR];
