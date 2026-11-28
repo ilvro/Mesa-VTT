@@ -149,7 +149,7 @@ Nota: sincronizado via `BroadcastChannel('atlas:combate')` (alinhado ao canal ad
 
 ---
 
-### M8.2c — Faixa de Combate / Iniciativa + PV rápido no `ModoSessao.tsx`  ⬜
+### M8.2c — Faixa de Combate / Iniciativa + PV rápido no `ModoSessao.tsx`  ✅
 Objetivo: o Modo Sessão exibe uma faixa tática de iniciativa e PV rápido no topo, sincronizada com o Atlas e o Dossiê.
 Depende de: M8.2b.
 Ler: `Mesa/src/ui/ModoSessao.tsx`, `Mesa/src/app/combate.ts`, `Mesa/src/ui/estilo.css`.
@@ -170,3 +170,4 @@ Como:
 Testes: e2e em `sessao-combate.test.ts`: simular `atlas.iniciativa` no barramento com 2 combatentes → a faixa aparece no Modo Sessão com a Rodada 1, o combatente da vez destacado e as barras de PV; clicar em `+`/`−` no PV ou em `Próximo turno ▶` envia `atlas.iniciativa-acao` e atualiza a faixa.
 Pronto quando: durante o Modo Sessão, o mestre controla iniciativa, turnos e PV de PJs e ameaças numa faixa única sincronizada com o Atlas e o Dossiê.
 Commit: `(feature) integrated combat initiative and quick hp bar in session mode`
+Nota: montado `<FaixaDeCombateSessao />` em `src/ui/App.tsx` dentro de `.sessao-envoltorio` logo acima de `<ModoSessao />`, com todos os estilos isolados em `src/ui/fase-8.css` para evitar conflito com edições paralelas em `src/ui/ModoSessao.tsx` e `src/ui/estilo.css`.

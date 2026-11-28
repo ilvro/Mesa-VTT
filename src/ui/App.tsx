@@ -10,6 +10,7 @@ import { Campanhas } from './Campanhas.tsx';
 import { Entidades } from './Entidades.tsx';
 import { MesaOnline } from './MesaOnline.tsx';
 import { ModoSessao } from './ModoSessao.tsx';
+import { FaixaDeCombateSessao } from './FaixaDeCombateSessao.tsx';
 import { BuscaRapida, buscaRapidaAberta } from './BuscaRapida.tsx';
 import { InspecaoDePista } from './InspecaoDePista.tsx';
 import { MenuDeContexto } from './MenuDeContexto.tsx';
@@ -62,7 +63,7 @@ function AppDoMestre() {
         ? <div class="carregando">Abrindo a campanha…</div>
         : r === 'indisponivel'
           ? <section class="pagina"><div class="aviso">Este navegador não deixa a Mesa guardar a campanha (IndexedDB indisponível). Abra em uma janela normal, fora do modo privado.</div></section>
-          : tela.value === 'campanhas' ? <Campanhas /> : tela.value === 'aplicativos' ? <Aplicativos /> : tela.value === 'online' ? <MesaOnline /> : tela.value === 'sessao' ? <ModoSessao /> : tela.value === 'quadros' ? (quadroAberto.value ? <Quadro /> : <Quadros />) : <Entidades />}
+          : tela.value === 'campanhas' ? <Campanhas /> : tela.value === 'aplicativos' ? <Aplicativos /> : tela.value === 'online' ? <MesaOnline /> : tela.value === 'sessao' ? <div class="sessao-envoltorio"><FaixaDeCombateSessao /><ModoSessao /></div> : tela.value === 'quadros' ? (quadroAberto.value ? <Quadro /> : <Quadros />) : <Entidades />}
       <Avisos />
       <BuscaRapida />
       <MenuDeContexto />

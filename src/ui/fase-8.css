@@ -185,3 +185,299 @@
   background: rgba(8, 7, 14, 0.72);
   border-top: 1px solid var(--borda);
 }
+
+/* Fase 8 (M8.2c) — Faixa de Combate / Iniciativa + PV rápido no Modo Sessão */
+.sessao-envoltorio {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.sessao-faixa-combate {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  background: color-mix(in srgb, var(--superficie), var(--fundo) 22%);
+  border-bottom: 1px solid var(--linha);
+  min-height: 44px;
+}
+
+.sessao-faixa-combate.recolhida {
+  justify-content: space-between;
+  padding: 5px 14px;
+  min-height: 38px;
+}
+
+.combate-recolhida-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.combate-recolhida-mapa {
+  font: 700 12px var(--titulo);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--texto);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.combate-controles {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.combate-rodada {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto);
+  border-color: var(--linha-forte);
+  padding: 4px 10px;
+}
+
+.combate-passo-btn {
+  padding: 5px 9px;
+}
+
+.combate-proximo-btn,
+.combate-seguir-btn,
+.combate-encerrar-btn {
+  padding: 5px 10px;
+  font-size: 10.5px;
+}
+
+.combate-fila {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 3px;
+  scrollbar-width: thin;
+}
+
+.combate-cartao {
+  flex: none;
+  min-width: 174px;
+  max-width: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border-radius: var(--raio);
+  background: var(--superficie-2);
+  border: 1px solid var(--linha);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.combate-cartao.atual {
+  border-color: color-mix(in srgb, #e5b84b, var(--acento) 35%);
+  background: color-mix(in srgb, var(--superficie-2), var(--acento) 12%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, #e5b84b, transparent 45%), 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.combate-cartao.critico {
+  border-color: color-mix(in srgb, var(--perigo), var(--linha) 30%);
+}
+
+.combate-cartao.atual.critico {
+  border-color: var(--perigo);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--perigo), transparent 35%), 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.combate-cartao-topo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.combate-identidade {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  text-align: left;
+  color: var(--texto);
+}
+
+.combate-identidade:hover .combate-nome {
+  color: var(--acento);
+}
+
+.combate-retrato {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--acento), var(--superficie) 78%);
+  border: 1px solid var(--linha-forte);
+  font: 700 11px var(--titulo);
+  color: var(--texto);
+}
+
+.combate-retrato img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.combate-nome {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.14s ease;
+}
+
+.combate-ini-input {
+  flex: none;
+  width: 44px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--linha);
+  background: var(--superficie);
+  color: var(--texto);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.combate-ini-input::-webkit-inner-spin-button,
+.combate-ini-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.combate-recursos {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.combate-pv-linha {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.combate-pv-btn {
+  flex: none;
+  width: 22px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: 1px solid var(--linha);
+  background: var(--superficie);
+  color: var(--texto);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+
+.combate-pv-btn:hover {
+  border-color: var(--acento);
+  background: var(--acento-suave);
+  color: var(--acento);
+}
+
+.combate-barra {
+  position: relative;
+  flex: 1;
+  min-width: 78px;
+  height: 20px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--linha);
+  background: color-mix(in srgb, var(--fundo), var(--superficie) 50%);
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.combate-barra:hover {
+  border-color: var(--acento);
+}
+
+.combate-barra-preenchimento {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--sucesso), var(--superficie) 42%);
+  transition: width 0.18s ease;
+}
+
+.combate-cartao.critico .combate-barra-preenchimento {
+  background: color-mix(in srgb, var(--perigo), var(--superficie) 28%);
+}
+
+.combate-barra-texto {
+  position: relative;
+  z-index: 1;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--texto);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.72);
+  white-space: nowrap;
+}
+
+.combate-pv-entrada {
+  flex: 1;
+  min-width: 78px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid var(--acento);
+  background: var(--fundo);
+  color: var(--texto);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.combate-pd-barra {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--fundo), var(--superficie) 50%);
+}
+
+.combate-pd-preenchimento {
+  display: block;
+  height: 100%;
+  background: color-mix(in srgb, var(--acento), #60a5fa 45%);
+  transition: width 0.18s ease;
+}
