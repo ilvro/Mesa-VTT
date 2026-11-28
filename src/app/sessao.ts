@@ -19,10 +19,28 @@ export function abrirProjetor(mapaId: string | null): void { projetorAberto.valu
 
 
 const CHAVE_LAYOUT = 'mesa:sessao-layout';
+const CHAVE_CONTROLE_JOGADORES = 'mesa:sessao-controle-jogadores';
 const chaveDasEscolhas = (campanhaId: string) => `mesa:sessao:${campanhaId}`;
 
 function lerJson(chave: string): unknown { try { const t = localStorage.getItem(chave); return t ? JSON.parse(t) : null; } catch { return null; } }
 function gravarJson(chave: string, valor: unknown): void { try { localStorage.setItem(chave, JSON.stringify(valor)); } catch { /* sem armazenamento: vale só nesta aba */ } }
+
+export type ControleJogadores = 'livres' | 'mestre';
+function lerControleJogadores(): ControleJogadores {
+  try { return localStorage.getItem(CHAVE_CONTROLE_JOGADORES) === 'mestre' ? 'mestre' : 'livres'; } catch { return 'livres'; }
+}
+/** Alterna entre deixar os jogadores livres (movem personagens e câmera) e controle do mestre (só o mestre move e controla a câmera da activity). */
+export const controleJogadores = signal<ControleJogadores>(lerControleJogadores());
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', e => {
+    if (e.key === CHAVE_CONTROLE_JOGADORES) controleJogadores.value = e.newValue === 'mestre' ? 'mestre' : 'livres';
+  });
+}
+export function definirControleJogadores(modo: ControleJogadores): void {
+  controleJogadores.value = modo;
+  try { localStorage.setItem(CHAVE_CONTROLE_JOGADORES, modo); } catch { /* sem armazenamento: vale só nesta aba */ }
+  barramentoDaMesa()?.emitir('mesa.controle-jogadores', { modo });
+}
 
 /** O layout dos painéis (vale para todas as campanhas: é do jeito de a pessoa jogar, não da campanha). */
 export const layout = signal<Layout>(lerLayout(lerJson(CHAVE_LAYOUT)));

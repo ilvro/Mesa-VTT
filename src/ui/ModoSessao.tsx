@@ -2,7 +2,7 @@ import { Fragment } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
 import { mesmaRef } from '#mesa';
-import { abrirProjetor, ativarCena, carregarEscolhas, cenaAtivadaNestaVisita, projetorAberto, escolhas, fichaDaAba, fichasEmAbas, layout, mapaAtual, mapas, mudarEscolhas, mudarLayout, personagens, alternarFicha, restaurarLayoutPadrao } from '../app/sessao.ts';
+import { abrirProjetor, ativarCena, carregarEscolhas, cenaAtivadaNestaVisita, controleJogadores, definirControleJogadores, projetorAberto, escolhas, fichaDaAba, fichasEmAbas, layout, mapaAtual, mapas, mudarEscolhas, mudarLayout, personagens, alternarFicha, restaurarLayoutPadrao } from '../app/sessao.ts';
 import { baseDoApp, inventario, sondarAplicativos } from '../app/inventario.ts';
 import { campanhaAtiva, entidades, ligacoes } from '../app/campanha.ts';
 import { enderecoDe } from '../app/aplicativos.ts';
@@ -387,6 +387,28 @@ export function ModoSessao() {
           </label>
         </div>
         <div class="sessao-zona sessao-zona-direita">
+          <div class="sessao-controle-jogadores" role="group" aria-label="Controle dos jogadores" data-testid="sessao-controle-jogadores">
+            <button
+              type="button"
+              class={cx('sessao-controle-btn', controleJogadores.value === 'livres' && 'ativo')}
+              aria-pressed={controleJogadores.value === 'livres'}
+              data-testid="sessao-controle-livres"
+              title="Jogadores podem mover suas peças e controlar a câmera da activity"
+              onClick={() => definirControleJogadores('livres')}
+            >
+              Jogadores livres
+            </button>
+            <button
+              type="button"
+              class={cx('sessao-controle-btn', controleJogadores.value === 'mestre' && 'ativo')}
+              aria-pressed={controleJogadores.value === 'mestre'}
+              data-testid="sessao-controle-mestre"
+              title="Apenas o mestre move peças e controla a câmera da activity"
+              onClick={() => definirControleJogadores('mestre')}
+            >
+              Controle do mestre
+            </button>
+          </div>
           {sessaoAtiva.value && (
             <button
               type="button"
