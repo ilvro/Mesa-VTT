@@ -3,6 +3,8 @@ import { useEffect, useState } from 'preact/hooks';
 import { repositorio } from '../app/campanha.ts';
 import { avisar } from '../app/toasts.ts';
 import { jogarSalaId, projecaoQuadroId, tela } from '../app/rotas.ts';
+import { Aprender } from './Aprender.tsx';
+import { Tutor } from './Tutor.tsx';
 import { Aplicativos } from './Aplicativos.tsx';
 import { Avisos } from './Avisos.tsx';
 import { Cabecalho } from './Cabecalho.tsx';
@@ -63,11 +65,12 @@ function AppDoMestre() {
         ? <div class="carregando">Abrindo a campanha…</div>
         : r === 'indisponivel'
           ? <section class="pagina"><div class="aviso">Este navegador não deixa a Mesa guardar a campanha (IndexedDB indisponível). Abra em uma janela normal, fora do modo privado.</div></section>
-          : tela.value === 'campanhas' ? <Campanhas /> : tela.value === 'aplicativos' ? <Aplicativos /> : tela.value === 'online' ? <MesaOnline /> : tela.value === 'sessao' ? <div class="sessao-envoltorio"><FaixaDeCombateSessao /><ModoSessao /></div> : tela.value === 'quadros' ? (quadroAberto.value ? <Quadro /> : <Quadros />) : <Entidades />}
+          : tela.value === 'aprender' ? <Aprender /> : tela.value === 'campanhas' ? <Campanhas /> : tela.value === 'aplicativos' ? <Aplicativos /> : tela.value === 'online' ? <MesaOnline /> : tela.value === 'sessao' ? <div class="sessao-envoltorio"><FaixaDeCombateSessao /><ModoSessao /></div> : tela.value === 'quadros' ? (quadroAberto.value ? <Quadro /> : <Quadros />) : <Entidades />}
       <Avisos />
       <BuscaRapida />
       <MenuDeContexto />
       <InspecaoDePista />
+      <Tutor />
     </>
   );
 }

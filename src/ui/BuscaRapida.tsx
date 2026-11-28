@@ -1,4 +1,3 @@
-import { signal } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { buscar, type ItemBusca } from '../dominio/busca.ts';
 import { campanhaAtiva, obterRepositorio } from '../app/campanha.ts';
@@ -18,7 +17,8 @@ import { NOME_DO_APP, ROTULO_DO_TIPO } from '../dominio/entidades.ts';
 import { abrirMenuContexto, acoesParaEntidade } from './MenuDeContexto.tsx';
 import { cx } from './cx.ts';
 
-export const buscaRapidaAberta = signal(false);
+import { buscaRapidaAberta } from '../app/sobreposicoes.ts';
+export { buscaRapidaAberta };
 
 export function fecharBuscaRapida(): void {
   buscaRapidaAberta.value = false;

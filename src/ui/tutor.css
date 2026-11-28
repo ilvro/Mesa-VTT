@@ -1,0 +1,29 @@
+/* O tutor: anel no alvo e o cartão do passo, sobre a interface de verdade. */
+.tutor { position: fixed; inset: 0; z-index: 90; pointer-events: none; }
+.tutor-anel { position: fixed; z-index: 91; border: 2px solid var(--acento); border-radius: 10px; box-shadow: 0 0 0 4px var(--acento-media), 0 0 24px var(--acento-media); transition: left 0.18s, top 0.18s, width 0.18s, height 0.18s; }
+.tutor-anel[hidden] { display: none; }
+.tutor-anel.insiste { animation: tutor-pulso 1s ease-in-out infinite; }
+@keyframes tutor-pulso { 50% { box-shadow: 0 0 0 9px var(--acento-media), 0 0 34px var(--acento); } }
+.tutor-cartao { position: fixed; z-index: 92; width: min(340px, calc(100vw - 24px)); padding: 12px 14px; background: var(--painel); border: 1px solid var(--linha-forte); border-radius: 12px; box-shadow: 0 14px 44px rgba(0, 0, 0, 0.55); pointer-events: auto; display: flex; flex-direction: column; gap: 7px; left: 24px; top: 24px; color: var(--texto); }
+.tutor-cartao header, .tutor-cartao footer { display: flex; align-items: center; gap: 8px; }
+.tutor-cartao header .eyebrow { flex: 1; font: 800 10px var(--corpo); letter-spacing: 0.1em; text-transform: uppercase; color: var(--apagado); }
+.tutor-cartao footer { justify-content: flex-end; flex-wrap: wrap; }
+.tutor-cartao .quieto { background: none; border: 0; color: var(--apagado); font: 700 12px var(--corpo); cursor: pointer; padding: 4px 6px; }
+.tutor-cartao .quieto:hover { color: var(--texto); } .tutor-cartao .quieto:disabled { opacity: 0.35; cursor: default; }
+.tutor-progresso { height: 3px; background: var(--linha); border-radius: 2px; overflow: hidden; } .tutor-progresso i { display: block; height: 100%; background: var(--acento); transition: width 0.25s; }
+.tutor-etapa, .tutor-sozinho { margin: 0; font: 800 10px var(--corpo); letter-spacing: 0.1em; text-transform: uppercase; color: var(--acento); }
+.tutor-diga { margin: 0; font: 600 14px/1.45 var(--corpo); } .tutor-porque { margin: 0; font: 500 12px/1.45 var(--corpo); color: var(--apagado); }
+.tutor-valores { margin: 0; padding: 6px 8px; border-radius: 8px; background: var(--superficie-2); font: 600 12px/1.5 var(--corpo); }
+.tutor-perdido { margin: 0; font: 600 12px var(--corpo); color: var(--perigo); } .tutor-perdido[hidden] { display: none; }
+.tutor-ajuda { display: flex; gap: 6px; }
+.tutor-aprendeu { margin: 0; padding-left: 18px; font: 500 12px/1.6 var(--corpo); } .tutor-aprendeu kbd { font: 700 11px var(--corpo); padding: 1px 5px; border: 1px solid var(--linha); border-radius: 4px; }
+
+/* A lista de tutoriais (aba Aprender). */
+.aprender { display: flex; flex-direction: column; gap: 8px; }
+.aprender-titulo { margin: 0; font: 700 20px var(--titulo); }
+.aprender-treino { margin: 0; padding: 8px 10px; border: 1px solid var(--linha); border-radius: 10px; background: var(--superficie); font: 600 12px var(--corpo); }
+.aprender-pasta { display: flex; flex-direction: column; gap: 6px; }
+.aprender-pasta-nome { margin: 8px 0 0; font: 800 11px var(--corpo); letter-spacing: 0.1em; text-transform: uppercase; color: var(--apagado); }
+.aprender-licao { padding: 8px 10px; border: 1px solid var(--linha); border-radius: 10px; background: var(--superficie); }
+.aprender-licao h4 { margin: 0 0 4px; font: 700 14px var(--titulo); } .aprender-licao small { font: 600 11px var(--corpo); color: var(--apagado); } .aprender-feita { color: var(--sucesso); font: 700 11px var(--corpo); }
+.aprender-acoes { display: flex; gap: 8px; }

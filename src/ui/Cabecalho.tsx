@@ -23,6 +23,7 @@ export function Cabecalho() {
         <button type="button" class={cx('ficha', tela.value === 'quadros' && 'ativa')} data-testid="aba-quadros" onClick={() => { navegarParaQuadro(quadroAberto.value?.id ?? null); }}>Quadros</button>
         <button type="button" class={cx('ficha', tela.value === 'sessao' && 'ativa')} data-testid="aba-sessao" onClick={() => { tela.value = 'sessao'; }}>Sessão</button>
         <button type="button" class={cx('ficha', tela.value === 'online' && 'ativa')} data-testid="aba-online" onClick={() => { tela.value = 'online'; }}>Online</button>
+        <button type="button" class={cx('ficha', tela.value === 'aprender' && 'ativa')} data-testid="aba-aprender" onClick={() => { tela.value = 'aprender'; }}>Aprender</button>
         <button type="button" class={cx('ficha', tela.value === 'campanhas' && 'ativa')} data-testid="aba-campanhas" onClick={() => { tela.value = 'campanhas'; }}>Campanhas</button>
         <button type="button" class={cx('ficha', tela.value === 'aplicativos' && 'ativa')} data-testid="aba-aplicativos" onClick={() => { tela.value = 'aplicativos'; void sondarAplicativos(); }}>Aplicativos</button>
       </nav>

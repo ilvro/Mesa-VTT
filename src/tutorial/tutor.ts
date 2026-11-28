@@ -1,4 +1,5 @@
 import { signal, type Signal } from '@preact/signals';
+import type { Semente } from './semente.ts';
 import { atendida, type Condicao, type EstadoDoTutor } from './condicoes.ts';
 
 /** O que um teste faz para executar um passo pela interface de verdade (a lição não escreve os gestos duas vezes: o tutor também os usa para mostrar os valores). */
@@ -39,6 +40,8 @@ export interface Licao {
   oculta?: boolean;
   /** O resumo de uma linha na lista. */
   resumo?: string;
+  /** O que a campanha de treino leva para a lição começar (entidades, quadro, itens). */
+  semente?: Semente;
 }
 
 export interface InfoDaLicao { id: string; titulo: string; indice: number; total: number }

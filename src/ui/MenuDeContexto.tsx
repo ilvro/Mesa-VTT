@@ -1,4 +1,3 @@
-import { signal } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Entidade, Ref } from '#mesa';
 import { abrirNoApp } from '../app/barramento.ts';
@@ -10,22 +9,8 @@ import { ehEncontro, NOME_DO_APP, NOME_DO_TIPO_DE_REF } from '../dominio/entidad
 import { ehRefDeEntidadeDaMesa } from '../dominio/notas.ts';
 import { abrirInspecaoNaMesa } from './InspecaoDePista.tsx';
 
-export type AcaoMenuContexto = {
-  id: string;
-  rotulo: string;
-  perigo?: boolean;
-  confirmar?: boolean;
-  executar: () => void | Promise<unknown>;
-};
-
-export interface EstadoMenuContexto {
-  x: number;
-  y: number;
-  titulo?: string;
-  acoes: readonly AcaoMenuContexto[];
-}
-
-export const menuContexto = signal<EstadoMenuContexto | null>(null);
+import { menuContexto, type AcaoMenuContexto, type EstadoMenuContexto } from '../app/sobreposicoes.ts';
+export { menuContexto, type AcaoMenuContexto, type EstadoMenuContexto };
 
 export function fecharMenuContexto(): void {
   menuContexto.value = null;

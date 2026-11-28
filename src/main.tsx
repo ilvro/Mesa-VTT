@@ -16,6 +16,7 @@ import '@fontsource/jetbrains-mono/400-italic.css';
 import '@fontsource/jetbrains-mono/700.css';
 import '@fontsource/jetbrains-mono/700-italic.css';
 import './ui/estilo.css';
+import './ui/tutor.css';
 import { render } from 'preact';
 import { atualizar, campanhaAtiva, campanhas, entidades, iniciarCampanhas, observarCampanhaAtiva, repositorio } from './app/campanha.ts';
 import { iniciarFocoDoQuadro } from './app/foco-do-quadro.ts';
