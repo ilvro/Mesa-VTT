@@ -105,6 +105,7 @@ import {
   type ModoMoldurasAgem,
 } from '../../app/foco-do-quadro.ts';
 import { navegarParaQuadro, tela } from '../../app/rotas.ts';
+import { ferramentaDoQuadro, modoDoQuadro } from '../../app/quadro-ui.ts';
 import { cx } from '../cx.ts';
 import {
   alteracoesDoArrasto,
@@ -240,6 +241,9 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
   const menuContexto = useSignal<{ x: number; y: number; pontoMundo: Ponto } | null>(null);
   const ultimoTextoCopiadoRef = useRef<string | null>(null);
   const espacoPressionado = useSignal(false);
+  // Espelho para o tutor (src/app/quadro-ui.ts): lê a ferramenta e o modo sem tocar na UI.
+  useEffect(() => { ferramentaDoQuadro.value = ferramenta.value; modoDoQuadro.value = modoQuadro.value; });
+  useEffect(() => () => { ferramentaDoQuadro.value = 'selecionar'; modoDoQuadro.value = 'quadro'; }, []);
   // No modo sessão o quadro divide a tela com outros painéis: os atalhos e a colagem só valem com ele ativo
   // (o último clique ou foco foi dentro dele). Fora do modo sessão, ele nasce ativo.
   const quadroAtivo = useSignal(tela.value !== 'sessao');
