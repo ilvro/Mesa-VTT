@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fichaCobreOMapa, mensagemDeVista, mensagemDoJogador, projetorPronto, vistaDaFicha, vistaPedidaPeloDossie } from '../../../src/jogar/vista-ficha.ts';
+import { dossiePronto, fichaCobreOMapa, mensagemDeVista, mensagemDoJogador, projetorPronto, vistaDaFicha, vistaPedidaPeloDossie } from '../../../src/jogar/vista-ficha.ts';
 
 const janela = {}, outra = {};
 const pedido = { tipo: 'dossie.pedir-vista', vista: 'completa' };
@@ -38,4 +38,13 @@ test('projetorPronto só aceita mensagem do iframe do projetor na mesma origem',
   assert.equal(projetorPronto({ source: janela, origin: 'http://a', data: { tipo: 'outro' } }, janela, 'http://a'), false);
   assert.equal(projetorPronto({ source: janela, origin: 'http://a', data: null }, janela, 'http://a'), false);
   assert.equal(projetorPronto({ source: janela, origin: 'http://a', data: { tipo: 'projetor.pronto' } }, null, 'http://a'), false);
+});
+
+test('dossiePronto só aceita mensagem do iframe do Dossiê na mesma origem', () => {
+  assert.equal(dossiePronto({ source: janela, origin: 'http://a', data: { tipo: 'dossie.pronto' } }, janela, 'http://a'), true);
+  assert.equal(dossiePronto({ source: outra, origin: 'http://a', data: { tipo: 'dossie.pronto' } }, janela, 'http://a'), false);
+  assert.equal(dossiePronto({ source: janela, origin: 'http://b', data: { tipo: 'dossie.pronto' } }, janela, 'http://a'), false);
+  assert.equal(dossiePronto({ source: janela, origin: 'http://a', data: { tipo: 'outro' } }, janela, 'http://a'), false);
+  assert.equal(dossiePronto({ source: janela, origin: 'http://a', data: null }, janela, 'http://a'), false);
+  assert.equal(dossiePronto({ source: janela, origin: 'http://a', data: { tipo: 'dossie.pronto' } }, null, 'http://a'), false);
 });

@@ -22,6 +22,13 @@ export function projetorPronto(ev: { source: unknown; origin: string; data: unkn
   return !!d && typeof d === 'object' && d.tipo === 'projetor.pronto';
 }
 
+/** Um aviso `postMessage` do Dossiê indicando que já carregou as fichas e registrou os ouvintes de mensagem. */
+export function dossiePronto(ev: { source: unknown; origin: string; data: unknown }, janelaDoDossie: unknown, origemLocal: string): boolean {
+  if (!janelaDoDossie || ev.source !== janelaDoDossie || ev.origin !== origemLocal) return false;
+  const d = ev.data as { tipo?: unknown } | null;
+  return !!d && typeof d === 'object' && d.tipo === 'dossie.pronto';
+}
+
 /** A vista que o Dossiê mostra. No celular na vertical, as abas decidem (Ficha = completa); fora dele, vale o pedido (`aberta`). */
 export function vistaDaFicha(o: { celularVertical: boolean; aba: AbaDaCasca; aberta: boolean }): VistaDaFicha {
   return o.celularVertical ? (o.aba === 'ficha' ? 'completa' : 'card') : (o.aberta ? 'completa' : 'card');

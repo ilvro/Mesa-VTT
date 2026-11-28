@@ -275,6 +275,30 @@ test('ficha.removida (entregue a outro jogador): a ponte esquece a ficha e avisa
   ponte.fechar();
 });
 
+test('sala.fichas traz ativaId de membro.personagem no bem-vindo e acompanha atualizações de membros', async () => {
+  const { dossie, emitir, ponte } = comDossie();
+  emitir({
+    tipo: 'bem-vindo',
+    eu,
+    membros: [{ ...mestre, personagem: null }, { ...eu, personagem: 'b' }],
+    fichas: [ficha('a'), ficha('b')],
+    revs: { a: 1, b: 1 },
+    donos: { a: '2', b: '2' },
+    ultimoEstado: {},
+  } as unknown as MensagemDaSala);
+  const r1 = await dossie.pedir('sala.fichas', {}) as unknown as { resposta: { ativaId?: string } };
+  assert.equal(r1.resposta.ativaId, 'b');
+
+  emitir({ tipo: 'membros', membros: [{ ...mestre, personagem: null }, { ...eu, personagem: 'a' }] });
+  const r2 = await dossie.pedir('sala.fichas', {}) as unknown as { resposta: { ativaId?: string } };
+  assert.equal(r2.resposta.ativaId, 'a');
+
+  emitir({ tipo: 'membros', membros: [{ ...mestre, personagem: null }, { ...eu, personagem: null }] });
+  const r3 = await dossie.pedir('sala.fichas', {}) as unknown as { resposta: { ativaId?: string } };
+  assert.equal('ativaId' in r3.resposta, false);
+  ponte.fechar();
+});
+
 test('aoDossiePronto é chamado quando o Dossiê pede sala.fichas', async () => {
   Canal.todos.clear(); Canal.escritos = [];
   const f = clienteFalso();

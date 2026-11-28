@@ -208,7 +208,7 @@ function PainelDoMestre({ sessao }: { sessao: string }) {
       </div>
       {conexao !== 'desconectada' && ponte.semNevoa.map(x => (
         <div key={x.mapa} class="aviso suave" data-testid="online-sem-nevoa">
-          <p>Este mapa está sem névoa: os jogadores vão receber o mapa inteiro.</p>
+          <p>Este mapa está sem névoa de guerra — os jogadores vão ver o mapa inteiro. Ative a névoa no Atlas ou clique em “Mandar assim mesmo”.</p>
           <p class="meta">{x.nome}</p>
           <button type="button" class="botao-pilula perigo" data-testid="online-sem-nevoa-confirmar" onClick={() => confirmarSemNevoa(x.mapa)}>Mandar assim mesmo</button>
         </div>

@@ -4,7 +4,8 @@ import { baseDoApp } from '../app/inventario.ts';
 import { carregarSessaoOnline, iniciarLogin, sairDoOnline, sessaoOnline } from '../app/online-login.ts';
 import { conectarSala, type ClienteDaSala, type EstadoDaSala } from '../online/cliente.ts';
 import { urlDoWebSocket } from '../online/config.ts';
-import type { ConfigSala, Eu, FichaDaSala, Membro } from '../online/protocolo.ts';
+import type { ConfigSala, Eu, FichaDaSala, Membro, ModoDaSala, ResumoConstrucao } from '../online/protocolo.ts';
+import { enviarAberturaConstrucao } from '../online/mapa-inicial.ts';
 import { deveMostrarSaguao, estadoDoSaguao, retratoDaFicha } from '../online/saguao.ts';
 import {
   BASE_PROXY_DISCORD,
@@ -21,7 +22,7 @@ import { criarPonteDoJogador, type CanalLocal } from './ponte-jogador.ts';
 import { Saguao } from './Saguao.tsx';
 import { criarSomDaCasca, type EstadoDoSomNaCasca, type SomDaCasca } from './som.ts';
 import { lerPreferenciasDeSom } from '../online/sincronia.ts';
-import { fichaCobreOMapa, mensagemDeVista, mensagemDoJogador, projetorPronto, vistaDaFicha, vistaPedidaPeloDossie } from './vista-ficha.ts';
+import { dossiePronto, fichaCobreOMapa, mensagemDeVista, mensagemDoJogador, projetorPronto, vistaDaFicha, vistaPedidaPeloDossie } from './vista-ficha.ts';
 import './casca.css';
 
 /** O endereço do projetor remoto do Atlas para esta sala. Não muda quando o mestre troca de mapa: o projetor aceita o `estado` de qualquer mapa. */
@@ -248,6 +249,7 @@ function Sala({
   const [membros, setMembros] = useState<Membro[]>([]);
   const [fichas, setFichas] = useState<FichaDaSala[]>([]);
   const [config, setConfig] = useState<ConfigSala | null>(null);
+  const [construcaoResumo, setConstrucaoResumo] = useState<ResumoConstrucao>({ temMapa: false, rev: 0 });
   const [capaUrl, setCapaUrl] = useState<string | null>(null);
   const [saguaoAberto, setSaguaoAberto] = useState(false);
   const [somPainelAberto, setSomPainelAberto] = useState(false);
@@ -277,7 +279,7 @@ function Sala({
   const baseFicha = emDiscord ? baseDoAppNoDiscord('ficha') : baseDoApp('ficha');
 
   useEffect(() => {
-    setErro(null); setTemMapa(false);
+    setErro(null); setTemMapa(false); setConstrucaoResumo({ temMapa: false, rev: 0 });
     let cliente: ClienteDaSala | null = null;
     const wsUrl = emDiscord ? urlDoWebSocket(salaId, `${location.origin}${BASE_PROXY_DISCORD}`) : urlDoWebSocket(salaId);
     cliente = conectarSala({
@@ -304,6 +306,7 @@ function Sala({
       setMembros(m.membros);
       setFichas(m.fichas);
       aplicarConfig(m.config);
+      setConstrucaoResumo(m.construcao ?? { temMapa: false, rev: 0 });
       const por: Record<string, string> = {};
       for (const f of m.fichas) {
         const img = retratoDaFicha(f, baseFicha);
@@ -313,6 +316,21 @@ function Sala({
     });
     const sairMembros = cliente.ouvir('membros', m => setMembros(m.membros));
     const sairConfig = cliente.ouvir('config', m => aplicarConfig(m.config));
+    const sairConstrucaoEstado = cliente.ouvir('construcao.estado', m => {
+      const rev = m.ops.reduce((acc, op) => Math.max(acc, op.rev), m.rev);
+      const nomeMapa = m.nome ?? (typeof m.mapa?.name === 'string' && m.mapa.name ? m.mapa.name : undefined);
+      setConstrucaoResumo({
+        temMapa: true,
+        rev,
+        ...(nomeMapa !== undefined ? { nome: nomeMapa } : {}),
+      });
+    });
+    const sairConstrucaoAplicada = cliente.ouvir('construcao.aplicada', m => {
+      setConstrucaoResumo(prev => (prev.temMapa ? { ...prev, rev: Math.max(prev.rev, m.rev) } : prev));
+    });
+    const sairConstrucaoFechada = cliente.ouvir('construcao.fechada', () => {
+      setConstrucaoResumo({ temMapa: false, rev: 0 });
+    });
     const sairAtualizada = cliente.ouvir('ficha.atualizada', m => {
       setFichas(fs => fs.some(x => x.id === m.ficha.id) ? fs.map(x => x.id === m.ficha.id ? m.ficha : x) : [...fs, m.ficha]);
       const img = retratoDaFicha(m.ficha, baseFicha);
@@ -335,6 +353,7 @@ function Sala({
       salaId,
       criarCanal: n => new BroadcastChannel(n) as unknown as CanalLocal,
       aoTerMapa: () => setTemMapa(true),
+      aoSemMapa: () => setTemMapa(false),
       aoDossiePronto: () => mandarVistaAtual.current(),
     });
     const baseJukebox = emDiscord ? baseDoAppNoDiscord('jukebox') : baseDoApp('jukebox');
@@ -344,18 +363,19 @@ function Sala({
     const sairSom = som.aoMudar(setEstadoSom);
     return () => {
       sairSom(); som.fechar(); somRef.current = null;
-      sairEstado(); sairBemVindo(); sairMembros(); sairConfig(); sairAtualizada(); sairRemovida(); sairBlob();
+      sairEstado(); sairBemVindo(); sairMembros(); sairConfig(); sairConstrucaoEstado(); sairConstrucaoAplicada(); sairConstrucaoFechada(); sairAtualizada(); sairRemovida(); sairBlob();
       if (capaUrlRef.current) { URL.revokeObjectURL(capaUrlRef.current); capaUrlRef.current = null; }
       capaBlobIdRef.current = null;
       ponte.fechar(); cliente?.fechar();
     };
   }, [salaId, sessao, emDiscord]);
 
-  // Pedido do card ("Ficha completa") e aviso do projetor remoto ("projetor.pronto"): só dos `iframe`s da casca, na mesma origem.
+  // Pedido do card ("Ficha completa") e avisos de pronto do Dossiê e do projetor remoto: só dos `iframe`s da casca, na mesma origem.
   useEffect(() => {
     const ouvir = (ev: MessageEvent) => {
       const pedida = vistaPedidaPeloDossie(ev, quadro.current?.contentWindow, location.origin);
       if (pedida) setAberta(pedida === 'completa');
+      if (dossiePronto(ev, quadro.current?.contentWindow, location.origin)) mandarVistaAtual.current();
       if (projetorPronto(ev, projetorQuadro.current?.contentWindow, location.origin)) mandarJogadorAtual.current();
     };
     addEventListener('message', ouvir);
@@ -364,11 +384,22 @@ function Sala({
   const meuPersonagemId = (eu ? membros.find(m => m.discordId === eu.discordId)?.personagem : undefined) ?? null;
   const meuPersonagemAtual = useRef<string | null>(null);
   meuPersonagemAtual.current = meuPersonagemId;
+  const fichasChave = fichas.map(f => f.id).join(',');
+  const modo: ModoDaSala = config?.modo ?? 'sessao';
+  const saguaoObrigatorio = deveMostrarSaguao({
+    modo,
+    temMapa,
+    temMapaConstrucao: construcaoResumo.temMapa,
+    papel: eu?.papel ?? 'jogador',
+    personagem: meuPersonagemId,
+  });
+  const editandoFicha = modo === 'sessao' && (aberta || (celular && aba === 'ficha'));
+  const mostrarSaguao = erro !== 'sala' && !editandoFicha && (saguaoAberto || saguaoObrigatorio);
   const mandarFichaAtiva = (id: string | null = meuPersonagemAtual.current) => {
     if (!id) return;
     try { quadro.current?.contentWindow?.postMessage({ tipo: 'dossie:abrir-ficha', fichaId: id }, location.origin); } catch { /* o Dossiê ainda não carregou */ }
   };
-  useEffect(() => { mandarFichaAtiva(meuPersonagemId); }, [meuPersonagemId]);
+  useEffect(() => { mandarFichaAtiva(meuPersonagemId); }, [meuPersonagemId, fichasChave, mostrarSaguao]);
   // A vista muda por mensagem, sem recarregar o `iframe`.
   const mandarVista = () => {
     try { quadro.current?.contentWindow?.postMessage(mensagemDeVista(vistaAtual.current), location.origin); } catch { /* o Dossiê ainda não carregou */ }
@@ -380,7 +411,6 @@ function Sala({
   const espectador = eu?.papel === 'mestre';
   const espectadorAtual = useRef(espectador);
   espectadorAtual.current = espectador;
-  const fichasChave = fichas.map(f => f.id).join(',');
   const fichasIdsAtual = useRef<string[]>([]);
   fichasIdsAtual.current = fichas.map(f => f.id);
   const mandarJogador = () => {
@@ -401,11 +431,16 @@ function Sala({
 
   if (erro === 'sessao') return null;   // volta para "Entrar" com o aviso
   const selo = conexao === 'aberta' ? 'Conectado' : 'Reconectando…';
-  const saguaoObrigatorio = deveMostrarSaguao({ temMapa, papel: eu?.papel ?? 'jogador', personagem: meuPersonagemId });
-  const editandoFicha = aberta || (celular && aba === 'ficha');
-  const mostrarSaguao = erro !== 'sala' && !editandoFicha && (saguaoAberto || saguaoObrigatorio);
   const baseAvatar = emDiscord ? `${BASE_PROXY_DISCORD}/sala/cdn` : undefined;
   const resumoSaguao = estadoDoSaguao(membros, fichas, temMapa, baseFicha, baseAvatar);
+
+  const mudarModo = (novoModo: ModoDaSala) => {
+    clienteSala?.enviar({ tipo: 'sala.modo', modo: novoModo });
+  };
+  const abrirMapaConstrucao = async (mapa: Record<string, unknown>, nomeMapa?: string) => {
+    await enviarAberturaConstrucao(clienteSala, mapa, nomeMapa);
+    setSaguaoAberto(false);
+  };
 
   const escolherPersonagem = (fichaId: string) => {
     clienteSala?.enviar({ tipo: 'membro.personagem', fichaId });
@@ -438,7 +473,7 @@ function Sala({
             )}
           </div>
         )}
-        <FeedDeRolagens cliente={clienteSala} salaId={salaId} nome={nome} retratos={retratos} />
+        <FeedDeRolagens cliente={clienteSala} salaId={salaId} nome={nome} retratos={retratos} eu={eu} membros={membros} baseAvatar={baseAvatar} />
         {!mostrarSaguao && erro !== 'sala' && (
           <div class="casca-topo-direita">
             {estadoSom.bloqueado && (
@@ -532,8 +567,13 @@ function Sala({
           meuPersonagemId={meuPersonagemId}
           podeFechar={!saguaoObrigatorio}
           espectador={espectador}
+          ehMestre={espectador}
+          modo={modo}
+          construcao={construcaoResumo}
           preparandoSons={estadoSom.preparando}
           aoLiberarSom={() => somRef.current?.liberar()}
+          aoMudarModo={mudarModo}
+          aoAbrirMapaConstrucao={abrirMapaConstrucao}
           aoEscolher={escolherPersonagem}
           aoNovaFicha={abrirNovaFicha}
           aoImportar={importarFichas}

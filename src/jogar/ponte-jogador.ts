@@ -39,6 +39,8 @@ export interface OpcoesDaPonteDoJogador {
   prazoDoBlobMs?: number;
   /** A primeira vez que um `estado` foi entregue ao projetor local (a sala já tem mapa). */
   aoTerMapa?: () => void;
+  /** O mestre encerrou a sessão / fechou a mesa online: volta ao estado sem mapa. */
+  aoSemMapa?: () => void;
   /** Chamado quando o Dossiê pede `sala.fichas` (sinal de que carregou e registrou seus listeners). */
   aoDossiePronto?: () => void;
   aviso?: (texto: string) => void;
@@ -75,10 +77,11 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
   const projetor = abrir(canalProjetorDaSala(salaId));
   const eventos = abrir(canalEventosDaSala(salaId));
 
-  // Fichas do jogador: o que a sala tem (o `bem-vindo` e as `ficha.atualizada`), o `rev` de cada uma e quem sou eu.
+  // Fichas do jogador: o que a sala tem (o `bem-vindo` e as `ficha.atualizada`), o `rev` de cada uma, quem sou eu e o personagem ativo.
   const fichas = new Map<string, FichaDaSala>();
   const revs = new Map<string, number>();
   let eu: Eu | null = null;
+  let personagemAtivo: string | null = null;
   let abriu: () => void = () => {};
   const aberta = new Promise<void>(r => { abriu = r; });
   const barramento = criarBarramento({ app: 'mesa', campanhaId: null, criarCanal: () => abrir(canalEventosDaSala(salaId)), aviso: avisar });
@@ -86,7 +89,8 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
   const blobs = new Map<string, Blob>();
   const esperando = new Map<string, Set<(b: Blob | null) => void>>();
   let fechada = false, temMapa = false;
-  let ultimoEstado: unknown = null, ultimaCamera: unknown = null;
+  let ultimoEstado: unknown = null, ultimaCamera: unknown = null, ultimoControle: unknown = null;
+  const ultimosRetratos = new Map<string, unknown>();
 
   /** O blob `id`: o que já chegou, ou o que chegar em até `prazo` ms; `null` depois disso. */
   function blob(id: string): Promise<Blob | null> {
@@ -124,11 +128,18 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
   /** Um de cada vez, na ordem em que chegaram: uma mensagem que espera um blob segura as seguintes (a ordem importa: `estado` antes de `camera`). */
   let fila: Promise<void> = Promise.resolve();
   async function entregar(msg: unknown): Promise<void> {
+    if (ehObj(msg) && msg.tipo === 'encerrado') {
+      ultimoEstado = null; ultimaCamera = null; ultimoControle = null; ultimosRetratos.clear();
+      if (temMapa) { temMapa = false; o.aoSemMapa?.(); }
+      return;
+    }
     const pronta = await remontar(msg);
     if (!pronta || fechada) return;
     const tipo = (pronta as Obj).tipo;
     if (tipo === 'estado') { ultimoEstado = pronta; if (!temMapa) { temMapa = true; o.aoTerMapa?.(); } }
     else if (tipo === 'camera') ultimaCamera = pronta;
+    else if (tipo === 'controle-jogadores') ultimoControle = pronta;
+    else if (tipo === 'retrato' && typeof (pronta as Obj).id === 'string') ultimosRetratos.set((pronta as Obj).id as string, pronta);
     projetor.postMessage(pronta);
   }
   const enfileirar = (msg: unknown): void => { fila = fila.then(() => entregar(msg)).catch(() => { /* uma mensagem ruim não para a fila */ }); };
@@ -139,6 +150,8 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
     if (!ehObj(data) || data.tipo !== 'ola') return;
     if (ultimoEstado) projetor.postMessage(ultimoEstado);
     if (ultimaCamera) projetor.postMessage(ultimaCamera);
+    if (ultimoControle) projetor.postMessage(ultimoControle);
+    for (const r of ultimosRetratos.values()) projetor.postMessage(r);
   };
 
   eventos.onmessage = ({ data }) => { if (eventoPodeSair(data)) cliente.enviar({ tipo: 'evento', envelope: data }); };
@@ -147,7 +160,13 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
     o.aoDossiePronto?.();
     await aberta;
     const minhas = [...fichas.values()].filter(f => !donos.has(f.id) || !eu || donos.get(f.id) === eu.discordId);
-    return { ok: true, fichas: minhas, revs: Object.fromEntries(minhas.filter(f => revs.has(f.id)).map(f => [f.id, revs.get(f.id)])), ...(eu ? { eu: { discordId: eu.discordId, nome: eu.nome } } : {}) };
+    return {
+      ok: true,
+      fichas: minhas,
+      revs: Object.fromEntries(minhas.filter(f => revs.has(f.id)).map(f => [f.id, revs.get(f.id)])),
+      ...(eu ? { eu: { discordId: eu.discordId, nome: eu.nome } } : {}),
+      ...(personagemAtivo ? { ativaId: personagemAtivo } : {}),
+    };
   });
   barramento.atender('sala.salvar-ficha', dados => {
     const { ficha, rev } = dados as { ficha: FichaDaSala; rev?: number };
@@ -160,11 +179,15 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
   const soltar = [
     cliente.ouvir('bem-vindo', m => {
       eu = m.eu;
+      personagemAtivo = m.membros.find(x => x.discordId === m.eu.discordId)?.personagem ?? null;
       fichas.clear(); revs.clear(); donos.clear();
       for (const f of m.fichas) fichas.set(f.id, f);
       for (const [id, r] of Object.entries(m.revs ?? {})) revs.set(id, r);
       for (const [id, d] of Object.entries(m.donos ?? {})) donos.set(id, d);
       abriu();
+    }),
+    cliente.ouvir('membros', m => {
+      if (eu) personagemAtivo = m.membros.find(x => x.discordId === eu!.discordId)?.personagem ?? null;
     }),
     cliente.ouvir('ficha.atualizada', m => {
       if (fechada) return;
@@ -181,7 +204,12 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
     }),
     cliente.ouvir('canal', m => { if (m.nome.startsWith('atlas:projetor:')) enfileirar(m.msg); }),
     cliente.ouvir('evento', m => { if (!fechada) eventos.postMessage(m.envelope); }),
-    cliente.ouvir('bem-vindo', m => { for (const [nome, msg] of Object.entries(m.ultimoEstado ?? {})) if (nome.startsWith('atlas:projetor:')) enfileirar(msg); }),
+    cliente.ouvir('bem-vindo', m => {
+      const entradas = Object.entries(m.ultimoEstado ?? {}).filter(([nome]) => nome.startsWith('atlas:projetor:'));
+      for (const [nome, msg] of entradas) if (!nome.endsWith(':controle') && !nome.includes(':retrato:')) enfileirar(msg);
+      for (const [nome, msg] of entradas) if (nome.includes(':retrato:')) enfileirar(msg);
+      for (const [nome, msg] of entradas) if (nome.endsWith(':controle')) enfileirar(msg);
+    }),
     cliente.ouvirBlob((id, b) => {
       blobs.set(id, b);
       for (const f of [...(esperando.get(id) ?? [])]) f(b);
