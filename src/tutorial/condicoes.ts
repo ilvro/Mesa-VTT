@@ -72,6 +72,8 @@ export const CONDICOES: Record<string, (e: EstadoDoTutor, ...a: never[]) => bool
   /** `n` itens do tipo dentro de uma moldura. */
   dentroDeMoldura: (e, tipo: string, n: number) => e.itens.filter(i => i.tipo === tipo && i.molduraId !== null).length >= n,
   selecionados: (e, n: number) => e.selecao.length >= n,
+  /** Há `n` itens selecionados daquele tipo (ex.: a moldura, para o menu dela). */
+  selecaoDe: (e, tipo: string, n = 1) => e.itens.filter(i => i.tipo === tipo && e.selecao.includes(i.id)).length >= n,
   semRevisao: e => !e.itens.some(i => i.revisao !== undefined),
   modelos: (e, n: number) => e.modelosDesde >= n,
   projetando: e => e.projetando,

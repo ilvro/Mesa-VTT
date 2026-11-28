@@ -37,6 +37,7 @@ test('itens, molduraComTitulo, dentroDeMoldura, selecionados, semRevisao', () =>
   assert.equal(ok(['molduraComTitulo', 'cena 1'], e), true); assert.equal(ok(['molduraComTitulo', 'Outra'], e), false);
   assert.equal(ok(['dentroDeMoldura', 'texto', 1], e), true); assert.equal(ok(['dentroDeMoldura', 'texto', 2], e), false);
   assert.equal(ok(['selecionados', 2], e), true); assert.equal(ok(['selecionados', 3], e), false);
+  assert.equal(ok(['selecaoDe', 'moldura'], e), false); assert.equal(ok(['selecaoDe', 'texto', 2], e), true); assert.equal(ok(['selecaoDe', 'moldura'], com({ itens: [m], selecao: ['m'] })), true);
   assert.equal(ok(['semRevisao'], e), true);
   const rev = texto('r', 'x', { revisao: { tipoSugerido: null, motivos: [], origem: 'miro' } });
   assert.equal(ok(['semRevisao'], com({ itens: [rev] })), false);
