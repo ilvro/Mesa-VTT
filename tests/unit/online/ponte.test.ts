@@ -618,6 +618,9 @@ test('projetar-ficha e pedir-retrato passam pela ponte do mestre', async () => {
 
   emitir({ tipo: 'pedir-retrato', id: 'r-muirenn' });
   assert.deepEqual(recebidasAtlas, [{ tipo: 'pedir-retrato', id: 'r-muirenn' }]);
+
+  emitir({ tipo: 'alternar-porta', id: 'porta-1' });
+  assert.deepEqual(recebidasAtlas[1], { tipo: 'alternar-porta', id: 'porta-1' });
   ponte.fechar();
 });
 

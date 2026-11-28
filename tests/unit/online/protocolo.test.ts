@@ -168,3 +168,10 @@ test('protocolo de construção colaborativa: sala -> cliente, config.modo e bem
   ];
   for (const r of ruins) assert.equal(lerMensagemDaSala(r), null, r);
 });
+
+test('alternar-porta é aceito em lerMensagemParaSala e lerMensagemDaSala', () => {
+  assert.deepEqual(lerMensagemParaSala(j({ tipo: 'alternar-porta', id: 'porta-1' })), { tipo: 'alternar-porta', id: 'porta-1' });
+  assert.deepEqual(lerMensagemDaSala(j({ tipo: 'alternar-porta', id: 'porta-1' })), { tipo: 'alternar-porta', id: 'porta-1' });
+  assert.equal(lerMensagemParaSala(j({ tipo: 'alternar-porta', id: '' })), null);
+  assert.equal(lerMensagemDaSala(j({ tipo: 'alternar-porta' })), null);
+});

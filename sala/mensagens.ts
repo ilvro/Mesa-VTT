@@ -409,6 +409,8 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
       }
       return [{ destino: 'outros', msg: { tipo: 'pedir-retrato', id: msg.id } }];
     }
+    case 'alternar-porta':
+      return [{ destino: 'outros', msg: { tipo: 'alternar-porta', id: msg.id } }];
     case 'blob':
       // `estado:<mapa>:<versao>` pode voltar com outro conteúdo (a versão recomeça numa sessão nova): o novo substitui
       if (msg.id.startsWith(PREFIXO_ESTADO)) estado.apagarBlob(msg.id);

@@ -606,6 +606,9 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     cliente.ouvir('pedir-retrato', m => {
       if (!fechada && estado.publicando) projetor.postMessage({ tipo: 'pedir-retrato', id: m.id });
     }),
+    cliente.ouvir('alternar-porta', m => {
+      if (!fechada && estado.publicando) projetor.postMessage({ tipo: 'alternar-porta', id: m.id });
+    }),
     cliente.ouvir('blob.tem', m => respostas.get(m.id)?.({ tem: m.tem, ...(m.tamanho !== undefined ? { tamanho: m.tamanho } : {}) })),
     cliente.ouvir('membros', m => { lembrarNomes(m.membros); atualizarPresenca(m.membros, false); }),
     cliente.ouvir('ficha.atualizada', m => {

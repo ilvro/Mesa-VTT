@@ -147,3 +147,15 @@ test('projetar-ficha local do mestre preserva ficha inline no ultimoEstado e ent
   const bv = bemVindo(e, ana, todos, 2);
   assert.deepEqual(bv.ultimoEstado[`${CANAL}:ficha-projetada`], { tipo: 'projetar-ficha', fichaId: 'f-npc', ficha: fichaLocal });
 });
+
+test('alternar-porta é permitido a jogador e mestre e encaminhado aos outros', () => {
+  const e = sala();
+  assert.deepEqual(
+    tratar(e, ana, j({ tipo: 'alternar-porta', id: 'porta-42' }), 1, todos),
+    [{ destino: 'outros', msg: { tipo: 'alternar-porta', id: 'porta-42' } }],
+  );
+  assert.deepEqual(
+    tratar(e, mestre, j({ tipo: 'alternar-porta', id: 'porta-42' }), 2, todos),
+    [{ destino: 'outros', msg: { tipo: 'alternar-porta', id: 'porta-42' } }],
+  );
+});

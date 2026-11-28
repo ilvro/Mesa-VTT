@@ -81,6 +81,8 @@ export type MsgSalaLimparSessao = { tipo: 'sala.limpar-sessao' };
 export type MsgRolagensHistorico = { tipo: 'rolagens.historico' };
 /** Qualquer membro pede um retrato em falta (a sala devolve se tiver, ou repassa ao mestre). */
 export type MsgPedirRetrato = { tipo: 'pedir-retrato'; id: string };
+/** Jogador em controle livre pede ao mestre para abrir/fechar uma porta no mapa. */
+export type MsgAlternarPorta = { tipo: 'alternar-porta'; id: string };
 
 /** Só o mestre: abre ou substitui o mapa em construção colaborativa (`rev = 0`). */
 export type MsgConstrucaoAbrir = { tipo: 'construcao.abrir'; mapa?: Record<string, unknown>; blobId?: string; nome?: string };
@@ -143,6 +145,7 @@ export type MensagemParaSala =
   | MsgMembroPersonagem
   | MsgRolagensHistorico
   | MsgPedirRetrato
+  | MsgAlternarPorta
   | MsgSalaConfig
   | MsgSalaModo
   | MsgSalaLimparSessao
@@ -249,6 +252,7 @@ export type MensagemDaSala =
   | MsgBlob
   | MsgBlobTemResposta
   | MsgPedirRetrato
+  | MsgAlternarPorta
   /** `recusado`: o `tipo` da mensagem recusada (o campo `tipo` já é o discriminante `'erro'`). */
   | { tipo: 'erro'; motivo: string; recusado?: string };
 
@@ -317,6 +321,7 @@ export function lerMensagemParaSala(texto: string): MensagemParaSala | null {
     case 'blob.tem': return txt(m.id) && m.id ? { tipo: 'blob.tem', id: m.id } : null;
     case 'blob.pedir': return txt(m.id) && m.id ? { tipo: 'blob.pedir', id: m.id } : null;
     case 'pedir-retrato': return txt(m.id) && m.id ? { tipo: 'pedir-retrato', id: m.id } : null;
+    case 'alternar-porta': return txt(m.id) && m.id ? { tipo: 'alternar-porta', id: m.id } : null;
     case 'rolagens.historico': return { tipo: 'rolagens.historico' };
     case 'membro.personagem': return m.fichaId === null || txt(m.fichaId) ? { tipo: 'membro.personagem', fichaId: m.fichaId } : null;
     case 'sala.config':
@@ -475,6 +480,7 @@ export function lerMensagemDaSala(texto: string): MensagemDaSala | null {
       if (!txt(m.id) || !m.id || typeof m.tem !== 'boolean' || (m.tamanho !== undefined && !num(m.tamanho))) return null;
       return { tipo: 'blob.tem', id: m.id, tem: m.tem, ...(m.tamanho !== undefined ? { tamanho: m.tamanho } : {}) };
     case 'pedir-retrato': return txt(m.id) && m.id ? { tipo: 'pedir-retrato', id: m.id } : null;
+    case 'alternar-porta': return txt(m.id) && m.id ? { tipo: 'alternar-porta', id: m.id } : null;
     case 'erro': return txt(m.motivo) && (m.recusado === undefined || txt(m.recusado)) ? { tipo: 'erro', motivo: m.motivo, ...(m.recusado !== undefined ? { recusado: m.recusado } : {}) } : null;
     default: return null;
   }

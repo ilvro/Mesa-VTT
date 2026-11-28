@@ -416,3 +416,10 @@ test('pedir-retrato responde do cache local, entrega blob atrasado e pede à sal
   ponte.fechar();
   m2.ponte.fechar();
 });
+
+test('alternar-porta do projetor local é enviado para a sala', () => {
+  const { ponte, projetor, enviadas } = montar();
+  projetor.postMessage({ tipo: 'alternar-porta', id: 'porta-7' });
+  assert.deepEqual(enviadas, [{ tipo: 'alternar-porta', id: 'porta-7' }]);
+  ponte.fechar();
+});

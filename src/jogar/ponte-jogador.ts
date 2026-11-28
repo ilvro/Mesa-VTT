@@ -191,11 +191,15 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
   const enfileirar = (msg: unknown): void => { fila = fila.then(() => entregar(msg)).catch(() => { /* uma mensagem ruim não para a fila */ }); };
 
   // O projetor local fala `ola` enquanto não tem mapa; o `BroadcastChannel` não guarda mensagens, então a ponte reenvia o último estado e a câmera.
-  // Nenhuma `MensagemDoProjetor` sai para a sala, exceto `pedir-retrato` quando o retrato ainda não está na ponte.
+  // Nenhuma `MensagemDoProjetor` sai para a sala, exceto `pedir-retrato` (quando o retrato ainda não está na ponte) e `alternar-porta`.
   projetor.onmessage = ({ data }) => {
     if (!ehObj(data)) return;
     if (data.tipo === 'pedir-retrato' && typeof data.id === 'string' && data.id) {
       pedirRetratoFaltante(data.id);
+      return;
+    }
+    if (data.tipo === 'alternar-porta' && typeof data.id === 'string' && data.id) {
+      cliente.enviar({ tipo: 'alternar-porta', id: data.id });
       return;
     }
     if (data.tipo !== 'ola') return;
