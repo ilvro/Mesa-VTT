@@ -1,5 +1,5 @@
-/** Lógica pura do saguão da mesa online (R12b): sem DOM, sem Preact. */
-import type { FichaDaSala, Membro, Papel } from './protocolo.ts';
+/** Lógica pura do saguão da mesa online (R12b / S2): sem DOM, sem Preact. */
+import type { FichaDaSala, Membro, ModoDaSala, Papel } from './protocolo.ts';
 
 export interface MembroNoSaguao {
   discordId: string;
@@ -84,10 +84,70 @@ export function estadoDoSaguao(
   };
 }
 
-/** A casca abre no saguão enquanto não houver mapa ou enquanto o jogador ainda não escolheu personagem. */
-export function deveMostrarSaguao(o: { temMapa: boolean; papel: Papel; personagem: string | null }): boolean {
+/**
+ * A casca abre no saguão:
+ * - Em `'sessao'`: enquanto não houver mapa projetado ou enquanto o jogador ainda não escolheu personagem.
+ * - Em `'construcao'`: apenas enquanto não houver mapa de construção aberto (não exige escolha de ficha).
+ */
+export function deveMostrarSaguao(o: {
+  modo?: ModoDaSala;
+  temMapa: boolean;
+  temMapaConstrucao?: boolean;
+  papel: Papel;
+  personagem: string | null;
+}): boolean {
+  const modo = o.modo ?? 'sessao';
+  if (modo === 'construcao') return !o.temMapaConstrucao;
   if (!o.temMapa) return true;
   return o.papel === 'jogador' && o.personagem === null;
+}
+
+export interface VisaoDoSaguao {
+  modo: ModoDaSala;
+  rotuloModo: 'Modo Sessão' | 'Modo Construção';
+  mostrarSeletorModo: boolean;
+  mostrarPersonagens: boolean;
+  mostrarMapaConstrucao: boolean;
+  mostrarStatusConstrucaoJogador: boolean;
+  aberta: boolean;
+  statusTexto: string;
+  rotuloBotaoEntrar: string;
+  podeEntrarNoCabecalho: boolean;
+}
+
+/** Calcula os blocos e rótulos que o saguão exibe conforme o modo da sala e o papel do participante. */
+export function visaoDoSaguao(o: {
+  modo?: ModoDaSala;
+  ehMestre: boolean;
+  mesaAberta: boolean;
+  temMapaConstrucao?: boolean;
+  podeFechar: boolean;
+}): VisaoDoSaguao {
+  const modo: ModoDaSala = o.modo ?? 'sessao';
+  const emConstrucao = modo === 'construcao';
+  const aberta = emConstrucao ? Boolean(o.temMapaConstrucao) : o.mesaAberta;
+
+  let statusTexto: string;
+  if (emConstrucao) {
+    if (aberta) statusTexto = 'Construção aberta';
+    else statusTexto = o.ehMestre ? 'Nenhum mapa de construção aberto' : 'Aguardando o mestre abrir um mapa para construir';
+  } else {
+    statusTexto = aberta ? 'Mesa aberta' : 'Aguardando o mestre abrir a mesa';
+  }
+
+  return {
+    modo,
+    rotuloModo: emConstrucao ? 'Modo Construção' : 'Modo Sessão',
+    mostrarSeletorModo: o.ehMestre,
+    mostrarPersonagens: !o.ehMestre && !emConstrucao,
+    mostrarMapaConstrucao: o.ehMestre && emConstrucao,
+    mostrarStatusConstrucaoJogador: !o.ehMestre && emConstrucao,
+    aberta,
+    statusTexto,
+    rotuloBotaoEntrar: emConstrucao ? 'Entrar na construção' : 'Voltar ao mapa',
+    // No modo construção, o mestre já tem "Entrar na construção" no card "Mapa da construção".
+    podeEntrarNoCabecalho: o.podeFechar && aberta && !(o.ehMestre && emConstrucao),
+  };
 }
 
 /** Prepara uma ou mais fichas vindas de um arquivo JSON importado no saguão, garantindo um id novo para cada uma. */

@@ -269,3 +269,32 @@ test('mesa.ping passa para jogadores e mestre, e descarta excesso acima de 1 por
   const r4 = tratar(e, ana, j(ping), 2000, todos);
   assert.equal(r4.length, 1);
 });
+
+test('múltiplos retratos ficam guardados em ultimoEstado e blobsCitados sem sobrescrever', () => {
+  const e = sala();
+  tratar(e, mestre, j({ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'retrato', id: 'asset-1', blob: { blobId: 'b1' } } }), 1, todos);
+  tratar(e, mestre, j({ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'retrato', id: 'asset-2', blob: { blobId: 'b2' } } }), 2, todos);
+  const ultimo = e.ultimoEstado();
+  assert.deepEqual(ultimo['atlas:projetor:remoto:retrato:asset-1'], { tipo: 'retrato', id: 'asset-1', blob: { blobId: 'b1' } });
+  assert.deepEqual(ultimo['atlas:projetor:remoto:retrato:asset-2'], { tipo: 'retrato', id: 'asset-2', blob: { blobId: 'b2' } });
+  const citados = e.blobsCitados();
+  assert.equal(citados.includes('b1'), true);
+  assert.equal(citados.includes('b2'), true);
+});
+
+test('sala.limpar-sessao é só do mestre e limpa ultimo, citados e personagens preservando fichas', () => {
+  const e = sala();
+  e.salvarFicha({ id: 'f1', name: 'Lia' }, 'A', 0, 1);
+  tratar(e, ana, j({ tipo: 'membro.personagem', fichaId: 'f1' }), 1, todos);
+  tratar(e, mestre, j({ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'estado', doc: { id: 'm1' } } }), 1, todos);
+  assert.equal(erros(tratar(e, ana, j({ tipo: 'sala.limpar-sessao' }), 2, todos)).length, 1);
+  assert.equal(e.personagem('A'), 'f1');
+
+  const s = tratar(e, mestre, j({ tipo: 'sala.limpar-sessao' }), 3, todos);
+  assert.equal(s.some(x => x.msg.tipo === 'membros'), true);
+  assert.equal(s.some(x => x.msg.tipo === 'canal' && (x.msg as { msg?: { tipo?: string } }).msg?.tipo === 'encerrado'), true);
+  assert.equal(e.personagem('A'), null);
+  assert.deepEqual(e.ultimoEstado(), {});
+  assert.deepEqual(e.blobsCitados(), []);
+  assert.equal(e.ficha('f1')?.ficha.id, 'f1');
+});

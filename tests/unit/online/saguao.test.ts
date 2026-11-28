@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deveMostrarSaguao, estadoDoSaguao, prepararFichasImportadas, retratoDaFicha, urlDoAvatarDiscord } from '../../../src/online/saguao.ts';
+import {
+  deveMostrarSaguao,
+  estadoDoSaguao,
+  prepararFichasImportadas,
+  retratoDaFicha,
+  urlDoAvatarDiscord,
+  visaoDoSaguao,
+} from '../../../src/online/saguao.ts';
 import type { FichaDaSala, Membro } from '../../../src/online/protocolo.ts';
 
 const membro = (discordId: string, nome: string, papel: 'mestre' | 'jogador', personagem: string | null = null, avatar: string | null = null): Membro =>
@@ -33,11 +40,56 @@ test('estadoDoSaguao: identifica quem falta escolher, se o mestre está presente
   assert.equal(semMestre.faltamEscolher.length, 0);
 });
 
-test('deveMostrarSaguao: abre sem mapa ou sem personagem escolhido pelo jogador', () => {
+test('deveMostrarSaguao: abre sem mapa ou sem personagem escolhido pelo jogador em sessao', () => {
   assert.equal(deveMostrarSaguao({ temMapa: false, papel: 'jogador', personagem: 'f1' }), true);
   assert.equal(deveMostrarSaguao({ temMapa: true, papel: 'jogador', personagem: null }), true);
   assert.equal(deveMostrarSaguao({ temMapa: true, papel: 'jogador', personagem: 'f1' }), false);
   assert.equal(deveMostrarSaguao({ temMapa: true, papel: 'mestre', personagem: null }), false);
+  assert.equal(deveMostrarSaguao({ modo: 'sessao', temMapa: false, temMapaConstrucao: true, papel: 'mestre', personagem: null }), true);
+});
+
+test('deveMostrarSaguao: em modo construcao depende só de temMapaConstrucao e não exige ficha', () => {
+  assert.equal(deveMostrarSaguao({ modo: 'construcao', temMapa: true, temMapaConstrucao: false, papel: 'mestre', personagem: null }), true);
+  assert.equal(deveMostrarSaguao({ modo: 'construcao', temMapa: true, temMapaConstrucao: false, papel: 'jogador', personagem: 'f1' }), true);
+  assert.equal(deveMostrarSaguao({ modo: 'construcao', temMapa: false, papel: 'jogador', personagem: null }), true);
+  assert.equal(deveMostrarSaguao({ modo: 'construcao', temMapa: false, temMapaConstrucao: true, papel: 'jogador', personagem: null }), false);
+  assert.equal(deveMostrarSaguao({ modo: 'construcao', temMapa: false, temMapaConstrucao: true, papel: 'mestre', personagem: null }), false);
+});
+
+test('visaoDoSaguao calcula selo de modo, blocos e botões para mestre e jogador', () => {
+  const mestreSessao = visaoDoSaguao({ modo: 'sessao', ehMestre: true, mesaAberta: true, temMapaConstrucao: false, podeFechar: true });
+  assert.equal(mestreSessao.rotuloModo, 'Modo Sessão');
+  assert.equal(mestreSessao.mostrarSeletorModo, true);
+  assert.equal(mestreSessao.mostrarPersonagens, false);
+  assert.equal(mestreSessao.mostrarMapaConstrucao, false);
+  assert.equal(mestreSessao.statusTexto, 'Mesa aberta');
+  assert.equal(mestreSessao.podeEntrarNoCabecalho, true);
+
+  const mestreConstrucaoVazio = visaoDoSaguao({ modo: 'construcao', ehMestre: true, mesaAberta: true, temMapaConstrucao: false, podeFechar: false });
+  assert.equal(mestreConstrucaoVazio.rotuloModo, 'Modo Construção');
+  assert.equal(mestreConstrucaoVazio.mostrarSeletorModo, true);
+  assert.equal(mestreConstrucaoVazio.mostrarMapaConstrucao, true);
+  assert.equal(mestreConstrucaoVazio.mostrarPersonagens, false);
+  assert.equal(mestreConstrucaoVazio.aberta, false);
+  assert.equal(mestreConstrucaoVazio.statusTexto, 'Nenhum mapa de construção aberto');
+
+  const mestreConstrucaoAberto = visaoDoSaguao({ modo: 'construcao', ehMestre: true, mesaAberta: false, temMapaConstrucao: true, podeFechar: true });
+  assert.equal(mestreConstrucaoAberto.aberta, true);
+  assert.equal(mestreConstrucaoAberto.statusTexto, 'Construção aberta');
+  assert.equal(mestreConstrucaoAberto.podeEntrarNoCabecalho, false);
+
+  const jogadorConstrucaoFechada = visaoDoSaguao({ modo: 'construcao', ehMestre: false, mesaAberta: true, temMapaConstrucao: false, podeFechar: false });
+  assert.equal(jogadorConstrucaoFechada.mostrarSeletorModo, false);
+  assert.equal(jogadorConstrucaoFechada.mostrarPersonagens, false);
+  assert.equal(jogadorConstrucaoFechada.mostrarStatusConstrucaoJogador, true);
+  assert.equal(jogadorConstrucaoFechada.statusTexto, 'Aguardando o mestre abrir um mapa para construir');
+  assert.equal(jogadorConstrucaoFechada.podeEntrarNoCabecalho, false);
+
+  const jogadorConstrucaoAberta = visaoDoSaguao({ modo: 'construcao', ehMestre: false, mesaAberta: false, temMapaConstrucao: true, podeFechar: true });
+  assert.equal(jogadorConstrucaoAberta.aberta, true);
+  assert.equal(jogadorConstrucaoAberta.statusTexto, 'Construção aberta');
+  assert.equal(jogadorConstrucaoAberta.rotuloBotaoEntrar, 'Entrar na construção');
+  assert.equal(jogadorConstrucaoAberta.podeEntrarNoCabecalho, true);
 });
 
 test('urlDoAvatarDiscord e prepararFichasImportadas', () => {

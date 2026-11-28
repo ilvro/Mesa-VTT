@@ -102,6 +102,12 @@ export const CATALOGO = {
                 return '“levelId” deve ser texto ou nulo.';
             return null;
         } },
+    /** Online / Sessão: alterna entre jogadores livres e controle do mestre na activity. */
+    'mesa.controle-jogadores': {
+        natureza: 'fato',
+        dono: 'mesa',
+        validar: d => ehObj(d) && (d.modo === 'livres' || d.modo === 'mestre') ? null : '“modo” deve ser “livres” ou “mestre”.',
+    },
 };
 const ehAutor = (v) => ehObj(v) && typeof v.discordId === 'string' && typeof v.nome === 'string' && (v.papel === 'mestre' || v.papel === 'jogador') && Array.isArray(v.fichas) && v.fichas.every(f => typeof f === 'string');
 /** Confere um envelope recebido. Nunca lança: o canal é compartilhado e qualquer aba pode mandar lixo. */

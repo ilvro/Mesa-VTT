@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  EVENTOS_DO_MESTRE, TAMANHO_PEDACO, codificarPedaco, decodificarPedaco, lerMensagemDaSala, lerMensagemParaSala,
+  EVENTOS_DO_MESTRE, LIMITE_OP_CONSTRUCAO_BYTES, MAX_COMANDOS_POR_OP, TAMANHO_PEDACO,
+  codificarPedaco, decodificarPedaco, lerMensagemDaSala, lerMensagemParaSala,
 } from '../../../src/online/protocolo.ts';
 
 const env = { contrato: 1, app: 'ficha', tipo: 'ficha.rolagem', id: 'e1', em: 1, campanhaId: null, dados: {} };
@@ -81,4 +82,89 @@ test('bem-vindo aceita config, revs e donos; erro guarda o tipo recusado', () =>
   assert.equal(lerMensagemDaSala(JSON.stringify({ ...base, config: {} })), null);
   assert.deepEqual(lerMensagemDaSala('{"tipo":"erro","motivo":"permissao","recusado":"canal"}'), { tipo: 'erro', motivo: 'permissao', recusado: 'canal' });
   assert.deepEqual(lerMensagemDaSala('{"tipo":"ficha.atualizada","ficha":{"id":"f"},"rev":1,"dono":"9","autor":{"discordId":"1","nome":"M","papel":"mestre","fichas":[]}}'), { tipo: 'ficha.atualizada', ficha: { id: 'f' }, rev: 1, autor: { discordId: '1', nome: 'M', papel: 'mestre', fichas: [] }, dono: '9' });
+});
+
+test('protocolo de construção colaborativa: cliente -> sala', () => {
+  const validas = [
+    { tipo: 'sala.modo', modo: 'construcao' },
+    { tipo: 'sala.modo', modo: 'sessao' },
+    { tipo: 'construcao.abrir', mapa: { id: 'm1' }, nome: 'Taverna' },
+    { tipo: 'construcao.abrir', blobId: 'construcao:0' },
+    { tipo: 'construcao.fechar' },
+    { tipo: 'construcao.comando', baseRev: 0, opId: 'op1', comandos: [{ tipo: 'comodo.criar', id: 'r1' }], rotulo: 'Criar cômodo' },
+    { tipo: 'construcao.snapshot', rev: 40, mapa: { id: 'm1' } },
+    { tipo: 'construcao.snapshot', rev: 40, blobId: 'construcao:40', nome: 'Taverna' },
+    { tipo: 'construcao.cursor', x: 10.5, y: 20, levelId: null, ferramenta: 'pincel' },
+    { tipo: 'construcao.cursor', x: 1, y: 2, levelId: 'andar-2', ferramenta: 'parede', pintando: true },
+    { tipo: 'construcao.ressincronizar' },
+    { tipo: 'construcao.nota', id: 'n1', texto: 'Falta iluminação' },
+  ];
+  for (const m of validas) assert.deepEqual(lerMensagemParaSala(j(m)), m);
+
+  const cmdOk = { tipo: 'x' };
+  const ruins = [
+    j({ tipo: 'sala.modo', modo: 'editar' }),
+    j({ tipo: 'sala.modo' }),
+    j({ tipo: 'construcao.abrir' }),
+    j({ tipo: 'construcao.abrir', mapa: {}, blobId: 'construcao:0' }),
+    j({ tipo: 'construcao.abrir', blobId: '' }),
+    j({ tipo: 'construcao.abrir', mapa: [], nome: 'x' }),
+    j({ tipo: 'construcao.comando', baseRev: -1, opId: 'o', comandos: [cmdOk] }),
+    j({ tipo: 'construcao.comando', baseRev: 1.5, opId: 'o', comandos: [cmdOk] }),
+    j({ tipo: 'construcao.comando', baseRev: 0, opId: '', comandos: [cmdOk] }),
+    j({ tipo: 'construcao.comando', baseRev: 0, opId: 'o', comandos: [] }),
+    j({ tipo: 'construcao.comando', baseRev: 0, opId: 'o', comandos: [{ semTipo: 1 }] }),
+    j({ tipo: 'construcao.comando', baseRev: 0, opId: 'o', comandos: Array.from({ length: MAX_COMANDOS_POR_OP + 1 }, () => cmdOk) }),
+    j({ tipo: 'construcao.comando', baseRev: 0, opId: 'o', comandos: [{ tipo: 'big', s: 'x'.repeat(LIMITE_OP_CONSTRUCAO_BYTES) }] }),
+    j({ tipo: 'construcao.snapshot', rev: -1, mapa: {} }),
+    j({ tipo: 'construcao.snapshot', rev: 5 }),
+    j({ tipo: 'construcao.snapshot', rev: 5, mapa: {}, blobId: 'b' }),
+    j({ tipo: 'construcao.cursor', x: 1, y: 2, ferramenta: 'pincel' }),
+    j({ tipo: 'construcao.cursor', x: 1, y: '2', levelId: null, ferramenta: 'pincel' }),
+    j({ tipo: 'construcao.cursor', x: 1, y: 2, levelId: null, ferramenta: '' }),
+    j({ tipo: 'construcao.cursor', x: 1, y: 2, levelId: null, ferramenta: 'p', pintando: 'sim' }),
+    j({ tipo: 'construcao.nota', id: '', texto: 'oi' }),
+    j({ tipo: 'construcao.nota', id: 'n1', texto: '   ' }),
+  ];
+  for (const r of ruins) assert.equal(lerMensagemParaSala(r), null, r);
+});
+
+test('protocolo de construção colaborativa: sala -> cliente, config.modo e bem-vindo.construcao', () => {
+  const autor = { ...eu, fichas: ['f1'] };
+  const op = { rev: 1, opId: 'op1', autor, comandos: [{ tipo: 'terreno.pintar' }], rotulo: 'Pintar', em: 100 };
+  const nota = { id: 'n1', autor, texto: 'Bom trabalho', em: 120 };
+  const validas = [
+    { tipo: 'config', config: { nome: 'Sala', modo: 'construcao' } },
+    {
+      tipo: 'bem-vindo',
+      eu,
+      membros: [membro],
+      fichas: [],
+      ultimoEstado: {},
+      config: { nome: 'Sala', modo: 'construcao' },
+      construcao: { temMapa: true, nome: 'Taverna', rev: 3 },
+    },
+    { tipo: 'construcao.estado', mapa: { id: 'm1' }, nome: 'Taverna', rev: 0, ops: [op], notas: [nota] },
+    { tipo: 'construcao.estado', blobId: 'construcao:10', rev: 10, ops: [] },
+    { tipo: 'construcao.aplicada', rev: 2, opId: 'op2', autor, comandos: [{ tipo: 'item.adicionar' }] },
+    { tipo: 'construcao.cursor', autor, x: 5, y: 6, levelId: null, ferramenta: 'selecionar', pintando: false },
+    nota && { tipo: 'construcao.nota', ...nota },
+    { tipo: 'construcao.fechada' },
+  ];
+  for (const m of validas) assert.deepEqual(lerMensagemDaSala(j(m)), m);
+
+  const ruins = [
+    j({ tipo: 'config', config: { nome: 'Sala', modo: 'invalido' } }),
+    j({ tipo: 'bem-vindo', eu, membros: [], fichas: [], ultimoEstado: {}, construcao: { temMapa: 'sim', rev: 0 } }),
+    j({ tipo: 'bem-vindo', eu, membros: [], fichas: [], ultimoEstado: {}, construcao: { temMapa: true, rev: -1 } }),
+    j({ tipo: 'construcao.estado', rev: 0, ops: [] }),
+    j({ tipo: 'construcao.estado', mapa: {}, blobId: 'construcao:0', rev: 0, ops: [] }),
+    j({ tipo: 'construcao.estado', mapa: {}, rev: -1, ops: [] }),
+    j({ tipo: 'construcao.estado', mapa: {}, rev: 0, ops: [{ ...op, rev: 0 }] }),
+    j({ tipo: 'construcao.aplicada', rev: 0, opId: 'o', autor, comandos: [{ tipo: 'a' }] }),
+    j({ tipo: 'construcao.aplicada', rev: 1, opId: 'o', autor, comandos: [] }),
+    j({ tipo: 'construcao.cursor', autor: eu, x: 1, y: 2, levelId: null, ferramenta: 'pincel' }),
+    j({ tipo: 'construcao.nota', id: 'n1', autor, texto: 'oi' }),
+  ];
+  for (const r of ruins) assert.equal(lerMensagemDaSala(r), null, r);
 });
