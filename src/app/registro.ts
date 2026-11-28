@@ -5,6 +5,7 @@ import { adicionar, mover, nomeDoRef, ondeEstaORef, podarNotas, removerItem } fr
 import { chaveDaRef } from '#mesa';
 import { abrirNoApp, barramentoDaMesa } from './barramento.ts';
 import { campanhaAtiva, entidades, obterRepositorio } from './campanha.ts';
+import { limparSessaoNaSala } from './online.ts';
 import { avisar, mensagemDe } from './toasts.ts';
 
 /** As sessões da campanha ativa (a mais recente primeiro), a que está aberta e se o registro está ligado. */
@@ -139,6 +140,7 @@ export async function carregarSessoes(): Promise<void> {
 /** Começa uma sessão: cria o registro no banco, liga a escuta e avisa os outros aplicativos (`mesa.sessao-iniciada`). */
 export async function iniciarSessao(nome: string): Promise<Sessao | null> {
   const c = campanhaAtiva.value; if (!c) return null;
+  limparSessaoNaSala();
   const agora = Date.now();
   const sessao: Sessao = { id: crypto.randomUUID(), campanhaId: c.id, nome: nome.trim() || `Sessão de ${new Date(agora).toLocaleDateString('pt-BR')}`, data: agora, roteiro: [], registro: '', criadaEm: agora, atualizadaEm: agora };
   try { await obterRepositorio().salvarSessao(sessao); } catch (erro) { avisar(mensagemDe(erro), true); return null; }
@@ -171,7 +173,7 @@ export async function removerSessao(id: string): Promise<void> {
 }
 
 /** Para de gravar. A sessão continua aberta para ler, exportar e anotar. */
-export function encerrarSessao(): void { gravando.value = false; pararDeOuvir(); lembrarSessaoAtiva(); }
+export function encerrarSessao(): void { gravando.value = false; pararDeOuvir(); lembrarSessaoAtiva(); limparSessaoNaSala(); }
 /** Volta a gravar na sessão aberta. */
 export function retomarGravacao(): void { if (sessaoAtiva.value) { gravando.value = true; ouvirFatos(); lembrarSessaoAtiva(); } }
 export function fecharSessao(): void { gravando.value = false; pararDeOuvir(); sessaoAtiva.value = null; lembrarSessaoAtiva(); }
