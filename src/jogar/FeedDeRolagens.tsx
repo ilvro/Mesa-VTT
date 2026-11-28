@@ -108,11 +108,25 @@ export function FeedDeRolagens({
 
   return (
     <div class="feed" data-testid="feed">
-      <ul class="feed-lista" aria-live="polite" aria-label="Rolagens recentes">
-        {itens.map(r => <Cartao key={r.id} r={r} retratos={retratos} avatares={avatares} baseAvatar={baseAvatar} teste="feed-item" />)}
-      </ul>
-      <button type="button" class="feed-botao" data-testid="feed-historico-botao" aria-expanded={aberto} onClick={alternar}>
-        {aberto ? 'Fechar histórico' : 'Histórico de rolagens'}
+      <button
+        type="button"
+        class="feed-botao"
+        data-testid="feed-historico-botao"
+        title="Histórico de rolagens"
+        aria-label="Histórico de rolagens"
+        aria-expanded={aberto}
+        onClick={alternar}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polygon points="12 2 21 7 21 17 12 22 3 17 3 7" />
+          <polygon points="12 6.5 17 15 7 15" />
+          <line x1="12" y1="2" x2="12" y2="6.5" />
+          <line x1="21" y1="7" x2="17" y2="15" />
+          <line x1="3" y1="7" x2="7" y2="15" />
+          <line x1="12" y1="22" x2="7" y2="15" />
+          <line x1="12" y1="22" x2="17" y2="15" />
+        </svg>
+        {historico.length > 0 && !aberto && <span class="feed-botao-ponto" aria-hidden="true" />}
       </button>
       {aberto && (
         <div class="feed-historico" data-testid="feed-historico" role="dialog" aria-label="Histórico de rolagens">
@@ -121,6 +135,9 @@ export function FeedDeRolagens({
             : <ul>{historico.map(r => <Cartao key={r.id} r={r} retratos={retratos} avatares={avatares} baseAvatar={baseAvatar} teste="feed-historico-item" />)}</ul>}
         </div>
       )}
+      <ul class="feed-lista" aria-live="polite" aria-label="Rolagens recentes">
+        {itens.map(r => <Cartao key={r.id} r={r} retratos={retratos} avatares={avatares} baseAvatar={baseAvatar} teste="feed-item" />)}
+      </ul>
     </div>
   );
 }
