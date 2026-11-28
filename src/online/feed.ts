@@ -2,7 +2,8 @@
  * Lógica pura do feed de rolagens da casca do jogador (R9): lê o envelope `ficha.rolagem`, guarda as 5 mais novas e as faz sumir depois de
  * 8 s. Sem DOM nem relógio próprio: o relógio e o agendamento entram por parâmetro.
  */
-import type { Envelope } from './protocolo.ts';
+import type { Envelope, Eu } from './protocolo.ts';
+import { urlDoAvatarDiscord } from './saguao.ts';
 
 export const MAX_NO_FEED = 5;
 export const VIDA_NO_FEED_MS = 8000;
@@ -19,6 +20,10 @@ export interface RolagemDoFeed {
   em: number;
   /** Nome de quem rolou (o `autor` carimbado pela sala); vazio se o envelope não traz. */
   autor: string;
+  /** `discordId` de quem rolou (o `autor` carimbado pela sala), quando disponível. */
+  autorId?: string;
+  /** Hash ou URL do avatar do Discord de quem rolou, quando disponível. */
+  autorAvatar?: string | null;
   /** Id da ficha (o Ref `dados.ficha`), para achar o retrato. */
   fichaId: string;
   titulo: string;
@@ -36,17 +41,54 @@ export function lerRolagem(envelope: unknown): RolagemDoFeed | null {
   if (!ehObj(d) || typeof d.titulo !== 'string' || typeof d.total !== 'number' || !Number.isFinite(d.total)) return null;
   const ref = ehObj(d.ficha) ? d.ficha : null;
   const mod = typeof d.modificador === 'number' && Number.isFinite(d.modificador) ? d.modificador : undefined;
-  const autor = ehObj(envelope.autor) && typeof envelope.autor.nome === 'string' ? envelope.autor.nome : '';
+  const autorObj = ehObj(envelope.autor) ? envelope.autor : null;
+  const autor = autorObj && typeof autorObj.nome === 'string' ? autorObj.nome : '';
+  const autorId = autorObj && typeof autorObj.discordId === 'string' && autorObj.discordId ? autorObj.discordId : undefined;
+  const autorAvatar = autorObj && (typeof autorObj.avatar === 'string' || autorObj.avatar === null) ? autorObj.avatar : undefined;
   return {
     id: envelope.id,
     em: typeof envelope.em === 'number' && Number.isFinite(envelope.em) ? envelope.em : 0,
     autor,
+    ...(autorId !== undefined ? { autorId } : {}),
+    ...(autorAvatar !== undefined ? { autorAvatar } : {}),
     fichaId: ref && typeof ref.id === 'string' ? ref.id : '',
     titulo: d.titulo,
     total: d.total,
     ...(mod !== undefined ? { modificador: mod } : {}),
     tom: tomDaRolagem(d.total, mod ?? 0),
   };
+}
+
+/** Mapa `discordId -> URL do avatar do Discord` a partir dos membros da sala e de `eu`. */
+export function mapaDeAvatares(
+  membros: readonly Pick<Eu, 'discordId' | 'avatar'>[],
+  eu?: Pick<Eu, 'discordId' | 'avatar'> | null,
+  baseAvatar?: string,
+  tamanho = 64,
+): Record<string, string> {
+  const mapa: Record<string, string> = {};
+  if (eu) {
+    const url = urlDoAvatarDiscord(eu.discordId, eu.avatar, tamanho, baseAvatar);
+    if (url) mapa[eu.discordId] = url;
+  }
+  for (const m of membros) {
+    const url = urlDoAvatarDiscord(m.discordId, m.avatar, tamanho, baseAvatar);
+    if (url) mapa[m.discordId] = url;
+  }
+  return mapa;
+}
+
+/** Resolve a URL do avatar do Discord para uma rolagem (priorizando o membro atual e caindo para o `autorAvatar` carimbado). */
+export function avatarDaRolagem(
+  r: Pick<RolagemDoFeed, 'autorId' | 'autorAvatar'>,
+  avataresPorId: Readonly<Record<string, string | null | undefined>>,
+  baseAvatar?: string,
+  tamanho = 64,
+): string | null {
+  if (!r.autorId) return null;
+  const doMembro = avataresPorId[r.autorId];
+  if (doMembro) return doMembro;
+  return urlDoAvatarDiscord(r.autorId, r.autorAvatar, tamanho, baseAvatar);
 }
 
 /** Lê uma lista de envelopes (histórico), da mais nova para a mais antiga. Ignora o que não for rolagem. */

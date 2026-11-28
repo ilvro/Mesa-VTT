@@ -58,3 +58,26 @@ test('o protocolo lê o pedido, a resposta e o bem-vindo com rolagens', () => {
   assert.equal('rolagens' in lerMensagemDaSala(j(base))!, false);
   assert.equal(lerMensagemDaSala(j({ ...base, rolagens: 'x' })), null);
 });
+
+test('o carimbo do autor em ficha.rolagem preserva o avatar do Discord no histórico e no broadcast', () => {
+  const e = criarEstado(sqlEmMemoria());
+  e.iniciar('M', 'Campanha');
+  e.salvarFicha({ id: 'f1' }, 'A', 0, 1);
+  const anaComAvatar: Eu = { discordId: 'A', nome: 'Ana', papel: 'jogador', avatar: 'av_ana' };
+  const envelope = {
+    contrato: 1,
+    app: 'ficha',
+    tipo: 'ficha.rolagem',
+    id: 'r-av',
+    em: 10,
+    campanhaId: null,
+    dados: { ficha: { app: 'ficha', tipo: 'ficha', id: 'f1' }, titulo: 'Percepção', total: 18 },
+  };
+  const s = tratar(e, anaComAvatar, j({ tipo: 'evento', envelope }), 10, [mestre, anaComAvatar]);
+  const envEnviado = (s[0]?.msg as unknown as { envelope: { autor: { avatar?: string | null } } }).envelope;
+  assert.equal(envEnviado.autor.avatar, 'av_ana');
+
+  const hist = tratar(e, mestre, j({ tipo: 'rolagens.historico' }), 11, [mestre, anaComAvatar]);
+  const rHist = (hist[0]?.msg as unknown as { rolagens: Array<{ autor: { avatar?: string | null } }> }).rolagens[0]!;
+  assert.equal(rHist.autor.avatar, 'av_ana');
+});

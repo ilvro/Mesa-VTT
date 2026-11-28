@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { criarFeed, iniciais, lerHistorico, lerRolagem, tomDaRolagem, VIDA_NO_FEED_MS, type RolagemDoFeed } from '../../../src/online/feed.ts';
+import {
+  avatarDaRolagem, criarFeed, iniciais, lerHistorico, lerRolagem, mapaDeAvatares, tomDaRolagem, VIDA_NO_FEED_MS,
+  type RolagemDoFeed,
+} from '../../../src/online/feed.ts';
 
 function relogio() {
   let t = 1000;
@@ -73,4 +76,33 @@ test('fechar para o relógio e esvazia', () => {
   feed.fechar();
   assert.deepEqual(feed.itens(), []);
   assert.equal(feed.receber(r('b', 2)), false);
+});
+
+test('lerRolagem, mapaDeAvatares e avatarDaRolagem resolvem o avatar do Discord pelo proxy ou CDN', () => {
+  const env = {
+    tipo: 'ficha.rolagem',
+    id: 'e2',
+    em: 10,
+    autor: { discordId: '123', nome: 'Ana', avatar: 'hash_ana' },
+    dados: { ficha: { app: 'ficha', tipo: 'ficha', id: 'f1' }, titulo: 'Ocultismo', total: 15 },
+  };
+  const rol = lerRolagem(env)!;
+  assert.equal(rol.autorId, '123');
+  assert.equal(rol.autorAvatar, 'hash_ana');
+
+  const mapaDiscord = mapaDeAvatares(
+    [{ discordId: '456', avatar: 'hash_mestre' }],
+    { discordId: '123', avatar: 'hash_ana' },
+    '/.proxy/sala/cdn',
+  );
+  assert.equal(mapaDiscord['123'], '/.proxy/sala/cdn/avatars/123/hash_ana.png?size=64');
+  assert.equal(mapaDiscord['456'], '/.proxy/sala/cdn/avatars/456/hash_mestre.png?size=64');
+
+  assert.equal(avatarDaRolagem(rol, mapaDiscord, '/.proxy/sala/cdn'), '/.proxy/sala/cdn/avatars/123/hash_ana.png?size=64');
+  // membro desconectado ainda usa autorAvatar carimbado no envelope com proxy do Discord
+  assert.equal(avatarDaRolagem(rol, {}, '/.proxy/sala/cdn'), '/.proxy/sala/cdn/avatars/123/hash_ana.png?size=64');
+  // envelope antigo sem autorAvatar usa o mapa dos membros conectados
+  assert.equal(avatarDaRolagem({ autorId: '456' }, mapaDiscord, '/.proxy/sala/cdn'), '/.proxy/sala/cdn/avatars/456/hash_mestre.png?size=64');
+  // sem avatar nem membro devolve null (cai para iniciais)
+  assert.equal(avatarDaRolagem({ autorId: '999', autorAvatar: null }, mapaDiscord, '/.proxy/sala/cdn'), null);
 });

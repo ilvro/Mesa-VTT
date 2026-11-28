@@ -1,12 +1,16 @@
 /** Permissões da sala (puro): quem pode mandar o quê, conforme a tabela "Protocolo da sala" do plano. */
 
-import { EVENTOS_DO_MESTRE, type Autor, type Envelope, type Eu, type MensagemParaSala } from '../src/online/protocolo.ts';
+import {
+  EVENTOS_DO_MESTRE, PREFIXO_BLOB_CONSTRUCAO, type Autor, type Envelope, type Eu, type MensagemParaSala, type ModoDaSala,
+} from '../src/online/protocolo.ts';
 import { validarEvento } from '../vendor/mesa-core/eventos.js';
 
-/** O que as permissões precisam saber das fichas da sala. */
+/** O que as permissões precisam saber das fichas e do modo da sala. */
 export interface ContextoPermissao {
   /** `discordId` do dono da ficha, ou `null` se ela não existe. */
   donoDaFicha(id: string): string | null;
+  modo(): ModoDaSala;
+  temMapaConstrucao(): boolean;
 }
 
 /** O envelope passa por `validarEvento` (contrato, catálogo e dados)? Devolve o motivo, ou `null` se vale. */
@@ -48,8 +52,20 @@ export function permitido(msg: MensagemParaSala, autor: Eu, ctx: ContextoPermiss
     }
     case 'ficha.entregar':
     case 'sala.config':
+    case 'sala.modo':
+    case 'sala.limpar-sessao':
+    case 'construcao.abrir':
+    case 'construcao.fechar': return mestre;
     case 'blob':
-    case 'blob.tem': return mestre;
+    case 'blob.tem':
+      return mestre || (ctx.modo() === 'construcao' && msg.id.startsWith(PREFIXO_BLOB_CONSTRUCAO));
+    case 'construcao.comando':
+    case 'construcao.snapshot':
+    case 'construcao.cursor':
+      return ctx.modo() === 'construcao' && ctx.temMapaConstrucao();
+    case 'construcao.ressincronizar':
+    case 'construcao.nota':
+      return ctx.modo() === 'construcao';
     // qualquer membro pede; quais ids saem é decisão da sala (`mensagens.ts`)
     case 'blob.pedir':
     case 'ping':
@@ -61,7 +77,13 @@ export function permitido(msg: MensagemParaSala, autor: Eu, ctx: ContextoPermiss
 
 /** O carimbo da sala para `autor`: o `Eu` e os ids das fichas que ele tem. */
 export function autorCarimbado(autor: Eu, fichas: string[]): Autor {
-  return { discordId: autor.discordId, nome: autor.nome, papel: autor.papel, fichas };
+  return {
+    discordId: autor.discordId,
+    nome: autor.nome,
+    papel: autor.papel,
+    ...(autor.avatar !== undefined ? { avatar: autor.avatar } : {}),
+    fichas,
+  };
 }
 
 /** Sobrescreve o `autor` do envelope: a sala é a única que carimba, e ignora o que o cliente mandou. */

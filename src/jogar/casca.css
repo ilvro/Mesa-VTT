@@ -41,7 +41,7 @@
 .feed-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; background: rgba(12, 10, 20, 0.78); border: 1px solid rgba(255, 255, 255, 0.14); border-left: 3px solid var(--acento); color: #f4f1fb; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45); animation: feed-entra 0.22s ease-out; }
 .feed-item[data-tom='alto'] { border-left-color: #ffd23f; }
 .feed-item[data-tom='baixo'] { border-left-color: #e0645c; }
-.feed-retrato { flex: none; width: 34px; height: 34px; border-radius: 50%; background: #2a2540 center / cover no-repeat; border: 1px solid rgba(255, 255, 255, 0.25); }
+.feed-retrato { flex: none; width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: #2a2540 center / cover no-repeat; border: 1px solid rgba(255, 255, 255, 0.25); }
 .feed-iniciais { display: grid; place-items: center; font: 800 12px var(--corpo); color: #f4f1fb; letter-spacing: 0.04em; }
 .feed-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
 .feed-autor { font: 700 12px var(--corpo); color: #f4f1fb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -73,16 +73,41 @@
 .saguao-capa { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--linha); background: var(--superficie); min-height: 120px; display: flex; align-items: flex-end; }
 .saguao-capa.com-imagem { min-height: 180px; }
 .saguao-capa-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.45; }
-.saguao-capa-conteudo { position: relative; z-index: 1; width: 100%; padding: 20px 22px; background: linear-gradient(to top, rgba(10, 9, 16, 0.92), rgba(10, 9, 16, 0.2)); display: flex; flex-direction: column; gap: 8px; }
+.saguao-capa-conteudo { position: relative; z-index: 1; width: 100%; padding: 20px 22px; background: linear-gradient(to top, rgba(10, 9, 16, 0.92), rgba(10, 9, 16, 0.2)); display: flex; flex-direction: column; gap: 10px; }
+.saguao-capa-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .saguao-titulo { margin: 0; font-size: 24px; color: #fff; }
+.saguao-modo-barra { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.saguao-modo-selo { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; background: var(--superficie-2); border: 1px solid var(--linha); color: var(--texto); font: 700 10.5px var(--corpo); letter-spacing: 0.1em; text-transform: uppercase; }
+.saguao-modo-selo.construcao { background: var(--acento-suave); border-color: var(--acento); color: var(--acento); }
+.saguao-modo-seletor { display: inline-flex; border-radius: var(--raio); overflow: hidden; border: 1px solid var(--linha-forte); background: var(--painel); }
+.saguao-modo-opcao { padding: 6px 12px; background: transparent; border: 0; color: var(--apagado); font: 700 11px var(--corpo); letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; transition: background 0.15s, color 0.15s; }
+.saguao-modo-opcao + .saguao-modo-opcao { border-left: 1px solid var(--linha-forte); }
+.saguao-modo-opcao:hover { color: var(--texto); background: var(--superficie-2); }
+.saguao-modo-opcao.ativa { background: var(--acento); color: var(--acento-texto); }
 .saguao-status-linha { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .saguao-status { margin: 0; font: 700 12px var(--corpo); letter-spacing: 0.12em; text-transform: uppercase; color: var(--apagado); }
 .saguao-status.aberta { color: var(--sucesso); }
 .saguao-grade { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr); gap: 20px; align-items: start; }
+.saguao-grade.uma-coluna { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 760px) { .saguao-grade { grid-template-columns: 1fr; } }
 .saguao-bloco { background: var(--superficie); border: 1px solid var(--linha); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 .saguao-bloco-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .saguao-bloco-cabecalho h2, .saguao-bloco > h2 { margin: 0; }
+.saguao-subtitulo { margin: 0; font: 700 13px var(--corpo); color: var(--texto); }
+.saguao-mapa-ativo { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px; border-radius: 8px; border: 1px solid var(--acento); background: var(--acento-suave); }
+.saguao-mapa-ativo-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.saguao-mapa-ativo-nome { font: 700 15px var(--corpo); color: var(--texto); overflow-wrap: anywhere; }
+.saguao-construcao-opcoes { display: flex; flex-direction: column; gap: 12px; }
+.saguao-form { display: flex; flex-direction: column; gap: 10px; }
+.saguao-campos-linha { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 520px) { .saguao-campos-linha { grid-template-columns: 1fr; } }
+.saguao-campo { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--apagado); }
+.saguao-campo input, .saguao-campo select { width: 100%; background: var(--superficie-2); border: 1px solid var(--linha); border-radius: var(--raio); padding: 7px 10px; color: var(--texto); min-width: 0; }
+.saguao-campo input:focus, .saguao-campo select:focus { border-color: var(--acento); outline: none; }
+.saguao-dimensao-metros { margin: -2px 0 0; }
+.saguao-construcao-acoes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 4px; }
+.saguao-confirmacao { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 8px; border: 1px solid var(--perigo); background: color-mix(in srgb, var(--perigo), transparent 92%); font-size: 13px; }
+.saguao-confirmacao p { margin: 0; color: var(--texto); }
 .saguao-acoes-ficha { display: flex; gap: 8px; flex-wrap: wrap; }
 .saguao-fichas { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .saguao-cartao-ficha { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 10px; border-radius: 10px; border: 1px solid var(--linha); background: var(--painel); color: var(--texto); cursor: pointer; text-align: center; transition: border-color 0.15s, background 0.15s; }
