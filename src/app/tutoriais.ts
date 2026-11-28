@@ -8,7 +8,7 @@ import { LICOES } from '../tutorial/licoes.ts';
 import type { EstadoDoTutor } from '../tutorial/condicoes.ts';
 import type { Semente } from '../tutorial/semente.ts';
 import { criarTutor } from '../tutorial/tutor.ts';
-import { alterarEntidade, campanhaAtiva, campanhas, criarCampanha, criarEntidade, entidades, escolherCampanha, ligacoes, ligarRefs, removerCampanha } from './campanha.ts';
+import { alterarEntidade, campanhaAtiva, campanhas, criarCampanha, criarEntidade, entidades, escolherCampanha, selecionadaId, ligacoes, ligarRefs, removerCampanha } from './campanha.ts';
 import { criarQuadroComItens } from './banco-quadros.ts';
 import { modoFocoSessao } from './foco-do-quadro.ts';
 import { carregarModelos, todosOsModelos } from './modelos.ts';
@@ -46,6 +46,7 @@ export function estadoDoTutor(): EstadoDoTutor {
     projetando: projetando.value !== null,
     buscaRapidaAberta: buscaRapidaAberta.value,
     menuContextoAberto: menuContexto.value !== null,
+    selecionadaId: selecionadaId.value,
     modelosDesde: todosOsModelos.value.filter(m => m.criadoEm >= inicioDaLicao).length,
   };
 }

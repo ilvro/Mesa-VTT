@@ -108,6 +108,39 @@ const SESSAO_AO_VIVO: Licao = {
 
 export const LICOES_DA_SESSAO: readonly Licao[] = [SESSAO_AO_VIVO];
 
+/** A lição de campanha: a semente leva a cena "Chegada à casa" SEM ligações (a aba Campanha não cria cenas à mão: `TIPOS_CRIAVEIS` as deixa para o Jukebox e o assistente); a pessoa faz as ligações. */
+const PREPARAR_CENA: Licao = {
+  id: 'campanha-cena', titulo: 'Preparar uma cena', minutos: 4, pasta: 'campanha', proxima: 'online-caminho',
+  resumo: 'Abrir uma cena, ligar a pista e um participante, achar tudo pela busca rápida e usar o botão direito.',
+  semente: { entidades: [...ENTIDADES, { tipo: 'cena', nome: 'Chegada à casa' }], tela: 'entidades' },
+  passos: [
+    { diga: 'Abra a cena <b>Chegada à casa</b>: use o filtro <b>Cenas</b> e clique no cartão dela.', porque: 'Uma cena junta o lugar, quem aparece, as pistas e a música de um momento da aventura. O editor dela abre ao lado.', alvo: tid('tipo-cena'), valores: '<b>Cena</b>: Chegada à casa', feito: ['selecionada', 'Chegada à casa'], etapa: 'Abrir a cena' },
+    { diga: 'Na cena que abriu, em <b>Pistas Reveladas</b>, escolha a <b>Carta rasgada</b>.', porque: 'A pista fica ligada à cena: quando a cena é ativada, o mestre a tem à mão para revelar.', alvo: tid('seletor-pista-cena'), valores: '<b>Pista</b>: Carta rasgada', feito: ['cenaCom', 'pista'], acao: ['escolher', tid('seletor-pista-cena'), 'Carta rasgada'], etapa: 'Ligar à cena' },
+    { diga: 'Em <b>Participantes</b>, adicione a <b>Joana</b>.', porque: 'Personagens e ameaças ligados são quem está na cena; o Modo Sessão e o encontro partem daí.', alvo: tid('seletor-participante-cena'), valores: '<b>Participante</b>: Joana', feito: ['cenaCom', 'personagem'], acao: ['escolher', tid('seletor-participante-cena'), 'Joana'] },
+    { diga: 'Aperte <b>Ctrl+K</b> para abrir a busca rápida.', porque: 'A busca rápida acha entidades, quadros, molduras e sessões de qualquer aba, sem navegar até eles.', feito: ['buscaRapida'], acao: ['tecla', 'Control+k'], aprendeu: ['Ctrl+K', 'busca rápida'], etapa: 'Achar e agir rápido' },
+    { diga: 'Escreva <b>Joana</b> e escolha o resultado com Enter ou um clique.', porque: 'O resultado abre a ficha na aba Campanha. Com Shift ele abre no app dono, se a entidade tiver um.', alvo: tid('campo-busca-rapida'), valores: '<b>Busca</b>: Joana', feito: ['selecionada', 'Joana'], acao: [['preencher', tid('campo-busca-rapida'), 'Joana'], ['tecla', 'Enter']] },
+    { diga: 'Clique com o <b>botão direito</b> num cartão da lista para abrir o menu dele.', porque: 'O mesmo menu aparece em qualquer lugar onde a entidade surge: lista, busca, quadro e cena.', alvo: '[data-testid^="entidade-"]', feito: ['menuContexto'], aprendeu: 'O botão direito abre o menu da entidade em qualquer tela.' },
+    ler('O menu muda conforme o tipo. <b>Abrir ↗</b> manda a entidade ao app dono (Atlas, Ateliê, Dossiê…), <b>▶ Ativar cena</b> põe a cena em jogo (aparece nas cenas) e <b>Deletar</b> a remove, pedindo confirmação. Feche o menu com Esc.', 'Quase toda ação da Mesa mora no botão direito: na dúvida, tente ali.'),
+  ],
+};
+
+/** A lição só de leitura: sem Discord e sem sala não há o que clicar além de Entrar, e a lição diz isso. */
+const MESA_ONLINE: Licao = {
+  id: 'online-caminho', titulo: 'Mesa online · o caminho', minutos: 3, pasta: 'campanha',
+  resumo: 'Só leitura: entrar com o Discord, criar a sala da campanha, ligar a um servidor e passar o link aos jogadores.',
+  semente: { entidades: [{ tipo: 'personagem', nome: 'Joana' }], tela: 'entidades' },
+  passos: [
+    { diga: 'Abra a aba <b>Online</b>.', porque: 'É onde você abre a campanha aos jogadores pela internet; sem entrar, a Mesa funciona como sempre. Nada nesta lição cria sala nem exige conta.', alvo: tid('aba-online'), feito: ['tela', 'online'], acao: clicar('aba-online'), etapa: 'O caminho' },
+    { diga: '<b>1. Entrar com o Discord.</b> Este botão abre o login no navegador. Só <b>mestres cadastrados</b> criam salas: se o seu Discord não estiver na lista do dono da Mesa, você vê um aviso e pode só olhar.', porque: 'O login é feito pelo Discord; a Mesa não guarda senha. Neste treino não precisa entrar.', alvo: tid('online-entrar'), feito: ['ler'] },
+    ler('<b>2. Criar sala para esta campanha.</b> Depois de entrar, esse botão cria a sala da campanha ativa; cada campanha tem a sua. A sala vive num servidor, e só existe se esse servidor (o Cloudflare em produção, ou o local) estiver no ar: é o endereço mostrado em <b>Servidor da sala</b>, com um botão para trocar entre produção e local.', 'Os botões desta etapa aparecem depois do login, por isso este passo é só leitura.'),
+    ler('<b>3. Ligar a um servidor do Discord.</b> A lista de servidores traz os que a atividade da Mesa já viu; você pode também colar o id de um servidor. Ligar permite que quem abrir a atividade ali entre direto nesta sala.', 'Sem a atividade aberta no Discord, a lista fica vazia, e colar o id resolve.'),
+    ler('<b>4. Abrir a mesa online e copiar o link de jogador.</b> <b>Abrir a mesa online</b> conecta a sala e mostra o estado da conexão; <b>Copiar link de jogador</b> leva o endereço para quem vai jogar. Se um mapa está sem névoa, a Mesa pergunta antes de mandá-lo inteiro.', 'O jogador só vê o que o mestre libera e não precisa de conta de mestre.'),
+    ler('<b>Dica:</b> teste o link de jogador numa <b>aba anônima</b>. Ela não tem o seu login, então mostra exatamente o que um jogador de verdade vê.', 'É o jeito mais rápido de conferir a mesa antes de convidar o grupo.'),
+  ],
+};
+
+export const LICOES_DA_CAMPANHA: readonly Licao[] = [PREPARAR_CENA, MESA_ONLINE];
+
 /** A lição de manutenção: só confere que o tutor, a campanha de treino e o cartão funcionam. Fica fora da lista (`?tutor-teste` a mostra). */
 const TESTE_DO_MOTOR: Licao = {
   id: 'teste-do-motor', titulo: 'Teste do motor', minutos: 1, oculta: true,
@@ -119,4 +152,4 @@ const TESTE_DO_MOTOR: Licao = {
   ],
 };
 
-export const LICOES: readonly Licao[] = [...LICOES_DO_QUADRO, ...LICOES_DA_SESSAO, TESTE_DO_MOTOR];
+export const LICOES: readonly Licao[] = [...LICOES_DO_QUADRO, ...LICOES_DA_SESSAO, ...LICOES_DA_CAMPANHA, TESTE_DO_MOTOR];

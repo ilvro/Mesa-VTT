@@ -8,7 +8,7 @@ import { refDaEntidade } from '../../../src/dominio/notas.ts';
 const base = (): EstadoDoTutor => ({
   tela: 'quadros', itens: [], quadroAbertoId: null, ferramenta: 'selecionar', modoQuadro: 'quadro', selecao: [], entidades: [], ligacoes: [],
   sessaoGravando: false, temSessao: false, linhasDoRegistro: 0, preset: null, paineisVisiveis: [], modoFoco: 'auto', cenaAtivada: false,
-  projetando: false, buscaRapidaAberta: false, menuContextoAberto: false, modelosDesde: 0,
+  projetando: false, buscaRapidaAberta: false, menuContextoAberto: false, modelosDesde: 0, selecionadaId: null,
 });
 const com = (mud: Partial<EstadoDoTutor>): EstadoDoTutor => ({ ...base(), ...mud });
 const texto = (id: string, s: string, extra: Partial<Item> = {}): Item => ({ ...novoTexto({ quadroId: 'q', x: 0, y: 0, doc: docDeTexto(s) }, 1, id), ...extra }) as Item;
@@ -99,6 +99,13 @@ test('cenaCom: como vincular*NaCena grava (mapa/trilha/pista saem da cena, parti
   assert.equal(ok(['cenaCom', 'pista'], com({ entidades, ligacoes: [lig(refCena, refDaEntidade('l1'), 'esta-em')] })), false);
   assert.equal(ok(['cenaCom', 'lugar'], com({ entidades, ligacoes: [lig(refCena, refDaEntidade('l1'), 'menciona')] })), false);
   assert.equal(ok(['cenaCom', 'lugar'], com({ entidades, ligacoes: [lig(refDaEntidade('p1'), refDaEntidade('l1'), 'esta-em')] })), false);
+});
+
+test('selecionada: a entidade aberta tem aquele nome', () => {
+  const entidades = [entidade('j', 'personagem', 'Joana'), entidade('c', 'cena', 'Chegada')];
+  assert.equal(ok(['selecionada', 'joana'], com({ entidades, selecionadaId: 'j' })), true);
+  assert.equal(ok(['selecionada', 'Joana'], com({ entidades, selecionadaId: 'c' })), false);
+  assert.equal(ok(['selecionada', 'Joana'], com({ entidades })), false);
 });
 
 test('toda condição do catálogo existe como função', () => {

@@ -187,3 +187,59 @@ test('MT4: sessao-ao-vivo de ponta a ponta sem o Atlas (preset, sessão, Diário
     assert.deepEqual(erros.filter(e => !/iframe|Atlas|Jukebox/i.test(e)), []);
   } finally { await ctx.close(); }
 });
+
+test('MT5: campanha-cena de ponta a ponta (abrir cena, pista, participante, Ctrl+K, Joana e botão direito)', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1440, height: 900 } });
+  try {
+    const mesa = await ctx.newPage(), erros: string[] = [];
+    mesa.on('pageerror', e => erros.push(`pageerror: ${e.message}`));
+    await mesa.goto(`${amb.origem}/Mesa/`);
+    await mesa.click('[data-testid="aba-campanhas"]');
+    await mesa.fill('[data-testid="nova-campanha-nome"]', 'Minha');
+    await mesa.click('[data-testid="criar-campanha"]');
+    await mesa.waitForSelector('[data-testid="tela-entidades"]');
+    await mesa.click('[data-testid="aba-aprender"]');
+    await mesa.click('[data-testid="licao-comecar-campanha-cena"]');
+    const passo = (n: number) => mesa.waitForSelector(`[data-testid="tutor"][data-passo="${n}"]`);
+    await passo(0);
+    await mesa.click('[data-testid="tipo-cena"]');
+    await mesa.locator('[data-testid^="entidade-"]', { hasText: 'Chegada à casa' }).first().click();
+    await passo(1); await mesa.selectOption('[data-testid="seletor-pista-cena"]', { label: 'Carta rasgada' });
+    await passo(2); await mesa.selectOption('[data-testid="seletor-participante-cena"]', { label: 'Joana' });
+    await passo(3); await mesa.keyboard.press('Control+k');
+    await passo(4); await mesa.fill('[data-testid="campo-busca-rapida"]', 'Joana');
+    await mesa.locator('[data-testid^="resultado-busca-"]').first().click();
+    await passo(5); await mesa.locator('[data-testid^="entidade-"]').first().click({ button: 'right' });
+    await passo(6); await mesa.click('[data-testid="tutor-continuar"]');
+    await mesa.waitForSelector('[data-testid="tutor-fim"]');
+    assert.match((await mesa.textContent('[data-testid="tutor-proxima"]')) ?? '', /Mesa online/);
+    assert.deepEqual(erros, []);
+  } finally { await ctx.close(); }
+});
+
+test('MT5: online-caminho é só leitura, sem login e sem criar sala', async () => {
+  const ctx = await amb.navegador.newContext({ viewport: { width: 1440, height: 900 } });
+  try {
+    const mesa = await ctx.newPage(), erros: string[] = [];
+    mesa.on('pageerror', e => erros.push(`pageerror: ${e.message}`));
+    await mesa.goto(`${amb.origem}/Mesa/`);
+    await mesa.click('[data-testid="aba-campanhas"]');
+    await mesa.fill('[data-testid="nova-campanha-nome"]', 'Minha');
+    await mesa.click('[data-testid="criar-campanha"]');
+    await mesa.waitForSelector('[data-testid="tela-entidades"]');
+    await mesa.click('[data-testid="aba-aprender"]');
+    await mesa.click('[data-testid="licao-comecar-online-caminho"]');
+    await mesa.waitForSelector('[data-testid="tutor"][data-passo="0"]');
+    await mesa.click('[data-testid="aba-online"]');
+    await mesa.waitForSelector('[data-testid="mesa-online"]');
+    await mesa.waitForSelector('[data-testid="tutor"][data-passo="1"]');
+    for (let n = 2; n <= 5; n++) {
+      await mesa.click('[data-testid="tutor-continuar"]');
+      await mesa.waitForSelector(`[data-testid="tutor"][data-passo="${n}"]`);
+    }
+    await mesa.click('[data-testid="tutor-continuar"]');
+    await mesa.waitForSelector('[data-testid="tutor-fim"]');
+    assert.equal(await mesa.locator('[data-testid="online-criar"]').count(), 0);
+    assert.deepEqual(erros, []);
+  } finally { await ctx.close(); }
+});

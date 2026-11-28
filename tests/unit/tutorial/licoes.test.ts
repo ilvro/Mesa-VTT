@@ -87,3 +87,20 @@ test('sessao-ao-vivo: a semente liga a cena à Casa abandonada, não abre o quad
   assert.equal(s.quadro?.itens?.filter(i => i.tipo === 'moldura' && i.titulo === 'Casa abandonada').length, 1);
   assert.deepEqual(l.passos.map(p => p.feito[0]), ['tela', 'preset', 'sessaoGravando', 'registro', 'ler', 'modoFoco', 'ler', 'cenaAtivada', 'ler', 'sessaoParada']);
 });
+
+test('campanha-cena: a semente traz a cena sem ligações e os passos seguem a ordem da tela', () => {
+  const l = LICOES.find(x => x.id === 'campanha-cena')!, s = l.semente!;
+  assert.equal(l.pasta, 'campanha'); assert.equal(l.proxima, 'online-caminho');
+  assert.deepEqual(s.entidades?.map(e => `${e.tipo}:${e.nome}`), ['personagem:Joana', 'lugar:Casa abandonada', 'pista:Carta rasgada', 'cena:Chegada à casa']);
+  assert.ok(!s.ligacoes?.length);
+  assert.deepEqual(l.passos.map(p => p.feito[0]), ['selecionada', 'cenaCom', 'cenaCom', 'buscaRapida', 'selecionada', 'menuContexto', 'ler']);
+  assert.deepEqual(l.passos.filter(p => p.feito[0] === 'cenaCom').map(p => p.feito[1]), ['pista', 'personagem']);
+});
+
+test('online-caminho: só leitura depois de abrir a aba, sem alvo em controle que exige login', () => {
+  const l = LICOES.find(x => x.id === 'online-caminho')!;
+  assert.deepEqual(l.passos.map(p => p.feito[0]), ['tela', 'ler', 'ler', 'ler', 'ler', 'ler']);
+  const semLogin = ['[data-testid="aba-online"]', '[data-testid="online-entrar"]'];
+  for (const p of l.passos) if (p.alvo) assert.ok(semLogin.includes(p.alvo), `alvo ${p.alvo} só existe logado`);
+  assert.ok(l.passos.some(p => /anônima/.test(p.diga)));
+});

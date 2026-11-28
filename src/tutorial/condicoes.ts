@@ -29,6 +29,8 @@ export interface EstadoDoTutor {
   menuContextoAberto: boolean;
   /** Modelos criados depois do início da lição. */
   modelosDesde: number;
+  /** O id da entidade aberta na aba Campanha. */
+  selecionadaId: string | null;
 }
 /** `['nome', ...argumentos]`. */
 export type Condicao = readonly [string, ...unknown[]];
@@ -97,6 +99,8 @@ export const CONDICOES: Record<string, (e: EstadoDoTutor, ...a: never[]) => bool
       return !!dona && dona.tipo === 'cena' && cenas.includes(dona) && outra?.tipo === tipoLigado;
     });
   },
+  /** A entidade com esse nome está aberta (selecionada) na aba Campanha. */
+  selecionada: (e, nome: string) => { const x = e.entidades.find(y => y.id === e.selecionadaId); return !!x && nomeIgual(x.nome, nome); },
   buscaRapida: e => e.buscaRapidaAberta,
   menuContexto: e => e.menuContextoAberto,
 };

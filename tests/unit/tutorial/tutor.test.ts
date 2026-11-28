@@ -7,7 +7,7 @@ const memoria = (): ArmazenamentoSimples & { dados: Map<string, string> } => { c
 const base = (): EstadoDoTutor => ({
   tela: 'quadros', itens: [], quadroAbertoId: null, ferramenta: 'selecionar', modoQuadro: 'quadro', selecao: [], entidades: [], ligacoes: [],
   sessaoGravando: false, temSessao: false, linhasDoRegistro: 0, preset: null, paineisVisiveis: [], modoFoco: 'auto', cenaAtivada: false,
-  projetando: false, buscaRapidaAberta: false, menuContextoAberto: false, modelosDesde: 0,
+  projetando: false, buscaRapidaAberta: false, menuContextoAberto: false, modelosDesde: 0, selecionadaId: null,
 });
 const LICAO: Licao = { id: 'duas', titulo: 'Duas coisas', minutos: 1, proxima: 'outra', passos: [
   { diga: 'Leia', feito: ['ler'], aprendeu: 'Ler antes de fazer' },
