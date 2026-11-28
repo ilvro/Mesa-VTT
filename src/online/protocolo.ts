@@ -4,6 +4,42 @@
  */
 
 export type Papel = 'mestre' | 'jogador';
+export type ModoDaSala = 'sessao' | 'construcao';
+
+/** Máximo de comandos em uma única operação colaborativa de construção. */
+export const MAX_COMANDOS_POR_OP = 100;
+/** Limite em bytes do JSON de `comandos` em uma operação de construção (protege SQLite do Durable Object). */
+export const LIMITE_OP_CONSTRUCAO_BYTES = 512 * 1024;
+/** Prefixo dos blobs de snapshot da construção colaborativa (`construcao:<rev>`). */
+export const PREFIXO_BLOB_CONSTRUCAO = 'construcao:';
+
+/** Um comando serializável do editor do Atlas (validado pelo próprio Atlas). */
+export type ComandoConstrucao = { tipo: string } & Record<string, unknown>;
+
+/** Operação já ordenada pela sala e guardada no histórico da construção. */
+export interface OpConstrucao {
+  rev: number;
+  opId: string;
+  autor: Autor;
+  comandos: ComandoConstrucao[];
+  rotulo?: string;
+  em?: number;
+}
+
+/** Nota rápida/recado da sessão de construção. */
+export interface NotaConstrucao {
+  id: string;
+  autor: Autor;
+  texto: string;
+  em: number;
+}
+
+/** Resumo do mapa em construção entregue no `bem-vindo`. */
+export interface ResumoConstrucao {
+  temMapa: boolean;
+  nome?: string;
+  rev: number;
+}
 
 /** Quem fala; o mesmo formato do `autor` carimbado nos eventos (mesa-core). */
 export interface Eu {
@@ -37,8 +73,48 @@ export type MsgFichaSalvar = { tipo: 'ficha.salvar'; ficha: FichaDaSala; rev: nu
 export type MsgFichaEntregar = { tipo: 'ficha.entregar'; fichaId: string; dono: string };
 export type MsgMembroPersonagem = { tipo: 'membro.personagem'; fichaId: string | null };
 export type MsgSalaConfig = { tipo: 'sala.config'; nome: string; capaBlobId?: string };
+/** Só o mestre: alterna entre `'sessao'` e `'construcao'`. */
+export type MsgSalaModo = { tipo: 'sala.modo'; modo: ModoDaSala };
+/** Só o mestre: limpa o mapa projetado e as escolhas de personagem da sessão atual na sala (mantém fichas, blobs e rolagens). */
+export type MsgSalaLimparSessao = { tipo: 'sala.limpar-sessao' };
 /** Qualquer membro pede o histórico de rolagens (as 200 da sala); a resposta é `MsgRolagensHistorico`, só ao remetente. */
 export type MsgRolagensHistorico = { tipo: 'rolagens.historico' };
+/** Qualquer membro pede um retrato em falta (a sala devolve se tiver, ou repassa ao mestre). */
+export type MsgPedirRetrato = { tipo: 'pedir-retrato'; id: string };
+
+/** Só o mestre: abre ou substitui o mapa em construção colaborativa (`rev = 0`). */
+export type MsgConstrucaoAbrir = { tipo: 'construcao.abrir'; mapa?: Record<string, unknown>; blobId?: string; nome?: string };
+/** Só o mestre: encerra e limpa o mapa em construção na sala. */
+export type MsgConstrucaoFechar = { tipo: 'construcao.fechar' };
+/** Qualquer membro (em modo `'construcao'` com mapa aberto): envia lote de comandos do Atlas. */
+export type MsgConstrucaoComando = {
+  tipo: 'construcao.comando';
+  baseRev: number;
+  opId: string;
+  comandos: ComandoConstrucao[];
+  rotulo?: string;
+};
+/** Qualquer membro (em modo `'construcao'` com mapa aberto): compacta o histórico até `rev`. */
+export type MsgConstrucaoSnapshot = {
+  tipo: 'construcao.snapshot';
+  rev: number;
+  mapa?: Record<string, unknown>;
+  blobId?: string;
+  nome?: string;
+};
+/** Qualquer membro (em modo `'construcao'` com mapa aberto): presença efêmera de cursor no editor. */
+export type MsgConstrucaoCursor = {
+  tipo: 'construcao.cursor';
+  x: number;
+  y: number;
+  levelId: string | null;
+  ferramenta: string;
+  pintando?: boolean;
+};
+/** Qualquer membro (em modo `'construcao'`): pede o estado completo atual da construção. */
+export type MsgConstrucaoRessincronizar = { tipo: 'construcao.ressincronizar' };
+/** Qualquer membro (em modo `'construcao'`): publica uma nota rápida no painel de construção. */
+export type MsgConstrucaoNota = { tipo: 'construcao.nota'; id: string; texto: string };
 
 /** Anúncio de um blob; os pedaços seguem em quadros binários (ver `codificarPedaco`). */
 export interface MsgBlob { tipo: 'blob'; id: string; tipoMime: string }
@@ -66,15 +142,26 @@ export type MensagemParaSala =
   | MsgBlobPedir
   | MsgMembroPersonagem
   | MsgRolagensHistorico
-  | MsgSalaConfig;
+  | MsgPedirRetrato
+  | MsgSalaConfig
+  | MsgSalaModo
+  | MsgSalaLimparSessao
+  | MsgConstrucaoAbrir
+  | MsgConstrucaoFechar
+  | MsgConstrucaoComando
+  | MsgConstrucaoSnapshot
+  | MsgConstrucaoCursor
+  | MsgConstrucaoRessincronizar
+  | MsgConstrucaoNota;
 
-/** Nome, capa e dono da sala, guardados no `config` dela. */
+/** Nome, capa, dono e modo da sala, guardados no `config` dela. */
 export interface ConfigSala {
   nome: string;
   capaBlobId?: string;
   /** `discordId` do mestre da sala. */
   dono?: string;
   campanhaId?: string;
+  modo?: ModoDaSala;
 }
 
 export interface MsgBemVindo {
@@ -95,10 +182,51 @@ export interface MsgBemVindo {
   rolagens?: Envelope[];
   /** Relógio da sala em ms no momento do `bem-vindo` (R23). */
   agora?: number;
+  /** Resumo do mapa em construção colaborativa, se houver. */
+  construcao?: ResumoConstrucao;
 }
 
 /** Quantas rolagens o `bem-vindo` traz. */
 export const ROLAGENS_NO_BEM_VINDO = 50;
+
+export type MsgConstrucaoEstado = {
+  tipo: 'construcao.estado';
+  mapa?: Record<string, unknown>;
+  blobId?: string;
+  nome?: string;
+  rev: number;
+  ops: OpConstrucao[];
+  notas?: NotaConstrucao[];
+};
+
+export type MsgConstrucaoAplicada = {
+  tipo: 'construcao.aplicada';
+  rev: number;
+  opId: string;
+  autor: Autor;
+  comandos: ComandoConstrucao[];
+  rotulo?: string;
+};
+
+export type MsgConstrucaoCursorDaSala = {
+  tipo: 'construcao.cursor';
+  autor: Autor;
+  x: number;
+  y: number;
+  levelId: string | null;
+  ferramenta: string;
+  pintando?: boolean;
+};
+
+export type MsgConstrucaoNotaDaSala = {
+  tipo: 'construcao.nota';
+  id: string;
+  autor: Autor;
+  texto: string;
+  em: number;
+};
+
+export type MsgConstrucaoFechada = { tipo: 'construcao.fechada' };
 
 export type MensagemDaSala =
   | MsgBemVindo
@@ -113,8 +241,14 @@ export type MensagemDaSala =
   | { tipo: 'ficha.removida'; id: string }
   /** Resposta a `rolagens.historico`: as rolagens da sala (até 200), da mais antiga à mais nova. */
   | { tipo: 'rolagens.historico'; rolagens: Envelope[] }
+  | MsgConstrucaoEstado
+  | MsgConstrucaoAplicada
+  | MsgConstrucaoCursorDaSala
+  | MsgConstrucaoNotaDaSala
+  | MsgConstrucaoFechada
   | MsgBlob
   | MsgBlobTemResposta
+  | MsgPedirRetrato
   /** `recusado`: o `tipo` da mensagem recusada (o campo `tipo` já é o discriminante `'erro'`). */
   | { tipo: 'erro'; motivo: string; recusado?: string };
 
@@ -127,6 +261,9 @@ type Obj = Record<string, unknown>;
 const ehObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v);
 const txt = (v: unknown): v is string => typeof v === 'string';
 const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const naoNegInt = (v: unknown): v is number => num(v) && Number.isInteger(v) && v >= 0;
+const posInt = (v: unknown): v is number => num(v) && Number.isInteger(v) && v >= 1;
+const ehModo = (v: unknown): v is ModoDaSala => v === 'sessao' || v === 'construcao';
 const ehEnvelope = (v: unknown): v is Envelope => ehObj(v) && txt(v.tipo) && txt(v.id);
 const ehFicha = (v: unknown): v is FichaDaSala => ehObj(v) && txt(v.id);
 const ehEu = (v: unknown): v is Eu =>
@@ -135,6 +272,31 @@ const ehEu = (v: unknown): v is Eu =>
 const ehAutor = (v: unknown): v is Autor => ehObj(v) && ehEu(v) && Array.isArray(v.fichas) && v.fichas.every(txt);
 const ehMembro = (v: unknown): v is Membro => ehObj(v) && ehEu(v) && (v.personagem === null || txt(v.personagem));
 const listaDe = <T>(v: unknown, ok: (x: unknown) => x is T): v is T[] => Array.isArray(v) && v.every(ok);
+const ehComandoConstrucao = (v: unknown): v is ComandoConstrucao => ehObj(v) && txt(v.tipo) && v.tipo.length > 0;
+const ehOpConstrucao = (v: unknown): v is OpConstrucao =>
+  ehObj(v)
+  && posInt(v.rev)
+  && txt(v.opId) && v.opId.length > 0
+  && ehAutor(v.autor)
+  && listaDe(v.comandos, ehComandoConstrucao) && v.comandos.length > 0
+  && (v.rotulo === undefined || txt(v.rotulo))
+  && (v.em === undefined || num(v.em));
+const ehNotaConstrucao = (v: unknown): v is NotaConstrucao =>
+  ehObj(v) && txt(v.id) && v.id.length > 0 && ehAutor(v.autor) && txt(v.texto) && num(v.em);
+const ehResumoConstrucao = (v: unknown): v is ResumoConstrucao =>
+  ehObj(v) && typeof v.temMapa === 'boolean' && naoNegInt(v.rev) && (v.nome === undefined || txt(v.nome));
+const ehConfigSala = (v: unknown): v is ConfigSala =>
+  ehObj(v)
+  && txt(v.nome)
+  && (v.capaBlobId === undefined || txt(v.capaBlobId))
+  && (v.dono === undefined || txt(v.dono))
+  && (v.campanhaId === undefined || txt(v.campanhaId))
+  && (v.modo === undefined || ehModo(v.modo));
+
+function dentroDoLimiteOp(comandos: readonly ComandoConstrucao[]): boolean {
+  if (comandos.length === 0 || comandos.length > MAX_COMANDOS_POR_OP) return false;
+  return enc.encode(JSON.stringify(comandos)).length <= LIMITE_OP_CONSTRUCAO_BYTES;
+}
 
 function json(texto: string): unknown {
   try { return JSON.parse(texto); } catch { return undefined; }
@@ -154,11 +316,73 @@ export function lerMensagemParaSala(texto: string): MensagemParaSala | null {
     case 'blob': return txt(m.id) && m.id && txt(m.tipoMime) ? { tipo: 'blob', id: m.id, tipoMime: m.tipoMime } : null;
     case 'blob.tem': return txt(m.id) && m.id ? { tipo: 'blob.tem', id: m.id } : null;
     case 'blob.pedir': return txt(m.id) && m.id ? { tipo: 'blob.pedir', id: m.id } : null;
+    case 'pedir-retrato': return txt(m.id) && m.id ? { tipo: 'pedir-retrato', id: m.id } : null;
     case 'rolagens.historico': return { tipo: 'rolagens.historico' };
     case 'membro.personagem': return m.fichaId === null || txt(m.fichaId) ? { tipo: 'membro.personagem', fichaId: m.fichaId } : null;
     case 'sala.config':
       if (!txt(m.nome) || (m.capaBlobId !== undefined && !txt(m.capaBlobId))) return null;
       return { tipo: 'sala.config', nome: m.nome, ...(m.capaBlobId !== undefined ? { capaBlobId: m.capaBlobId } : {}) };
+    case 'sala.modo': return ehModo(m.modo) ? { tipo: 'sala.modo', modo: m.modo } : null;
+    case 'sala.limpar-sessao': return { tipo: 'sala.limpar-sessao' };
+    case 'construcao.abrir': {
+      const temMapa = m.mapa !== undefined;
+      const temBlob = m.blobId !== undefined;
+      if (temMapa === temBlob) return null;
+      if (temMapa && !ehObj(m.mapa)) return null;
+      if (temBlob && (!txt(m.blobId) || !m.blobId)) return null;
+      if (m.nome !== undefined && !txt(m.nome)) return null;
+      return {
+        tipo: 'construcao.abrir',
+        ...(temMapa ? { mapa: m.mapa as Record<string, unknown> } : {}),
+        ...(temBlob ? { blobId: m.blobId as string } : {}),
+        ...(m.nome !== undefined ? { nome: m.nome } : {}),
+      };
+    }
+    case 'construcao.fechar': return { tipo: 'construcao.fechar' };
+    case 'construcao.comando':
+      if (!naoNegInt(m.baseRev) || !txt(m.opId) || !m.opId) return null;
+      if (!listaDe(m.comandos, ehComandoConstrucao) || !dentroDoLimiteOp(m.comandos)) return null;
+      if (m.rotulo !== undefined && !txt(m.rotulo)) return null;
+      return {
+        tipo: 'construcao.comando',
+        baseRev: m.baseRev,
+        opId: m.opId,
+        comandos: m.comandos,
+        ...(m.rotulo !== undefined ? { rotulo: m.rotulo } : {}),
+      };
+    case 'construcao.snapshot': {
+      if (!naoNegInt(m.rev)) return null;
+      const temMapa = m.mapa !== undefined;
+      const temBlob = m.blobId !== undefined;
+      if (temMapa === temBlob) return null;
+      if (temMapa && !ehObj(m.mapa)) return null;
+      if (temBlob && (!txt(m.blobId) || !m.blobId)) return null;
+      if (m.nome !== undefined && !txt(m.nome)) return null;
+      return {
+        tipo: 'construcao.snapshot',
+        rev: m.rev,
+        ...(temMapa ? { mapa: m.mapa as Record<string, unknown> } : {}),
+        ...(temBlob ? { blobId: m.blobId as string } : {}),
+        ...(m.nome !== undefined ? { nome: m.nome } : {}),
+      };
+    }
+    case 'construcao.cursor':
+      if (!num(m.x) || !num(m.y)) return null;
+      if (m.levelId !== null && !txt(m.levelId)) return null;
+      if (!txt(m.ferramenta) || !m.ferramenta) return null;
+      if (m.pintando !== undefined && typeof m.pintando !== 'boolean') return null;
+      return {
+        tipo: 'construcao.cursor',
+        x: m.x,
+        y: m.y,
+        levelId: m.levelId,
+        ferramenta: m.ferramenta,
+        ...(m.pintando !== undefined ? { pintando: m.pintando } : {}),
+      };
+    case 'construcao.ressincronizar': return { tipo: 'construcao.ressincronizar' };
+    case 'construcao.nota':
+      if (!txt(m.id) || !m.id || !txt(m.texto) || !m.texto.trim()) return null;
+      return { tipo: 'construcao.nota', id: m.id, texto: m.texto };
     default: return null;
   }
 }
@@ -170,25 +394,26 @@ export function lerMensagemDaSala(texto: string): MensagemDaSala | null {
   switch (m.tipo) {
     case 'bem-vindo':
       if (!ehEu(m.eu) || !listaDe(m.membros, ehMembro) || !listaDe(m.fichas, ehFicha) || !ehObj(m.ultimoEstado)) return null;
-      if (m.config !== undefined && !(ehObj(m.config) && txt(m.config.nome))) return null;
+      if (m.config !== undefined && !ehConfigSala(m.config)) return null;
       if (m.revs !== undefined && !(ehObj(m.revs) && Object.values(m.revs).every(num))) return null;
       if (m.donos !== undefined && !(ehObj(m.donos) && Object.values(m.donos).every(txt))) return null;
       if (m.rolagens !== undefined && !listaDe(m.rolagens, ehEnvelope)) return null;
       if (m.agora !== undefined && !num(m.agora)) return null;
+      if (m.construcao !== undefined && !ehResumoConstrucao(m.construcao)) return null;
       return {
         tipo: 'bem-vindo', eu: m.eu, membros: m.membros, fichas: m.fichas, ultimoEstado: m.ultimoEstado,
-        ...(m.config !== undefined ? { config: m.config as unknown as ConfigSala } : {}),
+        ...(m.config !== undefined ? { config: m.config } : {}),
         ...(m.revs !== undefined ? { revs: m.revs as Record<string, number> } : {}),
         ...(m.donos !== undefined ? { donos: m.donos as Record<string, string> } : {}),
         ...(m.rolagens !== undefined ? { rolagens: m.rolagens } : {}),
         ...(m.agora !== undefined ? { agora: m.agora } : {}),
+        ...(m.construcao !== undefined ? { construcao: m.construcao } : {}),
       };
     case 'pong': return num(m.em) && num(m.agora) ? { tipo: 'pong', em: m.em, agora: m.agora } : null;
     case 'membros': return listaDe(m.membros, ehMembro) ? { tipo: 'membros', membros: m.membros } : null;
     case 'config':
-      if (!ehObj(m.config) || !txt(m.config.nome)) return null;
-      if (m.config.capaBlobId !== undefined && !txt(m.config.capaBlobId)) return null;
-      return { tipo: 'config', config: m.config as unknown as ConfigSala };
+      if (!ehConfigSala(m.config)) return null;
+      return { tipo: 'config', config: m.config };
     case 'canal': return txt(m.nome) && 'msg' in m ? { tipo: 'canal', nome: m.nome, msg: m.msg } : null;
     case 'evento': return ehEnvelope(m.envelope) ? { tipo: 'evento', envelope: m.envelope } : null;
     case 'ficha.atualizada':
@@ -196,10 +421,60 @@ export function lerMensagemDaSala(texto: string): MensagemDaSala | null {
       return { tipo: 'ficha.atualizada', ficha: m.ficha, rev: m.rev, autor: m.autor, ...(m.conflito !== undefined ? { conflito: m.conflito } : {}), ...(m.dono !== undefined ? { dono: m.dono } : {}) };
     case 'ficha.removida': return txt(m.id) && m.id ? { tipo: 'ficha.removida', id: m.id } : null;
     case 'rolagens.historico': return listaDe(m.rolagens, ehEnvelope) ? { tipo: 'rolagens.historico', rolagens: m.rolagens } : null;
+    case 'construcao.estado': {
+      const temMapa = m.mapa !== undefined;
+      const temBlob = m.blobId !== undefined;
+      if (temMapa === temBlob) return null;
+      if (temMapa && !ehObj(m.mapa)) return null;
+      if (temBlob && (!txt(m.blobId) || !m.blobId)) return null;
+      if (m.nome !== undefined && !txt(m.nome)) return null;
+      if (!naoNegInt(m.rev) || !listaDe(m.ops, ehOpConstrucao)) return null;
+      if (m.notas !== undefined && !listaDe(m.notas, ehNotaConstrucao)) return null;
+      return {
+        tipo: 'construcao.estado',
+        ...(temMapa ? { mapa: m.mapa as Record<string, unknown> } : {}),
+        ...(temBlob ? { blobId: m.blobId as string } : {}),
+        ...(m.nome !== undefined ? { nome: m.nome } : {}),
+        rev: m.rev,
+        ops: m.ops,
+        ...(m.notas !== undefined ? { notas: m.notas } : {}),
+      };
+    }
+    case 'construcao.aplicada':
+      if (!posInt(m.rev) || !txt(m.opId) || !m.opId || !ehAutor(m.autor)) return null;
+      if (!listaDe(m.comandos, ehComandoConstrucao) || m.comandos.length === 0 || m.comandos.length > MAX_COMANDOS_POR_OP) return null;
+      if (m.rotulo !== undefined && !txt(m.rotulo)) return null;
+      return {
+        tipo: 'construcao.aplicada',
+        rev: m.rev,
+        opId: m.opId,
+        autor: m.autor,
+        comandos: m.comandos,
+        ...(m.rotulo !== undefined ? { rotulo: m.rotulo } : {}),
+      };
+    case 'construcao.cursor':
+      if (!ehAutor(m.autor) || !num(m.x) || !num(m.y)) return null;
+      if (m.levelId !== null && !txt(m.levelId)) return null;
+      if (!txt(m.ferramenta) || !m.ferramenta) return null;
+      if (m.pintando !== undefined && typeof m.pintando !== 'boolean') return null;
+      return {
+        tipo: 'construcao.cursor',
+        autor: m.autor,
+        x: m.x,
+        y: m.y,
+        levelId: m.levelId,
+        ferramenta: m.ferramenta,
+        ...(m.pintando !== undefined ? { pintando: m.pintando } : {}),
+      };
+    case 'construcao.nota':
+      if (!txt(m.id) || !m.id || !ehAutor(m.autor) || !txt(m.texto) || !num(m.em)) return null;
+      return { tipo: 'construcao.nota', id: m.id, autor: m.autor, texto: m.texto, em: m.em };
+    case 'construcao.fechada': return { tipo: 'construcao.fechada' };
     case 'blob': return txt(m.id) && m.id && txt(m.tipoMime) ? { tipo: 'blob', id: m.id, tipoMime: m.tipoMime } : null;
     case 'blob.tem':
       if (!txt(m.id) || !m.id || typeof m.tem !== 'boolean' || (m.tamanho !== undefined && !num(m.tamanho))) return null;
       return { tipo: 'blob.tem', id: m.id, tem: m.tem, ...(m.tamanho !== undefined ? { tamanho: m.tamanho } : {}) };
+    case 'pedir-retrato': return txt(m.id) && m.id ? { tipo: 'pedir-retrato', id: m.id } : null;
     case 'erro': return txt(m.motivo) && (m.recusado === undefined || txt(m.recusado)) ? { tipo: 'erro', motivo: m.motivo, ...(m.recusado !== undefined ? { recusado: m.recusado } : {}) } : null;
     default: return null;
   }

@@ -68,6 +68,7 @@ export function permitido(msg: MensagemParaSala, autor: Eu, ctx: ContextoPermiss
       return ctx.modo() === 'construcao';
     // qualquer membro pede; quais ids saem é decisão da sala (`mensagens.ts`)
     case 'blob.pedir':
+    case 'pedir-retrato':
     case 'ping':
     case 'rolagens.historico': return true;
     case 'membro.personagem':

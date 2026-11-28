@@ -1,6 +1,9 @@
 import { lerOla, type Eu } from '../src/online/protocolo.ts';
 import { criarEstado, type Estado } from './estado.ts';
-import { bemVindo, blobsParaQuemChega, eventosParaQuemChega, papelNaSala, saidaMembros, tratar, tratarBinario, type Destino, type Saida } from './mensagens.ts';
+import {
+  bemVindo, blobConstrucaoParaQuemChega, blobsParaQuemChega, construcaoParaQuemChega, eventosParaQuemChega,
+  papelNaSala, saidaMembros, tratar, tratarBinario, type Destino, type Saida,
+} from './mensagens.ts';
 import { criarLimitador } from './permissoes.ts';
 import { verificarSessao } from './sessao.ts';
 
@@ -20,6 +23,7 @@ export class Sala implements DurableObject {
   private env: Env;
   private estado: Estado;
   private limitador = criarLimitador(60, 1000);
+  private limitadorMestre = criarLimitador(150, 1000);
 
   constructor(ctx: DurableObjectState, env: Env) {
     this.ctx = ctx;
@@ -89,7 +93,8 @@ export class Sala implements DurableObject {
   async webSocketMessage(ws: WebSocket, mensagem: string | ArrayBuffer): Promise<void> {
     const eu = anexoDe(ws);
     if (eu) {
-      const veredito = this.limitador.tentar(ws, Date.now());
+      const lim = eu.papel === 'mestre' ? this.limitadorMestre : this.limitador;
+      const veredito = lim.tentar(ws, Date.now());
       if (veredito !== 'ok') {
         if (veredito === 'avisar') ws.send(JSON.stringify({ tipo: 'erro', motivo: 'limite' }));
         return;
@@ -106,7 +111,7 @@ export class Sala implements DurableObject {
         }
         return;
       }
-      this.entregar(tratar(this.estado, eu, mensagem, Date.now(), this.conectados()), ws);
+      this.entregar(tratar(this.estado, eu, mensagem, Date.now(), this.conectados(), ws), ws);
       return;
     }
     // ainda não identificada: a primeira mensagem precisa ser um `ola` válido
@@ -125,17 +130,18 @@ export class Sala implements DurableObject {
     ws.serializeAttachment(novo satisfies Anexo);
     const todos = this.conectados();
     ws.send(JSON.stringify(bemVindo(this.estado, novo, todos, Date.now())));
-    // quem chega depois não viu os blobs que o mestre mandou: manda os citados nos últimos `canal` (o mestre já os tem)
-    if (novo.papel !== 'mestre') {
-      for (const b of blobsParaQuemChega(this.estado)) {
-        ws.send(JSON.stringify(b.anuncio));
-        for (const q of b.quadros) ws.send(q);
-      }
+    // quem chega depois não viu os blobs que o mestre mandou: manda os citados nos últimos `canal` e o da construção
+    const blobsChegada = novo.papel !== 'mestre' ? blobsParaQuemChega(this.estado) : blobConstrucaoParaQuemChega(this.estado);
+    for (const b of blobsChegada) {
+      ws.send(JSON.stringify(b.anuncio));
+      for (const q of b.quadros) ws.send(q);
     }
     // e o último `jukebox.mix`, para o som seguir de onde está (a casca baixa as faixas com `blob.pedir`)
     if (novo.papel !== 'mestre') {
       for (const msg of eventosParaQuemChega(this.estado)) ws.send(JSON.stringify(msg));
     }
+    const estadoConstrucao = construcaoParaQuemChega(this.estado);
+    if (estadoConstrucao) ws.send(JSON.stringify(estadoConstrucao));
     this.entregar([saidaMembros(this.estado, todos)], ws);
   }
 

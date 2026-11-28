@@ -4,11 +4,11 @@
  */
 
 import {
-  ROLAGENS_NO_BEM_VINDO, codificarPedaco, decodificarPedaco, lerMensagemParaSala,
-  type Eu, type MensagemDaSala, type MsgBemVindo, type MsgBlob,
+  PREFIXO_BLOB_CONSTRUCAO, ROLAGENS_NO_BEM_VINDO, codificarPedaco, decodificarPedaco, lerMensagemParaSala,
+  type Eu, type MensagemDaSala, type MsgBemVindo, type MsgBlob, type MsgConstrucaoEstado,
 } from '../src/online/protocolo.ts';
-import { ErroEstado, montarMembros, type Estado } from './estado.ts';
-import { autorCarimbado, carimbar, envelopeInvalido, permitido } from './permissoes.ts';
+import { ErroEstado, montarMembros, type Estado, type EstadoConstrucao } from './estado.ts';
+import { autorCarimbado, carimbar, criarLimitador, envelopeInvalido, permitido } from './permissoes.ts';
 
 /**
  * Destino de uma saída:
@@ -38,6 +38,24 @@ function podePingar(estado: Estado, discordId: string, agora: number): boolean {
   return true;
 }
 
+export const MAX_CURSORES_POR_SEGUNDO = 15;
+const JANELA_CURSOR_MS = 1000;
+const limitadorCursorPorConexao = criarLimitador(MAX_CURSORES_POR_SEGUNDO, JANELA_CURSOR_MS);
+const cursoresPorEstado = new WeakMap<Estado, Map<string, { inicio: number; n: number }>>();
+function podeEnviarCursor(estado: Estado, discordId: string, agora: number, conexao?: object): boolean {
+  if (conexao) return limitadorCursorPorConexao.tentar(conexao, agora) === 'ok';
+  let porPessoa = cursoresPorEstado.get(estado);
+  if (!porPessoa) { porPessoa = new Map(); cursoresPorEstado.set(estado, porPessoa); }
+  let j = porPessoa.get(discordId);
+  if (!j || agora - j.inicio >= JANELA_CURSOR_MS) {
+    j = { inicio: agora, n: 0 };
+    porPessoa.set(discordId, j);
+  }
+  if (j.n >= MAX_CURSORES_POR_SEGUNDO) return false;
+  j.n++;
+  return true;
+}
+
 const ehObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const blobIdDe = (v: unknown): string[] => (ehObj(v) && typeof v.blobId === 'string' && v.blobId ? [v.blobId] : []);
 
@@ -53,11 +71,13 @@ export function blobsCitadosPor(msg: unknown): string[] {
 /** Quadros de um blob completo, na ordem em que o mestre os mandou: o anúncio e os pedaços binários. */
 export interface BlobParaEnviar { anuncio: MsgBlob; quadros: ArrayBuffer[] }
 
-/** O que mandar a quem chegou depois do `bem-vindo`: os blobs citados nos últimos `canal` guardados e a capa da sala. Os incompletos são pulados. */
+/** O que mandar a quem chegou depois do `bem-vindo`: os blobs citados nos últimos `canal` guardados, a capa da sala e o snapshot da construção. Os incompletos são pulados. */
 export function blobsParaQuemChega(estado: Estado): BlobParaEnviar[] {
   const ids = new Set(estado.blobsCitados());
   const capa = estado.config().capaBlobId;
   if (capa) ids.add(capa);
+  const snapBlob = estado.estadoConstrucao()?.blobId;
+  if (snapBlob) ids.add(snapBlob);
   const saida: BlobParaEnviar[] = [];
   for (const id of ids) {
     const pedacos = estado.pedacosDoBlob(id);
@@ -68,6 +88,37 @@ export function blobsParaQuemChega(estado: Estado): BlobParaEnviar[] {
     });
   }
   return saida;
+}
+
+/** Blob do snapshot da construção para enviar também ao mestre quando entra/reconecta. */
+export function blobConstrucaoParaQuemChega(estado: Estado): BlobParaEnviar[] {
+  const id = estado.estadoConstrucao()?.blobId;
+  if (!id) return [];
+  const pedacos = estado.pedacosDoBlob(id);
+  if (!pedacos || pedacos.length === 0) return [];
+  return [{
+    anuncio: { tipo: 'blob', id, tipoMime: pedacos[0]!.cab.tipo },
+    quadros: pedacos.map(p => codificarPedaco(p.cab, p.dados)),
+  }];
+}
+
+function msgEstadoConstrucao(estado: Estado, c: EstadoConstrucao): MsgConstrucaoEstado {
+  const notas = estado.notasConstrucao();
+  return {
+    tipo: 'construcao.estado',
+    ...(c.mapa !== undefined ? { mapa: c.mapa } : {}),
+    ...(c.blobId !== undefined ? { blobId: c.blobId } : {}),
+    ...(c.nome !== undefined ? { nome: c.nome } : {}),
+    rev: c.rev,
+    ops: c.ops,
+    ...(notas.length > 0 ? { notas } : {}),
+  };
+}
+
+/** Estado da construção colaborativa para quem chega (mestre ou jogador), se houver mapa de construção aberto. */
+export function construcaoParaQuemChega(estado: Estado): MsgConstrucaoEstado | null {
+  const c = estado.estadoConstrucao();
+  return c ? msgEstadoConstrucao(estado, c) : null;
 }
 
 /** O que mandar a quem chegou depois, além dos blobs: o último `jukebox.mix` (o envelope carimbado), como um `evento` comum. */
@@ -100,22 +151,31 @@ export function bemVindo(estado: Estado, eu: Eu, conectados: readonly Eu[], agor
     revs[f.id] = f.rev;
     donos[f.id] = f.dono;
   }
+  const ultimoEstado = estado.ultimoEstado();
+  for (const [canal, valor] of Object.entries(ultimoEstado)) {
+    if (!canal.endsWith(':ficha-projetada') || !ehObj(valor) || valor.tipo !== 'projetar-ficha') continue;
+    if (typeof valor.fichaId === 'string' && valor.fichaId && !ehObj(valor.ficha)) {
+      const f = estado.ficha(valor.fichaId)?.ficha;
+      if (f) ultimoEstado[canal] = { ...valor, ficha: f };
+    }
+  }
   return {
     tipo: 'bem-vindo',
     eu,
     membros: montarMembros(conectados, id => estado.personagem(id)),
     fichas: guardadas.map(f => f.ficha),
-    ultimoEstado: estado.ultimoEstado(),
+    ultimoEstado,
     config: estado.config(),
     revs,
     donos,
     rolagens: estado.rolagens(ROLAGENS_NO_BEM_VINDO),
+    construcao: estado.resumoConstrucao(),
     ...(agora !== undefined ? { agora } : {}),
   };
 }
 
 /** Trata um quadro de texto de uma conexão identificada. */
-export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, conectados: readonly Eu[]): Saida[] {
+export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, conectados: readonly Eu[], conexao?: object): Saida[] {
   const msg = lerMensagemParaSala(texto);
   if (!msg || msg.tipo === 'ola') return [erro('formato')];
 
@@ -130,11 +190,30 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
       return [{ destino: 'remetente', msg: { tipo: 'pong', em: msg.em, agora } }];
     case 'canal': {
       if (!msg.nome.startsWith(PREFIXO_PROJETOR)) return [erro('invalido', 'canal')];
-      const dentro = msg.msg as { tipo?: unknown } | null;
+      const dentro = msg.msg as { tipo?: unknown; id?: unknown } | null;
+      if (dentro && typeof dentro === 'object' && dentro.tipo === 'projetar-ficha') {
+        const rawId = (dentro as { fichaId?: unknown }).fichaId;
+        const fichaId = typeof rawId === 'string' && rawId ? rawId : null;
+        if (fichaId) {
+          const dentroFicha = (dentro as { ficha?: unknown }).ficha;
+          const f = (ehObj(dentroFicha) ? dentroFicha : undefined) ?? estado.ficha(fichaId)?.ficha;
+          estado.guardarUltimo(`${msg.nome}:ficha-projetada`, { tipo: 'projetar-ficha', fichaId });
+          return [{ destino: 'outros', msg: { tipo: 'canal', nome: msg.nome, msg: { tipo: 'projetar-ficha', fichaId, ...(f ? { ficha: f } : {}) } } }];
+        }
+        estado.apagarUltimo(`${msg.nome}:ficha-projetada`);
+        return [{ destino: 'outros', msg: { tipo: 'canal', nome: msg.nome, msg: { tipo: 'projetar-ficha', fichaId: null } } }];
+      }
       if (dentro && typeof dentro === 'object' && dentro.tipo === 'estado') estado.guardarUltimo(msg.nome, msg.msg);
+      if (dentro && typeof dentro === 'object' && dentro.tipo === 'controle-jogadores') estado.guardarUltimo(`${msg.nome}:controle`, msg.msg);
+      if (dentro && typeof dentro === 'object' && dentro.tipo === 'retrato' && typeof dentro.id === 'string' && dentro.id) {
+        estado.guardarUltimo(`${msg.nome}:retrato:${dentro.id}`, msg.msg);
+      }
       if (dentro && typeof dentro === 'object' && (dentro.tipo === 'estado' || dentro.tipo === 'retrato' || dentro.tipo === 'inspecao')) {
         const ids = blobsCitadosPor(msg.msg);
-        estado.guardarCitados(msg.nome, dentro.tipo, ids);
+        const tipoCitado = dentro.tipo === 'retrato' && typeof dentro.id === 'string' && dentro.id
+          ? `retrato:${dentro.id}`
+          : dentro.tipo;
+        estado.guardarCitados(msg.nome, tipoCitado, ids);
         // chegou uma versão nova do estado: a antiga do mesmo mapa não serve mais
         const nova = dentro.tipo === 'estado' ? ids[0] : undefined;
         if (nova?.startsWith(PREFIXO_ESTADO)) estado.apagarBlobsComPrefixo(nova.slice(0, nova.lastIndexOf(':') + 1), nova);
@@ -155,10 +234,20 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
     case 'ficha.salvar': {
       try {
         const r = estado.salvarFicha(msg.ficha, eu.discordId, msg.rev, agora);
-        return [{
+        const saidas: Saida[] = [{
           destino: { ficha: r.dono },
           msg: { tipo: 'ficha.atualizada', ficha: msg.ficha, rev: r.rev, autor: autorCarimbado(eu, estado.idsDoDono(eu.discordId)), dono: r.dono, ...(r.conflito ? { conflito: true } : {}) },
         }];
+        for (const [canal, valor] of Object.entries(estado.ultimoEstado())) {
+          if (!canal.endsWith(':ficha-projetada') || !ehObj(valor) || valor.tipo !== 'projetar-ficha') continue;
+          if (valor.fichaId === msg.ficha.id) {
+            saidas.push({
+              destino: 'outros',
+              msg: { tipo: 'canal', nome: canal.slice(0, -':ficha-projetada'.length), msg: { tipo: 'projetar-ficha', fichaId: msg.ficha.id, ficha: msg.ficha } },
+            });
+          }
+        }
+        return saidas;
       } catch (e) {
         if (e instanceof ErroEstado) return [erro(e.codigo, msg.tipo)];
         throw e;
@@ -186,6 +275,103 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
     case 'sala.config':
       estado.definirConfig(msg.nome, msg.capaBlobId);
       return [{ destino: 'todos', msg: { tipo: 'config', config: estado.config() } }];
+    case 'sala.modo':
+      estado.definirModo(msg.modo);
+      return [{ destino: 'todos', msg: { tipo: 'config', config: estado.config() } }];
+    case 'sala.limpar-sessao':
+      estado.limparSessao();
+      return [
+        saidaMembros(estado, conectados),
+        { destino: 'outros', msg: { tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'encerrado' } } },
+      ];
+    case 'construcao.abrir': {
+      try {
+        const c = estado.abrirConstrucao({
+          ...(msg.mapa !== undefined ? { mapa: msg.mapa } : {}),
+          ...(msg.blobId !== undefined ? { blobId: msg.blobId } : {}),
+          ...(msg.nome !== undefined ? { nome: msg.nome } : {}),
+        });
+        return [{ destino: 'todos', msg: msgEstadoConstrucao(estado, c) }];
+      } catch (e) {
+        if (e instanceof ErroEstado) return [erro(e.codigo, msg.tipo)];
+        throw e;
+      }
+    }
+    case 'construcao.fechar':
+      estado.fecharConstrucao();
+      return [{ destino: 'todos', msg: { tipo: 'construcao.fechada' } }];
+    case 'construcao.comando': {
+      try {
+        const autor = autorCarimbado(eu, estado.idsDoDono(eu.discordId));
+        const op = estado.registrarOpConstrucao({
+          opId: msg.opId,
+          autor,
+          comandos: msg.comandos,
+          ...(msg.rotulo !== undefined ? { rotulo: msg.rotulo } : {}),
+          em: agora,
+        });
+        if (!op) return [erro('inexistente', msg.tipo)];
+        return [{
+          destino: 'todos',
+          msg: {
+            tipo: 'construcao.aplicada',
+            rev: op.rev,
+            opId: op.opId,
+            autor: op.autor,
+            comandos: op.comandos,
+            ...(op.rotulo !== undefined ? { rotulo: op.rotulo } : {}),
+          },
+        }];
+      } catch (e) {
+        if (e instanceof ErroEstado) return [erro(e.codigo, msg.tipo)];
+        throw e;
+      }
+    }
+    case 'construcao.snapshot': {
+      try {
+        estado.salvarSnapshotConstrucao({
+          rev: msg.rev,
+          ...(msg.mapa !== undefined ? { mapa: msg.mapa } : {}),
+          ...(msg.blobId !== undefined ? { blobId: msg.blobId } : {}),
+          ...(msg.nome !== undefined ? { nome: msg.nome } : {}),
+        });
+        return [];
+      } catch (e) {
+        if (e instanceof ErroEstado) return [erro(e.codigo, msg.tipo)];
+        throw e;
+      }
+    }
+    case 'construcao.cursor': {
+      if (!podeEnviarCursor(estado, eu.discordId, agora, conexao)) return [];
+      const autor = autorCarimbado(eu, estado.idsDoDono(eu.discordId));
+      return [{
+        destino: 'outros',
+        msg: {
+          tipo: 'construcao.cursor',
+          autor,
+          x: msg.x,
+          y: msg.y,
+          levelId: msg.levelId,
+          ferramenta: msg.ferramenta,
+          ...(msg.pintando !== undefined ? { pintando: msg.pintando } : {}),
+        },
+      }];
+    }
+    case 'construcao.ressincronizar': {
+      const c = estado.estadoConstrucao();
+      if (!c) return [{ destino: 'remetente', msg: { tipo: 'construcao.fechada' } }];
+      return [{ destino: 'remetente', msg: msgEstadoConstrucao(estado, c) }];
+    }
+    case 'construcao.nota': {
+      try {
+        const autor = autorCarimbado(eu, estado.idsDoDono(eu.discordId));
+        const nota = estado.registrarNotaConstrucao({ id: msg.id, autor, texto: msg.texto, em: agora });
+        return [{ destino: 'todos', msg: { tipo: 'construcao.nota', id: nota.id, autor: nota.autor, texto: nota.texto, em: nota.em } }];
+      } catch (e) {
+        if (e instanceof ErroEstado) return [erro(e.codigo, msg.tipo)];
+        throw e;
+      }
+    }
     case 'blob.tem': {
       const tamanho = estado.tamanhoDoBlob(msg.id);
       return [{ destino: 'remetente', msg: { tipo: 'blob.tem', id: msg.id, tem: tamanho !== null, ...(tamanho !== null ? { tamanho } : {}) } }];
@@ -200,19 +386,47 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
         quadros: pedacos.map(p => codificarPedaco(p.cab, p.dados)),
       }];
     }
+    case 'pedir-retrato': {
+      const sufixo = `:retrato:${msg.id}`;
+      for (const [canal, valor] of Object.entries(estado.ultimoEstado())) {
+        if (!canal.startsWith(PREFIXO_PROJETOR) || !canal.endsWith(sufixo)) continue;
+        const canalBase = canal.slice(0, -sufixo.length);
+        const ids = blobsCitadosPor(valor);
+        const blobId = ids[0];
+        const pedacos = blobId ? estado.pedacosDoBlob(blobId) : null;
+        if (blobId && pedacos && pedacos.length > 0) {
+          return [
+            {
+              destino: 'remetente',
+              msg: { tipo: 'blob', id: blobId, tipoMime: pedacos[0]!.cab.tipo },
+              quadros: pedacos.map(p => codificarPedaco(p.cab, p.dados)),
+            },
+            { destino: 'remetente', msg: { tipo: 'canal', nome: canalBase, msg: valor } },
+          ];
+        }
+      }
+      return [{ destino: 'outros', msg: { tipo: 'pedir-retrato', id: msg.id } }];
+    }
     case 'blob':
       // `estado:<mapa>:<versao>` pode voltar com outro conteúdo (a versão recomeça numa sessão nova): o novo substitui
       if (msg.id.startsWith(PREFIXO_ESTADO)) estado.apagarBlob(msg.id);
+      // `construcao:0` de um novo mapa aberto pelo mestre substitui o anterior
+      if (eu.papel === 'mestre' && msg.id === `${PREFIXO_BLOB_CONSTRUCAO}0`) estado.apagarBlob(msg.id);
       // o id não se repete: se já está completo, o anúncio é ignorado
       return estado.temBlob(msg.id) ? [] : [{ destino: 'outros', msg: { tipo: 'blob', id: msg.id, tipoMime: msg.tipoMime } }];
   }
 }
 
-/** Trata um quadro binário (pedaço de blob). Só o mestre guarda; devolve se o quadro deve ser repassado. */
+/** Trata um quadro binário (pedaço de blob). Mestre guarda qualquer um; em `'construcao'`, participantes guardam snapshots `construcao:`. */
 export function tratarBinario(estado: Estado, eu: Eu, quadro: ArrayBuffer): { saidas: Saida[]; repassar: boolean } {
-  if (eu.papel !== 'mestre') return { saidas: [erro('permissao', 'blob')], repassar: false };
+  if (eu.papel !== 'mestre' && estado.modo() !== 'construcao') {
+    return { saidas: [erro('permissao', 'blob')], repassar: false };
+  }
   const p = decodificarPedaco(quadro);
   if (!p) return { saidas: [erro('formato', 'blob')], repassar: false };
+  if (eu.papel !== 'mestre' && !p.cab.id.startsWith(PREFIXO_BLOB_CONSTRUCAO)) {
+    return { saidas: [erro('permissao', 'blob')], repassar: false };
+  }
   if (estado.temBlob(p.cab.id)) return { saidas: [], repassar: false };
   try {
     estado.guardarPedaco(p.cab, p.dados);

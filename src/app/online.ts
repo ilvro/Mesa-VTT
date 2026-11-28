@@ -12,7 +12,7 @@ import { barramentoDaMesa } from './barramento.ts';
 import { campanhaAtiva, entidades } from './campanha.ts';
 
 /** No máximo isto de mensagens de gesto (`emGesto`, `peca-gesto`) por segundo; a última sempre sai. */
-export const GESTOS_POR_SEGUNDO = 25;
+export const GESTOS_POR_SEGUNDO = 60;
 const INTERVALO_GESTO_MS = Math.ceil(1000 / GESTOS_POR_SEGUNDO);
 /** Quanto a ponte espera a resposta do `blob.tem` antes de subir o blob assim mesmo. */
 const ESPERA_BLOB_TEM_MS = 5000;
@@ -42,8 +42,8 @@ export interface CanalLocal {
 
 /** As mensagens do mestre ao projetor (`MensagemDoMestre` do Atlas). As do projetor (`ola`, `tamanho`, `soltou`, `tchau`) não saem. */
 const TIPOS_DO_MESTRE = new Set([
-  'estado', 'peca-gesto', 'camera', 'evento', 'relampago', 'retrato', 'tela', 'letreiro', 'letreiro-fim',
-  'recursos', 'inspecao', 'inspecao-estado', 'inspecao-fim', 'rolagem',
+  'estado', 'controle-jogadores', 'peca-gesto', 'camera', 'evento', 'relampago', 'retrato', 'tela', 'letreiro', 'letreiro-fim',
+  'recursos', 'inspecao', 'inspecao-estado', 'inspecao-fim', 'rolagem', 'projetar-ficha',
 ]);
 
 export interface OpcoesDaPonte {
@@ -198,10 +198,27 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     return saida;
   }
 
+  let ultimaFichaProjetada: string | null = null;
+
   async function sairProjetor(data: unknown): Promise<void> {
     if (fechada || !data || typeof data !== 'object') return;
     const msg = data as Record<string, unknown>;
     if (typeof msg.tipo !== 'string' || !TIPOS_DO_MESTRE.has(msg.tipo)) return;
+    if (msg.tipo === 'peca-gesto') {
+      cliente.enviar({ tipo: 'canal', nome: CANAL_PROJETOR_REMOTO, msg });
+      return;
+    }
+    if (msg.tipo === 'projetar-ficha') {
+      const fichaId = typeof msg.fichaId === 'string' && msg.fichaId ? msg.fichaId : null;
+      ultimaFichaProjetada = fichaId;
+      const ficha = fichaId ? ((msg.ficha && typeof msg.ficha === 'object' ? msg.ficha : undefined) ?? fichasDaSala.get(fichaId)) : undefined;
+      cliente.enviar({
+        tipo: 'canal',
+        nome: CANAL_PROJETOR_REMOTO,
+        msg: { tipo: 'projetar-ficha', fichaId, ...(ficha ? { ficha } : {}) },
+      });
+      return;
+    }
     if (msg.tipo === 'estado') {
       const doc = msg.doc as { id?: unknown; session?: { explored?: unknown } } | undefined;
       const mapa = typeof doc?.id === 'string' ? doc.id : null;
@@ -362,6 +379,15 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
   }
 
   const enfileirar = (data: unknown): void => { fila = fila.then(() => sairProjetor(data)).catch(() => { /* um quadro perdido não para a fila */ }); };
+  const enviarGesto = (data: unknown): void => {
+    if (fechada || !data || typeof data !== 'object') return;
+    const m = data as Record<string, unknown>;
+    if (m.tipo === 'peca-gesto') {
+      cliente.enviar({ tipo: 'canal', nome: CANAL_PROJETOR_REMOTO, msg: m });
+      return;
+    }
+    enfileirar(data);
+  };
 
   /** Gestos (`estado` com `emGesto` e `peca-gesto`): no máximo `GESTOS_POR_SEGUNDO` por chave; o que sobra espera e só o último sai. */
   const gestos = new Map<string, { ultimo: number; pendente: unknown; cancelar: (() => void) | null }>();
@@ -371,7 +397,7 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     const g = gestos.get(chave) ?? { ultimo: -Infinity, pendente: undefined, cancelar: null };
     gestos.set(chave, g);
     const espera = g.ultimo + INTERVALO_GESTO_MS - agora();
-    if (espera <= 0 && !g.cancelar) { g.ultimo = agora(); enfileirar(data); return; }
+    if (espera <= 0 && !g.cancelar) { g.ultimo = agora(); enviarGesto(data); return; }
     g.pendente = data; // o mais novo substitui o que esperava
     if (g.cancelar) return;
     g.cancelar = agendar(() => {
@@ -379,7 +405,7 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
       const p = g.pendente; g.pendente = undefined;
       if (p === undefined || fechada) return;
       g.ultimo = agora();
-      enfileirar(p);
+      enviarGesto(p);
     }, Math.max(espera, 0));
   }
   /** Um `estado` firme (fora de gesto) já traz a posição final: o gesto que esperava perde a vez. */
@@ -507,7 +533,18 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
       void enviarConfig();
       for (const som of sons.values()) if (som.estado === 'falhou') som.estado = 'pendente'; // a falha pode ter sido a conexão
       if (proximoSom() !== null) void rodarSons();
+      if (ultimaFichaProjetada) {
+        const ficha = fichasDaSala.get(ultimaFichaProjetada);
+        cliente.enviar({
+          tipo: 'canal',
+          nome: CANAL_PROJETOR_REMOTO,
+          msg: { tipo: 'projetar-ficha', fichaId: ultimaFichaProjetada, ...(ficha ? { ficha } : {}) },
+        });
+      }
       atualizarPresenca(m.membros, true);
+    }),
+    cliente.ouvir('pedir-retrato', m => {
+      if (!fechada && estado.publicando) projetor.postMessage({ tipo: 'pedir-retrato', id: m.id });
     }),
     cliente.ouvir('blob.tem', m => respostas.get(m.id)?.({ tem: m.tem, ...(m.tamanho !== undefined ? { tamanho: m.tamanho } : {}) })),
     cliente.ouvir('membros', m => { lembrarNomes(m.membros); atualizarPresenca(m.membros, false); }),
@@ -546,6 +583,7 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
       cancelarOuvir?.(); cancelarOuvir = null;
       pedirParaOuvir(false);
       if (conectada) { conectada = false; avisarConexao(); }
+      ultimaFichaProjetada = null;
       fechada = true;
       avisarSalaAtualizada();
       for (const f of soltar) f();
@@ -596,8 +634,12 @@ export function abrirMesaOnline(sessao: string, salaId: string, nome?: string): 
 /** "Mandar assim mesmo" para um mapa sem névoa (a tela da mesa online). */
 export function confirmarSemNevoa(mapa: string): void { atual?.ponte.confirmarSemNevoa(mapa); }
 
+/** Limpa o estado projetado e as escolhas de personagem da sessão atual na sala (mantém fichas, blobs e rolagens). */
+export function limparSessaoNaSala(): void { atual?.cliente.enviar({ tipo: 'sala.limpar-sessao' }); }
+
 export function fecharMesaOnline(): void {
   if (!atual) return;
+  atual.cliente.enviar({ tipo: 'sala.limpar-sessao' });
   atual.ponte.fechar();
   atual.cliente.fechar();
   atual = null;

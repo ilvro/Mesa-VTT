@@ -579,3 +579,44 @@ test('ponte responde precisa-ola do Atlas com ola remoto quando há jogadores na
   assert.deepEqual(recebidas, [{ tipo: 'ola', largura: 1920, altura: 1080, remoto: true }]);
   ponte.fechar();
 });
+
+test('peca-gesto vai a 60 fps e fura fila lenta de blob/compressão sem perder id/position/facing', async () => {
+  assert.equal(GESTOS_POR_SEGUNDO, 60);
+  let liberarBlob!: () => void;
+  const espera = new Promise<void>(r => { liberarBlob = r; });
+  const f = clienteFalso();
+  f.cliente.enviarBlob = async () => { await espera; return true; };
+  Canal.todos.clear();
+  const ponte = criarPonte({ cliente: f.cliente, criarCanal: n => new Canal(n), nomeDaSala: 'teste-1', hash: async b => `h${b.byteLength}` });
+  const atlas = new Canal('atlas:projetor:remoto');
+  // Dispara um retrato que trava a fila async esperando enviarBlob
+  atlas.postMessage({ tipo: 'retrato', id: 'r1', blob: new Blob([new Uint8Array([1, 2])], { type: 'image/png' }) });
+  await Promise.resolve();
+  // Mesmo com a fila travada, peca-gesto sai na hora
+  atlas.postMessage({ tipo: 'peca-gesto', id: 'p1', position: [3, 4], facing: 'e' });
+  assert.deepEqual(f.enviadas, [{ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'peca-gesto', id: 'p1', position: [3, 4], facing: 'e' } }]);
+  liberarBlob();
+  await ponte.esvaziar();
+  ponte.fechar();
+});
+
+test('projetar-ficha e pedir-retrato passam pela ponte do mestre', async () => {
+  const { atlas, emitir, enviadas, ponte } = montar('teste-1');
+  const recebidasAtlas: unknown[] = [];
+  atlas.onmessage = m => recebidasAtlas.push(m.data);
+  emitir({ ...bemVindo([membro('1', 'mestre'), membro('2', 'jogador')]), fichas: [{ id: 'f1', name: 'Muirenn' }] } as MensagemDaSala);
+  enviadas.length = 0;
+  recebidasAtlas.length = 0;
+
+  atlas.postMessage({ tipo: 'projetar-ficha', fichaId: 'f1' });
+  await ponte.esvaziar();
+  assert.deepEqual(enviadas, [{ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'projetar-ficha', fichaId: 'f1', ficha: { id: 'f1', name: 'Muirenn' } } }]);
+
+  atlas.postMessage({ tipo: 'projetar-ficha', fichaId: null });
+  await ponte.esvaziar();
+  assert.deepEqual(enviadas[1], { tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'projetar-ficha', fichaId: null } });
+
+  emitir({ tipo: 'pedir-retrato', id: 'r-muirenn' });
+  assert.deepEqual(recebidasAtlas, [{ tipo: 'pedir-retrato', id: 'r-muirenn' }]);
+  ponte.fechar();
+});

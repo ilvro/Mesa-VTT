@@ -107,3 +107,33 @@ test('o mesmo id estado:<mapa>:<versao> de uma sessão nova substitui o conteúd
   tratarBinario(e, mestre, codificarPedaco({ id: 'estado:m:1', i: 0, n: 1, tipo: 'application/gzip' }, new Uint8Array([8, 8])));
   assert.deepEqual([...e.pedacosDoBlob('estado:m:1')![0]!.dados], [8, 8]);
 });
+
+test('pedir-retrato devolve blob + canal ao remetente se a sala tiver, ou encaminha aos outros se faltar', () => {
+  const e = sala();
+  subir(e, 'h-ret', [new Uint8Array([1, 2, 3])], 'image/png');
+  tratar(e, mestre, canal({ tipo: 'retrato', id: 'r1', blob: { blobId: 'h-ret' } }), 1, todos);
+
+  const achou = tratar(e, ana, j({ tipo: 'pedir-retrato', id: 'r1' }), 2, todos);
+  assert.equal(achou.length, 2);
+  assert.equal(achou[0]!.destino, 'remetente');
+  assert.deepEqual(achou[0]!.msg, { tipo: 'blob', id: 'h-ret', tipoMime: 'image/png' });
+  assert.equal(achou[0]!.quadros?.length, 1);
+  assert.deepEqual(achou[1], { destino: 'remetente', msg: { tipo: 'canal', nome: CANAL, msg: { tipo: 'retrato', id: 'r1', blob: { blobId: 'h-ret' } } } });
+
+  const faltou = tratar(e, ana, j({ tipo: 'pedir-retrato', id: 'nao-existe' }), 3, todos);
+  assert.deepEqual(faltou, [{ destino: 'outros', msg: { tipo: 'pedir-retrato', id: 'nao-existe' } }]);
+});
+
+test('projetar-ficha anexa os dados da ficha da sala, aparece no bem-vindo e limpa quando fichaId é null', () => {
+  const e = sala();
+  const fichaOutro = { id: 'f-kael', name: 'Kael', pv: 12 };
+  tratar(e, mestre, j({ tipo: 'ficha.salvar', ficha: fichaOutro, rev: 0 }), 1, todos);
+
+  const s1 = tratar(e, mestre, canal({ tipo: 'projetar-ficha', fichaId: 'f-kael' }), 2, todos);
+  assert.deepEqual(s1, [{ destino: 'outros', msg: { tipo: 'canal', nome: CANAL, msg: { tipo: 'projetar-ficha', fichaId: 'f-kael', ficha: fichaOutro } } }]);
+  assert.deepEqual(e.ultimoEstado()[`${CANAL}:ficha-projetada`], { tipo: 'projetar-ficha', fichaId: 'f-kael' });
+
+  const s2 = tratar(e, mestre, canal({ tipo: 'projetar-ficha', fichaId: null }), 3, todos);
+  assert.deepEqual(s2, [{ destino: 'outros', msg: { tipo: 'canal', nome: CANAL, msg: { tipo: 'projetar-ficha', fichaId: null } } }]);
+  assert.equal(`${CANAL}:ficha-projetada` in e.ultimoEstado(), false);
+});
