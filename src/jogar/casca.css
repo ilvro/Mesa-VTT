@@ -7,21 +7,23 @@
 .casca-ficha { grid-column: 2; grid-row: 1; width: 360px; height: 100%; min-width: 0; border: 0; border-left: 1px solid var(--linha); background: var(--painel); display: block; transform: translateX(0); opacity: 1; visibility: visible; transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 240ms cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0s; }
 .casca[data-ficha-recolhida='1'] .casca-ficha { transform: translateX(48px); opacity: 0; visibility: hidden; pointer-events: none; border-left: 0; transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 240ms cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 240ms; }
 /* Ficha completa: o mesmo `iframe` vai para a tela toda, por cima do mapa (que segue vivo por baixo). */
-.casca[data-ficha='completa'] .casca-ficha { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 10; border-left: 0; transform: none; opacity: 1; visibility: visible; pointer-events: auto; }
-.casca[data-projetando-ficha='1'] .casca-ficha { display: block; position: fixed; inset: 0; width: 100%; height: 100%; z-index: 12; border-left: 0; transform: none; opacity: 1; visibility: visible; pointer-events: auto; }
-@keyframes casca-tela-entra { from { opacity: 0; } to { opacity: 1; } }
-@keyframes casca-tela-sai { from { opacity: 1; } to { opacity: 0; } }
-.casca[data-expandida-fase='entrando'] .casca-ficha,
-.casca[data-expandida-fase='entrando'] .casca-voltar { animation: casca-tela-entra 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.casca[data-ficha='completa'] .casca-ficha { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 10; border-left: 0; transform: none; opacity: 1; visibility: visible; pointer-events: auto; will-change: opacity; transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+.casca[data-projetando-ficha='1'] .casca-ficha { display: block; position: fixed; inset: 0; width: 100%; height: 100%; z-index: 12; border-left: 0; transform: none; opacity: 1; visibility: visible; pointer-events: auto; will-change: opacity; transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+.casca[data-expandida-fase='preparando'] .casca-ficha,
+.casca[data-expandida-fase='preparando'] .casca-voltar,
+.casca[data-projecao-fase='preparando'] .casca-ficha { opacity: 0; pointer-events: none; transition: none; }
 .casca[data-expandida-fase='saindo'] .casca-ficha,
-.casca[data-expandida-fase='saindo'] .casca-voltar { animation: casca-tela-sai 220ms ease-out both; pointer-events: none; }
-.casca[data-projecao-fase='entrando'] .casca-ficha { animation: casca-tela-entra 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-.casca[data-projecao-fase='saindo'] .casca-ficha { animation: casca-tela-sai 220ms ease-out both; pointer-events: none; }
+.casca[data-expandida-fase='saindo'] .casca-voltar,
+.casca[data-projecao-fase='saindo'] .casca-ficha { opacity: 0; pointer-events: none; }
+.casca[data-projetando-ficha='1'] .casca-voltar,
+.casca[data-projetando-ficha='1'] .casca-topo-direita,
+.casca[data-projetando-ficha='1'] .casca-som-painel,
+.casca[data-projetando-ficha='1'] .casca-recolher-ficha { display: none; }
 .casca-recolher-ficha { position: absolute; right: 0; top: 50%; transform: translateY(-50%); z-index: 6; width: 22px; height: 48px; border-radius: 8px 0 0 8px; display: grid; place-items: center; background: rgba(12, 10, 20, 0.45); border: 1px solid rgba(255, 255, 255, 0.14); border-right: 0; color: rgba(244, 241, 251, 0.85); opacity: 0.48; backdrop-filter: blur(6px); cursor: pointer; transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 0.18s ease, background 0.18s ease, border-color 0.18s ease, color 0.18s ease; }
 .casca-recolher-ficha svg { transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1); }
 .casca[data-ficha-recolhida='1'] .casca-recolher-ficha svg { transform: rotate(180deg); }
 .casca-recolher-ficha:hover, .casca-recolher-ficha:focus-visible { opacity: 1; background: rgba(12, 10, 20, 0.88); border-color: var(--acento); color: #fff; }
-.casca-voltar { position: fixed; top: 10px; right: 14px; z-index: 11; padding: 5px 13px; border-radius: 999px; background: rgba(12, 10, 20, 0.55); border: 1px solid rgba(255, 255, 255, 0.14); color: var(--texto); font: 700 11px var(--corpo); letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; opacity: 0.65; backdrop-filter: blur(6px); transition: opacity 0.18s ease, background 0.18s ease, border-color 0.18s ease; }
+.casca-voltar { position: fixed; top: 10px; right: 14px; z-index: 11; padding: 5px 13px; border-radius: 999px; background: rgba(12, 10, 20, 0.55); border: 1px solid rgba(255, 255, 255, 0.14); color: var(--texto); font: 700 11px var(--corpo); letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; opacity: 0.65; backdrop-filter: blur(6px); transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1), background 0.18s ease, border-color 0.18s ease; }
 .casca-voltar:hover, .casca-voltar:focus-visible { opacity: 1; background: rgba(12, 10, 20, 0.88); border-color: var(--acento); }
 .casca-abas { display: none; }
 .casca-sobre { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; text-align: center; gap: 6px; background: color-mix(in srgb, var(--fundo), transparent 12%); pointer-events: none; font: 700 13px var(--corpo); letter-spacing: 0.14em; text-transform: uppercase; color: var(--apagado); padding: 24px; }
@@ -75,11 +77,9 @@
 @media (prefers-reduced-motion: reduce) {
   .casca,
   .casca-ficha,
+  .casca-voltar,
   .casca-recolher-ficha,
   .casca-recolher-ficha svg { transition: none; }
-  .casca[data-expandida-fase] .casca-ficha,
-  .casca[data-expandida-fase] .casca-voltar,
-  .casca[data-projecao-fase] .casca-ficha { animation: none; }
   .feed-item { animation: none; }
 }
 

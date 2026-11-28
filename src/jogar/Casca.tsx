@@ -46,9 +46,10 @@ function useCelularVertical(): boolean {
 
 export type ErroDaCasca = 'sala' | 'sessao' | null;
 type Aba = 'mapa' | 'ficha';
-type FaseTelaFicha = 'inativa' | 'entrando' | 'ativa' | 'saindo';
+type FaseTelaFicha = 'inativa' | 'preparando' | 'ativa' | 'saindo';
 
 const DURACAO_FADE_FICHA_MS = 220;
+const ATRASO_PREPARO_FICHA_MS = 50;
 const prefereMenosMovimento = (): boolean =>
   typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -283,8 +284,8 @@ function Sala({
   expandidaVisivelAtual.current = expandidaVisivel;
   const faseExpandidaAtual = useRef<FaseTelaFicha>('inativa');
   faseExpandidaAtual.current = faseExpandida;
-  const timerProjecaoRef = useRef<number | null>(null);
-  const timerExpandidaRef = useRef<number | null>(null);
+  const timerProjecaoRef = useRef<(() => void) | null>(null);
+  const timerExpandidaRef = useRef<(() => void) | null>(null);
   const celular = useCelularVertical();
   const quadro = useRef<HTMLIFrameElement>(null);
   const projetorQuadro = useRef<HTMLIFrameElement>(null);
@@ -441,25 +442,30 @@ function Sala({
     } catch { /* o Dossiê ainda não carregou */ }
   };
   useEffect(() => () => {
-    if (timerProjecaoRef.current !== null) clearTimeout(timerProjecaoRef.current);
-    if (timerExpandidaRef.current !== null) clearTimeout(timerExpandidaRef.current);
+    timerProjecaoRef.current?.();
+    timerExpandidaRef.current?.();
   }, []);
   useEffect(() => {
-    if (timerProjecaoRef.current !== null) {
-      clearTimeout(timerProjecaoRef.current);
-      timerProjecaoRef.current = null;
-    }
+    timerProjecaoRef.current?.();
+    timerProjecaoRef.current = null;
     if (fichaProjetada) {
       setProjecaoVisivel(fichaProjetada);
       if (faseProjecaoAtual.current === 'inativa' || faseProjecaoAtual.current === 'saindo') {
         if (prefereMenosMovimento()) {
           setFaseProjecao('ativa');
         } else {
-          setFaseProjecao('entrando');
-          timerProjecaoRef.current = window.setTimeout(() => {
-            timerProjecaoRef.current = null;
-            setFaseProjecao('ativa');
-          }, DURACAO_FADE_FICHA_MS);
+          setFaseProjecao('preparando');
+          let timeoutId: number | null = null;
+          const rafId = requestAnimationFrame(() => {
+            timeoutId = window.setTimeout(() => {
+              timerProjecaoRef.current = null;
+              setFaseProjecao('ativa');
+            }, ATRASO_PREPARO_FICHA_MS);
+          });
+          timerProjecaoRef.current = () => {
+            cancelAnimationFrame(rafId);
+            if (timeoutId !== null) clearTimeout(timeoutId);
+          };
         }
       }
       return;
@@ -468,34 +474,40 @@ function Sala({
       setFaseProjecao('inativa');
       return;
     }
-    if (prefereMenosMovimento()) {
+    if (prefereMenosMovimento() || faseProjecaoAtual.current === 'preparando') {
       setProjecaoVisivel(null);
       setFaseProjecao('inativa');
       return;
     }
     setFaseProjecao('saindo');
-    timerProjecaoRef.current = window.setTimeout(() => {
+    const timeoutId = window.setTimeout(() => {
       timerProjecaoRef.current = null;
       setProjecaoVisivel(null);
       setFaseProjecao('inativa');
     }, DURACAO_FADE_FICHA_MS);
+    timerProjecaoRef.current = () => clearTimeout(timeoutId);
   }, [fichaProjetada]);
   useEffect(() => {
-    if (timerExpandidaRef.current !== null) {
-      clearTimeout(timerExpandidaRef.current);
-      timerExpandidaRef.current = null;
-    }
+    timerExpandidaRef.current?.();
+    timerExpandidaRef.current = null;
     if (aberta && !celular) {
       setExpandidaVisivel(true);
       if (faseExpandidaAtual.current === 'inativa' || faseExpandidaAtual.current === 'saindo') {
         if (prefereMenosMovimento()) {
           setFaseExpandida('ativa');
         } else {
-          setFaseExpandida('entrando');
-          timerExpandidaRef.current = window.setTimeout(() => {
-            timerExpandidaRef.current = null;
-            setFaseExpandida('ativa');
-          }, DURACAO_FADE_FICHA_MS);
+          setFaseExpandida('preparando');
+          let timeoutId: number | null = null;
+          const rafId = requestAnimationFrame(() => {
+            timeoutId = window.setTimeout(() => {
+              timerExpandidaRef.current = null;
+              setFaseExpandida('ativa');
+            }, ATRASO_PREPARO_FICHA_MS);
+          });
+          timerExpandidaRef.current = () => {
+            cancelAnimationFrame(rafId);
+            if (timeoutId !== null) clearTimeout(timeoutId);
+          };
         }
       }
       return;
@@ -505,17 +517,18 @@ function Sala({
       setFaseExpandida('inativa');
       return;
     }
-    if (prefereMenosMovimento()) {
+    if (prefereMenosMovimento() || faseExpandidaAtual.current === 'preparando') {
       setExpandidaVisivel(false);
       setFaseExpandida('inativa');
       return;
     }
     setFaseExpandida('saindo');
-    timerExpandidaRef.current = window.setTimeout(() => {
+    const timeoutId = window.setTimeout(() => {
       timerExpandidaRef.current = null;
       setExpandidaVisivel(false);
       setFaseExpandida('inativa');
     }, DURACAO_FADE_FICHA_MS);
+    timerExpandidaRef.current = () => clearTimeout(timeoutId);
   }, [aberta, celular]);
   const jaProjetouAntes = useRef(false);
   useEffect(() => { mandarFichaAtiva(meuPersonagemId); }, [meuPersonagemId, fichasChave, mostrarSaguao]);
@@ -597,7 +610,7 @@ function Sala({
       data-testid="casca"
       data-aba={aba}
       data-ficha={cobre ? 'completa' : 'painel'}
-      data-ficha-recolhida={fichaRecolhida && !cobre ? '1' : undefined}
+      data-ficha-recolhida={fichaRecolhida ? '1' : undefined}
       data-projetando-ficha={projetandoFicha ? '1' : undefined}
       data-projecao-fase={faseProjecao !== 'inativa' ? faseProjecao : undefined}
       data-expandida-fase={!projetandoFicha && faseExpandida !== 'inativa' ? faseExpandida : undefined}
@@ -617,7 +630,7 @@ function Sala({
           </div>
         )}
         <FeedDeRolagens cliente={clienteSala} salaId={salaId} nome={nome} retratos={retratos} eu={eu} membros={membros} baseAvatar={baseAvatar} />
-        {!mostrarSaguao && erro !== 'sala' && (
+        {!mostrarSaguao && !projetandoFicha && erro !== 'sala' && (
           <div class="casca-topo-direita">
             {estadoSom.bloqueado && (
               <button
@@ -662,7 +675,7 @@ function Sala({
             </button>
           </div>
         )}
-        {!mostrarSaguao && somPainelAberto && (
+        {!mostrarSaguao && !projetandoFicha && somPainelAberto && (
           <div class="casca-som-painel" data-testid="casca-som-painel" role="region" aria-label="Controles de som">
             <label class="casca-som-linha">
               <span>Música</span>
@@ -698,7 +711,7 @@ function Sala({
             </button>
           </div>
         )}
-        {!espectador && !cobre && !mostrarSaguao && erro !== 'sala' && (
+        {!espectador && !cobre && !mostrarSaguao && !projetandoFicha && erro !== 'sala' && (
           <button
             type="button"
             class="casca-recolher-ficha"
