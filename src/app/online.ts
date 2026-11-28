@@ -30,6 +30,9 @@ const ESPERA_EFEITO_MS = 10_000;
 
 /** O canal do destino remoto do publicador do Atlas (R5b): a projeção remota, só o que os jogadores já viram. */
 export const CANAL_PROJETOR_REMOTO = 'atlas:projetor:remoto';
+/** Canal direto para pedir uma ficha local do mestre ao Dossiê ao projetar. */
+export const CANAL_DOSSIE_PROJECAO = 'mesa:dossie-projecao';
+const ESPERA_FICHA_DOSSIE_MS = 400;
 /** A confirmação "mandar assim mesmo" de um mapa sem névoa, lembrada por mapa. */
 export const chaveSemNevoa = (mapa: string): string => `mesa:online-sem-nevoa:${mapa}`;
 
@@ -129,6 +132,7 @@ const gravarConfirmacao = (mapa: string): void => { try { localStorage.setItem(c
 export function criarPonte(o: OpcoesDaPonte): Ponte {
   const { cliente } = o;
   const projetor = o.criarCanal(CANAL_PROJETOR_REMOTO);
+  const dossieProjecao = o.criarCanal(CANAL_DOSSIE_PROJECAO);
   const confirmado = o.semNevoaConfirmado ?? lerConfirmacao, lembrar = o.lembrarSemNevoa ?? gravarConfirmacao;
   const eventos = o.criarCanal(CANAL_EVENTOS);
   const hash = o.hash ?? sha256Hex;
@@ -199,6 +203,40 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
   }
 
   let ultimaFichaProjetada: string | null = null;
+  let ultimaFichaProjetadaDados: FichaDaSala | undefined = undefined;
+  let ultimaFichaProjetadaSolicitada: string | null = null;
+  const pedidosFicha = new Map<string, (ficha: FichaDaSala | null) => void>();
+
+  dossieProjecao.onmessage = ({ data }) => {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return;
+    const msg = data as { tipo?: unknown; reqId?: unknown; ficha?: unknown };
+    if (msg.tipo !== 'ficha' || typeof msg.reqId !== 'string') return;
+    const resolver = pedidosFicha.get(msg.reqId);
+    if (!resolver) return;
+    const ficha = msg.ficha && typeof msg.ficha === 'object' && !Array.isArray(msg.ficha)
+      ? msg.ficha as FichaDaSala
+      : null;
+    resolver(ficha);
+  };
+
+  function pedirFichaAoDossie(id: string): Promise<FichaDaSala | null> {
+    if (fechada) return Promise.resolve(null);
+    const reqId = crypto.randomUUID();
+    return new Promise(resolver => {
+      let finalizado = false;
+      let cancelar: () => void = () => {};
+      const concluir = (ficha: FichaDaSala | null) => {
+        if (finalizado) return;
+        finalizado = true;
+        cancelar();
+        pedidosFicha.delete(reqId);
+        resolver(ficha);
+      };
+      pedidosFicha.set(reqId, concluir);
+      cancelar = agendar(() => concluir(null), ESPERA_FICHA_DOSSIE_MS);
+      dossieProjecao.postMessage({ tipo: 'pedir-ficha', reqId, id });
+    });
+  }
 
   async function sairProjetor(data: unknown): Promise<void> {
     if (fechada || !data || typeof data !== 'object') return;
@@ -211,7 +249,25 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     if (msg.tipo === 'projetar-ficha') {
       const fichaId = typeof msg.fichaId === 'string' && msg.fichaId ? msg.fichaId : null;
       ultimaFichaProjetada = fichaId;
-      const ficha = fichaId ? ((msg.ficha && typeof msg.ficha === 'object' ? msg.ficha : undefined) ?? fichasDaSala.get(fichaId)) : undefined;
+      if (!fichaId) {
+        ultimaFichaProjetadaDados = undefined;
+        cliente.enviar({
+          tipo: 'canal',
+          nome: CANAL_PROJETOR_REMOTO,
+          msg: { tipo: 'projetar-ficha', fichaId: null },
+        });
+        return;
+      }
+      const fichaInline = msg.ficha && typeof msg.ficha === 'object' && !Array.isArray(msg.ficha)
+        ? msg.ficha as FichaDaSala
+        : undefined;
+      let ficha = fichaInline ?? fichasDaSala.get(fichaId);
+      if (!ficha) {
+        ficha = (await pedirFichaAoDossie(fichaId)) ?? undefined;
+        if (fechada || ultimaFichaProjetadaSolicitada !== fichaId) return;
+        ficha = ficha ?? fichasDaSala.get(fichaId);
+      }
+      ultimaFichaProjetadaDados = ficha;
       cliente.enviar({
         tipo: 'canal',
         nome: CANAL_PROJETOR_REMOTO,
@@ -421,6 +477,10 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     const chave = m && typeof m === 'object' ? chaveDoGesto(m) : null;
     if (chave) { if (!fechada) gesto(chave, data); return; }
     if (m && typeof m === 'object' && m.tipo === 'estado') largarGestosPendentes();
+    if (m && typeof m === 'object' && m.tipo === 'projetar-ficha') {
+      const rawId = (m as { fichaId?: unknown }).fichaId;
+      ultimaFichaProjetadaSolicitada = typeof rawId === 'string' && rawId ? rawId : null;
+    }
     enfileirar(data);
   };
 
@@ -534,7 +594,7 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
       for (const som of sons.values()) if (som.estado === 'falhou') som.estado = 'pendente'; // a falha pode ter sido a conexão
       if (proximoSom() !== null) void rodarSons();
       if (ultimaFichaProjetada) {
-        const ficha = fichasDaSala.get(ultimaFichaProjetada);
+        const ficha = fichasDaSala.get(ultimaFichaProjetada) ?? ultimaFichaProjetadaDados;
         cliente.enviar({
           tipo: 'canal',
           nome: CANAL_PROJETOR_REMOTO,
@@ -584,11 +644,17 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
       pedirParaOuvir(false);
       if (conectada) { conectada = false; avisarConexao(); }
       ultimaFichaProjetada = null;
+      ultimaFichaProjetadaDados = undefined;
+      ultimaFichaProjetadaSolicitada = null;
       fechada = true;
+      for (const resolver of [...pedidosFicha.values()]) resolver(null);
+      pedidosFicha.clear();
       avisarSalaAtualizada();
       for (const f of soltar) f();
       dossie.fechar();
       largarGestosPendentes();
+      dossieProjecao.onmessage = null;
+      dossieProjecao.close();
       projetor.onmessage = null; eventos.onmessage = null;
       projetor.close(); eventos.close();
     },

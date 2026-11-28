@@ -46,6 +46,11 @@ function useCelularVertical(): boolean {
 
 export type ErroDaCasca = 'sala' | 'sessao' | null;
 type Aba = 'mapa' | 'ficha';
+type FaseTelaFicha = 'inativa' | 'entrando' | 'ativa' | 'saindo';
+
+const DURACAO_FADE_FICHA_MS = 220;
+const prefereMenosMovimento = (): boolean =>
+  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function Casca({ salaId }: { salaId: string }) {
   useEffect(() => { carregarSessaoOnline(); }, []);
@@ -264,14 +269,29 @@ function Sala({
   const [aberta, setAberta] = useState(false);   // a ficha completa pediu a tela toda (fora do celular)
   const [fichaRecolhida, setFichaRecolhida] = useState(false);
   const [fichaProjetada, setFichaProjetada] = useState<{ fichaId: string; ficha?: FichaDaSala } | null>(null);
+  const [projecaoVisivel, setProjecaoVisivel] = useState<{ fichaId: string; ficha?: FichaDaSala } | null>(null);
+  const [faseProjecao, setFaseProjecao] = useState<FaseTelaFicha>('inativa');
+  const [expandidaVisivel, setExpandidaVisivel] = useState(false);
+  const [faseExpandida, setFaseExpandida] = useState<FaseTelaFicha>('inativa');
   const fichaProjetadaAtual = useRef<{ fichaId: string; ficha?: FichaDaSala } | null>(null);
   fichaProjetadaAtual.current = fichaProjetada;
+  const projecaoVisivelAtual = useRef<{ fichaId: string; ficha?: FichaDaSala } | null>(null);
+  projecaoVisivelAtual.current = projecaoVisivel;
+  const faseProjecaoAtual = useRef<FaseTelaFicha>('inativa');
+  faseProjecaoAtual.current = faseProjecao;
+  const expandidaVisivelAtual = useRef(false);
+  expandidaVisivelAtual.current = expandidaVisivel;
+  const faseExpandidaAtual = useRef<FaseTelaFicha>('inativa');
+  faseExpandidaAtual.current = faseExpandida;
+  const timerProjecaoRef = useRef<number | null>(null);
+  const timerExpandidaRef = useRef<number | null>(null);
   const celular = useCelularVertical();
   const quadro = useRef<HTMLIFrameElement>(null);
   const projetorQuadro = useRef<HTMLIFrameElement>(null);
-  const projetandoFicha = fichaProjetada !== null;
-  const vista = vistaDaFicha({ celularVertical: celular, aba, aberta, projetando: projetandoFicha });
-  const cobre = fichaCobreOMapa({ celularVertical: celular, aberta, projetando: projetandoFicha });
+  const projetandoFicha = projecaoVisivel !== null;
+  const expandidaNaTela = !celular && expandidaVisivel;
+  const vista = vistaDaFicha({ celularVertical: celular, aba, aberta: expandidaNaTela, projetando: projetandoFicha });
+  const cobre = fichaCobreOMapa({ celularVertical: celular, aberta: expandidaNaTela, projetando: projetandoFicha });
   const vistaAtual = useRef(vista);
   vistaAtual.current = vista;
   const invalida = useRef(aoSessaoInvalida);
@@ -380,7 +400,7 @@ function Sala({
   useEffect(() => {
     const ouvir = (ev: MessageEvent) => {
       const pedida = vistaPedidaPeloDossie(ev, quadro.current?.contentWindow, location.origin);
-      if (pedida) setAberta(pedida === 'completa');
+      if (pedida && !fichaProjetadaAtual.current && !projecaoVisivelAtual.current) setAberta(pedida === 'completa');
       if (dossiePronto(ev, quadro.current?.contentWindow, location.origin)) mandarVistaAtual.current();
       if (projetorPronto(ev, projetorQuadro.current?.contentWindow, location.origin)) mandarJogadorAtual.current();
     };
@@ -390,6 +410,8 @@ function Sala({
   const meuPersonagemId = (eu ? membros.find(m => m.discordId === eu.discordId)?.personagem : undefined) ?? null;
   const meuPersonagemAtual = useRef<string | null>(null);
   meuPersonagemAtual.current = meuPersonagemId;
+  const fichasAtual = useRef<FichaDaSala[]>(fichas);
+  fichasAtual.current = fichas;
   const fichasChave = fichas.map(f => f.id).join(',');
   const modo: ModoDaSala = config?.modo ?? 'sessao';
   const saguaoObrigatorio = deveMostrarSaguao({
@@ -399,36 +421,122 @@ function Sala({
     papel: eu?.papel ?? 'jogador',
     personagem: meuPersonagemId,
   });
-  const editandoFicha = modo === 'sessao' && !projetandoFicha && (aberta || (celular && aba === 'ficha'));
+  const editandoFicha = modo === 'sessao' && !projetandoFicha && (aberta || expandidaNaTela || (celular && aba === 'ficha'));
   const mostrarSaguao = erro !== 'sala' && !editandoFicha && !projetandoFicha && (saguaoAberto || saguaoObrigatorio);
+  const projecaoAtivaOuSaindo = (): { fichaId: string; ficha?: FichaDaSala } | null =>
+    fichaProjetadaAtual.current ?? projecaoVisivelAtual.current;
   const mandarFichaAtiva = (id: string | null = meuPersonagemAtual.current) => {
-    if (!id || fichaProjetadaAtual.current) return;
+    if (!id || projecaoAtivaOuSaindo()) return;
     try { quadro.current?.contentWindow?.postMessage({ tipo: 'dossie:abrir-ficha', fichaId: id }, location.origin); } catch { /* o Dossiê ainda não carregou */ }
   };
-  const mandarProjecaoFicha = (p: { fichaId: string; ficha?: FichaDaSala } | null = fichaProjetadaAtual.current) => {
+  const mandarProjecaoFicha = (p: { fichaId: string; ficha?: FichaDaSala } | null = projecaoAtivaOuSaindo()) => {
+    const fichaEnvio = p ? (p.ficha ?? fichasAtual.current.find(x => x.id === p.fichaId)) : undefined;
     try {
       quadro.current?.contentWindow?.postMessage(
         p
-          ? { tipo: 'dossie:projetar-ficha', fichaId: p.fichaId, ...(p.ficha ? { ficha: p.ficha } : {}) }
+          ? { tipo: 'dossie:projetar-ficha', fichaId: p.fichaId, ...(fichaEnvio ? { ficha: fichaEnvio } : {}) }
           : { tipo: 'dossie:projetar-ficha', fichaId: null },
         location.origin,
       );
     } catch { /* o Dossiê ainda não carregou */ }
   };
+  useEffect(() => () => {
+    if (timerProjecaoRef.current !== null) clearTimeout(timerProjecaoRef.current);
+    if (timerExpandidaRef.current !== null) clearTimeout(timerExpandidaRef.current);
+  }, []);
+  useEffect(() => {
+    if (timerProjecaoRef.current !== null) {
+      clearTimeout(timerProjecaoRef.current);
+      timerProjecaoRef.current = null;
+    }
+    if (fichaProjetada) {
+      setProjecaoVisivel(fichaProjetada);
+      if (faseProjecaoAtual.current === 'inativa' || faseProjecaoAtual.current === 'saindo') {
+        if (prefereMenosMovimento()) {
+          setFaseProjecao('ativa');
+        } else {
+          setFaseProjecao('entrando');
+          timerProjecaoRef.current = window.setTimeout(() => {
+            timerProjecaoRef.current = null;
+            setFaseProjecao('ativa');
+          }, DURACAO_FADE_FICHA_MS);
+        }
+      }
+      return;
+    }
+    if (!projecaoVisivelAtual.current) {
+      setFaseProjecao('inativa');
+      return;
+    }
+    if (prefereMenosMovimento()) {
+      setProjecaoVisivel(null);
+      setFaseProjecao('inativa');
+      return;
+    }
+    setFaseProjecao('saindo');
+    timerProjecaoRef.current = window.setTimeout(() => {
+      timerProjecaoRef.current = null;
+      setProjecaoVisivel(null);
+      setFaseProjecao('inativa');
+    }, DURACAO_FADE_FICHA_MS);
+  }, [fichaProjetada]);
+  useEffect(() => {
+    if (timerExpandidaRef.current !== null) {
+      clearTimeout(timerExpandidaRef.current);
+      timerExpandidaRef.current = null;
+    }
+    if (aberta && !celular) {
+      setExpandidaVisivel(true);
+      if (faseExpandidaAtual.current === 'inativa' || faseExpandidaAtual.current === 'saindo') {
+        if (prefereMenosMovimento()) {
+          setFaseExpandida('ativa');
+        } else {
+          setFaseExpandida('entrando');
+          timerExpandidaRef.current = window.setTimeout(() => {
+            timerExpandidaRef.current = null;
+            setFaseExpandida('ativa');
+          }, DURACAO_FADE_FICHA_MS);
+        }
+      }
+      return;
+    }
+    if (!expandidaVisivelAtual.current || celular) {
+      setExpandidaVisivel(false);
+      setFaseExpandida('inativa');
+      return;
+    }
+    if (prefereMenosMovimento()) {
+      setExpandidaVisivel(false);
+      setFaseExpandida('inativa');
+      return;
+    }
+    setFaseExpandida('saindo');
+    timerExpandidaRef.current = window.setTimeout(() => {
+      timerExpandidaRef.current = null;
+      setExpandidaVisivel(false);
+      setFaseExpandida('inativa');
+    }, DURACAO_FADE_FICHA_MS);
+  }, [aberta, celular]);
+  const jaProjetouAntes = useRef(false);
   useEffect(() => { mandarFichaAtiva(meuPersonagemId); }, [meuPersonagemId, fichasChave, mostrarSaguao]);
   useEffect(() => {
-    try { quadro.current?.contentWindow?.postMessage(mensagemDeVista(vistaAtual.current), location.origin); } catch { /* */ }
-    if (fichaProjetada) {
-      mandarProjecaoFicha(fichaProjetada);
-    } else {
-      mandarProjecaoFicha(null);
-      mandarFichaAtiva(meuPersonagemAtual.current);
+    if (projecaoVisivel) {
+      jaProjetouAntes.current = true;
+      try { quadro.current?.contentWindow?.postMessage(mensagemDeVista(vistaAtual.current), location.origin); } catch { /* */ }
+      mandarProjecaoFicha(projecaoVisivel);
+      return;
     }
-  }, [fichaProjetada]);
+    if (!jaProjetouAntes.current) return;
+    jaProjetouAntes.current = false;
+    try { quadro.current?.contentWindow?.postMessage(mensagemDeVista(vistaAtual.current), location.origin); } catch { /* */ }
+    mandarProjecaoFicha(null);
+    mandarFichaAtiva(meuPersonagemAtual.current);
+  }, [projecaoVisivel]);
   // A vista muda por mensagem, sem recarregar o `iframe`.
   const mandarVista = () => {
     try { quadro.current?.contentWindow?.postMessage(mensagemDeVista(vistaAtual.current), location.origin); } catch { /* o Dossiê ainda não carregou */ }
-    if (fichaProjetadaAtual.current) mandarProjecaoFicha(fichaProjetadaAtual.current);
+    const proj = projecaoAtivaOuSaindo();
+    if (proj) mandarProjecaoFicha(proj);
     else mandarFichaAtiva();
   };
   mandarVistaAtual.current = mandarVista;
@@ -491,6 +599,8 @@ function Sala({
       data-ficha={cobre ? 'completa' : 'painel'}
       data-ficha-recolhida={fichaRecolhida && !cobre ? '1' : undefined}
       data-projetando-ficha={projetandoFicha ? '1' : undefined}
+      data-projecao-fase={faseProjecao !== 'inativa' ? faseProjecao : undefined}
+      data-expandida-fase={!projetandoFicha && faseExpandida !== 'inativa' ? faseExpandida : undefined}
       data-espectador={espectador ? '1' : undefined}
     >
       <section class="casca-mapa" data-testid="casca-mapa" aria-label="Mapa">
@@ -599,9 +709,7 @@ function Sala({
             onClick={() => setFichaRecolhida(v => !v)}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              {fichaRecolhida
-                ? <polyline points="15 18 9 12 15 6" />
-                : <polyline points="9 18 15 12 9 6" />}
+              <polyline points="9 18 15 12 9 6" />
             </svg>
           </button>
         )}

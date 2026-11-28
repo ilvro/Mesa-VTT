@@ -359,6 +359,24 @@ test('projetar-ficha chama aoProjetarFicha com dados de outro jogador, reenvia n
   emitir({ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'encerrado' } });
   await ponte.esvaziar();
   assert.equal(projecoes.at(-1), null);
+
+  // Reativa projeção de uma ficha conhecida e atualiza ao vivo via ficha.atualizada
+  emitir({ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'projetar-ficha', fichaId: 'a' } });
+  await ponte.esvaziar();
+  const fichaAtualizada = ficha('a', { pv: 7 });
+  emitir({ tipo: 'ficha.atualizada', ficha: fichaAtualizada, rev: 2, autor });
+  assert.deepEqual(projecoes.at(-1), { fichaId: 'a', ficha: fichaAtualizada });
+
+  // Novo bem-vindo sem :ficha-projetada limpa projeção anterior
+  emitir({
+    tipo: 'bem-vindo',
+    eu,
+    membros: [{ ...mestre, personagem: null }],
+    fichas: [fichaAtualizada],
+    ultimoEstado: { 'atlas:projetor:remoto': { tipo: 'estado', doc: { id: 'm' }, versao: 2 } },
+  } as unknown as MensagemDaSala);
+  await ponte.esvaziar();
+  assert.equal(projecoes.at(-1), null);
   ponte.fechar();
 });
 

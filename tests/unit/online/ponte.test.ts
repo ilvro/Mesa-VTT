@@ -620,3 +620,53 @@ test('projetar-ficha e pedir-retrato passam pela ponte do mestre', async () => {
   assert.deepEqual(recebidasAtlas, [{ tipo: 'pedir-retrato', id: 'r-muirenn' }]);
   ponte.fechar();
 });
+
+test('projetar-ficha fora da sala pede a ficha ao Dossiê em mesa:dossie-projecao, reenvia na reconexão e respeita prazo/cancelamento', async () => {
+  const agendadas: Array<() => void> = [];
+  const { atlas, emitir, enviadas, ponte } = montar('teste-1', {
+    agendar: f => { agendadas.push(f); return () => {}; },
+  });
+  const dossie = new Canal('mesa:dossie-projecao');
+  const fichaLocal = { id: 'f-local', name: 'NPC Secreto', pv: 20 };
+  dossie.onmessage = ({ data }) => {
+    const m = data as { tipo?: string; reqId?: string; id?: string };
+    if (m.tipo === 'pedir-ficha' && m.reqId && m.id === 'f-local') {
+      dossie.postMessage({ tipo: 'ficha', reqId: m.reqId, id: m.id, ficha: fichaLocal });
+    }
+  };
+  emitir(bemVindo([membro('1', 'mestre'), membro('2', 'jogador')]));
+  enviadas.length = 0;
+
+  // 1) Ficha local do mestre (não está em fichasDaSala): busca no Dossiê e envia junto
+  atlas.postMessage({ tipo: 'projetar-ficha', fichaId: 'f-local' });
+  await ponte.esvaziar();
+  assert.deepEqual(enviadas, [{ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'projetar-ficha', fichaId: 'f-local', ficha: fichaLocal } }]);
+
+  // 2) Reconexão (bem-vindo): reenvia a ficha local projetada
+  enviadas.length = 0;
+  emitir(bemVindo([membro('1', 'mestre'), membro('2', 'jogador')]));
+  assert.deepEqual(enviadas, [{ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'projetar-ficha', fichaId: 'f-local', ficha: fichaLocal } }]);
+
+  // 3) Sem resposta do Dossiê dentro do prazo: não trava e envia sem ficha
+  enviadas.length = 0;
+  agendadas.length = 0;
+  atlas.postMessage({ tipo: 'projetar-ficha', fichaId: 'f-ausente' });
+  await Promise.resolve();
+  agendadas.at(-1)?.();
+  await ponte.esvaziar();
+  assert.deepEqual(enviadas, [{ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'projetar-ficha', fichaId: 'f-ausente' } }]);
+
+  // 4) Cancelamento antes da resposta do Dossiê: não envia projeção obsoleta antes do null
+  enviadas.length = 0;
+  dossie.onmessage = null;
+  atlas.postMessage({ tipo: 'projetar-ficha', fichaId: 'f-cancelada' });
+  await Promise.resolve();
+  atlas.postMessage({ tipo: 'projetar-ficha', fichaId: null });
+  dossie.postMessage({ tipo: 'ficha', reqId: (dossie.postados.at(-1) as { reqId?: string } | undefined)?.reqId, id: 'f-cancelada', ficha: { id: 'f-cancelada', name: 'Tarde' } });
+  agendadas.at(-1)?.();
+  await ponte.esvaziar();
+  assert.deepEqual(enviadas, [{ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'projetar-ficha', fichaId: null } }]);
+
+  dossie.close();
+  ponte.fechar();
+});

@@ -196,8 +196,10 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
         const fichaId = typeof rawId === 'string' && rawId ? rawId : null;
         if (fichaId) {
           const dentroFicha = (dentro as { ficha?: unknown }).ficha;
-          const f = (ehObj(dentroFicha) ? dentroFicha : undefined) ?? estado.ficha(fichaId)?.ficha;
-          estado.guardarUltimo(`${msg.nome}:ficha-projetada`, { tipo: 'projetar-ficha', fichaId });
+          const daSala = estado.ficha(fichaId)?.ficha;
+          const f = (ehObj(dentroFicha) ? dentroFicha : undefined) ?? daSala;
+          const fichaLocal = !daSala && ehObj(dentroFicha) ? dentroFicha : undefined;
+          estado.guardarUltimo(`${msg.nome}:ficha-projetada`, { tipo: 'projetar-ficha', fichaId, ...(fichaLocal ? { ficha: fichaLocal } : {}) });
           return [{ destino: 'outros', msg: { tipo: 'canal', nome: msg.nome, msg: { tipo: 'projetar-ficha', fichaId, ...(f ? { ficha: f } : {}) } } }];
         }
         estado.apagarUltimo(`${msg.nome}:ficha-projetada`);

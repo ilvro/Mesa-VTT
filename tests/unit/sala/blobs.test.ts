@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { criarEstado } from '../../../sala/estado.ts';
-import { blobsCitadosPor, blobsParaQuemChega, tratar, tratarBinario } from '../../../sala/mensagens.ts';
+import { bemVindo, blobsCitadosPor, blobsParaQuemChega, tratar, tratarBinario } from '../../../sala/mensagens.ts';
 import { decodificarPedaco, lerMensagemDaSala, lerMensagemParaSala, codificarPedaco, type Eu } from '../../../src/online/protocolo.ts';
 import { sqlEmMemoria } from './sql-teste.ts';
 
@@ -136,4 +136,14 @@ test('projetar-ficha anexa os dados da ficha da sala, aparece no bem-vindo e lim
   const s2 = tratar(e, mestre, canal({ tipo: 'projetar-ficha', fichaId: null }), 3, todos);
   assert.deepEqual(s2, [{ destino: 'outros', msg: { tipo: 'canal', nome: CANAL, msg: { tipo: 'projetar-ficha', fichaId: null } } }]);
   assert.equal(`${CANAL}:ficha-projetada` in e.ultimoEstado(), false);
+});
+
+test('projetar-ficha local do mestre preserva ficha inline no ultimoEstado e entrega no bemVindo', () => {
+  const e = sala();
+  const fichaLocal = { id: 'f-npc', name: 'Barão', pv: 30 };
+  const s1 = tratar(e, mestre, canal({ tipo: 'projetar-ficha', fichaId: 'f-npc', ficha: fichaLocal }), 1, todos);
+  assert.deepEqual(s1, [{ destino: 'outros', msg: { tipo: 'canal', nome: CANAL, msg: { tipo: 'projetar-ficha', fichaId: 'f-npc', ficha: fichaLocal } } }]);
+  assert.deepEqual(e.ultimoEstado()[`${CANAL}:ficha-projetada`], { tipo: 'projetar-ficha', fichaId: 'f-npc', ficha: fichaLocal });
+  const bv = bemVindo(e, ana, todos, 2);
+  assert.deepEqual(bv.ultimoEstado[`${CANAL}:ficha-projetada`], { tipo: 'projetar-ficha', fichaId: 'f-npc', ficha: fichaLocal });
 });

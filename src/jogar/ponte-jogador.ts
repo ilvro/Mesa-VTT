@@ -251,6 +251,10 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
       if (fechada) return;
       fichas.set(m.ficha.id, m.ficha); revs.set(m.ficha.id, m.rev);
       if (m.dono) donos.set(m.ficha.id, m.dono);
+      if (ultimaProjecaoFicha && ultimaProjecaoFicha.fichaId === m.ficha.id) {
+        ultimaProjecaoFicha = { fichaId: m.ficha.id, ficha: m.ficha };
+        o.aoProjetarFicha?.(ultimaProjecaoFicha);
+      }
       const envelope = { contrato: CONTRATO, app: 'mesa', tipo: 'sala.ficha-atualizada', id: crypto.randomUUID(), em: Date.now(), campanhaId: null, dados: { ficha: m.ficha, rev: m.rev, ...(m.conflito ? { conflito: true } : {}) }, autor: m.autor };
       if (validarEvento(envelope).ok) eventos.postMessage(envelope);
     }),
@@ -267,7 +271,9 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
       for (const [nome, msg] of entradas) if (!nome.endsWith(':controle') && !nome.includes(':retrato:') && !nome.endsWith(':ficha-projetada')) enfileirar(msg);
       for (const [nome, msg] of entradas) if (nome.includes(':retrato:')) enfileirar(msg);
       for (const [nome, msg] of entradas) if (nome.endsWith(':controle')) enfileirar(msg);
-      for (const [nome, msg] of entradas) if (nome.endsWith(':ficha-projetada')) enfileirar(msg);
+      const projecoes = entradas.filter(([nome]) => nome.endsWith(':ficha-projetada'));
+      if (projecoes.length > 0) for (const [, msg] of projecoes) enfileirar(msg);
+      else if (ultimaProjecaoFicha !== null) enfileirar({ tipo: 'projetar-ficha', fichaId: null });
     }),
     cliente.ouvirBlob((id, b) => {
       blobs.set(id, b);
