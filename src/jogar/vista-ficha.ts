@@ -29,6 +29,13 @@ export function dossiePronto(ev: { source: unknown; origin: string; data: unknow
   return !!d && typeof d === 'object' && d.tipo === 'dossie.pronto';
 }
 
+/** Um aviso `postMessage` do Dossiê indicando que já aplicou a vista ou a projeção pedida (a casca então pode revelar o `iframe`). */
+export function vistaAplicada(ev: { source: unknown; origin: string; data: unknown }, janelaDoDossie: unknown, origemLocal: string): boolean {
+  if (!janelaDoDossie || ev.source !== janelaDoDossie || ev.origin !== origemLocal) return false;
+  const d = ev.data as { tipo?: unknown } | null;
+  return !!d && typeof d === 'object' && d.tipo === 'dossie.vista-aplicada';
+}
+
 /** A vista que o Dossiê mostra. Na projeção do mestre ou no celular na vertical (aba Ficha), é `completa`; fora disso, vale o pedido (`aberta`). */
 export function vistaDaFicha(o: { celularVertical: boolean; aba: AbaDaCasca; aberta: boolean; projetando?: boolean }): VistaDaFicha {
   if (o.projetando) return 'completa';

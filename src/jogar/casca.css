@@ -7,12 +7,19 @@
 /* Ficha completa: o mesmo `iframe` vai para a tela toda, por cima do mapa (que segue vivo por baixo). */
 .casca[data-ficha='completa'] .casca-ficha { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 16; border-left: 0; transform: none; opacity: 1; visibility: visible; pointer-events: auto; will-change: opacity; transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1); }
 .casca[data-projetando-ficha='1'] .casca-ficha { display: block; position: fixed; inset: 0; width: 100%; height: 100%; z-index: 18; border-left: 0; transform: none; opacity: 1; visibility: visible; pointer-events: auto; will-change: opacity; transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+/* Fases da ficha em tela cheia. `@keyframes` (e não `transition`) porque o `iframe` recém-trocado de layout pode saltar o frame de `opacity: 0`. */
+@keyframes casca-ficha-fade-in { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: scale(1); } }
+@keyframes casca-ficha-fade-out { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.985); } }
+@keyframes casca-ficha-painel-entra { from { opacity: 0; } to { opacity: 1; } }
 .casca[data-expandida-fase='preparando'] .casca-ficha,
-.casca[data-expandida-fase='preparando'] .casca-voltar,
-.casca[data-projecao-fase='preparando'] .casca-ficha { opacity: 0; pointer-events: none; transition: none; }
+.casca[data-projecao-fase='preparando'] .casca-ficha { opacity: 0; transform: scale(0.985); pointer-events: none; transition: none; animation: none; }
+.casca[data-expandida-fase='ativa'] .casca-ficha,
+.casca[data-projecao-fase='ativa'] .casca-ficha { animation: casca-ficha-fade-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 .casca[data-expandida-fase='saindo'] .casca-ficha,
-.casca[data-expandida-fase='saindo'] .casca-voltar,
-.casca[data-projecao-fase='saindo'] .casca-ficha { opacity: 0; pointer-events: none; }
+.casca[data-projecao-fase='saindo'] .casca-ficha { opacity: 0; transform: scale(0.985); pointer-events: none; transition: none; animation: casca-ficha-fade-out 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.casca[data-expandida-fase='preparando'] .casca-voltar { opacity: 0; pointer-events: none; transition: none; }
+.casca[data-expandida-fase='saindo'] .casca-voltar { opacity: 0; pointer-events: none; }
+.casca[data-ficha-retorno='1']:not([data-ficha-recolhida='1']) .casca-ficha { animation: casca-ficha-painel-entra 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 .casca[data-projetando-ficha='1'] .casca-voltar,
 .casca[data-projetando-ficha='1'] .casca-topo-direita,
 .casca[data-projetando-ficha='1'] .casca-som-painel,
@@ -84,6 +91,7 @@
   .casca-recolher-ficha svg,
   .casca-topo-direita,
   .casca-som-painel { transition: none; }
+  .casca-ficha { animation: none !important; }
   .feed-item { animation: none; }
 }
 

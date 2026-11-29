@@ -22,7 +22,8 @@ import { criarPonteDoJogador, type CanalLocal } from './ponte-jogador.ts';
 import { Saguao } from './Saguao.tsx';
 import { criarSomDaCasca, type EstadoDoSomNaCasca, type SomDaCasca } from './som.ts';
 import { lerPreferenciasDeSom } from '../online/sincronia.ts';
-import { dossiePronto, fichaCobreOMapa, mensagemDeVista, mensagemDoJogador, projetorPronto, vistaDaFicha, vistaPedidaPeloDossie } from './vista-ficha.ts';
+import { agendarEntradaDaFicha, type FaseTelaFicha } from './fase-ficha.ts';
+import { dossiePronto, vistaAplicada, fichaCobreOMapa, mensagemDeVista, mensagemDoJogador, projetorPronto, vistaDaFicha, vistaPedidaPeloDossie } from './vista-ficha.ts';
 import './casca.css';
 
 /** O endereço do projetor remoto do Atlas para esta sala. Não muda quando o mestre troca de mapa: o projetor aceita o `estado` de qualquer mapa. */
@@ -46,10 +47,8 @@ function useCelularVertical(): boolean {
 
 export type ErroDaCasca = 'sala' | 'sessao' | null;
 type Aba = 'mapa' | 'ficha';
-type FaseTelaFicha = 'inativa' | 'preparando' | 'ativa' | 'saindo';
 
 const DURACAO_FADE_FICHA_MS = 220;
-const ATRASO_PREPARO_FICHA_MS = 50;
 const prefereMenosMovimento = (): boolean =>
   typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -286,6 +285,13 @@ function Sala({
   faseExpandidaAtual.current = faseExpandida;
   const timerProjecaoRef = useRef<(() => void) | null>(null);
   const timerExpandidaRef = useRef<(() => void) | null>(null);
+  const [retornoPainel, setRetornoPainel] = useState(false);   // o painel lateral reaparece com fade depois da ficha completa
+  const aguardandoVista = useRef(new Set<() => void>());
+  /** O Dossiê avisa (`dossie.vista-aplicada`) quando termina de aplicar a vista ou a projeção pedida. */
+  const ouvirVistaAplicada = (aoReceber: () => void) => {
+    aguardandoVista.current.add(aoReceber);
+    return () => { aguardandoVista.current.delete(aoReceber); };
+  };
   const celular = useCelularVertical();
   const quadro = useRef<HTMLIFrameElement>(null);
   const projetorQuadro = useRef<HTMLIFrameElement>(null);
@@ -402,6 +408,7 @@ function Sala({
     const ouvir = (ev: MessageEvent) => {
       const pedida = vistaPedidaPeloDossie(ev, quadro.current?.contentWindow, location.origin);
       if (pedida && !fichaProjetadaAtual.current && !projecaoVisivelAtual.current) setAberta(pedida === 'completa');
+      if (vistaAplicada(ev, quadro.current?.contentWindow, location.origin)) for (const f of [...aguardandoVista.current]) f();
       if (dossiePronto(ev, quadro.current?.contentWindow, location.origin)) mandarVistaAtual.current();
       if (projetorPronto(ev, projetorQuadro.current?.contentWindow, location.origin)) mandarJogadorAtual.current();
     };
@@ -455,17 +462,10 @@ function Sala({
           setFaseProjecao('ativa');
         } else {
           setFaseProjecao('preparando');
-          let timeoutId: number | null = null;
-          const rafId = requestAnimationFrame(() => {
-            timeoutId = window.setTimeout(() => {
-              timerProjecaoRef.current = null;
-              setFaseProjecao('ativa');
-            }, ATRASO_PREPARO_FICHA_MS);
-          });
-          timerProjecaoRef.current = () => {
-            cancelAnimationFrame(rafId);
-            if (timeoutId !== null) clearTimeout(timeoutId);
-          };
+          timerProjecaoRef.current = agendarEntradaDaFicha(() => {
+            timerProjecaoRef.current = null;
+            setFaseProjecao('ativa');
+          }, ouvirVistaAplicada);
         }
       }
       return;
@@ -497,17 +497,10 @@ function Sala({
           setFaseExpandida('ativa');
         } else {
           setFaseExpandida('preparando');
-          let timeoutId: number | null = null;
-          const rafId = requestAnimationFrame(() => {
-            timeoutId = window.setTimeout(() => {
-              timerExpandidaRef.current = null;
-              setFaseExpandida('ativa');
-            }, ATRASO_PREPARO_FICHA_MS);
-          });
-          timerExpandidaRef.current = () => {
-            cancelAnimationFrame(rafId);
-            if (timeoutId !== null) clearTimeout(timeoutId);
-          };
+          timerExpandidaRef.current = agendarEntradaDaFicha(() => {
+            timerExpandidaRef.current = null;
+            setFaseExpandida('ativa');
+          }, ouvirVistaAplicada);
         }
       }
       return;
@@ -523,12 +516,14 @@ function Sala({
       return;
     }
     setFaseExpandida('saindo');
+    let retornoId: number | null = null;
     const timeoutId = window.setTimeout(() => {
-      timerExpandidaRef.current = null;
       setExpandidaVisivel(false);
       setFaseExpandida('inativa');
+      setRetornoPainel(true);
+      retornoId = window.setTimeout(() => { timerExpandidaRef.current = null; setRetornoPainel(false); }, DURACAO_FADE_FICHA_MS);
     }, DURACAO_FADE_FICHA_MS);
-    timerExpandidaRef.current = () => clearTimeout(timeoutId);
+    timerExpandidaRef.current = () => { clearTimeout(timeoutId); if (retornoId !== null) clearTimeout(retornoId); setRetornoPainel(false); };
   }, [aberta, celular]);
   const jaProjetouAntes = useRef(false);
   useEffect(() => { mandarFichaAtiva(meuPersonagemId); }, [meuPersonagemId, fichasChave, mostrarSaguao]);
@@ -614,6 +609,7 @@ function Sala({
       data-projetando-ficha={projetandoFicha ? '1' : undefined}
       data-projecao-fase={faseProjecao !== 'inativa' ? faseProjecao : undefined}
       data-expandida-fase={!projetandoFicha && faseExpandida !== 'inativa' ? faseExpandida : undefined}
+      data-ficha-retorno={retornoPainel ? '1' : undefined}
       data-espectador={espectador ? '1' : undefined}
     >
       <section class="casca-mapa" data-testid="casca-mapa" aria-label="Mapa">
