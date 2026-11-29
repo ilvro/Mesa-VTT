@@ -207,6 +207,7 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
       }
       if (dentro && typeof dentro === 'object' && dentro.tipo === 'estado') estado.guardarUltimo(msg.nome, msg.msg);
       if (dentro && typeof dentro === 'object' && dentro.tipo === 'controle-jogadores') estado.guardarUltimo(`${msg.nome}:controle`, msg.msg);
+      if (dentro && typeof dentro === 'object' && dentro.tipo === 'visao-remota') estado.guardarUltimo(`${msg.nome}:visao-remota`, msg.msg);
       if (dentro && typeof dentro === 'object' && dentro.tipo === 'retrato' && typeof dentro.id === 'string' && dentro.id) {
         estado.guardarUltimo(`${msg.nome}:retrato:${dentro.id}`, msg.msg);
       }

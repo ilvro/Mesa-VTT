@@ -673,3 +673,16 @@ test('projetar-ficha fora da sala pede a ficha ao Dossiê em mesa:dossie-projeca
   dossie.close();
   ponte.fechar();
 });
+
+test('visao-remota do projetor é repassada e reenviada no bem-vindo', async () => {
+  const { atlas, emitir, enviadas, ponte } = montar();
+  const visao = { tipo: 'visao-remota', modo: 'jogadores' };
+  atlas.postMessage(visao);
+  await ponte.esvaziar();
+  assert.deepEqual(enviadas, [{ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: visao }]);
+
+  enviadas.length = 0;
+  emitir(bemVindo([membro('1', 'mestre'), membro('2', 'jogador')]));
+  assert.deepEqual(enviadas, [{ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: visao }]);
+  ponte.fechar();
+});

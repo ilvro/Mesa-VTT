@@ -45,7 +45,7 @@ export interface CanalLocal {
 
 /** As mensagens do mestre ao projetor (`MensagemDoMestre` do Atlas). As do projetor (`ola`, `tamanho`, `soltou`, `tchau`) não saem. */
 const TIPOS_DO_MESTRE = new Set([
-  'estado', 'controle-jogadores', 'peca-gesto', 'camera', 'evento', 'relampago', 'retrato', 'tela', 'letreiro', 'letreiro-fim',
+  'estado', 'controle-jogadores', 'visao-remota', 'peca-gesto', 'camera', 'evento', 'relampago', 'retrato', 'tela', 'letreiro', 'letreiro-fim',
   'recursos', 'inspecao', 'inspecao-estado', 'inspecao-fim', 'rolagem', 'projetar-ficha',
 ]);
 
@@ -205,6 +205,7 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
   let ultimaFichaProjetada: string | null = null;
   let ultimaFichaProjetadaDados: FichaDaSala | undefined = undefined;
   let ultimaFichaProjetadaSolicitada: string | null = null;
+  let ultimaVisaoRemota: Record<string, unknown> | null = null;
   const pedidosFicha = new Map<string, (ficha: FichaDaSala | null) => void>();
 
   dossieProjecao.onmessage = ({ data }) => {
@@ -243,6 +244,11 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     const msg = data as Record<string, unknown>;
     if (typeof msg.tipo !== 'string' || !TIPOS_DO_MESTRE.has(msg.tipo)) return;
     if (msg.tipo === 'peca-gesto') {
+      cliente.enviar({ tipo: 'canal', nome: CANAL_PROJETOR_REMOTO, msg });
+      return;
+    }
+    if (msg.tipo === 'visao-remota') {
+      ultimaVisaoRemota = msg;
       cliente.enviar({ tipo: 'canal', nome: CANAL_PROJETOR_REMOTO, msg });
       return;
     }
@@ -601,6 +607,9 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
           msg: { tipo: 'projetar-ficha', fichaId: ultimaFichaProjetada, ...(ficha ? { ficha } : {}) },
         });
       }
+      if (ultimaVisaoRemota) {
+        cliente.enviar({ tipo: 'canal', nome: CANAL_PROJETOR_REMOTO, msg: ultimaVisaoRemota });
+      }
       atualizarPresenca(m.membros, true);
     }),
     cliente.ouvir('pedir-retrato', m => {
@@ -649,6 +658,7 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
       ultimaFichaProjetada = null;
       ultimaFichaProjetadaDados = undefined;
       ultimaFichaProjetadaSolicitada = null;
+      ultimaVisaoRemota = null;
       fechada = true;
       for (const resolver of [...pedidosFicha.values()]) resolver(null);
       pedidosFicha.clear();

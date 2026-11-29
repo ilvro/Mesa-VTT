@@ -159,3 +159,13 @@ test('alternar-porta é permitido a jogador e mestre e encaminhado aos outros', 
     [{ destino: 'outros', msg: { tipo: 'alternar-porta', id: 'porta-42' } }],
   );
 });
+
+test('visao-remota é persistido em :visao-remota e incluído no bem-vindo', () => {
+  const e = sala();
+  const msg = { tipo: 'visao-remota', modo: 'mestre' };
+  const s = tratar(e, mestre, canal(msg), 1, todos);
+  assert.deepEqual(s, [{ destino: 'outros', msg: { tipo: 'canal', nome: CANAL, msg } }]);
+  assert.deepEqual(e.ultimoEstado()[`${CANAL}:visao-remota`], msg);
+  const bv = bemVindo(e, ana, todos, 2);
+  assert.deepEqual(bv.ultimoEstado[`${CANAL}:visao-remota`], msg);
+});

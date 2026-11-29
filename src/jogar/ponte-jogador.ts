@@ -91,7 +91,7 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
   const blobs = new Map<string, Blob>();
   const esperando = new Map<string, Set<(b: Blob | null) => void>>();
   let fechada = false, temMapa = false;
-  let ultimoEstado: unknown = null, ultimaCamera: unknown = null, ultimoControle: unknown = null;
+  let ultimoEstado: unknown = null, ultimaCamera: unknown = null, ultimoControle: unknown = null, ultimaVisaoRemota: unknown = null;
   let ultimaProjecaoFicha: { fichaId: string; ficha?: FichaDaSala } | null = null;
   const ultimosRetratos = new Map<string, unknown>();
   const retratoBlobIds = new Map<string, string>();
@@ -159,7 +159,7 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
   let fila: Promise<void> = Promise.resolve();
   async function entregar(msg: unknown): Promise<void> {
     if (ehObj(msg) && msg.tipo === 'encerrado') {
-      ultimoEstado = null; ultimaCamera = null; ultimoControle = null; ultimosRetratos.clear();
+      ultimoEstado = null; ultimaCamera = null; ultimoControle = null; ultimaVisaoRemota = null; ultimosRetratos.clear();
       if (ultimaProjecaoFicha !== null) { ultimaProjecaoFicha = null; o.aoProjetarFicha?.(null); }
       if (temMapa) { temMapa = false; o.aoSemMapa?.(); }
       return;
@@ -185,6 +185,7 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
     if (tipo === 'estado') { ultimoEstado = pronta; if (!temMapa) { temMapa = true; o.aoTerMapa?.(); } }
     else if (tipo === 'camera') ultimaCamera = pronta;
     else if (tipo === 'controle-jogadores') ultimoControle = pronta;
+    else if (tipo === 'visao-remota') ultimaVisaoRemota = pronta;
     else if (tipo === 'retrato' && typeof (pronta as Obj).id === 'string') ultimosRetratos.set((pronta as Obj).id as string, pronta);
     projetor.postMessage(pronta);
   }
@@ -206,6 +207,7 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
     if (ultimoEstado) projetor.postMessage(ultimoEstado);
     if (ultimaCamera) projetor.postMessage(ultimaCamera);
     if (ultimoControle) projetor.postMessage(ultimoControle);
+    if (ultimaVisaoRemota) projetor.postMessage(ultimaVisaoRemota);
     for (const r of ultimosRetratos.values()) projetor.postMessage(r);
     if (ehObj(ultimoEstado) && ehObj(ultimoEstado.doc) && ehObj(ultimoEstado.doc.tokens)) {
       for (const t of Object.values(ultimoEstado.doc.tokens)) {

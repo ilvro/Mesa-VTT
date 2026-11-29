@@ -423,3 +423,27 @@ test('alternar-porta do projetor local é enviado para a sala', () => {
   assert.deepEqual(enviadas, [{ tipo: 'alternar-porta', id: 'porta-7' }]);
   ponte.fechar();
 });
+
+test('visao-remota no bem-vindo e em canal chega ao projetor e é reenviada no ola', async () => {
+  const { emitir, ponte, projetor, vistos } = montar();
+  emitir({
+    tipo: 'bem-vindo',
+    eu,
+    membros: [],
+    fichas: [],
+    ultimoEstado: {
+      'atlas:projetor:remoto': { tipo: 'estado', doc: { id: 'm' }, versao: 1 },
+      'atlas:projetor:remoto:visao-remota': { tipo: 'visao-remota', modo: 'mestre' },
+    },
+  } as unknown as MensagemDaSala);
+  await ponte.esvaziar();
+  assert.deepEqual(vistos.map(v => (v as { tipo: string }).tipo), ['estado', 'visao-remota']);
+
+  vistos.length = 0;
+  projetor.postMessage({ tipo: 'ola', largura: 800, altura: 600 });
+  assert.deepEqual(vistos, [
+    { tipo: 'estado', doc: { id: 'm' }, versao: 1 },
+    { tipo: 'visao-remota', modo: 'mestre' },
+  ]);
+  ponte.fechar();
+});
