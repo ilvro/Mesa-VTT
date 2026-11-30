@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { agendarEntradaDaFicha, type RelogioDaFicha } from '../../../src/jogar/fase-ficha.ts';
-import { vistaAplicada } from '../../../src/jogar/vista-ficha.ts';
+import { vistaAplicada, vistaDoAviso } from '../../../src/jogar/vista-ficha.ts';
 
 /** Relógio manual: quadros e esperas só andam quando o teste manda. */
 function relogioManual() {
@@ -81,4 +81,36 @@ test('vistaAplicada só vale vindo do iframe da ficha, na mesma origem', () => {
   assert.equal(vistaAplicada(ev({ source: {} }), janela, 'http://a'), false);
   assert.equal(vistaAplicada(ev({ origin: 'http://b' }), janela, 'http://a'), false);
   assert.equal(vistaAplicada(ev({ data: { tipo: 'outro' } }), janela, 'http://a'), false);
+});
+
+test('vistaDoAviso lê a vista do aviso e ignora avisos sem ela ou inválidos', () => {
+  assert.equal(vistaDoAviso({ tipo: 'dossie.vista-aplicada', vista: 'card' }), 'card');
+  assert.equal(vistaDoAviso({ tipo: 'dossie.vista-aplicada', vista: 'completa' }), 'completa');
+  assert.equal(vistaDoAviso({ tipo: 'dossie.vista-aplicada' }), null);
+  assert.equal(vistaDoAviso({ vista: 'x' }), null);
+  assert.equal(vistaDoAviso(null), null);
+});
+
+test('ciclo completo da ficha expandida: inativa → preparando → ativa → saindo → retornando → inativa', () => {
+  const fases: string[] = ['inativa', 'preparando'];
+  const r = relogioManual();
+  const ouvintes = new Set<() => void>();
+  const ouvir = (f: () => void) => { ouvintes.add(f); return () => { ouvintes.delete(f); }; };
+  agendarEntradaDaFicha(() => fases.push('ativa'), ouvir, r.relogio);
+  for (const f of [...ouvintes]) f();
+  r.quadro(); r.quadro();
+  fases.push('saindo', 'retornando');
+  agendarEntradaDaFicha(() => fases.push('inativa'), ouvir, r.relogio);
+  r.quadro(); r.quadro();
+  assert.deepEqual(fases, ['inativa', 'preparando', 'ativa', 'saindo', 'retornando'], 'o card só reaparece depois do aviso');
+  for (const f of [...ouvintes]) f();
+  assert.deepEqual(fases, ['inativa', 'preparando', 'ativa', 'saindo', 'retornando', 'inativa']);
+});
+
+test('retornando: sem aviso do Dossiê, o card reaparece no teto de 180 ms', () => {
+  const r = relogioManual();
+  let voltou = 0;
+  agendarEntradaDaFicha(() => { voltou++; }, () => () => {}, r.relogio);
+  r.estouro();
+  assert.equal(voltou, 1);
 });

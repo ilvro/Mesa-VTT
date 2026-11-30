@@ -51,3 +51,9 @@ export const mensagemDeVista = (vista: VistaDaFicha) => ({ tipo: 'dossie.vista' 
 
 /** A mensagem que a casca manda ao `iframe` do projetor remoto com os ids das fichas do jogador (R14). */
 export const mensagemDoJogador = (fichas: readonly string[]) => ({ tipo: 'jogador' as const, fichas: [...fichas] });
+
+/** A vista que o aviso `dossie.vista-aplicada` diz ter aplicado (`null` se o Dossiê não informou, como nas versões antigas). */
+export function vistaDoAviso(data: unknown): VistaDaFicha | null {
+  const v = (data as { vista?: unknown } | null)?.vista;
+  return ehVista(v) ? v : null;
+}

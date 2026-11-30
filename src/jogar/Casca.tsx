@@ -25,7 +25,7 @@ import { lerPreferenciasDeSom } from '../online/sincronia.ts';
 import { agendarEntradaDaFicha, type FaseTelaFicha } from './fase-ficha.ts';
 import { AtmosferaCritica } from './AtmosferaCritica.tsx';
 import { atmosferaPedidaPeloDossie, batimentoDoDossie, EFEITOS_PADRAO, estadoCriticoDaFicha, type AtmosferaCritica as EstadoAtmosfera } from './atmosfera-critica.ts';
-import { dossiePronto, vistaAplicada, fichaCobreOMapa, mensagemDeVista, mensagemDoJogador, projetorPronto, vistaDaFicha, vistaPedidaPeloDossie } from './vista-ficha.ts';
+import { dossiePronto, vistaAplicada, vistaDoAviso, type VistaDaFicha, fichaCobreOMapa, mensagemDeVista, mensagemDoJogador, projetorPronto, vistaDaFicha, vistaPedidaPeloDossie } from './vista-ficha.ts';
 import './casca.css';
 
 /** O endereço do projetor remoto do Atlas para esta sala. Não muda quando o mestre troca de mapa: o projetor aceita o `estado` de qualquer mapa. */
@@ -50,7 +50,7 @@ function useCelularVertical(): boolean {
 export type ErroDaCasca = 'sala' | 'sessao' | null;
 type Aba = 'mapa' | 'ficha';
 
-const DURACAO_FADE_FICHA_MS = 220;
+const DURACAO_FADE_FICHA_MS = 320;
 const prefereMenosMovimento = (): boolean =>
   typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -288,11 +288,13 @@ function Sala({
   const timerProjecaoRef = useRef<(() => void) | null>(null);
   const timerExpandidaRef = useRef<(() => void) | null>(null);
   const [retornoPainel, setRetornoPainel] = useState(false);   // o painel lateral reaparece com fade depois da ficha completa
-  const aguardandoVista = useRef(new Set<() => void>());
-  /** O Dossiê avisa (`dossie.vista-aplicada`) quando termina de aplicar a vista ou a projeção pedida. */
-  const ouvirVistaAplicada = (aoReceber: () => void) => {
-    aguardandoVista.current.add(aoReceber);
-    return () => { aguardandoVista.current.delete(aoReceber); };
+  const ultimaFichaAtiva = useRef<string | null>(null);
+  const aguardandoVista = useRef(new Set<(vista: VistaDaFicha | null) => void>());
+  /** O Dossiê avisa (`dossie.vista-aplicada`) quando termina de aplicar a vista ou a projeção pedida; com `esperada`, ignora avisos de outra vista. */
+  const ouvirVistaAplicada = (aoReceber: () => void, esperada?: VistaDaFicha) => {
+    const ouvinte = (vista: VistaDaFicha | null) => { if (!esperada || !vista || vista === esperada) aoReceber(); };
+    aguardandoVista.current.add(ouvinte);
+    return () => { aguardandoVista.current.delete(ouvinte); };
   };
   const celular = useCelularVertical();
   const quadro = useRef<HTMLIFrameElement>(null);
@@ -412,8 +414,8 @@ function Sala({
     const ouvir = (ev: MessageEvent) => {
       const pedida = vistaPedidaPeloDossie(ev, quadro.current?.contentWindow, location.origin);
       if (pedida && !fichaProjetadaAtual.current && !projecaoVisivelAtual.current) setAberta(pedida === 'completa');
-      if (vistaAplicada(ev, quadro.current?.contentWindow, location.origin)) for (const f of [...aguardandoVista.current]) f();
-      if (dossiePronto(ev, quadro.current?.contentWindow, location.origin)) mandarVistaAtual.current();
+      if (vistaAplicada(ev, quadro.current?.contentWindow, location.origin)) { const v = vistaDoAviso(ev.data); for (const f of [...aguardandoVista.current]) f(v); }
+      if (dossiePronto(ev, quadro.current?.contentWindow, location.origin)) { ultimaFichaAtiva.current = null; mandarVistaAtual.current(); }
       const atm = atmosferaPedidaPeloDossie(ev, quadro.current?.contentWindow, location.origin);
       if (atm) setAtmosferaDoDossie(atm);
       if (batimentoDoDossie(ev, quadro.current?.contentWindow, location.origin)) setPulsoCritico(n => n + 1);
@@ -447,7 +449,8 @@ function Sala({
   const projecaoAtivaOuSaindo = (): { fichaId: string; ficha?: FichaDaSala } | null =>
     fichaProjetadaAtual.current ?? projecaoVisivelAtual.current;
   const mandarFichaAtiva = (id: string | null = meuPersonagemAtual.current) => {
-    if (!id || projecaoAtivaOuSaindo()) return;
+    if (!id || projecaoAtivaOuSaindo() || ultimaFichaAtiva.current === id) return;   // a mesma ficha não reabre a cada troca de vista
+    ultimaFichaAtiva.current = id;
     try { quadro.current?.contentWindow?.postMessage({ tipo: 'dossie:abrir-ficha', fichaId: id }, location.origin); } catch { /* o Dossiê ainda não carregou */ }
   };
   const mandarProjecaoFicha = (p: { fichaId: string; ficha?: FichaDaSala } | null = projecaoAtivaOuSaindo()) => {
@@ -505,7 +508,7 @@ function Sala({
     timerExpandidaRef.current = null;
     if (aberta && !celular) {
       setExpandidaVisivel(true);
-      if (faseExpandidaAtual.current === 'inativa' || faseExpandidaAtual.current === 'saindo') {
+      if (faseExpandidaAtual.current === 'inativa' || faseExpandidaAtual.current === 'saindo' || faseExpandidaAtual.current === 'retornando') {
         if (prefereMenosMovimento()) {
           setFaseExpandida('ativa');
         } else {
@@ -513,7 +516,7 @@ function Sala({
           timerExpandidaRef.current = agendarEntradaDaFicha(() => {
             timerExpandidaRef.current = null;
             setFaseExpandida('ativa');
-          }, ouvirVistaAplicada);
+          }, f => ouvirVistaAplicada(f, 'completa'));
         }
       }
       return;
@@ -529,14 +532,19 @@ function Sala({
       return;
     }
     setFaseExpandida('saindo');
-    let retornoId: number | null = null;
+    // saindo (ficha e véu somem) → retornando (o iframe volta ao painel ainda invisível e o Dossiê pinta o card) → inativa + painel com fade.
+    let retornoId: number | null = null, cancelarRetorno: (() => void) | null = null;
     const timeoutId = window.setTimeout(() => {
       setExpandidaVisivel(false);
-      setFaseExpandida('inativa');
-      setRetornoPainel(true);
-      retornoId = window.setTimeout(() => { timerExpandidaRef.current = null; setRetornoPainel(false); }, DURACAO_FADE_FICHA_MS);
+      setFaseExpandida('retornando');
+      cancelarRetorno = agendarEntradaDaFicha(() => {
+        cancelarRetorno = null;
+        setFaseExpandida('inativa');
+        setRetornoPainel(true);
+        retornoId = window.setTimeout(() => { timerExpandidaRef.current = null; setRetornoPainel(false); }, DURACAO_FADE_FICHA_MS);
+      }, f => ouvirVistaAplicada(f, 'card'));
     }, DURACAO_FADE_FICHA_MS);
-    timerExpandidaRef.current = () => { clearTimeout(timeoutId); if (retornoId !== null) clearTimeout(retornoId); setRetornoPainel(false); };
+    timerExpandidaRef.current = () => { clearTimeout(timeoutId); cancelarRetorno?.(); if (retornoId !== null) clearTimeout(retornoId); setRetornoPainel(false); };
   }, [aberta, celular]);
   const jaProjetouAntes = useRef(false);
   useEffect(() => { mandarFichaAtiva(meuPersonagemId); }, [meuPersonagemId, fichasChave, mostrarSaguao]);
@@ -551,6 +559,7 @@ function Sala({
     jaProjetouAntes.current = false;
     try { quadro.current?.contentWindow?.postMessage(mensagemDeVista(vistaAtual.current), location.origin); } catch { /* */ }
     mandarProjecaoFicha(null);
+    ultimaFichaAtiva.current = null;
     mandarFichaAtiva(meuPersonagemAtual.current);
   }, [projecaoVisivel]);
   // A vista muda por mensagem, sem recarregar o `iframe`.
@@ -739,6 +748,7 @@ function Sala({
           <span class={`casca-selo ${erro ? 'caiu' : conexao}`} data-testid="casca-selo" title={`Entrou como ${nome}`}>{erro === 'sala' ? 'Sem sala' : 'Reconectando…'}</span>
         )}
       </section>
+      {!projetandoFicha && (faseExpandida === 'preparando' || faseExpandida === 'ativa' || faseExpandida === 'saindo') && <div class="casca-ficha-backdrop" data-testid="casca-ficha-backdrop" aria-hidden="true" />}
       {mostrarSaguao && (
         <Saguao
           nomeDaSala={config?.nome ?? ''}
@@ -763,7 +773,7 @@ function Sala({
         />
       )}
       {(!espectador || projetandoFicha) && (
-        <iframe ref={quadro} class="casca-ficha" data-testid="casca-ficha" data-vista={vista} title="Ficha" src={enderecoDoDossie(baseFicha, salaId)} onLoad={mandarVista} allow="fullscreen; autoplay" />
+        <iframe ref={quadro} class="casca-ficha" data-testid="casca-ficha" data-vista={vista} title="Ficha" src={enderecoDoDossie(baseFicha, salaId)} onLoad={() => { ultimaFichaAtiva.current = null; mandarVista(); }} allow="fullscreen; autoplay" />
       )}
       {atmosferaVisivel && <AtmosferaCritica atmosfera={atmosferaAtual} pulso={pulsoCritico} />}
       {!espectador && (

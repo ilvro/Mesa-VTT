@@ -1,8 +1,8 @@
 /**
  * A entrada da ficha em tela cheia (expandir ou projetar): lógica pura, sem DOM, para a casca testar a sequência
- * `inativa → preparando → ativa → saindo → inativa` sem montar o `iframe`.
+ * `inativa → preparando → ativa → saindo → retornando → inativa` (a volta, `retornando`, é só da ficha expandida: o card reaparece depois de pintado) sem montar o `iframe`.
  */
-export type FaseTelaFicha = 'inativa' | 'preparando' | 'ativa' | 'saindo';
+export type FaseTelaFicha = 'inativa' | 'preparando' | 'ativa' | 'saindo' | 'retornando';
 
 /** Teto da espera pelo Dossiê: se ele demorar, a ficha aparece assim mesmo. */
 export const ESPERA_MAXIMA_FICHA_MS = 180;
