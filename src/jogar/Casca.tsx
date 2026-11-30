@@ -4,7 +4,7 @@ import { baseDoApp } from '../app/inventario.ts';
 import { carregarSessaoOnline, iniciarLogin, sairDoOnline, sessaoOnline } from '../app/online-login.ts';
 import { conectarSala, type ClienteDaSala, type EstadoDaSala } from '../online/cliente.ts';
 import { urlDaSala, urlDoWebSocket } from '../online/config.ts';
-import type { ConfigSala, Eu, FichaDaSala, Membro, ModoDaSala, ResumoConstrucao } from '../online/protocolo.ts';
+import type { ConfigSala, Eu, FichaDaSala, Membro, ModoDaSala, NotaConstrucao, ResumoConstrucao } from '../online/protocolo.ts';
 import { enviarAberturaConstrucao } from '../online/mapa-inicial.ts';
 import { deveMostrarSaguao, estadoDoSaguao, retratoDaFicha } from '../online/saguao.ts';
 import {
@@ -18,6 +18,15 @@ import {
   type ResultadoDiscord,
 } from './discord.ts';
 import { FeedDeRolagens } from './FeedDeRolagens.tsx';
+import {
+  criarPonteConstrucao,
+  enderecoDaConstrucaoRemota,
+  enderecoDoAtlasNoModo,
+  enderecoDoProjetorRemoto,
+  type AtividadeConstrucao,
+  type PonteConstrucao,
+} from './ponte-construcao.ts';
+import { PainelConstrucao } from './PainelConstrucao.tsx';
 import { criarPonteDoJogador, type CanalLocal } from './ponte-jogador.ts';
 import { Saguao } from './Saguao.tsx';
 import { criarSomDaCasca, type EstadoDoSomNaCasca, type SomDaCasca } from './som.ts';
@@ -28,8 +37,7 @@ import { atmosferaPedidaPeloDossie, batimentoDoDossie, EFEITOS_PADRAO, estadoCri
 import { dossiePronto, vistaAplicada, vistaDoAviso, type VistaDaFicha, fichaCobreOMapa, mensagemDeVista, mensagemDoJogador, projetorPronto, vistaDaFicha, vistaPedidaPeloDossie } from './vista-ficha.ts';
 import './casca.css';
 
-/** O endereço do projetor remoto do Atlas para esta sala. Não muda quando o mestre troca de mapa: o projetor aceita o `estado` de qualquer mapa. */
-export const enderecoDoProjetorRemoto = (base: string, salaId: string): string => `${base}#/projetor-remoto/${encodeURIComponent(salaId)}`;
+export { enderecoDaConstrucaoRemota, enderecoDoAtlasNoModo, enderecoDoProjetorRemoto };
 
 /** O endereço do Dossiê em modo jogador. Fixo: a vista muda por `postMessage`, nunca pelo `src`. */
 export const enderecoDoDossie = (base: string, salaId: string): string => `${base}?sala=${encodeURIComponent(salaId)}&vista=card`;
@@ -257,6 +265,14 @@ function Sala({
   const [fichas, setFichas] = useState<FichaDaSala[]>([]);
   const [config, setConfig] = useState<ConfigSala | null>(null);
   const [construcaoResumo, setConstrucaoResumo] = useState<ResumoConstrucao>({ temMapa: false, rev: 0 });
+  const [atividadesConstrucao, setAtividadesConstrucao] = useState<AtividadeConstrucao[]>([]);
+  const [notasConstrucao, setNotasConstrucao] = useState<NotaConstrucao[]>([]);
+  const [mapaConstrucao, setMapaConstrucao] = useState<{ nome: string; rev: number } | null>(null);
+  const [painelConstrucaoRecolhido, setPainelConstrucaoRecolhido] = useState(false);
+  const [abaConstrucao, setAbaConstrucao] = useState<'editor' | 'painel'>('editor');
+  const ponteConstrucaoRef = useRef<PonteConstrucao | null>(null);
+  const euAtualRef = useRef<Eu | null>(null);
+  euAtualRef.current = eu;
   const [capaUrl, setCapaUrl] = useState<string | null>(null);
   const [saguaoAberto, setSaguaoAberto] = useState(false);
   const [somPainelAberto, setSomPainelAberto] = useState(false);
@@ -445,7 +461,37 @@ function Sala({
     : { fichaId: meuPersonagemId, estado: estadoCriticoDaFicha(fichaDoJogador), efeitos: atmosferaDoDossie?.efeitos ?? EFEITOS_PADRAO };
   const editandoFicha = modo === 'sessao' && !projetandoFicha && (aberta || expandidaNaTela || (celular && aba === 'ficha'));
   const mostrarSaguao = erro !== 'sala' && !editandoFicha && !projetandoFicha && (saguaoAberto || saguaoObrigatorio);
-  const atmosferaVisivel = eu?.papel !== 'mestre' && !mostrarSaguao && !projetandoFicha && (atmosferaAtual.estado.pv.vignette || atmosferaAtual.estado.pd.vignette);
+  const atmosferaVisivel = modo === 'sessao' && eu?.papel !== 'mestre' && !mostrarSaguao && !projetandoFicha && (atmosferaAtual.estado.pv.vignette || atmosferaAtual.estado.pd.vignette);
+
+  useEffect(() => {
+    if (!clienteSala || modo !== 'construcao') {
+      ponteConstrucaoRef.current = null;
+      setAtividadesConstrucao([]);
+      setNotasConstrucao([]);
+      setMapaConstrucao(null);
+      return;
+    }
+    setSomPainelAberto(false);
+    const ponte = criarPonteConstrucao({
+      cliente: clienteSala,
+      salaId,
+      eu: euAtualRef.current,
+      criarCanal: n => new BroadcastChannel(n) as unknown as CanalLocal,
+      aoMudarAtividades: setAtividadesConstrucao,
+      aoMudarNotas: setNotasConstrucao,
+      aoMudarMapa: setMapaConstrucao,
+      aoFechar: () => {
+        setAtividadesConstrucao([]);
+        setNotasConstrucao([]);
+        setMapaConstrucao(null);
+      },
+    });
+    ponteConstrucaoRef.current = ponte;
+    return () => {
+      if (ponteConstrucaoRef.current === ponte) ponteConstrucaoRef.current = null;
+      ponte.fechar();
+    };
+  }, [clienteSala, modo, salaId]);
   const projecaoAtivaOuSaindo = (): { fichaId: string; ficha?: FichaDaSala } | null =>
     fichaProjetadaAtual.current ?? projecaoVisivelAtual.current;
   const mandarFichaAtiva = (id: string | null = meuPersonagemAtual.current) => {
@@ -604,6 +650,25 @@ function Sala({
     await enviarAberturaConstrucao(clienteSala, mapa, nomeMapa);
     setSaguaoAberto(false);
   };
+  const baixarMapaConstrucao = () => {
+    const dados = ponteConstrucaoRef.current?.mapaParaDownload();
+    if (!dados) return;
+    const slug = dados.nome
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
+      .replace(/[^A-Za-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .toLowerCase() || 'mapa';
+    const blob = new Blob([JSON.stringify(dados.mapa, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${slug}.atlas.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
   const escolherPersonagem = (fichaId: string) => {
     clienteSala?.enviar({ tipo: 'membro.personagem', fichaId });
@@ -625,17 +690,29 @@ function Sala({
     <main
       class="casca"
       data-testid="casca"
+      data-modo={modo}
       data-aba={aba}
+      data-aba-construcao={modo === 'construcao' ? abaConstrucao : undefined}
       data-ficha={cobre ? 'completa' : 'painel'}
       data-ficha-recolhida={fichaRecolhida ? '1' : undefined}
+      data-painel-recolhido={modo === 'construcao' && painelConstrucaoRecolhido ? '1' : undefined}
       data-projetando-ficha={projetandoFicha ? '1' : undefined}
       data-projecao-fase={faseProjecao !== 'inativa' ? faseProjecao : undefined}
       data-expandida-fase={!projetandoFicha && faseExpandida !== 'inativa' ? faseExpandida : undefined}
       data-ficha-retorno={retornoPainel ? '1' : undefined}
       data-espectador={espectador ? '1' : undefined}
     >
-      <section class="casca-mapa" data-testid="casca-mapa" aria-label="Mapa">
-        <iframe ref={projetorQuadro} class="casca-iframe" data-testid="casca-iframe" title="Mapa" src={enderecoDoProjetorRemoto(baseAtlas, salaId)} onLoad={mandarJogador} allow="fullscreen; autoplay" />
+      <section class="casca-mapa" data-testid="casca-mapa" aria-label={modo === 'construcao' ? 'Editor de mapa' : 'Mapa'}>
+        <iframe
+          key={modo}
+          ref={projetorQuadro}
+          class="casca-iframe"
+          data-testid="casca-iframe"
+          title={modo === 'construcao' ? 'Editor de mapa' : 'Mapa'}
+          src={enderecoDoAtlasNoModo(modo, baseAtlas, salaId)}
+          onLoad={modo === 'sessao' ? mandarJogador : undefined}
+          allow="fullscreen; autoplay"
+        />
         {erro === 'sala' && (
           <div class="casca-sobre aviso-grande" data-testid="casca-erro-sala" role="alert">
             <h2 class="faixa">Sala não encontrada</h2>
@@ -647,8 +724,10 @@ function Sala({
             )}
           </div>
         )}
-        <FeedDeRolagens cliente={clienteSala} salaId={salaId} nome={nome} retratos={retratos} eu={eu} membros={membros} baseAvatar={baseAvatar} />
-        {!mostrarSaguao && !projetandoFicha && erro !== 'sala' && (
+        {modo === 'sessao' && (
+          <FeedDeRolagens cliente={clienteSala} salaId={salaId} nome={nome} retratos={retratos} eu={eu} membros={membros} baseAvatar={baseAvatar} />
+        )}
+        {modo === 'sessao' && !mostrarSaguao && !projetandoFicha && erro !== 'sala' && (
           <div class="casca-topo-direita">
             {estadoSom.bloqueado && (
               <button
@@ -693,7 +772,7 @@ function Sala({
             </button>
           </div>
         )}
-        {!mostrarSaguao && !projetandoFicha && somPainelAberto && (
+        {modo === 'sessao' && !mostrarSaguao && !projetandoFicha && somPainelAberto && (
           <div class="casca-som-painel" data-testid="casca-som-painel" role="region" aria-label="Controles de som">
             <label class="casca-som-linha">
               <span>Música</span>
@@ -729,7 +808,7 @@ function Sala({
             </button>
           </div>
         )}
-        {!espectador && !cobre && !mostrarSaguao && !projetandoFicha && erro !== 'sala' && (
+        {modo === 'sessao' && !espectador && !cobre && !mostrarSaguao && !projetandoFicha && erro !== 'sala' && (
           <button
             type="button"
             class="casca-recolher-ficha"
@@ -748,7 +827,7 @@ function Sala({
           <span class={`casca-selo ${erro ? 'caiu' : conexao}`} data-testid="casca-selo" title={`Entrou como ${nome}`}>{erro === 'sala' ? 'Sem sala' : 'Reconectando…'}</span>
         )}
       </section>
-      {!projetandoFicha && (faseExpandida === 'preparando' || faseExpandida === 'ativa' || faseExpandida === 'saindo') && <div class="casca-ficha-backdrop" data-testid="casca-ficha-backdrop" aria-hidden="true" />}
+      {modo === 'sessao' && !projetandoFicha && (faseExpandida === 'preparando' || faseExpandida === 'ativa' || faseExpandida === 'saindo') && <div class="casca-ficha-backdrop" data-testid="casca-ficha-backdrop" aria-hidden="true" />}
       {mostrarSaguao && (
         <Saguao
           nomeDaSala={config?.nome ?? ''}
@@ -774,16 +853,55 @@ function Sala({
           aoFechar={() => setSaguaoAberto(false)}
         />
       )}
-      {(!espectador || projetandoFicha) && (
+      {modo === 'sessao' && (!espectador || projetandoFicha) && (
         <iframe ref={quadro} class="casca-ficha" data-testid="casca-ficha" data-vista={vista} title="Ficha" src={enderecoDoDossie(baseFicha, salaId)} onLoad={() => { ultimaFichaAtiva.current = null; mandarVista(); }} allow="fullscreen; autoplay" />
       )}
-      {atmosferaVisivel && <AtmosferaCritica atmosfera={atmosferaAtual} pulso={pulsoCritico} />}
-      {!espectador && (
+      {modo === 'sessao' && atmosferaVisivel && <AtmosferaCritica atmosfera={atmosferaAtual} pulso={pulsoCritico} />}
+      {modo === 'sessao' && !espectador && (
         <>
           {cobre && !projetandoFicha && <button type="button" class="casca-voltar" data-testid="casca-voltar" onClick={() => setAberta(false)}>Voltar ao mapa</button>}
           <nav class="casca-abas" role="tablist" aria-label="Seções">
             <button type="button" role="tab" aria-selected={aba === 'mapa'} data-testid="casca-aba-mapa" onClick={() => setAba('mapa')}>Mapa</button>
             <button type="button" role="tab" aria-selected={aba === 'ficha'} data-testid="casca-aba-ficha" onClick={() => setAba('ficha')}>Ficha</button>
+          </nav>
+        </>
+      )}
+      {modo === 'construcao' && (
+        <>
+          <PainelConstrucao
+            nomeMapa={mapaConstrucao?.nome ?? construcaoResumo.nome ?? 'Mapa sem nome'}
+            rev={mapaConstrucao?.rev ?? construcaoResumo.rev}
+            ehMestre={espectador}
+            membros={membros}
+            eu={eu}
+            atividades={atividadesConstrucao}
+            notas={notasConstrucao}
+            fichas={fichas}
+            baseDossie={baseFicha}
+            baseAvatar={baseAvatar}
+            podeBaixarMapa={mapaConstrucao !== null}
+            aoBaixarMapa={baixarMapaConstrucao}
+            aoAbrirSaguao={() => setSaguaoAberto(true)}
+            aoEnviarNota={texto => ponteConstrucaoRef.current?.enviarNota(texto) ?? false}
+          />
+          {!mostrarSaguao && erro !== 'sala' && (
+            <button
+              type="button"
+              class="casca-recolher-construcao"
+              data-testid="casca-recolher-construcao"
+              aria-expanded={!painelConstrucaoRecolhido}
+              aria-label={painelConstrucaoRecolhido ? 'Mostrar painel' : 'Esconder painel'}
+              title={painelConstrucaoRecolhido ? 'Mostrar painel' : 'Esconder painel'}
+              onClick={() => setPainelConstrucaoRecolhido(v => !v)}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          )}
+          <nav class="casca-abas casca-abas-construcao" role="tablist" aria-label="Seções da construção">
+            <button type="button" role="tab" aria-selected={abaConstrucao === 'editor'} data-testid="casca-aba-editor" onClick={() => setAbaConstrucao('editor')}>Editor</button>
+            <button type="button" role="tab" aria-selected={abaConstrucao === 'painel'} data-testid="casca-aba-painel" onClick={() => setAbaConstrucao('painel')}>Painel</button>
           </nav>
         </>
       )}
