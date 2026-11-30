@@ -237,6 +237,7 @@ body.atmosfera-na-casca .critical-atmosphere{display:none}
   26%{transform:scale(1.002);filter:brightness(.83);opacity:var(--pv-vignette-rest)}
   50%{transform:scale(1.006);filter:brightness(1.12);opacity:var(--pv-vignette-echo)}
   72%{transform:scale(1.001);filter:brightness(.78);opacity:var(--pv-vignette-rest)}
+}
 @keyframes critical-mental-breath{
   0%,100%{opacity:var(--pd-vignette-opacity);transform:scale(1);filter:brightness(.92) contrast(1.08)}
   50%{opacity:calc(var(--pd-vignette-opacity) + .12);transform:scale(1.012);filter:brightness(.78) contrast(1.24)}
