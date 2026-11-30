@@ -4,10 +4,12 @@ import { assinarSessao, podeMestrar, venceEm, verificarSessao, type Sessao } fro
 
 export { Sala } from './sala.ts';
 export { Diretorio } from './diretorio.ts';
+export { CofreJogador } from './cofre-jogador.ts';
 
 interface Env {
   SALA: DurableObjectNamespace;
   DIRETORIO: DurableObjectNamespace;
+  COFRE: DurableObjectNamespace;
   DISCORD_CLIENT_ID: string;
   DISCORD_CLIENT_SECRET: string;
   MESTRES_DISCORD_IDS: string;
@@ -133,7 +135,7 @@ function cors(origem: string | null): Record<string, string> {
   if (!origemPermitida(origem)) return {};
   return {
     'Access-Control-Allow-Origin': origem as string,
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     Vary: 'Origin',
   };
@@ -208,6 +210,19 @@ export default {
       if (request.method === 'GET' && url.pathname === '/sala/minhas') {
         return repassar(await diretorio(env, '/minhas', sessao.discordId), cabecalhos);
       }
+    }
+
+    // Cofre pessoal de fichas da conta: o `discordId` vem da sessão, nunca do pedido.
+    const cf = /^\/sala\/minhas-fichas(?:\/([^/]+))?$/.exec(url.pathname);
+    if (cf) {
+      const sessao = await autenticar(request, env);
+      if (!sessao) return json({ erro: 'sessão inválida' }, 401, cabecalhos);
+      const caminho = cf[1] ? `/fichas/${cf[1]}` : '/fichas';
+      const permitido = cf[1] ? ['PUT', 'DELETE'] : ['GET'];
+      if (!permitido.includes(request.method)) return json({ erro: 'método não permitido' }, 405, cabecalhos);
+      const stub = env.COFRE.get(env.COFRE.idFromName(`cofre:${sessao.discordId}`));
+      const r = await stub.fetch(`https://cofre${caminho}`, { method: request.method, body: request.method === 'PUT' ? await request.text() : undefined });
+      return repassar(r, cabecalhos);
     }
 
     const m = /^\/sala\/([^/]+)\/ws$/.exec(url.pathname);
