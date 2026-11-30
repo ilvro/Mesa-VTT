@@ -10,6 +10,7 @@ import {
   type RenderizadorMapa,
 } from '../online/mapa-inicial.ts';
 import type { FichaDaSala, ModoDaSala, ResumoConstrucao } from '../online/protocolo.ts';
+import { enderecoDoSeletor, mensagemDoSeletor, resolverEscolha } from './seletor-dossie.ts';
 import {
   nomeDaFicha,
   prepararFichasImportadas,
@@ -123,6 +124,33 @@ export function Saguao({
   const inputRef = useRef<HTMLInputElement>(null);
   const inputMapaRef = useRef<HTMLInputElement>(null);
   const [erroImport, setErroImport] = useState<string | null>(null);
+  const [seletorAberto, setSeletorAberto] = useState(false);
+  const seletorQuadro = useRef<HTMLIFrameElement>(null);
+
+  // Seletor visual do Dossiê (iframe): a ficha escolhida volta por postMessage; só vale vinda desse iframe, na mesma origem.
+  useEffect(() => {
+    if (!seletorAberto) return;
+    const ouvir = (ev: MessageEvent) => {
+      const m = mensagemDoSeletor(ev, seletorQuadro.current?.contentWindow, location.origin);
+      if (!m) return;
+      if (m.tipo === 'escolheu') {
+        const r = resolverEscolha(m.ficha, fichas);
+        setSeletorAberto(false);
+        if (r.acao === 'escolher') aoEscolher(r.id);
+        else aoImportar(prepararFichasImportadas(m.ficha, () => `sheet-${crypto.randomUUID().slice(0, 8)}`));
+      } else if (m.tipo === 'nova') {
+        setSeletorAberto(false);
+        aoNovaFicha();
+      } else if (m.tipo === 'importar-json') {
+        setSeletorAberto(false);
+        inputRef.current?.click();
+      }
+    };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setSeletorAberto(false); };
+    addEventListener('message', ouvir);
+    addEventListener('keydown', esc);
+    return () => { removeEventListener('message', ouvir); removeEventListener('keydown', esc); };
+  }, [seletorAberto, fichas, aoEscolher, aoImportar, aoNovaFicha]);
 
   // Estado do formulário "Mapa da construção" (mestre)
   const [nomeMapa, setNomeMapa] = useState('');
@@ -210,6 +238,7 @@ export function Saguao({
   const nomeConstrucaoAtual = construcao.nome || 'Mapa sem nome';
 
   return (
+    <>
     <div class="saguao" data-testid="casca-saguao" role="dialog" aria-label="Saguão da mesa" onClick={() => aoLiberarSom?.()}>
       <div class="saguao-miolo">
         <header class={`saguao-capa ${capaUrl ? 'com-imagem' : ''}`}>
@@ -278,10 +307,15 @@ export function Saguao({
               <div class="saguao-bloco-cabecalho">
                 <h2 class="faixa pequena">Seu personagem</h2>
                 <div class="saguao-acoes-ficha">
+                  {baseDossie && (
+                    <button type="button" class="botao-pilula destaque" data-testid="saguao-escolher-dossie" onClick={() => setSeletorAberto(true)}>
+                      Escolher do Dossiê
+                    </button>
+                  )}
                   <button type="button" class="botao-pilula" data-testid="saguao-nova-ficha" onClick={aoNovaFicha}>
                     Nova ficha
                   </button>
-                  <button type="button" class="botao-pilula" data-testid="saguao-importar-json" onClick={() => inputRef.current?.click()}>
+                  <button type="button" class="botao-pilula discreto" data-testid="saguao-importar-json" onClick={() => inputRef.current?.click()}>
                     Importar JSON
                   </button>
                   <input
@@ -300,7 +334,7 @@ export function Saguao({
 
               {fichas.length === 0 ? (
                 <p class="dica" data-testid="saguao-sem-fichas">
-                  Você ainda não tem fichas nesta mesa. Crie uma nova ou importe um JSON.
+                  Você ainda não tem fichas nesta mesa. Escolha uma do Dossiê, crie uma nova ou importe um JSON.
                 </p>
               ) : (
                 <ul class="saguao-fichas" data-testid="saguao-fichas">
@@ -536,5 +570,15 @@ export function Saguao({
         </div>
       </div>
     </div>
+      {seletorAberto && baseDossie && (
+        <div class="saguao-seletor" data-testid="saguao-seletor" role="dialog" aria-modal="true" aria-label="Escolher do Dossiê">
+          <div class="saguao-seletor-fundo" onClick={() => setSeletorAberto(false)} />
+          <div class="saguao-seletor-caixa">
+            <button type="button" class="saguao-seletor-fechar" data-testid="saguao-seletor-fechar" aria-label="Fechar" onClick={() => setSeletorAberto(false)}>×</button>
+            <iframe ref={seletorQuadro} class="saguao-seletor-quadro" title="Escolher do Dossiê" src={enderecoDoSeletor(baseDossie)} />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
