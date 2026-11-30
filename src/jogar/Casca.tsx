@@ -23,6 +23,8 @@ import { Saguao } from './Saguao.tsx';
 import { criarSomDaCasca, type EstadoDoSomNaCasca, type SomDaCasca } from './som.ts';
 import { lerPreferenciasDeSom } from '../online/sincronia.ts';
 import { agendarEntradaDaFicha, type FaseTelaFicha } from './fase-ficha.ts';
+import { AtmosferaCritica } from './AtmosferaCritica.tsx';
+import { atmosferaPedidaPeloDossie, batimentoDoDossie, EFEITOS_PADRAO, estadoCriticoDaFicha, type AtmosferaCritica as EstadoAtmosfera } from './atmosfera-critica.ts';
 import { dossiePronto, vistaAplicada, fichaCobreOMapa, mensagemDeVista, mensagemDoJogador, projetorPronto, vistaDaFicha, vistaPedidaPeloDossie } from './vista-ficha.ts';
 import './casca.css';
 
@@ -403,6 +405,8 @@ function Sala({
     };
   }, [salaId, sessao, emDiscord]);
 
+  const [atmosferaDoDossie, setAtmosferaDoDossie] = useState<EstadoAtmosfera | null>(null);
+  const [pulsoCritico, setPulsoCritico] = useState(0);
   // Pedido do card ("Ficha completa") e avisos de pronto do Dossiê e do projetor remoto: só dos `iframe`s da casca, na mesma origem.
   useEffect(() => {
     const ouvir = (ev: MessageEvent) => {
@@ -410,6 +414,9 @@ function Sala({
       if (pedida && !fichaProjetadaAtual.current && !projecaoVisivelAtual.current) setAberta(pedida === 'completa');
       if (vistaAplicada(ev, quadro.current?.contentWindow, location.origin)) for (const f of [...aguardandoVista.current]) f();
       if (dossiePronto(ev, quadro.current?.contentWindow, location.origin)) mandarVistaAtual.current();
+      const atm = atmosferaPedidaPeloDossie(ev, quadro.current?.contentWindow, location.origin);
+      if (atm) setAtmosferaDoDossie(atm);
+      if (batimentoDoDossie(ev, quadro.current?.contentWindow, location.origin)) setPulsoCritico(n => n + 1);
       if (projetorPronto(ev, projetorQuadro.current?.contentWindow, location.origin)) mandarJogadorAtual.current();
     };
     addEventListener('message', ouvir);
@@ -429,8 +436,14 @@ function Sala({
     papel: eu?.papel ?? 'jogador',
     personagem: meuPersonagemId,
   });
+  // Atmosfera crítica: vale o aviso do Dossiê para a ficha do jogador; antes dele (ou com o card recolhido), o estado sai da própria ficha.
+  const fichaDoJogador = meuPersonagemId ? fichas.find(f => f.id === meuPersonagemId) : undefined;
+  const atmosferaAtual: EstadoAtmosfera = atmosferaDoDossie && atmosferaDoDossie.fichaId === meuPersonagemId
+    ? atmosferaDoDossie
+    : { fichaId: meuPersonagemId, estado: estadoCriticoDaFicha(fichaDoJogador), efeitos: atmosferaDoDossie?.efeitos ?? EFEITOS_PADRAO };
   const editandoFicha = modo === 'sessao' && !projetandoFicha && (aberta || expandidaNaTela || (celular && aba === 'ficha'));
   const mostrarSaguao = erro !== 'sala' && !editandoFicha && !projetandoFicha && (saguaoAberto || saguaoObrigatorio);
+  const atmosferaVisivel = eu?.papel !== 'mestre' && !mostrarSaguao && !projetandoFicha && (atmosferaAtual.estado.pv.vignette || atmosferaAtual.estado.pd.vignette);
   const projecaoAtivaOuSaindo = (): { fichaId: string; ficha?: FichaDaSala } | null =>
     fichaProjetadaAtual.current ?? projecaoVisivelAtual.current;
   const mandarFichaAtiva = (id: string | null = meuPersonagemAtual.current) => {
@@ -752,6 +765,7 @@ function Sala({
       {(!espectador || projetandoFicha) && (
         <iframe ref={quadro} class="casca-ficha" data-testid="casca-ficha" data-vista={vista} title="Ficha" src={enderecoDoDossie(baseFicha, salaId)} onLoad={mandarVista} allow="fullscreen; autoplay" />
       )}
+      {atmosferaVisivel && <AtmosferaCritica atmosfera={atmosferaAtual} pulso={pulsoCritico} />}
       {!espectador && (
         <>
           {cobre && !projetandoFicha && <button type="button" class="casca-voltar" data-testid="casca-voltar" onClick={() => setAberta(false)}>Voltar ao mapa</button>}
