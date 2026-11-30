@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { baseDoApp } from '../app/inventario.ts';
 import { carregarSessaoOnline, iniciarLogin, sairDoOnline, sessaoOnline } from '../app/online-login.ts';
 import { conectarSala, type ClienteDaSala, type EstadoDaSala } from '../online/cliente.ts';
-import { urlDoWebSocket } from '../online/config.ts';
+import { urlDaSala, urlDoWebSocket } from '../online/config.ts';
 import type { ConfigSala, Eu, FichaDaSala, Membro, ModoDaSala, ResumoConstrucao } from '../online/protocolo.ts';
 import { enviarAberturaConstrucao } from '../online/mapa-inicial.ts';
 import { deveMostrarSaguao, estadoDoSaguao, retratoDaFicha } from '../online/saguao.ts';
@@ -754,6 +754,8 @@ function Sala({
           nomeDaSala={config?.nome ?? ''}
           capaUrl={capaUrl}
           baseDossie={baseFicha}
+          sessao={sessao}
+          baseSala={`${emDiscord ? `${location.origin}${BASE_PROXY_DISCORD}` : urlDaSala()}/sala`}
           estado={resumoSaguao}
           fichas={fichas}
           meuPersonagemId={meuPersonagemId}

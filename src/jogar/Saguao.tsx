@@ -24,6 +24,9 @@ export interface SaguaoProps {
   nomeDaSala: string;
   capaUrl: string | null;
   baseDossie?: string;
+  /** Sessão e base da API da sala: vão ao seletor do Dossiê por `postMessage` (nunca na URL) para ele ler o cofre de fichas da conta. */
+  sessao?: string;
+  baseSala?: string;
   estado: EstadoDoSaguao;
   fichas: readonly FichaDaSala[];
   meuPersonagemId: string | null;
@@ -95,6 +98,8 @@ export function Saguao({
   nomeDaSala,
   capaUrl,
   baseDossie,
+  sessao,
+  baseSala,
   estado,
   fichas,
   meuPersonagemId,
@@ -133,7 +138,11 @@ export function Saguao({
     const ouvir = (ev: MessageEvent) => {
       const m = mensagemDoSeletor(ev, seletorQuadro.current?.contentWindow, location.origin);
       if (!m) return;
-      if (m.tipo === 'escolheu') {
+      if (m.tipo === 'pronto') {
+        if (sessao && baseSala) {
+          try { seletorQuadro.current?.contentWindow?.postMessage({ tipo: 'mesa.seletor-sessao', sessao, baseSala }, location.origin); } catch { /* o seletor ainda não carregou */ }
+        }
+      } else if (m.tipo === 'escolheu') {
         const r = resolverEscolha(m.ficha, fichas);
         setSeletorAberto(false);
         if (r.acao === 'escolher') aoEscolher(r.id);
@@ -150,7 +159,7 @@ export function Saguao({
     addEventListener('message', ouvir);
     addEventListener('keydown', esc);
     return () => { removeEventListener('message', ouvir); removeEventListener('keydown', esc); };
-  }, [seletorAberto, fichas, aoEscolher, aoImportar, aoNovaFicha]);
+  }, [seletorAberto, fichas, sessao, baseSala, aoEscolher, aoImportar, aoNovaFicha]);
 
   // Estado do formulário "Mapa da construção" (mestre)
   const [nomeMapa, setNomeMapa] = useState('');
