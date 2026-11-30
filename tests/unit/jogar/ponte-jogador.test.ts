@@ -113,6 +113,21 @@ test('o estado comprimido é descomprimido antes de postar (blob antes ou depois
   assert.equal((vistos[1] as { versao: number }).versao, 8);
 });
 
+test('latest wins: com o 1º estado esperando o blob, o 2º é pulado, o 3º é entregue, e a câmera no meio fica', async () => {
+  const { emitir, chegouBlob, ponte, vistos } = montar();
+  const doc = { tipo: 'estado', doc: { id: 'grande', nome: 'x'.repeat(50) } };
+  const ref = (v: number) => ({ tipo: 'canal' as const, nome: 'atlas:projetor:remoto', msg: { tipo: 'estado', blobId: `estado:grande:${v}`, versao: v, comprimido: true } });
+  emitir(ref(1));
+  emitir(ref(2));
+  emitir({ tipo: 'canal', nome: 'atlas:projetor:remoto', msg: { tipo: 'camera', caixa: { x0: 0, y0: 0, x1: 1, y1: 1 } } });
+  emitir(ref(3));
+  chegouBlob('estado:grande:1', await comprimirEstado({ ...doc, versao: 1 }));
+  chegouBlob('estado:grande:2', await comprimirEstado({ ...doc, versao: 2 }));
+  chegouBlob('estado:grande:3', await comprimirEstado({ ...doc, versao: 3 }));
+  await ponte.esvaziar();
+  assert.deepEqual(vistos.map(v => `${(v as { tipo: string }).tipo}${(v as { versao?: number }).versao ?? ''}`), ['estado1', 'camera', 'estado3']);
+});
+
 test('o ultimoEstado do bem-vindo também chega, e um "ola" do projetor recebe o último estado e a câmera', async () => {
   const { emitir, ponte, vistos, projetor, enviadas } = montar();
   emitir({ tipo: 'bem-vindo', eu, membros: [], fichas: [], ultimoEstado: { 'atlas:projetor:remoto': { tipo: 'estado', doc: { id: 'm' }, versao: 2 } } });

@@ -156,7 +156,10 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
   }
 
   /** Um de cada vez, na ordem em que chegaram: uma mensagem que espera um blob segura as seguintes (a ordem importa: `estado` antes de `camera`). */
-  let fila: Promise<void> = Promise.resolve();
+  const filaEntrada: unknown[] = [];
+  let drenagem: Promise<void> | null = null;
+  /** Blobs de `estado` descartados por um mais novo: se ainda não chegaram, ao chegar não ficam guardados. */
+  const blobsDescartados = new Set<string>();
   async function entregar(msg: unknown): Promise<void> {
     if (ehObj(msg) && msg.tipo === 'encerrado') {
       ultimoEstado = null; ultimaCamera = null; ultimoControle = null; ultimaVisaoRemota = null; ultimosRetratos.clear();
@@ -189,7 +192,33 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
     else if (tipo === 'retrato' && typeof (pronta as Obj).id === 'string') ultimosRetratos.set((pronta as Obj).id as string, pronta);
     projetor.postMessage(pronta);
   }
-  const enfileirar = (msg: unknown): void => { fila = fila.then(() => entregar(msg)).catch(() => { /* uma mensagem ruim não para a fila */ }); };
+  const ehEstado = (m: unknown): m is Obj => ehObj(m) && m.tipo === 'estado';
+  /** O mapa do `estado`: o `doc.id`, ou, no comprimido, o que está entre `estado:` e a versão no `blobId`. */
+  const mapaDoEstado = (m: Obj): string | null => {
+    if (ehObj(m.doc) && typeof m.doc.id === 'string') return m.doc.id;
+    if (typeof m.blobId === 'string' && m.blobId.startsWith('estado:')) return m.blobId.slice(7, m.blobId.lastIndexOf(':'));
+    return null;
+  };
+  async function drenar(): Promise<void> {
+    while (filaEntrada.length > 0) {
+      const m = filaEntrada.shift();
+      try { await entregar(m); } catch { /* uma mensagem ruim não para a fila */ }
+    }
+    drenagem = null;                                           // na mesma volta em que esvaziou: nada novo fica sem laço
+  }
+  /** Só o `estado` mais novo importa: os que esperam, sem ter começado, são descartados (câmera, controle, visão e retrato ficam, na ordem). */
+  const enfileirar = (msg: unknown): void => {
+    if (ehEstado(msg)) {
+      for (let i = filaEntrada.length - 1; i >= 0; i--) {
+        const antigo = filaEntrada[i];
+        if (!ehEstado(antigo) || mapaDoEstado(antigo) !== mapaDoEstado(msg)) continue;
+        filaEntrada.splice(i, 1);
+        if (typeof antigo.blobId === 'string') { if (blobs.has(antigo.blobId)) blobs.delete(antigo.blobId); else blobsDescartados.add(antigo.blobId); }
+      }
+    }
+    filaEntrada.push(msg);
+    drenagem ??= drenar();
+  };
 
   // O projetor local fala `ola` enquanto não tem mapa; o `BroadcastChannel` não guarda mensagens, então a ponte reenvia o último estado e a câmera.
   // Nenhuma `MensagemDoProjetor` sai para a sala, exceto `pedir-retrato` (quando o retrato ainda não está na ponte) e `alternar-porta`.
@@ -282,6 +311,7 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
       else if (ultimaProjecaoFicha !== null) enfileirar({ tipo: 'projetar-ficha', fichaId: null });
     }),
     cliente.ouvirBlob((id, b) => {
+      if (blobsDescartados.delete(id)) return;                  // era de um `estado` superado
       blobs.set(id, b);
       for (const f of [...(esperando.get(id) ?? [])]) f(b);
       for (const [rid, bid] of retratoBlobIds) {
@@ -296,7 +326,7 @@ export function criarPonteDoJogador(o: OpcoesDaPonteDoJogador): PonteDoJogador {
 
   return {
     get temMapa() { return temMapa; },
-    esvaziar: async () => { let atual; do { atual = fila; await atual; } while (atual !== fila); },
+    esvaziar: async () => { while (drenagem) await drenagem; },
     fechar() {
       fechada = true;
       for (const f of soltar) f();
