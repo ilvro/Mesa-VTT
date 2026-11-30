@@ -26,6 +26,8 @@ function clienteFalso() {
   const tamanhos = new Map<string, number>();
   /** A ordem em que as coisas saíram: `blob:<id>` e `evento:<tipo>`. */
   const ordem: string[] = [];
+  /** Enquanto houver um bloqueio, `enviarBlob` espera por ele (para segurar um estado em andamento). */
+  let bloqueio: Promise<void> | null = null;
   const c = {
     estado: 'aberta' as const,
     enviar(m: MensagemParaSala) {
@@ -35,12 +37,13 @@ function clienteFalso() {
     },
     ouvir(tipo: string, f: (m: never) => void) { ouvintes.set(tipo, [...(ouvintes.get(tipo) ?? []), f]); return () => {}; },
     aoMudarEstado() { return () => {}; },
-    async enviarBlob(id: string, blob: Blob) { blobs.push({ id, blob }); ordem.push(`blob:${id}`); return true; },
+    async enviarBlob(id: string, blob: Blob) { if (bloqueio) await bloqueio; blobs.push({ id, blob }); ordem.push(`blob:${id}`); return true; },
     ouvirBlob() { return () => {}; },
     fechar() {},
   };
   const emitir = (m: MensagemDaSala) => { for (const f of ouvintes.get(m.tipo) ?? []) f(m as never); };
-  return { cliente: c as unknown as ClienteDaSala, enviadas, blobs, emitir, salaTem, tamanhos, ordem };
+  const segurarBlobs = (): (() => void) => { let liberar!: () => void; bloqueio = new Promise<void>(r => { liberar = () => { bloqueio = null; r(); }; }); return liberar; };
+  return { cliente: c as unknown as ClienteDaSala, enviadas, blobs, emitir, salaTem, tamanhos, ordem, segurarBlobs };
 }
 
 const eu = { discordId: '1', nome: 'Mestre', papel: 'mestre' as const };
@@ -204,6 +207,22 @@ test('um estado de 3 MB vira blob gzip estado:<mapa>:<versao>, o canal leva só 
   assert.equal(blobs.length, 1);
   assert.equal(blobs[0]!.id, 'estado:mapa-grande:5');
   assert.deepEqual(await descomprimirEstado(blobs[0]!.blob), estado);
+});
+
+test('latest wins: com um estado grande em andamento, três estados em seguida comprimem e sobem só o primeiro e o último', async () => {
+  const { atlas, enviadas, blobs, ponte, segurarBlobs } = montar();
+  const grande = 'x'.repeat(400 * 1024);
+  const estado = (versao: number) => ({ tipo: 'estado', doc: { id: 'mapa-grande', grande, session: { explored: null } }, versao });
+  const liberar = segurarBlobs();
+  atlas.postMessage(estado(1));
+  atlas.postMessage(estado(2));
+  atlas.postMessage({ tipo: 'camera', caixa: { x0: 0, y0: 0, x1: 1, y1: 1 } });
+  atlas.postMessage(estado(3));
+  liberar();
+  await ponte.esvaziar();
+  assert.deepEqual(blobs.map(b => b.id), ['estado:mapa-grande:1', 'estado:mapa-grande:3']);
+  const tipos = enviadas.map(m => (m as { msg: { tipo: string } }).msg.tipo);
+  assert.deepEqual(tipos, ['estado', 'camera', 'estado'], 'a câmera fica; o estado do meio some');
 });
 
 test('estado abaixo do limite não é comprimido; emGesto nunca é', async () => {

@@ -142,7 +142,9 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
   /** Mapas sem névoa à espera, com o último `estado` retido de cada um. */
   const pendentes = new Map<string, { nome: string; retido: Record<string, unknown> | null }>();
   const enviados = new Set<string>();
-  let fila: Promise<void> = Promise.resolve();
+  /** Saída para o projetor remoto: uma lista drenada por um laço só. Um `estado` novo toma o lugar dos que ainda não começaram (latest wins). */
+  const filaItens: unknown[] = [];
+  let drenagem: Promise<void> | null = null;
   let fechada = false;
   const estado: EstadoDaPonte = { membros: [], fichas: [], semNevoa: [], publicando: false, sons: SONS_VAZIOS };
 
@@ -440,7 +442,27 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
     cancelarOuvir = agendar(repetirOuvir, INTERVALO_OUVIR_MS);
   }
 
-  const enfileirar = (data: unknown): void => { fila = fila.then(() => sairProjetor(data)).catch(() => { /* um quadro perdido não para a fila */ }); };
+  const ehEstado = (d: unknown): d is { tipo: 'estado'; emGesto?: unknown; doc?: unknown } => !!d && typeof d === 'object' && (d as { tipo?: unknown }).tipo === 'estado';
+  /** De que mapa é o `estado` (para só trocar um estado por outro do mesmo mapa). */
+  const mapaDoEstado = (d: { doc?: unknown }): string | null => (d.doc && typeof d.doc === 'object' && typeof (d.doc as { id?: unknown }).id === 'string' ? (d.doc as { id: string }).id : null);
+  async function drenar(): Promise<void> {
+    while (filaItens.length > 0) {
+      const d = filaItens.shift();
+      try { await sairProjetor(d); } catch { /* um quadro perdido não para a fila */ }
+    }
+    drenagem = null;                                           // na mesma volta em que a fila esvaziou: nenhum item novo fica sem laço
+  }
+  const enfileirar = (data: unknown): void => {
+    if (ehEstado(data)) {
+      // Um estado de gesto não derruba um firme que espera; um firme derruba qualquer estado anterior.
+      for (let i = filaItens.length - 1; i >= 0; i--) {
+        const antigo = filaItens[i];
+        if (ehEstado(antigo) && mapaDoEstado(antigo) === mapaDoEstado(data) && (data.emGesto !== true || antigo.emGesto === true)) filaItens.splice(i, 1);
+      }
+    }
+    filaItens.push(data);
+    drenagem ??= drenar();
+  };
   const enviarGesto = (data: unknown): void => {
     if (fechada || !data || typeof data !== 'object') return;
     const m = data as Record<string, unknown>;
@@ -640,14 +662,14 @@ export function criarPonte(o: OpcoesDaPonte): Ponte {
 
   return {
     estado,
-    esvaziar: async () => { await fila; while (somRodando) await somRodando; },
+    esvaziar: async () => { while (drenagem) await drenagem; while (somRodando) await somRodando; },
     confirmarSemNevoa(mapa) {
       lembrar(mapa);
       const p = pendentes.get(mapa);
       if (!p) return;
       pendentes.delete(mapa);
       mudou();
-      if (p.retido) { const retido = p.retido; fila = fila.then(() => sairProjetor(retido)).catch(() => { /* idem */ }); }
+      if (p.retido) enfileirar(p.retido);
     },
     fechar() {
       if (fechada) return;
