@@ -131,14 +131,18 @@ export function Saguao({
   const [erroImport, setErroImport] = useState<string | null>(null);
   const [seletorAberto, setSeletorAberto] = useState(false);
   const seletorQuadro = useRef<HTMLIFrameElement>(null);
+  const [seletorPronto, setSeletorPronto] = useState(false);
+  const [seletorDemora, setSeletorDemora] = useState(false);
 
   // Seletor visual do Dossiê (iframe): a ficha escolhida volta por postMessage; só vale vinda desse iframe, na mesma origem.
   useEffect(() => {
-    if (!seletorAberto) return;
+    if (!seletorAberto) { setSeletorPronto(false); setSeletorDemora(false); return; }
+    const espera = setTimeout(() => setSeletorDemora(true), 6000);
     const ouvir = (ev: MessageEvent) => {
       const m = mensagemDoSeletor(ev, seletorQuadro.current?.contentWindow, location.origin);
       if (!m) return;
       if (m.tipo === 'pronto') {
+        setSeletorPronto(true);
         if (sessao && baseSala) {
           try { seletorQuadro.current?.contentWindow?.postMessage({ tipo: 'mesa.seletor-sessao', sessao, baseSala }, location.origin); } catch { /* o seletor ainda não carregou */ }
         }
@@ -158,7 +162,7 @@ export function Saguao({
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setSeletorAberto(false); };
     addEventListener('message', ouvir);
     addEventListener('keydown', esc);
-    return () => { removeEventListener('message', ouvir); removeEventListener('keydown', esc); };
+    return () => { clearTimeout(espera); removeEventListener('message', ouvir); removeEventListener('keydown', esc); };
   }, [seletorAberto, fichas, sessao, baseSala, aoEscolher, aoImportar, aoNovaFicha]);
 
   // Estado do formulário "Mapa da construção" (mestre)
@@ -585,6 +589,11 @@ export function Saguao({
           <div class="saguao-seletor-caixa">
             <button type="button" class="saguao-seletor-fechar" data-testid="saguao-seletor-fechar" aria-label="Fechar" onClick={() => setSeletorAberto(false)}>×</button>
             <iframe ref={seletorQuadro} class="saguao-seletor-quadro" title="Escolher do Dossiê" src={enderecoDoSeletor(baseDossie)} />
+            {!seletorPronto && (
+              <p class="saguao-seletor-aviso" data-testid="saguao-seletor-aviso" role="status">
+                {seletorDemora ? 'O Dossiê não respondeu. Feche e tente de novo, ou use "Nova ficha" / "Importar JSON".' : 'Abrindo o Dossiê…'}
+              </p>
+            )}
           </div>
         </div>
       )}
