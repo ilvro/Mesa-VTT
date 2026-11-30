@@ -17,7 +17,12 @@ interface Env {
 }
 
 /** `redirect_uri` aceitos no fluxo web (o da atividade do Discord não leva `redirect_uri`). */
-const REDIRECTS_PERMITIDOS = ['https://ilvro.github.io/Mesa-VTT/', 'http://127.0.0.1:5100/Mesa/'];
+const REDIRECTS_PERMITIDOS = [
+  'https://ilvro.github.io/Mesa-VTT/',
+  'http://127.0.0.1:5100/Mesa/',
+  'https://ilvro.github.io/Dossie/',
+  'http://127.0.0.1:5100/Dossie/',
+];
 
 function json(corpo: unknown, status: number, cabecalhos: Record<string, string>): Response {
   return new Response(JSON.stringify(corpo), {
