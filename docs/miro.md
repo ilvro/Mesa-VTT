@@ -4,9 +4,14 @@ A Mesa importa quadros do Miro a partir de um pacote `.miro.zip` gerado localmen
 
 ## 1. Gerar um token de leitura no Miro
 
-1. Acesse [miro.com/app/settings/user-profile/apps](https://miro.com/app/settings/user-profile/apps) e crie um aplicativo de desenvolvedor.
-2. Em **Permissions**, marque a permissão **`boards:read`**.
-3. Clique em **Install app and get OAuth token** e copie o token gerado.
+O token não sai de "Aplicativos" (a loja de apps do Miro): ele vem de um **app de desenvolvedor** que você mesmo cria. Passos (conferidos na documentação do Miro em 25/11/2026):
+
+1. **Time de desenvolvedor** (só na primeira vez): abra [miro.com/app/dashboard/?createDevTeam=1](https://miro.com/app/dashboard/?createDevTeam=1), aceite os termos e clique em **Create team**. É um time à parte, de testes; seus quadros não mudam de lugar.
+2. **Criar o app:** clique no seu avatar → **Settings** → aba **Your apps** → **+ Create new app**. Dê um nome (ex.: "Mesa") e **deixe desmarcado** "Expire user authorization token" (com ele, o token vence em 1 hora). Clique em **Create app**.
+3. **Permissão:** na página do app, em **Permissions**, marque **`boards:read`** (o manifesto chama de `board:read`).
+4. **Token:** no fim da página do app, clique em **Install app and get OAuth token**, escolha o time em **Select a team** e clique em **Install & authorize**. Copie o token mostrado.
+
+O app é instalado no time escolhido no passo 4. Para ler um quadro de outro time, instale o app também nesse time (repita o passo 4 escolhendo o outro time); se o token não tiver acesso ao quadro, a Mesa avisa "token inválido ou sem acesso ao quadro".
 
 ## 2. Contar os itens do quadro (opcional)
 

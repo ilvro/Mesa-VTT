@@ -24,11 +24,27 @@ export function DialogoTokenMiro() {
         <p class="meta">
           Com o token, as imagens coladas do Miro chegam com o arquivo. Ele fica só neste aparelho: não vai para o
           banco, para as exportações nem para a sala online.{' '}
-          <a href="https://miro.com/app/settings/user-profile/apps" target="_blank" rel="noreferrer">
-            Gerar um token no Miro
-          </a>{' '}
-          (permissão de leitura; passo 1 de <code>docs/miro.md</code>).
         </p>
+        <ol class="meta">
+          <li>
+            Na primeira vez, crie um time de desenvolvedor:{' '}
+            <a href="https://miro.com/app/dashboard/?createDevTeam=1" target="_blank" rel="noreferrer">
+              abrir no Miro
+            </a>{' '}
+            → <b>Create team</b>.
+          </li>
+          <li>
+            Avatar → <b>Settings</b> → <b>Your apps</b> → <b>+ Create new app</b>. Deixe desmarcado “Expire user
+            authorization token”.
+          </li>
+          <li>
+            Na página do app, em <b>Permissions</b>, marque <code>boards:read</code>.
+          </li>
+          <li>
+            No fim da página, <b>Install app and get OAuth token</b> → escolha o time → <b>Install &amp; authorize</b>,
+            e cole o token aqui.
+          </li>
+        </ol>
         <input
           type="password"
           class="campo-inline"
