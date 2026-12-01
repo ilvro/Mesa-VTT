@@ -5,7 +5,7 @@ import { semAcento } from '../dominio/entidades.ts';
 import { textoBuscavel } from '../dominio/busca-quadro.ts';
 import { mapaDoQuadro } from '../dominio/mapa-do-quadro.ts';
 import type { PaletaDaCampanha } from '../dominio/paleta.ts';
-import { ESPACO_VERTICAL_PADRAO, MAX_ITENS_POR_INSERCAO, montarInsercao, posicionarEmColuna, type AlvoDaColuna, type ItemPedido } from '../dominio/insercao-quadro.ts';
+import { ESPACO_VERTICAL_PADRAO, MAX_ITENS_POR_INSERCAO, montarInsercao, montarSetas, posicionarEmColuna, posicionarImagensAoLado, type AlvoDaColuna, type ImagemResolvida, type ItemPedido, type PedidoDeSeta } from '../dominio/insercao-quadro.ts';
 import { MAX_NOTAS_POR_PROPOSTA, MAX_TEXTO_DA_NOTA, montarProposta, posicaoLivre, tamanhoDaProposta } from '../dominio/proposta-quadro.ts';
 import { TIPOS_SEMANTICOS, type Item, type Quadro } from '../dominio/quadro.ts';
 import {
@@ -41,6 +41,8 @@ export interface ContextoDeQuadros {
   criarItens(quadroId: string, itens: Item[], rotulo: string, mover?: { id: string; dy: number }[]): Promise<void>;
   /** Altura (px) que o texto do item precisa, com as regras do render; sem isto, `quadro_inserir` estima pelo tamanho do texto. */
   medirTexto?(item: Extract<Item, { tipo: 'texto' }>): number;
+  /** O retrato da entidade copiado para o banco de imagens do quadro; null se ela não tem retrato. Sem isto, `entidade:` em `quadro_inserir` não é suportado. */
+  retratoDaEntidade?(entidadeId: string): Promise<ImagemResolvida | null>;
   /** Paleta da campanha (cores por tipo); padrão se ausente. */
   paleta?(): PaletaDaCampanha;
   /** A região do quadro como JPEG (data URL), com o maior lado em `lado` px; sem isto, `quadro_ver_regiao` avisa que não há captura. */
@@ -361,7 +363,7 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
     },
     {
       nome: 'quadro_inserir',
-      descricao: 'Insere texto, títulos ou notas soltos no quadro, no estilo do mestre, numa coluna: abaixo_de (#id ou seção) ou ao_lado_de (seção). Para montar, transcrever ou continuar material; para ideias em post-its numa moldura, use quadro_propor. Confira depois com quadro_ver_regiao. Ctrl+Z desfaz.',
+      descricao: 'Insere texto, títulos, notas, imagens do quadro ou retratos e setas, no estilo do mestre, numa coluna: abaixo_de (#id ou seção) ou ao_lado_de (seção). Para montar, transcrever ou continuar material; para ideias em post-its numa moldura, use quadro_propor. Confira depois com quadro_ver_regiao. Ctrl+Z desfaz.',
       esquema: {
         type: 'object',
         properties: {
@@ -374,7 +376,9 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
             items: {
               type: 'object',
               properties: {
-                formato: { type: 'string', enum: ['texto', 'titulo', 'nota'], description: 'texto (corpo), titulo ou nota (post-it).' },
+                formato: { type: 'string', enum: ['texto', 'titulo', 'nota', 'imagem'], description: 'texto (corpo), titulo, nota (post-it) ou imagem.' },
+                de: { type: 'string', description: 'Só imagem: #id de imagem do quadro ou entidade:<nome ou id> (retrato).' },
+                lado: { type: 'string', enum: ['direita', 'esquerda'], description: 'Só imagem: ao lado do texto anterior, sem ocupar altura; sem lado, na coluna.' },
                 texto: { type: 'string', description: 'O texto; ou use paragrafos.' },
                 paragrafos: {
                   type: 'array',
@@ -383,9 +387,24 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
                 },
                 estilo_como: { type: 'string', description: '#id do item de texto cujo estilo copiar (quadro_estilo).' },
                 tipo: { type: 'string', enum: [...TIPOS_SEMANTICOS], description: 'Tipo semântico; opcional, sem cor com estilo.' },
-                largura: { type: 'number', description: 'Largura em px; padrão: a do estilo.' },
+                largura: { type: 'number', description: 'Largura em px; padrão: a do estilo (imagem: mediana das imagens).' },
               },
               required: ['formato'],
+              additionalProperties: false,
+            },
+          },
+          setas: {
+            type: 'array',
+            maxItems: 40,
+            description: 'Setas entre itens, no estilo das do mestre.',
+            items: {
+              type: 'object',
+              properties: {
+                de: { type: ['integer', 'string'], description: 'Índice (de 0) de um item novo ou #id existente.' },
+                para: { type: ['integer', 'string'], description: 'Índice (de 0) de um item novo ou #id existente.' },
+                rotulo: { type: 'string', description: 'Texto sobre a seta; opcional.' },
+              },
+              required: ['de', 'para'],
               additionalProperties: false,
             },
           },
@@ -418,7 +437,23 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
         }
         const paleta = ctx.paleta?.();
         const medir = ctx.medirTexto ?? estimarAltura;
-        const insercao = montarInsercao((Array.isArray(args.itens) ? args.itens : []) as ItemPedido[], {
+        const pedidos = (Array.isArray(args.itens) ? args.itens : []) as ItemPedido[];
+        // Retratos de entidade: resolvidos aqui (assíncrono) e entregues ao domínio já guardados no banco de imagens.
+        const retratos = new Map<string, ImagemResolvida>();
+        for (const p of pedidos) {
+          const de = p && p.formato === 'imagem' && typeof p.de === 'string' ? p.de.trim() : '';
+          if (!/^entidade:/i.test(de) || retratos.has(de)) continue;
+          const chave = de.slice(de.indexOf(':') + 1).trim();
+          if (!chave) throw new Error('Informe o nome ou id da entidade em entidade:<nome ou id>.');
+          if (!ctx.entidades || !ctx.retratoDaEntidade) throw new Error('Retrato de entidade ainda não suportado aqui; use o #id de uma imagem do quadro.');
+          const lista = [...(await ctx.entidades()).entries()].map(([id, e]) => ({ id, nome: e.nome }));
+          const ent = escolher(lista, chave, x => x.id, x => x.nome, 'Entidade', () => `Há ${lista.length} entidades na campanha.`);
+          const img = await ctx.retratoDaEntidade(ent.id);
+          if (!img) throw new Error(`A entidade "${ent.nome}" não tem retrato.`);
+          retratos.set(de, { ...img, nome: ent.nome });
+        }
+        const insercao = montarInsercao(pedidos, {
+          retratos,
           quadroId: c.quadro.id,
           itens: c.itens,
           ...(secao ? { secao } : {}),
@@ -428,15 +463,29 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
           ...(paleta ? { paleta } : {}),
         });
         const espaco = (secao ? estiloDoQuadro(c.itens, secao)?.espacoVertical : null) || ESPACO_VERTICAL_PADRAO;
-        const pos = posicionarEmColuna(insercao.itens.map(i => i.altura), insercao.itens.map(i => i.largura), c.itens, alvo, espaco, { abrirEspaco: args.abrir_espaco === true, secoes: c.secoes });
-        insercao.itens.forEach((it, k) => { it.x = pos.posicoes[k]!.x; it.y = pos.posicoes[k]!.y; });
-        await ctx.criarItens(c.quadro.id, insercao.itens, `Inserção do assistente (${insercao.itens.length})`, pos.empurrar);
+        // As imagens com `lado` não entram na coluna: ficam ao lado do texto anterior, sem ocupar altura.
+        const naColuna = insercao.itens.filter((_, k) => insercao.lados[k] === null);
+        if (naColuna.length === 0) throw new Error('A imagem com lado precisa de um item de texto antes dela na mesma chamada.');
+        const pos = posicionarEmColuna(naColuna.map(i => i.altura), naColuna.map(i => i.largura), c.itens, alvo, espaco, { abrirEspaco: args.abrir_espaco === true, secoes: c.secoes });
+        let proxima = 0;
+        const dasColunas = insercao.itens.map((_, k) => (insercao.lados[k] === null ? pos.posicoes[proxima++]! : null));
+        const finais = posicionarImagensAoLado(insercao.itens, insercao.lados, dasColunas, c.itens, pos.empurrar);
+        insercao.itens.forEach((it, k) => { it.x = finais[k]!.x; it.y = finais[k]!.y; });
+        const pedidosDeSeta = (args.setas === undefined ? [] : args.setas) as PedidoDeSeta[];
+        const setas = montarSetas(pedidosDeSeta, { quadroId: c.quadro.id, itens: c.itens, novos: insercao.itens, agora: Date.now(), novoId: () => crypto.randomUUID() });
+        await ctx.criarItens(c.quadro.id, [...insercao.itens, ...setas], `Inserção do assistente (${insercao.itens.length + setas.length})`, pos.empurrar);
         const naTela = ctx.aberto()?.quadro.id === c.quadro.id;
         const criados = insercao.itens.map(i => `#${i.id.slice(0, 6)}`);
+        const minX = Math.min(...finais.map(p => p.x));
+        const minY = Math.min(...finais.map(p => p.y));
+        const maxX = Math.max(...insercao.itens.map((i, k) => finais[k]!.x + i.largura));
+        const maxY = Math.max(pos.caixa.y + pos.caixa.altura, ...insercao.itens.map((i, k) => finais[k]!.y + i.altura));
+        const caixa = { x: minX, y: minY, largura: maxX - minX, altura: maxY - minY };
         return [json({
           criados,
+          ...(setas.length > 0 ? { setas: setas.map(s => `#${s.id.slice(0, 6)}`) } : {}),
           empurrados: pos.empurrar.length,
-          caixa: { x: Math.round(pos.caixa.x), y: Math.round(pos.caixa.y), largura: Math.round(pos.caixa.largura), altura: Math.round(pos.caixa.altura) },
+          caixa: { x: Math.round(caixa.x), y: Math.round(caixa.y), largura: Math.round(caixa.largura), altura: Math.round(caixa.altura) },
           desfazer: naTela ? 'Ctrl+Z na tela do quadro (um passo só)' : 'sem histórico (quadro fechado); o mestre apaga pela fila de revisão',
           conferir: 'Chame quadro_ver_regiao com itens = criados para ver o resultado.',
         })];

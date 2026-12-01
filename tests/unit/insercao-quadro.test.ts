@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { montarInsercao, marcasPredominantes, posicionarEmColuna, type ItemPedido } from '../../src/dominio/insercao-quadro.ts';
+import { montarInsercao, montarSetas, marcasPredominantes, posicionarEmColuna, posicionarImagensAoLado, type ItemPedido } from '../../src/dominio/insercao-quadro.ts';
 import { PALETA_PADRAO } from '../../src/dominio/paleta.ts';
 import type { DocRico, Item, NoRico } from '../../src/dominio/quadro.ts';
 import {
@@ -9,6 +9,7 @@ import {
   novaImagem,
   novaMoldura,
   novaNotaAdesiva,
+  novaSeta,
   normalizarDoc,
   validarItem,
 } from '../../src/dominio/quadro.ts';
@@ -190,7 +191,8 @@ test('erros: limites, vazio, tipo inválido, imagem', () => {
   assert.throws(() => montarInsercao([{ formato: 'texto', texto: '  ' }], o()), /sem texto/);
   assert.throws(() => montarInsercao([{ formato: 'texto', paragrafos: [{ texto: ' ' }] }], o()), /parágrafo 1 do item 1 está vazio/);
   assert.throws(() => montarInsercao([{ formato: 'texto', texto: 'a', tipo: 'xyz' as never }], o()), /Tipo "xyz" inválido/);
-  assert.throws(() => montarInsercao([{ formato: 'imagem', de: '#it-img1' }], o()), /ainda não suportado/);
+  assert.throws(() => montarInsercao([{ formato: 'imagem', de: '#it-dd3' }], o()), /não uma imagem/);
+  assert.throws(() => montarInsercao([{ formato: 'imagem', de: 'entidade:Ninguém' }], o()), /retrato.*não está disponível/);
 });
 
 // Q9e: posição em coluna.
@@ -256,4 +258,55 @@ test('coluna: alvos inválidos dão erro legível', () => {
   const itens = [...coluna(), novaMoldura({ quadroId: Q, x: 0, y: 0, largura: 10, altura: 10, titulo: 'M' }, 1, 'mold')];
   assert.throws(() => posicionarEmColuna([10], [10], itens, { abaixoDe: por(itens, 'mold') }, 24), /moldura/);
   assert.throws(() => posicionarEmColuna([], [], itens, { abaixoDe: por(itens, 'it-dd3') }, 24), /Nada a posicionar/);
+});
+
+
+// Q9f: imagens e setas.
+test('imagem: largura padrão é a mediana das imagens do mestre na seção, proporção original', () => {
+  const itens = [
+    ...coluna(),
+    novaImagem({ quadroId: Q, x: 1500, y: 2300, imagemId: 'i2', larguraOriginal: 400, alturaOriginal: 400, largura: 200, altura: 200 }, 1, 'it-img2'),
+  ];
+  const secao = secoesDoQuadro(itens)[0]!;
+  const r = montarInsercao([{ formato: 'imagem', de: '#it-img1', lado: 'direita' }], opcoes(itens, { secao }));
+  const img = r.itens[0]!;
+  assert.equal(img.tipo, 'imagem');
+  assert.equal(img.largura, 200);
+  assert.equal(img.altura, 150);
+  assert.deepEqual(r.lados, ['direita']);
+  assert.equal(img.tipo === 'imagem' && img.imagemId, 'i1');
+});
+
+test('imagem ao lado: alinhada pelo topo do texto anterior, a 24 px, e recusa obstáculo', () => {
+  const itens = coluna();
+  const pedidos: ItemPedido[] = [{ formato: 'texto', texto: 'Aldric' }, { formato: 'imagem', de: '#it-img1', lado: 'esquerda', largura: 100 }];
+  const { itens: novos, lados } = montarInsercao(pedidos, opcoes(itens));
+  const f = posicionarImagensAoLado(novos, lados, [{ x: 1000, y: 2500 }, null], itens);
+  assert.deepEqual(f[1], { x: 1000 - 24 - 100, y: 2500 });
+  // À direita bateria na imagem existente (x 1500..1700, y 2100..2250) se o texto estivesse perto dela.
+  const perto = montarInsercao([{ formato: 'texto', texto: 'x', largura: 400 }, { formato: 'imagem', de: '#it-img1', lado: 'direita' }], opcoes(itens));
+  assert.throws(() => posicionarImagensAoLado(perto.itens, perto.lados, [{ x: 1000, y: 2100 }, null], itens), /bateria em #it-img\./);
+});
+
+test('setas: estilo da mais comum do mestre; pontas por índice e #id; erros legíveis', () => {
+  const mestre = (id: string, cor: string) => ({ ...novaSeta({ quadroId: Q, de: { itemId: 'it-dd3', lado: 'auto' }, para: { itemId: 'it-fala1', lado: 'auto' }, cor, espessura: 4, rota: 'reta' }, 1, id), fim: 'triangulo' as const }) as Item;
+  const itens = [...coluna(), mestre('s1', '#ff0000'), mestre('s2', '#ff0000'), mestre('s3', '#00ff00')];
+  const novos = montarInsercao([{ formato: 'texto', texto: 'novo' }], opcoes(itens)).itens;
+  novos[0]!.x = 1000; novos[0]!.y = 2600;
+  const [s] = montarSetas([{ de: 0, para: '#it-fala1', rotulo: ' x ' }], { quadroId: Q, itens, novos, agora: 7, novoId: () => 'seta-n' });
+  assert.equal(s!.cor, '#ff0000');
+  assert.equal(s!.espessura, 4);
+  assert.equal(s!.rota, 'reta');
+  assert.equal(s!.fim, 'triangulo');
+  assert.equal(s!.rotulo, 'x');
+  assert.equal(s!.revisao?.origem, 'assistente');
+  assert.deepEqual(s!.de, { itemId: novos[0]!.id, lado: 'auto' });
+  const comOpcoes = { quadroId: Q, itens, novos, agora: 7, novoId: () => 'seta-n' };
+  assert.throws(() => montarSetas([{ de: 3, para: 0 }], comOpcoes), /índice 3 não existe/);
+  assert.throws(() => montarSetas([{ de: 0, para: '#s1' }], comOpcoes), /é uma seta/);
+  assert.throws(() => montarSetas([{ de: 0, para: '#nada' }], comOpcoes), /não encontrado/);
+  // Sem seta do mestre, vale o padrão de novaSeta.
+  const padrao = montarSetas([{ de: 0, para: '#it-fala1' }], { ...comOpcoes, itens: coluna() })[0]!;
+  assert.equal(padrao.rota, 'curva');
+  assert.equal(padrao.fim, 'seta');
 });

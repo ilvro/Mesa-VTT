@@ -5,7 +5,7 @@ import { abrirAplicativo } from './aplicativos.ts';
 import { alternarEncontroDaCena, alterarEntidade, atualizar, campanhaAtiva, campanhas, criarCampanha, criarEntidade, definirMomentoDaCena, ligarRefs, obterRepositorio, salvarElencoDaCampanha, vincularMapaNaCena, vincularParticipanteNaCena, vincularPistaNaCena, vincularTrilhaNaCena } from './campanha.ts';
 import { ferramentasDaMesa } from './ponte-ferramentas.ts';
 import { momentosDoMapaDoAtlas } from './momentos-do-atlas.ts';
-import { gravarItens, listarItens, listarQuadros, listarResumos } from './banco-quadros.ts';
+import { gravarItens, guardarImagem, listarItens, listarQuadros, listarResumos } from './banco-quadros.ts';
 import { gravarResumo } from './resumos-quadro.ts';
 import { imagemReduzidaParaAssistente } from './imagens-quadro.ts';
 import { executar as executarNoQuadro, itens as itensDoQuadro, paletaDaCampanha, quadroAberto } from './quadros.ts';
@@ -136,6 +136,13 @@ const ferramentas = ferramentasDaMesa({
     aberto: () => (quadroAberto.value ? { quadro: quadroAberto.value, itens: [...itensDoQuadro.value.values()] } : null),
     entidades: async () => new Map((await entidadesDoBanco()).map(e => [e.id, { nome: e.nome, tipo: e.tipo }])),
     imagem: imagemReduzidaParaAssistente,
+    retratoDaEntidade: async entidadeId => {
+      const retrato = (await entidadesDoBanco()).find(e => e.id === entidadeId)?.retrato;
+      if (!retrato) return null;
+      // Copia o retrato para o banco de imagens do quadro (o id é o hash, então copiar de novo não duplica).
+      const { id, largura, altura } = await guardarImagem(retrato);
+      return { imagemId: id, larguraOriginal: largura > 0 ? largura : 320, alturaOriginal: altura > 0 ? altura : 240 };
+    },
     resumos: id => listarResumos(id),
     salvarResumo: gravarResumo,
     criarItens: async (quadroId, novos, rotulo, mover = []) => {

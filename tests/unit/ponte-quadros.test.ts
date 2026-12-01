@@ -10,7 +10,7 @@ const doc = (...linhas: string[]): DocRico => ({ type: 'doc', content: linhas.ma
 const nota = (qid: string, id: string, x: number, y: number, texto: string, mae: string | null = null) =>
   ({ ...novaNotaAdesiva({ quadroId: qid, x, y, largura: 200, altura: 100, doc: doc(texto) }, 1, id), molduraId: mae }) as Item;
 
-function montar(opcoes: { campanha?: boolean; aberto?: boolean; semArquivo?: boolean; semCaptura?: boolean; resumos?: RegistroResumo[] } = {}) {
+function montar(opcoes: { campanha?: boolean; aberto?: boolean; semArquivo?: boolean; semCaptura?: boolean; retratos?: boolean; resumos?: RegistroResumo[] } = {}) {
   const guardados: RegistroResumo[] = opcoes.resumos ?? [];
   const q1: Quadro = novoQuadro('c1', 'Reino Vermelho', 1, 'q1aaaa');
   const q2: Quadro = novoQuadro('c1', 'Masmorra', 1, 'q2bbbb');
@@ -29,6 +29,8 @@ function montar(opcoes: { campanha?: boolean; aberto?: boolean; semArquivo?: boo
     quadros: async () => [q1, q2],
     itens: async id => (id === 'q1aaaa' ? itens1 : itens2),
     aberto: () => (opcoes.aberto ? { quadro: q1, itens: [...itens1, nota('q1aaaa', 'n9nnnnnn', 600, 400, 'Nota só na memória', 'm1')] } : null),
+    entidades: async () => new Map([['e-aldric', { nome: 'Aldric', tipo: 'personagem' }], ['e-vazia', { nome: 'Sem Retrato', tipo: 'personagem' }]]),
+    ...(opcoes.retratos ? { async retratoDaEntidade(id: string) { return id === 'e-aldric' ? { imagemId: 'ret-aldric', larguraOriginal: 200, alturaOriginal: 300 } : null; } } : {}),
     async imagem(id, lado) { chamadas.push({ id, lado }); return opcoes.semArquivo ? null : 'data:image/jpeg;base64,QUJD'; },
     resumos: async id => guardados.filter(r => r.quadroId === id),
     async criarItens(quadroId, novos, rotulo, mover) { criados.push({ quadroId, itens: novos, rotulo, ...(mover ? { mover } : {}) }); },
@@ -247,6 +249,65 @@ test('quadro_inserir: continua abaixo de um item, numa única chamada de criaç�
   assert.equal(a!.x, 20);
   assert.ok(a!.y >= 200 + 24 && b!.y > a!.y + a!.altura);
   assert.ok(criados[0]!.itens.every(i => i.revisao?.origem === 'assistente' && i.molduraId === null || i.molduraId === 'm1'));
+});
+
+test('quadro_inserir: seta entre item novo e existente, imagem do quadro à direita alinhada pelo topo', async () => {
+  const { f, criados } = montar({ aberto: true });
+  const r = await lerJson(f.quadro_inserir!.executar({
+    quadro: 'Reino',
+    abaixo_de: '#i1yyyy',
+    itens: [
+      { formato: 'titulo', texto: 'ALDRIC' },
+      { formato: 'texto', texto: 'O rei desconfia de todos.' },
+      { formato: 'imagem', de: '#i1yyyy', lado: 'direita' },
+    ],
+    setas: [{ de: 1, para: '#i1yyyy', rotulo: 'vê' }],
+  }));
+  assert.equal(criados.length, 1);
+  const [tit, corpo, img, seta] = criados[0]!.itens;
+  assert.equal(r.criados.length, 3);
+  assert.equal(r.setas.length, 1);
+  assert.equal(img!.tipo, 'imagem');
+  if (img!.tipo !== 'imagem' || seta!.tipo !== 'seta') throw new Error('tipos');
+  assert.equal(img!.imagemId, 'img1');
+  // Sem largura: a mediana das imagens da seção (a do mestre tem 800 x 600).
+  assert.equal(img!.largura, 800);
+  assert.equal(img!.altura, 600);
+  assert.equal(img!.y, corpo!.y);
+  assert.equal(img!.x, corpo!.x + corpo!.largura + 24);
+  assert.equal(corpo!.y, tit!.y + tit!.altura + 24);
+  assert.equal(img!.revisao?.origem, 'assistente');
+  assert.equal(seta!.revisao?.origem, 'assistente');
+  assert.deepEqual(seta!.de, { itemId: corpo!.id, lado: 'auto' });
+  assert.deepEqual(seta!.para, { itemId: 'i1yyyyyy', lado: 'auto' });
+  assert.equal(seta!.rotulo, 'vê');
+  // A imagem ao lado não ocupa altura: a caixa da resposta a inclui na largura, mas a coluna termina no corpo.
+  assert.equal(r.caixa.largura, corpo!.largura + 24 + 800);
+});
+
+test('quadro_inserir: ponta de seta inválida e imagem inexistente dão erro legível', async () => {
+  const { f, criados } = montar();
+  const base = { quadro: 'Reino', abaixo_de: '#i1yyyy', itens: [{ formato: 'texto', texto: 'a' }] };
+  await assert.rejects(f.quadro_inserir!.executar({ ...base, setas: [{ de: 5, para: 0 }] }), /índice 5 não existe/);
+  await assert.rejects(f.quadro_inserir!.executar({ ...base, setas: [{ de: 0, para: '#zzzz' }] }), /não encontrado/);
+  await assert.rejects(f.quadro_inserir!.executar({ ...base, setas: [{ de: 0, para: 0 }] }), /mesmo item/);
+  await assert.rejects(f.quadro_inserir!.executar({ ...base, setas: [{ de: 0, para: 'abc' }] }), /índice.*#id/);
+  await assert.rejects(f.quadro_inserir!.executar({ ...base, itens: [{ formato: 'imagem', de: '#n1xxxx' }] }), /não uma imagem/);
+  await assert.rejects(f.quadro_inserir!.executar({ ...base, itens: [{ formato: 'imagem', de: '#i1yyyy', lado: 'direita' }] }), /precisa de um item de texto antes/);
+  assert.equal(criados.length, 0);
+});
+
+test('quadro_inserir: retrato de entidade vira imagem; sem retrato ou sem suporte dá erro legível', async () => {
+  const { f, criados } = montar({ retratos: true });
+  await f.quadro_inserir!.executar({ quadro: 'Reino', abaixo_de: '#i1yyyy', itens: [{ formato: 'texto', texto: 'Aldric' }, { formato: 'imagem', de: 'entidade:aldric', lado: 'esquerda', largura: 100 }] });
+  const img = criados[0]!.itens[1]!;
+  assert.equal(img.tipo === 'imagem' && img.imagemId, 'ret-aldric');
+  assert.equal(img.altura, 150);
+  assert.equal(img.x, criados[0]!.itens[0]!.x - 24 - 100);
+  const pedido = (de: string) => ({ quadro: 'Reino', abaixo_de: '#i1yyyy', itens: [{ formato: 'texto', texto: 'a' }, { formato: 'imagem', de }] });
+  await assert.rejects(f.quadro_inserir!.executar(pedido('entidade:Sem Retrato')), /não tem retrato/);
+  await assert.rejects(f.quadro_inserir!.executar(pedido('entidade:Fulano')), /não encontrado/);
+  await assert.rejects(montar().f.quadro_inserir!.executar(pedido('entidade:Aldric')), /ainda não suportado/);
 });
 
 test('quadro_inserir: obstáculo recusa; abrir_espaco empurra no mesmo passo de criação', async () => {

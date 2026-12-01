@@ -2,13 +2,16 @@
 // de itens de referência; a posição é da Q9e e a medição de altura é injetada.
 import { caixaEnvolventeDeItem, type Caixa } from './camera.ts';
 import { estiloDoQuadro } from './estilo-do-quadro.ts';
+import { caixaDaSeta } from './setas.ts';
 import { blocosDaSecao, itensDaSecao } from './estrutura-da-secao.ts';
 import { PALETA_PADRAO, type PaletaDaCampanha } from './paleta.ts';
 import { MOTIVO_DO_ASSISTENTE, NOTA_ALTURA, NOTA_LARGURA, posicaoLivre } from './proposta-quadro.ts';
 import { secoesDoQuadro, type Secao } from './secoes-do-quadro.ts';
 import {
   docDeTexto,
+  novaImagem,
   novaNotaAdesiva,
+  novaSeta,
   novoTexto,
   TIPOS_SEMANTICOS,
   type DocRico,
@@ -22,6 +25,7 @@ export const MAX_ITENS_POR_INSERCAO = 40;
 export const MAX_TEXTO_DO_ITEM = 4000;
 const TAMANHO_DO_TITULO_PADRAO = 28;
 const LARGURA_PADRAO = 240;
+const LARGURA_PADRAO_DA_IMAGEM = 320;
 
 export interface ParagrafoPedido { texto: string; como?: string }
 
@@ -35,8 +39,16 @@ export type ItemPedido =
       largura?: number;
     }
   | { formato: 'nota'; texto: string; tipo?: TipoSemantico; estilo_como?: string }
-  // Q9f: por enquanto recusado com erro legível.
+  // Q9f: `de` = "#id" (imagem do quadro) ou "entidade:<nome ou id>" (retrato, resolvido por `retratos`).
   | { formato: 'imagem'; de: string; lado?: 'direita' | 'esquerda'; largura?: number };
+
+export type LadoDaImagem = 'direita' | 'esquerda';
+
+/** Uma imagem já guardada no banco de imagens do quadro (a de um item existente ou o retrato de uma entidade). */
+export interface ImagemResolvida { imagemId: string; larguraOriginal: number; alturaOriginal: number; nome?: string }
+
+/** Ponta de uma seta pedida: índice (base 0) de um item criado na mesma chamada, ou `#id` de um item existente. */
+export interface PedidoDeSeta { de: number | string; para: number | string; rotulo?: string }
 
 export interface OpcoesDaInsercao {
   quadroId: string;
@@ -49,10 +61,14 @@ export interface OpcoesDaInsercao {
   /** Altura necessária do texto (injetada para manter o domínio puro). */
   medir: (item: Extract<Item, { tipo: 'texto' }>) => number;
   paleta?: PaletaDaCampanha;
+  /** Retratos já resolvidos (e guardados no banco de imagens), pela chave `de` do pedido (ex.: "entidade:Aldric"). */
+  retratos?: ReadonlyMap<string, ImagemResolvida>;
 }
 
 export interface Insercao {
   itens: Item[];
+  /** Por item: o lado em que a imagem fica ao lado do texto anterior, ou null (entra na coluna). */
+  lados: (LadoDaImagem | null)[];
   /** Altura final de cada item, por id (já gravada em `item.altura`). */
   alturas: Record<string, number>;
 }
@@ -170,12 +186,48 @@ export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaI
   };
 
   const resultado: Item[] = [];
+  const lados: (LadoDaImagem | null)[] = [];
   const alturas: Record<string, number> = {};
+  let larguraPadraoDaImagem: number | undefined;
 
   pedidos.forEach((p, k) => {
     const n = k + 1;
     const formato = (p as { formato?: unknown } | null)?.formato;
-    if (formato === 'imagem') throw new Error(`Item ${n}: formato "imagem" ainda não suportado.`);
+    if (formato === 'imagem') {
+      const pi = p as Extract<ItemPedido, { formato: 'imagem' }>;
+      const lado = pi.lado as unknown;
+      if (lado !== undefined && lado !== 'direita' && lado !== 'esquerda') throw new Error(`Item ${n}: lado "${String(lado)}" inválido. Use direita ou esquerda.`);
+      if (pi.largura !== undefined && (typeof pi.largura !== 'number' || !Number.isFinite(pi.largura) || pi.largura < 40)) {
+        throw new Error(`Item ${n}: largura deve ser um número a partir de 40.`);
+      }
+      const chave = typeof pi.de === 'string' ? pi.de.trim() : '';
+      if (!chave) throw new Error(`Item ${n}: imagem sem "de" (#id de uma imagem do quadro ou entidade:<nome>).`);
+      let origem: ImagemResolvida;
+      if (/^entidade:/i.test(chave)) {
+        const r = opcoes.retratos?.get(chave);
+        if (!r) throw new Error(`Item ${n}: o retrato de "${chave.slice(chave.indexOf(':') + 1).trim()}" não está disponível.`);
+        origem = r;
+      } else {
+        const fonte = itemPor(itens, chave, `de (item ${n})`);
+        if (fonte.tipo !== 'imagem') throw new Error(`Item ${n}: #${fonte.id.slice(0, 6)} é ${fonte.tipo === 'forma' ? 'uma' : 'um'} ${fonte.tipo}, não uma imagem. Use o #id de uma imagem ou entidade:<nome>.`);
+        origem = fonte;
+      }
+      if (larguraPadraoDaImagem === undefined) larguraPadraoDaImagem = (secao ? estiloDoQuadro(itens, secao)?.imagens?.largura : undefined) || LARGURA_PADRAO_DA_IMAGEM;
+      const lo = origem.larguraOriginal > 0 ? origem.larguraOriginal : 1;
+      const ao = origem.alturaOriginal > 0 ? origem.alturaOriginal : 1;
+      const larguraDaImagem = pi.largura ?? larguraPadraoDaImagem;
+      const img = novaImagem(
+        { quadroId, x: 0, y: 0, imagemId: origem.imagemId, larguraOriginal: origem.larguraOriginal, alturaOriginal: origem.alturaOriginal, largura: larguraDaImagem, altura: Math.max(20, Math.round((larguraDaImagem * ao) / lo)) },
+        agora,
+        novoId(),
+      );
+      img.molduraId = molduraId;
+      img.revisao = { origem: 'assistente', tipoSugerido: null, motivos: [MOTIVO_DO_ASSISTENTE] };
+      alturas[img.id] = img.altura;
+      resultado.push(img);
+      lados.push(lado ?? null);
+      return;
+    }
     if (formato !== 'texto' && formato !== 'titulo' && formato !== 'nota') {
       throw new Error(`Item ${n}: formato "${String(formato)}" inválido. Use texto, titulo ou nota.`);
     }
@@ -243,9 +295,10 @@ export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaI
     if (formato !== 'nota') item.altura = item.alturaAuto ? medir(item) : Math.max(item.altura, medir(item));
     alturas[item.id] = item.altura;
     resultado.push(item);
+    lados.push(null);
   });
 
-  return { itens: resultado, alturas };
+  return { itens: resultado, lados, alturas };
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -400,4 +453,132 @@ export function posicionarEmColuna(
     }
   }
   return resposta(posicoes, empurrados.map((i) => ({ id: i.id, dy })));
+}
+
+
+// ---------------------------------------------------------------------------------------------------------
+// Q9f: imagens ao lado do texto anterior e setas.
+
+/**
+ * Completa as posições dos itens novos: as imagens com `lado` ficam ao lado do item de coluna anterior (que não seja imagem),
+ * alinhadas pelo topo, a `espaco` px dele; não ocupam altura na coluna. Recusa se a imagem bater em algo (existente, já
+ * descido por `empurrar`, ou novo). `posicoes` traz as posições da coluna (null onde há `lado`); devolve todas preenchidas.
+ */
+export function posicionarImagensAoLado(
+  novos: readonly Item[],
+  lados: readonly (LadoDaImagem | null)[],
+  posicoes: readonly ({ x: number; y: number } | null)[],
+  itens: readonly Item[],
+  empurrar: readonly { id: string; dy: number }[] = [],
+  espaco: number = ESPACO_VERTICAL_PADRAO,
+): { x: number; y: number }[] {
+  const dy = new Map(empurrar.map((e) => [e.id, e.dy]));
+  const existentes = itens.filter(solido).map((i) => {
+    const c = caixaEnvolventeDeItem(i);
+    return { id: i.id, caixa: { ...c, y: c.y + (dy.get(i.id) ?? 0) } };
+  });
+  const saida: ({ x: number; y: number } | null)[] = posicoes.map((p) => (p ? { ...p } : null));
+  const ocupados: { id: string; caixa: Caixa }[] = [];
+  novos.forEach((it, k) => {
+    const p = saida[k];
+    if (p && lados[k] === null) ocupados.push({ id: it.id, caixa: { x: p.x, y: p.y, largura: it.largura, altura: it.altura } });
+  });
+  novos.forEach((it, k) => {
+    const lado = lados[k];
+    if (!lado) return;
+    let j = k - 1;
+    while (j >= 0 && (lados[j] !== null || novos[j]!.tipo === 'imagem' || !saida[j])) j--;
+    if (j < 0) throw new Error(`Item ${k + 1}: a imagem com lado precisa de um item de texto antes dela na mesma chamada.`);
+    const ancora = saida[j]!;
+    const x = lado === 'direita' ? ancora.x + novos[j]!.largura + espaco : ancora.x - espaco - it.largura;
+    const caixa: Caixa = { x, y: ancora.y, largura: it.largura, altura: it.altura };
+    const batida = [...existentes, ...ocupados].find((o) => cruza(caixa, o.caixa));
+    if (batida) {
+      const nova = novos.some((n) => n.id === batida.id);
+      throw new Error(
+        `A imagem do item ${k + 1} (à ${lado}) bateria em ${nova ? 'outro item novo' : `#${curto(batida.id)}`}. Tente o outro lado, outro abaixo_de ou tire o lado (entra na coluna).`,
+      );
+    }
+    saida[k] = { x, y: ancora.y };
+    ocupados.push({ id: it.id, caixa });
+  });
+  return saida as { x: number; y: number }[];
+}
+
+export interface OpcoesDasSetas {
+  quadroId: string;
+  /** Itens existentes do quadro (para `#id` e para copiar o estilo da seta mais comum do mestre). */
+  itens: readonly Item[];
+  /** Itens criados na chamada, já com x e y finais (as pontas por índice apontam para eles). */
+  novos: readonly Item[];
+  agora: number;
+  novoId: () => string;
+}
+
+export const MAX_SETAS_POR_INSERCAO = 40;
+
+/** A seta mais comum do mestre (cor, espessura, tracejado, cabeças, rota); `null` se o mestre não fez nenhuma. */
+function estiloDaSetaDoMestre(itens: readonly Item[]): Pick<Extract<Item, { tipo: 'seta' }>, 'cor' | 'espessura' | 'tracejado' | 'inicio' | 'fim' | 'rota'> | null {
+  const contagem = new Map<string, { n: number; estilo: ReturnType<typeof estiloDaSetaDoMestre> }>();
+  for (const i of itens) {
+    if (i.tipo !== 'seta' || i.revisao?.origem === 'assistente') continue;
+    const estilo = { cor: i.cor, espessura: i.espessura, tracejado: i.tracejado, inicio: i.inicio, fim: i.fim, rota: i.rota };
+    const chave = JSON.stringify(estilo);
+    const c = contagem.get(chave);
+    if (c) c.n++;
+    else contagem.set(chave, { n: 1, estilo });
+  }
+  let melhor: { n: number; estilo: ReturnType<typeof estiloDaSetaDoMestre> } | null = null;
+  for (const c of contagem.values()) if (!melhor || c.n > melhor.n) melhor = c;
+  return melhor?.estilo ?? null;
+}
+
+/** Monta as setas pedidas (com `revisao` do assistente e o estilo da seta mais comum do mestre); ponta inválida lança erro legível. */
+export function montarSetas(pedidos: readonly PedidoDeSeta[], opcoes: OpcoesDasSetas): Extract<Item, { tipo: 'seta' }>[] {
+  if (!Array.isArray(pedidos)) throw new Error('"setas" deve ser uma lista de { de, para, rotulo? }.');
+  if (pedidos.length > MAX_SETAS_POR_INSERCAO) {
+    throw new Error(`São ${pedidos.length} setas; o máximo por chamada é ${MAX_SETAS_POR_INSERCAO}.`);
+  }
+  const { quadroId, itens, novos, agora, novoId } = opcoes;
+  const estilo = estiloDaSetaDoMestre(itens);
+  const mapa = new Map<string, Item>([...itens, ...novos].map((i) => [i.id, i]));
+  const z0 = Math.max(0, ...[...mapa.values()].map((i) => i.z));
+  const ponta = (v: unknown, qual: 'de' | 'para', n: number): Item => {
+    const onde = `seta ${n}, "${qual}"`;
+    const indice = typeof v === 'number' ? v : typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v) : null;
+    let item: Item;
+    if (indice !== null) {
+      if (!Number.isInteger(indice) || indice < 0 || indice >= novos.length) {
+        throw new Error(`${onde[0]!.toUpperCase()}${onde.slice(1)}: o índice ${String(v)} não existe; os itens novos vão de 0 a ${novos.length - 1}.`);
+      }
+      item = novos[indice]!;
+    } else if (typeof v === 'string' && v.trim().startsWith('#')) {
+      item = itemPor(itens, v, onde);
+    } else {
+      throw new Error(`${onde[0]!.toUpperCase()}${onde.slice(1)}: use o índice (0 a ${novos.length - 1}) de um item novo ou o #id de um item existente.`);
+    }
+    if (item.tipo === 'seta') throw new Error(`${onde[0]!.toUpperCase()}${onde.slice(1)}: #${curto(item.id)} é uma seta; ligue itens de texto, imagem ou forma.`);
+    return item;
+  };
+  return pedidos.map((p, k) => {
+    const n = k + 1;
+    const de = ponta(p?.de, 'de', n);
+    const para = ponta(p?.para, 'para', n);
+    if (de.id === para.id) throw new Error(`Seta ${n}: "de" e "para" são o mesmo item.`);
+    const rotulo = typeof p.rotulo === 'string' ? p.rotulo.trim() : '';
+    const base = { de: { itemId: de.id, lado: 'auto' as const }, para: { itemId: para.id, lado: 'auto' as const } };
+    const seta = novaSeta(
+      { quadroId, ...base, ...(estilo ? { rota: estilo.rota, cor: estilo.cor, espessura: estilo.espessura } : {}), rotulo, z: z0 + 1 + k },
+      agora,
+      novoId(),
+    );
+    if (estilo) {
+      seta.tracejado = estilo.tracejado;
+      seta.inicio = estilo.inicio;
+      seta.fim = estilo.fim;
+    }
+    Object.assign(seta, caixaDaSeta(seta, mapa));
+    seta.revisao = { origem: 'assistente', tipoSugerido: null, motivos: [MOTIVO_DO_ASSISTENTE] };
+    return seta;
+  });
 }
