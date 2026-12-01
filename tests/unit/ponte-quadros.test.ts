@@ -63,6 +63,10 @@ test('quadro_secao: titulos por padrão, completo e id curto; seção por id ou 
   const porTitulo = await lerTexto(f.quadro_secao!.executar({ quadro: 'Reino Vermelho', secao: 'capitulo 1', nivel: 'completo' }));
   assert.match(porTitulo, /coroa falsa/);
   await assert.rejects(f.quadro_secao!.executar({ quadro: 'Reino Vermelho', secao: 'm1', nivel: 'x' }), /nivel/);
+  const est = await lerTexto(f.quadro_secao!.executar({ quadro: 'Reino Vermelho', secao: 'm1', nivel: 'estrutura' }));
+  assert.match(est, /^§ Capítulo 1 \(moldura, 3 itens\)/);
+  assert.match(est, /- #n1xxxx nota 20,40 /);
+  assert.match(est, /- #i1yyyy imagem /);
   await assert.rejects(f.quadro_secao!.executar({ quadro: 'Reino Vermelho', secao: 'm1', pagina: 0 }), /pagina/);
 });
 

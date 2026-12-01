@@ -63,7 +63,7 @@ export const OPCOES_PADRAO_SECOES: Readonly<OpcoesSecoes> = {
 // Texto de um item
 // ---------------------------------------------------------------------------
 
-interface InfoTexto {
+export interface InfoTexto {
   texto: string;
   primeiraLinha: string;
   cabecalho: boolean;
@@ -77,7 +77,7 @@ function tamanhoDaMarca(valor: unknown): number | null {
   return m ? Number(m[1]) : null;
 }
 
-function infoDoTexto(item: Item): InfoTexto | null {
+export function infoDoTexto(item: Item): InfoTexto | null {
   if (item.tipo !== 'texto' && item.tipo !== 'forma') return null;
   const linhas: string[] = [];
   let atual = '';
@@ -119,7 +119,7 @@ function infoDoTexto(item: Item): InfoTexto | null {
   };
 }
 
-function mediana(valores: number[]): number {
+export function mediana(valores: number[]): number {
   if (valores.length === 0) return 0;
   const o = [...valores].sort((a, b) => a - b);
   const m = o.length >> 1;
@@ -142,6 +142,12 @@ function maisAcima<T extends Item>(lista: readonly T[]): T | null {
 
 function cortar(texto: string, max: number): string {
   return texto.length > max ? `${texto.slice(0, max).trimEnd()}…` : texto;
+}
+
+/** Critério de título por fonte: texto curto com H1/H2 ou tamanho efetivo ≥ razão × mediana. */
+export function tituloPorFonte(info: InfoTexto, mediana: number, o: OpcoesSecoes): boolean {
+  if (info.texto.length > o.maxCaracteresTitulo) return false;
+  return info.cabecalho || info.tamanho >= o.razaoTitulo * mediana;
 }
 
 export interface TituloDaSecao {
@@ -181,11 +187,7 @@ export function tituloDaSecao(
   }
 
   const med = mediana(comTexto.map((i) => infos.get(i.id)!.tamanho));
-  const candidatos = comTexto.filter((i) => {
-    const info = infos.get(i.id)!;
-    if (info.texto.length > o.maxCaracteresTitulo) return false;
-    return info.cabecalho || info.tamanho >= o.razaoTitulo * med;
-  });
+  const candidatos = comTexto.filter((i) => tituloPorFonte(infos.get(i.id)!, med, o));
   const destaque = maisAcima(candidatos);
   if (destaque) {
     const info = infos.get(destaque.id)!;

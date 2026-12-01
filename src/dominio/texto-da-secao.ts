@@ -192,8 +192,17 @@ export function textoDaSecao(
 
   const cabecalho = `§ ${secao.titulo} (${secao.tipo}, ${rotuloDoTitulo(secao.itemIds.length)})`;
   const unidades = [...linhasDeItens, ...linhasDeSetas];
+  const r = paginarUnidades(cabecalho, unidades, limite, opcoes.pagina);
+  return { ...r, tokens: estimarTokens(r.texto) };
+}
 
-  // Paginação: nunca corta uma unidade no meio.
+/** Paginação por tokens: nunca corta uma unidade no meio; devolve a página pedida. */
+export function paginarUnidades(
+  cabecalho: string,
+  unidades: readonly string[],
+  limite: number,
+  pagina?: number,
+): { texto: string; paginas: number; tokensTotais: number } {
   const reserva = estimarTokens(`${cabecalho}\n`) + estimarTokens('\n… página 99 de 99');
   const orcamento = Math.max(1, limite - reserva);
   const paginasDeUnidades: string[][] = [];
@@ -227,9 +236,8 @@ export function textoDaSecao(
   let tokensTotais = 0;
   for (let i = 0; i < paginas; i++) tokensTotais += estimarTokens(montar(i));
 
-  const pedida = Math.min(paginas, Math.max(1, Math.trunc(opcoes.pagina ?? 1) || 1));
-  const texto = montar(pedida - 1);
-  return { texto, tokens: estimarTokens(texto), paginas, tokensTotais };
+  const pedida = Math.min(paginas, Math.max(1, Math.trunc(pagina ?? 1) || 1));
+  return { texto: montar(pedida - 1), paginas, tokensTotais };
 }
 
 function sufixo(item: Item): string {

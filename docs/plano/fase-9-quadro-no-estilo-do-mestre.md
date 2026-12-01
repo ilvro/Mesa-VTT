@@ -41,7 +41,7 @@ Regras para o executor: as mesmas da [fase-4.md](fase-4.md). Uma ficha por vez; 
 
 ## Etapa A — Ler o estilo
 
-### Q9a — Estrutura visual de uma seção (puro + `nivel: "estrutura"`)  ⬜
+### Q9a — Estrutura visual de uma seção (puro + `nivel: "estrutura"`)  ✅
 Objetivo: o assistente vê, por item, o formato, o estilo e a posição, e vê os blocos internos de uma ilha.
 Ler: `src/dominio/texto-da-secao.ts` (`idsCurtos`, paginação), `src/dominio/secoes-do-quadro.ts` (`infoDeTexto` e o cálculo de tamanho efetivo, `tituloDaSecao`, `razaoTitulo`), `src/dominio/quadro.ts` (`EstiloDeTexto`, `EstiloDeCaixa`, `DocRico`), `src/app/ponte-quadros.ts` (`quadro_secao`).
 Arquivos: criar `src/dominio/estrutura-da-secao.ts` + `tests/unit/estrutura-da-secao.test.ts`; mudar `src/app/ponte-quadros.ts`.
@@ -56,6 +56,7 @@ Como:
 2. **Blocos internos:** dentro de uma ilha ou moldura, um item que seria título pelo critério de `tituloDaSecao` (fonte ≥ razão × mediana, H1/H2 ou `semantica === 'titulo'`) abre um bloco. Antes dele sai a linha `▸ bloco "COMBATE" (#it-420)`. Os itens seguintes na ordem de leitura pertencem ao bloco até o próximo título. Exporte `blocosDaSecao(secao, itens) → { tituloId, titulo, itemIds }[]`, que a Q9e usa.
 3. Na ponte: `quadro_secao` aceita `nivel: "estrutura"`, com a mesma paginação. Atualize a descrição da ferramenta (sem passar de 4,5 KB).
 Testes: coordenadas relativas; tamanho efetivo pela marca `fontSize`; destaques com frações somando ~100%; formato `nota` × `texto`; blocos a partir de títulos por fonte e por `semantica`; ilha sem título interno = um bloco só; paginação.
+Nota: `estruturaDaSecao(secao, itens, { pagina, limiteTokens, secoes? }) → { texto, paginas }` e `blocosDaSecao(secao, itens) → { tituloId, titulo, itemIds }[]` em `src/dominio/estrutura-da-secao.ts`. Reaproveitados e exportados sem mudar comportamento: `infoDoTexto`, `mediana` e o novo `tituloPorFonte` (critério de título por fonte, usado também por `tituloDaSecao`) em `secoes-do-quadro.ts`; `paginarUnidades` (extraído de `textoDaSecao`) em `texto-da-secao.ts`. Desvios: `blocosDaSecao` aplica o critério a todos os itens (todo título abre bloco, não só o mais acima), `itemIds` não inclui o próprio título e itens antes do primeiro título ficam sem bloco; setas saem como `- seta #a → #b: rótulo` (ids curtos); molduras filhas saem como linha `moldura`; `nota` = `texto` com fundo de caixa e sombra, como a `novaNotaAdesiva` (na revisão: o critério "sem borda" marcava como nota os textos do Miro com caixa branca); a cor de letra só substitui `cor` se uma marca `color` cobrir mais da metade; tamanhos também arredondados a 4 px. Limite: a fração dos destaques conta caracteres, inclusive espaços.
 Commit: `board section structure view with styles and blocks`
 
 ### Q9b — Convenções visuais do quadro (puro + `quadro_estilo`)  ⬜

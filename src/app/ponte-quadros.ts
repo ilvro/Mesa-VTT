@@ -16,6 +16,7 @@ import {
   type RegistroResumo,
 } from '../dominio/resumos-do-quadro.ts';
 import { assinaturaDaSecao, secoesDoQuadro, type Secao } from '../dominio/secoes-do-quadro.ts';
+import { estruturaDaSecao } from '../dominio/estrutura-da-secao.ts';
 import { LIMITE_TOKENS_PADRAO, textoDaSecao } from '../dominio/texto-da-secao.ts';
 
 export interface ContextoDeQuadros {
@@ -145,13 +146,13 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
     },
     {
       nome: 'quadro_secao',
-      descricao: 'O texto compacto de uma seção do quadro, paginado (~2,5 mil tokens por página). nivel \"titulos\" (padrão) traz só a primeira linha de cada item; \"completo\" traz tudo. Cite itens pelo #id curto.',
+      descricao: 'O texto compacto de uma seção do quadro, paginado (~2,5 mil tokens por página). nivel \"titulos\" (padrão) traz só a primeira linha de cada item; \"completo\" traz tudo; \"estrutura\" traz formato, posição, fonte, cores e blocos de cada item. Cite itens pelo #id curto.',
       esquema: {
         type: 'object',
         properties: {
           quadro: quadroEsquema,
           secao: { type: 'string', description: 'Id da seção (do quadro_mapa) ou o título.' },
-          nivel: { type: 'string', enum: ['titulos', 'completo'], description: 'Padrão: titulos.' },
+          nivel: { type: 'string', enum: ['titulos', 'completo', 'estrutura'], description: 'Padrão: titulos.' },
           pagina: { type: 'integer', minimum: 1, description: 'Padrão: 1.' },
         },
         required: ['quadro', 'secao'],
@@ -161,13 +162,13 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
       async executar(args) {
         const c = await quadroPor(args.quadro);
         const s = secaoPor(c, args.secao);
-        const nivel = args.nivel === 'completo' ? 'completo' : args.nivel === undefined || args.nivel === 'titulos' ? 'titulos' : null;
-        if (!nivel) throw new Error('nivel deve ser \"titulos\" ou \"completo\".');
+        const nivel = args.nivel === 'completo' || args.nivel === 'estrutura' ? args.nivel : args.nivel === undefined || args.nivel === 'titulos' ? 'titulos' : null;
+        if (!nivel) throw new Error('nivel deve ser \"titulos\", \"completo\" ou \"estrutura\".');
         const pagina = args.pagina === undefined ? 1 : Number(args.pagina);
         if (!Number.isInteger(pagina) || pagina < 1) throw new Error('pagina deve ser um inteiro a partir de 1.');
         const entidades = ctx.entidades ? await ctx.entidades() : undefined;
         const { resumos, descricoes } = resumosParaOMapa(await ctx.resumos(c.quadro.id), c.secoes, c.itens);
-        const r = textoDaSecao(s, c.itens, { nivel, pagina, limiteTokens: LIMITE_TOKENS_PADRAO, secoes: c.secoes, descricoes, ...(entidades ? { entidades } : {}) });
+        const r = nivel === 'estrutura' ? estruturaDaSecao(s, c.itens, { pagina, limiteTokens: LIMITE_TOKENS_PADRAO, secoes: c.secoes }) : textoDaSecao(s, c.itens, { nivel, pagina, limiteTokens: LIMITE_TOKENS_PADRAO, secoes: c.secoes, descricoes, ...(entidades ? { entidades } : {}) });
         const resumo = resumos.get(s.id);
         const topo = resumo ? `Resumo${resumo.desatualizado ? ' (desatualizado)' : ''}${resumo.autor === 'mestre' ? ' (escrito pelo mestre)' : ''}: ${resumo.texto}\n\n` : '';
         return [texto(topo + r.texto)];
