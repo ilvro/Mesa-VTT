@@ -177,6 +177,45 @@ function desenharCaixaRetangular(
   }
 }
 
+/** O `--acento` do tema (estilo.css), a cor das propostas do assistente. */
+const COR_DO_ASSISTENTE = 0xa58de0;
+const AFASTAMENTO_DA_MARCA = 5;
+const ESPESSURA_DA_MARCA = 2;
+const RAIO_DA_ETIQUETA = 9;
+
+/**
+ * Marca de proposto: contorno tracejado por fora da caixa (não muda o tamanho do item) e uma etiqueta
+ * "✦" no canto superior direito. Some quando o item é aceito (a revisão sai). Não vai à projeção,
+ * que já esconde os itens em revisão.
+ */
+function desenharMarcaDoAssistente(g: Graphics, largura: number, altura: number): void {
+  const a = AFASTAMENTO_DA_MARCA;
+  const w = Math.max(1, largura);
+  const h = Math.max(1, altura);
+  desenharPolilinha(
+    g,
+    [
+      { x: -a, y: -a },
+      { x: w + a, y: -a },
+      { x: w + a, y: h + a },
+      { x: -a, y: h + a },
+    ],
+    'tracejado',
+    ESPESSURA_DA_MARCA,
+    true,
+  );
+  g.stroke({ color: COR_DO_ASSISTENTE, alpha: 0.95, width: ESPESSURA_DA_MARCA });
+  // Etiqueta: círculo no canto, com uma estrela de quatro pontas escura.
+  const cx = w + a;
+  const cy = -a;
+  const r = RAIO_DA_ETIQUETA;
+  g.circle(cx, cy, r).fill({ color: COR_DO_ASSISTENTE, alpha: 1 });
+  const p = r * 0.68;
+  const q = r * 0.2;
+  g.poly([cx, cy - p, cx + q, cy - q, cx + p, cy, cx + q, cy + q, cx, cy + p, cx - q, cy + q, cx - p, cy, cx - q, cy - q], true)
+    .fill({ color: 0x1b1b1b, alpha: 0.9 });
+}
+
 /**
  * Sincroniza os itens do modelo com as camadas PixiJS de forma incremental
  * e aplica culling espacial para manter 60 FPS mesmo com 10.000+ itens.
@@ -416,7 +455,21 @@ export class GerenciadorItensPixi {
     aplicarRotacaoEPosicao(ent.container, item);
     const g = ent.graficos!;
     g.clear();
+    this.desenharCorpo(g, ent, item, todos, paleta);
+    // Dentro de uma moldura que também é proposta, a marca da moldura basta.
+    const molduraProposta = item.molduraId !== null && todos.get(item.molduraId)?.revisao?.origem === 'assistente';
+    if (item.revisao?.origem === 'assistente' && !molduraProposta && item.tipo !== 'seta' && item.tipo !== 'traco') {
+      desenharMarcaDoAssistente(g, item.largura, item.altura);
+    }
+  }
 
+  private desenharCorpo(
+    g: Graphics,
+    ent: EntradaVisual,
+    item: Item,
+    todos: ReadonlyMap<string, Item>,
+    paleta: PaletaDaCampanha,
+  ): void {
     if (item.tipo === 'seta') {
       desenharSetaPixi(g, item, todos);
       return;
