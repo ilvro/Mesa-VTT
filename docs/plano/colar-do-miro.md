@@ -55,3 +55,27 @@ Testes (`tests/unit/area-miro.test.ts`): recodificar a amostra (JSON → UTF-8 �
 Verificar: `npm run typecheck` e `npm test`.
 Nota: desvios e limites — `areaMiroParaPacote` não mapeia `_parent` (a moldura que contém é achada pela geometria, como já faz `converterMiro`); `ls` (estilo do traço) e `b/i/u/s` do item inteiro são ignorados; a espessura da seta (`t`) não é multiplicada pelo fator; `fatorDeEscala` e `contarIgnoradosDaArea` são exportados à parte (o pacote não carrega avisos); o fator por `boardId` vive num `Map` do módulo `Quadro.tsx` (perdido ao recarregar); a marca de fundo do texto fica como `rgb(...)`, como `htmlParaDocRico` já guarda; sem teste de tela (Quadro.tsx não tem teste unitário).
 Commit: `(feature) paste miro items into the board with their styles`
+
+## C2 — Imagens coladas do Miro com o token da conta  ✅
+
+Objetivo: as imagens coladas chegam com o arquivo, não como espaço reservado.
+Verificado em 25/11/2026: `initialId` da área de transferência = id do item na API REST; `boardId` da área = id do quadro na API; `api.miro.com` responde ao preflight com `access-control-allow-origin: *` e `allow-headers: authorization`; o arquivo final (`r.miro.com/...`) também tem `access-control-allow-origin: *`. Ou seja, o app baixa direto do navegador/Tauri, sem ponte.
+Depende de: C1.
+Ler: `scripts/miro-baixar.mjs` (`urlDaImagemNoFormato`, `baixarImagemDoItem`, `baixarBinarioImagem`, `requisitarMiro`), `src/app/importar-miro.ts` (`guardarImagensDoPacote`: `prepararImagemParaGuardar` 2048 px WebP 0,85 + `guardarImagem`), `src/app/imagens-quadro.ts`, `src/ui/quadro/Quadro.tsx` (`colarDoMiro`, `avisar`), `src/ui/quadro/Quadros.tsx` (onde fica "Importar do Miro"), `docs/miro.md`.
+Arquivos: `src/app/imagens-miro.ts` (novo), `src/ui/quadro/Quadro.tsx`, `src/ui/quadro/Quadros.tsx` (ou o lugar do botão de importar), `src/ui/estilo.css` (só se precisar), `tests/unit/imagens-miro.test.ts` (novo), `docs/miro.md`.
+Como:
+1. **Token só no aparelho:** `localStorage['mesa.miro.token']`. Nunca no banco da campanha, em exportações, na sala online ou em logs. Funções `lerTokenMiro()`, `gravarTokenMiro(token | null)`.
+2. **Tela do token:** um diálogo pequeno "Token do Miro" (campo de senha, salvar, apagar, link para o passo 1 de `docs/miro.md` / `https://miro.com/app/settings/user-profile/apps`, texto: "fica só neste aparelho"). Abrir pelo lado de "Importar do Miro" e pelo aviso de imagens sem arquivo.
+3. **`baixarImagemDoMiro(boardId, itemId, token, fetchFn = fetch)`** em `src/app/imagens-miro.ts`: `GET https://api.miro.com/v2/boards/{encodeURIComponent(boardId)}/images/{itemId}` com `Authorization: Bearer` → `data.imageUrl` → trocar `format` para `original` (porte de `urlDaImagemNoFormato`) → GET com o token e `Accept: */*`; se vier JSON, pegar `url`/`imageUrl` e baixar **sem** o token; se `original` falhar, tentar `preview`. Devolve `Blob` ou lança erro com o status (401/403 = token inválido ou sem acesso ao quadro).
+4. **`colarDoMiro` passa a ser assíncrona** e baixa **antes** de criar os itens, para a colagem continuar sendo um único Ctrl+Z:
+   - imagens já no quadro (por `origem.miro`) continuam reaproveitadas, sem baixar;
+   - também reaproveitar o que já foi baixado nesta sessão (`Map` boardId+itemId → metadados, no módulo), para colar de novo não baixar de novo;
+   - com token: aviso "Baixando N imagens do Miro…", até 4 em paralelo, cada uma por `prepararImagemParaGuardar` (2048 px, WebP 0,85) e `guardarImagem`, e o resultado entra em `imagensPorItemId`;
+   - falhas não impedem a colagem: a imagem fica como espaço reservado e o aviso diz quantas falharam e por quê (token inválido / sem rede);
+   - sem token: cola na hora como hoje, e o aviso das imagens sem arquivo ganha "Configure o token do Miro para trazer as imagens" (abre o diálogo).
+   - Se a câmera ou o quadro mudarem durante o download, colar mesmo assim no centro calculado no início (não no quadro errado: se `quadroAberto` não é mais o mesmo, descartar e avisar).
+5. `docs/miro.md`, seção 6: trocar "Não vêm: os bytes das imagens" pelo fluxo com token.
+Testes (`tests/unit/imagens-miro.test.ts`, com `fetchFn` falso): cadeia completa (API → JSON com `url` → binário), o segundo GET leva o token e o terceiro não; `original` falhando cai em `preview`; 401 vira erro reconhecível; `boardId` com `=` vai codificado.
+Verificar: `npm run typecheck` e `npm test`.
+Nota: desvios e limites — criado `src/ui/quadro/DialogoTokenMiro.tsx` (fora da lista; o diálogo reaproveita as classes `miro-molduras-*`, sem CSS novo), aberto pelo sinal `dialogoTokenMiroAberto` (em `imagens-miro.ts`) pelo botão "Token do Miro…" em `Quadros.tsx` e pelo botão do aviso de imagens sem arquivo; `baixarImagemDoMiro` não repete tentativas em 429/5xx (só `original` → `preview`); o cache de baixadas (`boardId|itemId`) vive no módulo e se perde ao recarregar; sem teste de tela nem do download em lote (só `baixarImagemDoMiro`); se `boardId` da área vier vazio, não baixa.
+Commit: `(feature) pasted miro images download with the account token`

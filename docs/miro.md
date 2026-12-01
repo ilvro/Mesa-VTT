@@ -61,8 +61,8 @@ Itens que você criou na Mesa nunca são tocados. O que é da Mesa também é ma
 
 ## 6. Copiar e colar do Miro
 
-Sem token e sem arquivo: selecione itens no Miro, **Ctrl+C**, e no Quadro da Mesa **Ctrl+V** (ou "Colar" no menu de contexto). Chegam textos, molduras, formas e setas com posição, proporção, fonte, cores e ligações, no centro da tela e num único Ctrl+Z.
+Selecione itens no Miro, **Ctrl+C**, e no Quadro da Mesa **Ctrl+V** (ou "Colar" no menu de contexto). Chegam textos, molduras, formas e setas com posição, proporção, fonte, cores e ligações, no centro da tela e num único Ctrl+Z.
 
-- **Não vêm:** os bytes das imagens (o Miro só entrega o item). A imagem chega como espaço reservado; arraste o arquivo por cima ou use o `.miro.zip`. Se o quadro aberto já tem essa imagem (veio por `.miro.zip`), ela é reaproveitada.
+- **Imagens:** o Miro só entrega o item, não o arquivo. Com o **token do Miro** salvo (botão "Token do Miro…" na lista de quadros, ou o botão do aviso de imagens sem arquivo), a colagem baixa os arquivos direto da API (`original`, ou `preview` se falhar), até 4 em paralelo, e guarda cada um em WebP de até 2048 px; tudo isso antes de criar os itens, então continua sendo um único Ctrl+Z. O token (passo 1 deste guia) fica só no `localStorage` deste aparelho: nunca vai ao banco da campanha, a exportações nem à sala online. Sem token, ou se o download falhar (token inválido, sem rede), a imagem chega como espaço reservado e o aviso diz quantas falharam; arraste o arquivo por cima ou use o `.miro.zip`. Se o quadro aberto já tem a imagem (por `.miro.zip` ou colagem anterior), ela é reaproveitada sem baixar de novo.
 - **Escala:** o Miro usa escalas enormes por item. A Mesa divide tudo pela escala do texto de corpo (a que cobre mais caracteres), então o corpo chega com a fonte do Miro e o resto mantém a proporção. O fator fica guardado por quadro do Miro enquanto o app está aberto, para colagens seguintes se encaixarem.
 - Colar não sincroniza: os itens colados não guardam a origem, então "Atualizar do Miro" não os conhece e colar duas vezes não os duplica na revisão.

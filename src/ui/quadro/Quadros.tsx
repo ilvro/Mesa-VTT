@@ -5,6 +5,8 @@ import { campanhaAtiva } from '../../app/campanha.ts';
 import { examinarPacoteMiro, importarArquivoMiro, type ExamePacoteMiro, type ProgressoMiro } from '../../app/importar-miro.ts';
 import { exportarQuadro, importarPacoteDeQuadro } from '../../app/exportar-quadro.ts';
 import { avisar } from '../../app/toasts.ts';
+import { dialogoTokenMiroAberto } from '../../app/imagens-miro.ts';
+import { DialogoTokenMiro } from './DialogoTokenMiro.tsx';
 import {
   abrirQuadro,
   criarQuadro,
@@ -138,6 +140,16 @@ export function Quadros() {
         <button
           type="button"
           class="botao-pilula"
+          data-testid="token-miro-botao"
+          onClick={() => {
+            dialogoTokenMiroAberto.value = true;
+          }}
+        >
+          Token do Miro…
+        </button>
+        <button
+          type="button"
+          class="botao-pilula"
           data-testid="importar-pacote-botao"
           onClick={() => inputPacoteRef.current?.click()}
         >
@@ -193,6 +205,7 @@ export function Quadros() {
           }}
         />
       </form>
+      <DialogoTokenMiro />
 
       {importando.value ? (
         <p class="selo" data-testid="progresso-importacao-miro" role="status" aria-live="polite">

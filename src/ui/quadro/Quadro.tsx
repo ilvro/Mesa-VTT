@@ -81,6 +81,8 @@ import { duplicarSelecao, removerSelecao } from '../../app/quadro-acoes.ts';
 import { atualizarQuadroDoMiro } from '../../app/importar-miro.ts';
 import { pararProjecao, projetando } from '../../app/projecao.ts';
 import { mensagemDe, avisar } from '../../app/toasts.ts';
+import { baixarImagensDoMiro, dialogoTokenMiroAberto, lerTokenMiro } from '../../app/imagens-miro.ts';
+import { DialogoTokenMiro } from './DialogoTokenMiro.tsx';
 import { FORMATOS_IMAGEM_ACEITOS, importarArquivoImagem } from '../../app/imagens-quadro.ts';
 import {
   agruparSelecao,
@@ -371,7 +373,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
     selecao.value = new Set([novo.id]);
   };
 
-  const colarDoMiro = (area: AreaMiro, pontoMundo?: Ponto) => {
+  const colarDoMiro = async (area: AreaMiro, pontoMundo?: Ponto) => {
     const chave = area.boardId ?? '';
     let fator = fatoresDoMiro.get(chave);
     if (fator === undefined) {
@@ -386,6 +388,31 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
           larguraOriginal: it.larguraOriginal,
           alturaOriginal: it.alturaOriginal,
         });
+      }
+    }
+    // O ponto de colagem é o do início: o download pode demorar e a câmera mudar.
+    const centro =
+      pontoMundo ??
+      telaParaMundo(camera.value, {
+        x: tamanhoTela.value.largura / 2,
+        y: tamanhoTela.value.altura / 2,
+      });
+    const pendentes = area.objects
+      .filter((o) => o.widgetData.type === 'image' && !imagensPorItemId.has(o.initialId))
+      .map((o) => o.initialId);
+    let falhasDownload = 0;
+    let motivoFalha = '';
+    const token = lerTokenMiro();
+    if (token && pendentes.length > 0 && area.boardId) {
+      const n = new Set(pendentes).size;
+      avisar(`Baixando ${n} ${n === 1 ? 'imagem' : 'imagens'} do Miro…`);
+      const r = await baixarImagensDoMiro(area.boardId, pendentes, token);
+      for (const [id, meta] of r.baixadas) imagensPorItemId.set(id, meta);
+      falhasDownload = r.falhas;
+      motivoFalha = r.tokenInvalido ? 'token inválido ou sem acesso ao quadro' : r.semRede ? 'sem rede' : 'erro do Miro';
+      if (quadroAberto.value?.id !== q.id) {
+        avisar('O quadro mudou durante o download; a colagem do Miro foi descartada.', true);
+        return;
       }
     }
     const agora = Date.now();
@@ -428,12 +455,6 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
       (it) => it.tipo === 'imagem' && it.imagemId.startsWith('miro-img-'),
     ).length;
 
-    const centro =
-      pontoMundo ??
-      telaParaMundo(camera.value, {
-        x: tamanhoTela.value.largura / 2,
-        y: tamanhoTela.value.altura / 2,
-      });
     const antes = caixaEnvolventeTotal(novos);
     if (!antes) return;
     const dx = centro.x - (antes.x + antes.largura / 2);
@@ -459,8 +480,13 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
       }
     }
     if (semArquivo > 0) {
+      const motivo = falhasDownload > 0 ? ` (${falhasDownload} falharam: ${motivoFalha})` : '';
       avisar(
-        `${semArquivo} ${semArquivo === 1 ? 'imagem do Miro veio' : 'imagens do Miro vieram'} sem arquivo; arraste a imagem por cima ou atualize pelo .miro.zip.`,
+        `${semArquivo} ${semArquivo === 1 ? 'imagem do Miro veio' : 'imagens do Miro vieram'} sem arquivo${motivo}; arraste a imagem por cima ou atualize pelo .miro.zip.`,
+        falhasDownload > 0,
+        token
+          ? undefined
+          : { rotulo: 'Configurar token do Miro', aoClicar: () => { dialogoTokenMiroAberto.value = true; } },
       );
     }
     const ignorados = contarIgnoradosDaArea(area);
@@ -497,7 +523,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
       const areaMiro = lerAreaDoMiro(e.clipboardData?.getData('text/html') ?? '');
       if (areaMiro) {
         e.preventDefault();
-        colarDoMiro(areaMiro);
+        void colarDoMiro(areaMiro).catch((erro) => avisar(mensagemDe(erro), true));
         return;
       }
       const arquivos: Blob[] = [];
@@ -2357,6 +2383,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
           }}
         />
 
+        <DialogoTokenMiro />
         {menuContexto.value ? (
           <MenuDoItem
             x={menuContexto.value.x}
@@ -2375,7 +2402,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
                     if (!entrada.types.includes('text/html')) continue;
                     const area = lerAreaDoMiro(await (await entrada.getType('text/html')).text());
                     if (area) {
-                      colarDoMiro(area, pm);
+                      await colarDoMiro(area, pm);
                       return;
                     }
                   }
