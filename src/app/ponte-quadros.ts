@@ -5,6 +5,7 @@ import { semAcento } from '../dominio/entidades.ts';
 import { textoBuscavel } from '../dominio/busca-quadro.ts';
 import { mapaDoQuadro } from '../dominio/mapa-do-quadro.ts';
 import type { PaletaDaCampanha } from '../dominio/paleta.ts';
+import { ESPACO_VERTICAL_PADRAO, MAX_ITENS_POR_INSERCAO, montarInsercao, posicionarEmColuna, type AlvoDaColuna, type ItemPedido } from '../dominio/insercao-quadro.ts';
 import { MAX_NOTAS_POR_PROPOSTA, MAX_TEXTO_DA_NOTA, montarProposta, posicaoLivre, tamanhoDaProposta } from '../dominio/proposta-quadro.ts';
 import { TIPOS_SEMANTICOS, type Item, type Quadro } from '../dominio/quadro.ts';
 import {
@@ -36,8 +37,10 @@ export interface ContextoDeQuadros {
   /** Resumos e descrições gravados do quadro (lê do banco na hora). */
   resumos(quadroId: string): Promise<RegistroResumo[]>;
   salvarResumo(resumo: RegistroResumo): Promise<void>;
-  /** Cria os itens no quadro: no aberto, num único passo de desfazer; nos outros, direto no banco. */
-  criarItens(quadroId: string, itens: Item[], rotulo: string): Promise<void>;
+  /** Cria os itens no quadro: no aberto, num único passo de desfazer; nos outros, direto no banco. Com `mover`, desce (dy px) itens existentes no mesmo passo. */
+  criarItens(quadroId: string, itens: Item[], rotulo: string, mover?: { id: string; dy: number }[]): Promise<void>;
+  /** Altura (px) que o texto do item precisa, com as regras do render; sem isto, `quadro_inserir` estima pelo tamanho do texto. */
+  medirTexto?(item: Extract<Item, { tipo: 'texto' }>): number;
   /** Paleta da campanha (cores por tipo); padrão se ausente. */
   paleta?(): PaletaDaCampanha;
   /** A região do quadro como JPEG (data URL), com o maior lado em `lado` px; sem isto, `quadro_ver_regiao` avisa que não há captura. */
@@ -357,6 +360,89 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
       },
     },
     {
+      nome: 'quadro_inserir',
+      descricao: 'Insere texto, títulos ou notas soltos no quadro, no estilo do mestre, numa coluna: abaixo_de (#id ou seção) ou ao_lado_de (seção). Para montar, transcrever ou continuar material; para ideias em post-its numa moldura, use quadro_propor. Confira depois com quadro_ver_regiao. Ctrl+Z desfaz.',
+      esquema: {
+        type: 'object',
+        properties: {
+          quadro: quadroEsquema,
+          itens: {
+            type: 'array',
+            minItems: 1,
+            maxItems: MAX_ITENS_POR_INSERCAO,
+            description: 'Itens na ordem de cima para baixo.',
+            items: {
+              type: 'object',
+              properties: {
+                formato: { type: 'string', enum: ['texto', 'titulo', 'nota'], description: 'texto (corpo), titulo ou nota (post-it).' },
+                texto: { type: 'string', description: 'O texto; ou use paragrafos.' },
+                paragrafos: {
+                  type: 'array',
+                  description: 'Parágrafos, cada um com o destaque de um item do mestre.',
+                  items: { type: 'object', properties: { texto: { type: 'string' }, como: { type: 'string', description: '#id do item cujo destaque copiar.' } }, required: ['texto'], additionalProperties: false },
+                },
+                estilo_como: { type: 'string', description: '#id do item de texto cujo estilo copiar (quadro_estilo).' },
+                tipo: { type: 'string', enum: [...TIPOS_SEMANTICOS], description: 'Tipo semântico; opcional, sem cor com estilo.' },
+                largura: { type: 'number', description: 'Largura em px; padrão: a do estilo.' },
+              },
+              required: ['formato'],
+              additionalProperties: false,
+            },
+          },
+          abaixo_de: { type: 'string', description: '#id de um item (abaixo do bloco dele) ou seção (fim da coluna).' },
+          ao_lado_de: { type: 'string', description: 'Seção (id ou título): abre uma coluna nova à direita.' },
+          abrir_espaco: { type: 'boolean', description: 'Desce a coluna abaixo se algo estiver no caminho.' },
+        },
+        required: ['quadro', 'itens'],
+        additionalProperties: false,
+      },
+      anotacoes: { destrutiva: false, idempotente: false },
+      async executar(args) {
+        const c = await quadroPor(args.quadro);
+        const abaixo = textoDe(args.abaixo_de);
+        const lado = textoDe(args.ao_lado_de);
+        if (!abaixo && !lado) throw new Error('Informe onde inserir: abaixo_de (#id de um item ou seção) ou ao_lado_de (seção). Veja os ids em quadro_secao.');
+        if (abaixo && lado) throw new Error('Informe só um destino: abaixo_de ou ao_lado_de.');
+        let alvo: AlvoDaColuna;
+        let secao: Secao | undefined;
+        if (lado) {
+          secao = secaoPor(c, lado);
+          alvo = { aoLadoDe: secao };
+        } else if (abaixo.startsWith('#')) {
+          const item = itemPor(c, abaixo);
+          alvo = { abaixoDe: item };
+          secao = c.secoes.find(s => s.itemIds.includes(item.id));
+        } else {
+          secao = secaoPor(c, abaixo);
+          alvo = { abaixoDeSecao: secao };
+        }
+        const paleta = ctx.paleta?.();
+        const medir = ctx.medirTexto ?? estimarAltura;
+        const insercao = montarInsercao((Array.isArray(args.itens) ? args.itens : []) as ItemPedido[], {
+          quadroId: c.quadro.id,
+          itens: c.itens,
+          ...(secao ? { secao } : {}),
+          agora: Date.now(),
+          novoId: () => crypto.randomUUID(),
+          medir,
+          ...(paleta ? { paleta } : {}),
+        });
+        const espaco = (secao ? estiloDoQuadro(c.itens, secao)?.espacoVertical : null) || ESPACO_VERTICAL_PADRAO;
+        const pos = posicionarEmColuna(insercao.itens.map(i => i.altura), insercao.itens.map(i => i.largura), c.itens, alvo, espaco, { abrirEspaco: args.abrir_espaco === true, secoes: c.secoes });
+        insercao.itens.forEach((it, k) => { it.x = pos.posicoes[k]!.x; it.y = pos.posicoes[k]!.y; });
+        await ctx.criarItens(c.quadro.id, insercao.itens, `Inserção do assistente (${insercao.itens.length})`, pos.empurrar);
+        const naTela = ctx.aberto()?.quadro.id === c.quadro.id;
+        const criados = insercao.itens.map(i => `#${i.id.slice(0, 6)}`);
+        return [json({
+          criados,
+          empurrados: pos.empurrar.length,
+          caixa: { x: Math.round(pos.caixa.x), y: Math.round(pos.caixa.y), largura: Math.round(pos.caixa.largura), altura: Math.round(pos.caixa.altura) },
+          desfazer: naTela ? 'Ctrl+Z na tela do quadro (um passo só)' : 'sem histórico (quadro fechado); o mestre apaga pela fila de revisão',
+          conferir: 'Chame quadro_ver_regiao com itens = criados para ver o resultado.',
+        })];
+      },
+    },
+    {
       nome: 'quadro_propor',
       descricao: `Propõe notas num quadro: cria a moldura "✦ <titulo>" num espaço livre ao lado da seção "perto", com até ${MAX_NOTAS_POR_PROPOSTA} notas {texto, tipo?} (tipo semântico opcional). Tudo entra na fila de revisão do mestre como do assistente. No quadro aberto, um Ctrl+Z desfaz; em outro, grava direto, sem histórico. Devolve o id da moldura e o total de notas.`,
       esquema: {
@@ -412,4 +498,13 @@ function trechoDe(bruto: string, q: string): string {
   const ini = Math.max(0, Math.min(pos - 30, bruto.length - MAX_CARACTERES_TRECHO));
   const fim = ini + MAX_CARACTERES_TRECHO;
   return `${ini > 0 ? '…' : ''}${bruto.slice(ini, fim)}${fim < bruto.length ? '…' : ''}`.slice(0, MAX_CARACTERES_TRECHO + 2);
+}
+
+/** Estimativa sem medidor de texto real (testes e ambientes sem canvas): ~0,52 do corpo por caractere, linha de 1,4 do corpo. */
+function estimarAltura(item: Extract<Item, { tipo: 'texto' }>): number {
+  const tam = item.texto.tamanho;
+  const pad = item.caixa.padding;
+  const porLinha = Math.max(1, Math.floor((item.largura - pad * 2) / (tam * 0.52)));
+  const linhas = textoBuscavel(item).split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / porLinha)), 0);
+  return Math.ceil(linhas * tam * 1.4 + pad * 2);
 }

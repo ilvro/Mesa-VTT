@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { montarInsercao, marcasPredominantes, type ItemPedido } from '../../src/dominio/insercao-quadro.ts';
+import { montarInsercao, marcasPredominantes, posicionarEmColuna, type ItemPedido } from '../../src/dominio/insercao-quadro.ts';
 import { PALETA_PADRAO } from '../../src/dominio/paleta.ts';
 import type { DocRico, Item, NoRico } from '../../src/dominio/quadro.ts';
 import {
@@ -191,4 +191,69 @@ test('erros: limites, vazio, tipo inválido, imagem', () => {
   assert.throws(() => montarInsercao([{ formato: 'texto', paragrafos: [{ texto: ' ' }] }], o()), /parágrafo 1 do item 1 está vazio/);
   assert.throws(() => montarInsercao([{ formato: 'texto', texto: 'a', tipo: 'xyz' as never }], o()), /Tipo "xyz" inválido/);
   assert.throws(() => montarInsercao([{ formato: 'imagem', de: '#it-img1' }], o()), /ainda não suportado/);
+});
+
+// Q9e: posição em coluna.
+const por = (itens: Item[], id: string) => itens.find((i) => i.id === id)!;
+const doisBlocos = (): Item[] => [
+  ...coluna(),
+  texto('it-tit2', 1000, 2560, paragrafo(trecho('COMBATE')), 28),
+  texto('it-cmb1', 1000, 2660, paragrafo(trecho('Três afogados atacam.'))),
+];
+
+test('coluna: continua abaixo do último item com o espaço pedido, empilhando os novos', () => {
+  const itens = coluna();
+  const r = posicionarEmColuna([50, 80], [400, 300], itens, { abaixoDe: por(itens, 'it-fala1') }, 24);
+  assert.deepEqual(r.posicoes, [{ x: 1000, y: 2500 }, { x: 1000, y: 2574 }]);
+  assert.deepEqual(r.empurrar, []);
+  assert.deepEqual(r.caixa, { x: 1000, y: 2500, largura: 400, altura: 50 + 24 + 80 });
+});
+
+test('coluna: abaixo de um título é o fim do bloco dele; abaixo de um item comum é o próprio item', () => {
+  const itens = doisBlocos();
+  // Bloco INTRODUÇÃO termina em 2476 (it-fala1); COMBATE começa em 2560: cabem 40 px de altura com espaço 24.
+  const r = posicionarEmColuna([30], [400], itens, { abaixoDe: por(itens, 'it-tit1') }, 24);
+  assert.equal(r.posicoes[0]!.y, 2500);
+  // Abaixo de um item no meio do bloco, o item seguinte está no caminho.
+  assert.throws(() => posicionarEmColuna([30], [400], itens, { abaixoDe: por(itens, 'it-dd3') }, 24), /bloco "INTRODUÇÃO" começa 24 px abaixo/);
+});
+
+test('coluna: recusa com obstáculo dizendo o bloco; abrir_espaco desce a coluna e a imagem do bloco seguinte', () => {
+  const ficha = { ...novaImagem({ quadroId: Q, x: 1500, y: 2560, imagemId: 'img-ficha', larguraOriginal: 200, alturaOriginal: 200 }, 1, 'it-ficha'), molduraId: null } as Item;
+  const itens = [...doisBlocos(), ficha, texto('it-lado', 1900, 2600, paragrafo(trecho('fora da coluna')))];
+  const tit = por(itens, 'it-tit1');
+  assert.throws(() => posicionarEmColuna([100], [400], itens, { abaixoDe: tit }, 24), /o bloco "COMBATE" começa 84 px abaixo.*abrir_espaco: true/);
+  const r = posicionarEmColuna([100], [400], itens, { abaixoDe: tit }, 24, { abrirEspaco: true });
+  assert.equal(r.posicoes[0]!.y, 2500);
+  // A ficha ao lado de COMBATE (mesma seção) desce com o bloco; a imagem acima do ponto e a outra ilha ficam.
+  assert.deepEqual(r.empurrar.map((e) => e.id).sort(), ['it-cmb1', 'it-ficha', 'it-tit2']);
+  assert.ok(r.empurrar.every((e) => e.dy === 124));
+  assert.ok(!r.empurrar.some((e) => e.id === 'it-img1' || e.id === 'it-lado'));
+});
+
+test('coluna: abaixo da seção usa o fim da coluna principal', () => {
+  const itens = coluna();
+  const secao = secoesDoQuadro(itens)[0]!;
+  const r = posicionarEmColuna([40], [400], itens, { abaixoDeSecao: secao }, 24);
+  assert.deepEqual(r.posicoes[0], { x: 1000, y: 2476 + 24 });
+});
+
+test('coluna: ao lado da seção abre coluna nova sem sobrepor nada', () => {
+  const itens = coluna();
+  const secao = secoesDoQuadro(itens)[0]!;
+  const r = posicionarEmColuna([60, 60], [400, 400], itens, { aoLadoDe: secao }, 24);
+  const caixa = r.caixa;
+  for (const i of itens) {
+    const sobrepoe = caixa.x < i.x + i.largura && caixa.x + caixa.largura > i.x && caixa.y < i.y + i.altura && caixa.y + caixa.altura > i.y;
+    assert.equal(sobrepoe, false, i.id);
+  }
+  assert.ok(r.posicoes[0]!.x > 1500 + 200);
+  assert.equal(r.posicoes[1]!.y, r.posicoes[0]!.y + 60 + 24);
+  assert.deepEqual(r.empurrar, []);
+});
+
+test('coluna: alvos inválidos dão erro legível', () => {
+  const itens = [...coluna(), novaMoldura({ quadroId: Q, x: 0, y: 0, largura: 10, altura: 10, titulo: 'M' }, 1, 'mold')];
+  assert.throws(() => posicionarEmColuna([10], [10], itens, { abaixoDe: por(itens, 'mold') }, 24), /moldura/);
+  assert.throws(() => posicionarEmColuna([], [], itens, { abaixoDe: por(itens, 'it-dd3') }, 24), /Nada a posicionar/);
 });

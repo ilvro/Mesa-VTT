@@ -1,6 +1,6 @@
 // Só em desenvolvimento: carregado por `main.tsx` dentro de `if (import.meta.env.DEV)`; o Vite elimina o chunk do build.
 import { conectarPonte, type FerramentaDaPonte } from '#mesa/ponte';
-import { capturadorDoQuadro, estadoDaPonte } from './assistente-slot.ts';
+import { capturadorDoQuadro, estadoDaPonte, medidorDeTexto } from './assistente-slot.ts';
 import { abrirAplicativo } from './aplicativos.ts';
 import { alternarEncontroDaCena, alterarEntidade, atualizar, campanhaAtiva, campanhas, criarCampanha, criarEntidade, definirMomentoDaCena, ligarRefs, obterRepositorio, salvarElencoDaCampanha, vincularMapaNaCena, vincularParticipanteNaCena, vincularPistaNaCena, vincularTrilhaNaCena } from './campanha.ts';
 import { ferramentasDaMesa } from './ponte-ferramentas.ts';
@@ -11,6 +11,7 @@ import { imagemReduzidaParaAssistente } from './imagens-quadro.ts';
 import { executar as executarNoQuadro, itens as itensDoQuadro, paletaDaCampanha, quadroAberto } from './quadros.ts';
 import { oQueVejo } from './o-que-vejo.ts';
 import { alterarSessaoPorId, carregarSessoes, planejarSessao } from './registro.ts';
+import type { Item } from '../dominio/quadro.ts';
 import type { Efeito } from '../dominio/efeitos.ts';
 import { registrarChamadaConcluida } from './atividade-do-assistente.ts';
 
@@ -137,9 +138,26 @@ const ferramentas = ferramentasDaMesa({
     imagem: imagemReduzidaParaAssistente,
     resumos: id => listarResumos(id),
     salvarResumo: gravarResumo,
-    criarItens: async (quadroId, novos, rotulo) => {
-      if (quadroAberto.value?.id === quadroId) executarNoQuadro({ rotulo, ops: [{ criar: novos }] });
-      else await gravarItens(novos, []);
+    criarItens: async (quadroId, novos, rotulo, mover = []) => {
+      const agora = Date.now();
+      const descer = (it: Item, dy: number): Item => ({ ...it, y: it.y + dy, atualizadoEm: agora });
+      if (quadroAberto.value?.id === quadroId) {
+        const alterar = mover.flatMap(({ id, dy }) => {
+          const it = itensDoQuadro.value.get(id);
+          return it ? [{ id, antes: { y: it.y, atualizadoEm: it.atualizadoEm }, depois: { y: it.y + dy, atualizadoEm: agora } }] : [];
+        });
+        // Um único passo: um Ctrl+Z desfaz a criação e o movimento juntos.
+        executarNoQuadro({ rotulo, ops: alterar.length > 0 ? [{ criar: novos }, { alterar }] : [{ criar: novos }] });
+      } else {
+        const existentes = mover.length > 0 ? new Map((await listarItens(quadroId)).map(i => [i.id, i])) : new Map<string, Item>();
+        const movidos = mover.flatMap(({ id, dy }) => { const it = existentes.get(id); return it ? [descer(it, dy)] : []; });
+        await gravarItens([...novos, ...movidos], []);
+      }
+    },
+    medirTexto: item => {
+      const medida = medidorDeTexto.value?.({ doc: item.doc, largura: item.largura, padding: item.caixa.padding, tamanhoFonte: item.texto.tamanho, fonte: item.texto.fonte, corPadrao: item.texto.cor, alinhamento: item.texto.alinhamento });
+      // Folga de 6% para a fonte que ainda não carregou (como ao colar do Miro); texto vazio ou sem medidor: a altura atual.
+      return medida == null ? item.altura : Math.ceil(medida * 1.06);
     },
     paleta: () => paletaDaCampanha.value,
     capturar: async (quadro, itens, caixa, lado) => {

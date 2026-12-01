@@ -1,9 +1,11 @@
 // Inserção do assistente no estilo do mestre (Q9d). Puro: monta itens soltos (x = y = 0) copiando o estilo
 // de itens de referência; a posição é da Q9e e a medição de altura é injetada.
+import { caixaEnvolventeDeItem, type Caixa } from './camera.ts';
 import { estiloDoQuadro } from './estilo-do-quadro.ts';
+import { blocosDaSecao, itensDaSecao } from './estrutura-da-secao.ts';
 import { PALETA_PADRAO, type PaletaDaCampanha } from './paleta.ts';
-import { MOTIVO_DO_ASSISTENTE, NOTA_ALTURA, NOTA_LARGURA } from './proposta-quadro.ts';
-import type { Secao } from './secoes-do-quadro.ts';
+import { MOTIVO_DO_ASSISTENTE, NOTA_ALTURA, NOTA_LARGURA, posicaoLivre } from './proposta-quadro.ts';
+import { secoesDoQuadro, type Secao } from './secoes-do-quadro.ts';
 import {
   docDeTexto,
   novaNotaAdesiva,
@@ -244,4 +246,158 @@ export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaI
   });
 
   return { itens: resultado, alturas };
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Q9e: posição em coluna.
+
+export const ESPACO_VERTICAL_PADRAO = 24;
+const TOLERANCIA_DA_COLUNA = 24;
+
+/** Onde empilhar: abaixo de um item (ou do bloco que ele abre), abaixo da coluna principal de uma seção, ou numa coluna nova ao lado. */
+export type AlvoDaColuna = { abaixoDe: Item } | { abaixoDeSecao: Secao } | { aoLadoDe: Secao };
+
+export interface OpcoesDaColuna {
+  /** Com obstáculo no caminho, desce os itens da coluna abaixo do ponto em vez de recusar. */
+  abrirEspaco?: boolean;
+  /** Seções do quadro (calculadas de `itens` se faltar). */
+  secoes?: readonly Secao[];
+}
+
+export interface PosicaoEmColuna {
+  /** Canto superior esquerdo de cada item novo, na ordem dos pedidos. */
+  posicoes: { x: number; y: number }[];
+  /** Itens existentes que descem `dy` px (só com `abrirEspaco`). */
+  empurrar: { id: string; dy: number }[];
+  /** Caixa envolvente dos itens novos. */
+  caixa: Caixa;
+}
+
+const curto = (id: string) => id.slice(0, 6);
+const solido = (i: Item) => i.tipo !== 'seta' && i.tipo !== 'moldura';
+const cruza = (a: Caixa, b: Caixa) => a.x < b.x + b.largura && a.x + a.largura > b.x && a.y < b.y + b.altura && a.y + a.altura > b.y;
+const fundo = (c: Caixa) => c.y + c.altura;
+
+/** x e fundo da coluna principal da seção: o x mais comum (±24 px) entre os itens de texto, ou entre todos se não há texto. */
+function colunaPrincipal(secao: Secao, itens: readonly Item[]): { x: number; fundo: number } {
+  const lista = itensDaSecao(secao, itens).filter(solido);
+  const textos = lista.filter((i) => i.tipo === 'texto');
+  const base = textos.length > 0 ? textos : lista;
+  if (base.length === 0) return { x: secao.caixa.x, fundo: secao.caixa.y };
+  let melhor: Item[] = [];
+  for (const a of base) {
+    const grupo = base.filter((b) => Math.abs(b.x - a.x) <= TOLERANCIA_DA_COLUNA);
+    if (grupo.length > melhor.length || (grupo.length === melhor.length && a.x < melhor[0]!.x)) melhor = grupo;
+  }
+  const x = Math.min(...melhor.map((i) => i.x));
+  return { x, fundo: Math.max(...melhor.map((i) => fundo(caixaEnvolventeDeItem(i)))) };
+}
+
+/**
+ * Posiciona itens novos (de `alturas` e `larguras` já medidas) empilhados com `espaco` px entre eles, conforme o alvo.
+ * Nada se sobrepõe a nada (molduras e setas não contam como obstáculo): com obstáculo e sem `abrirEspaco` lança um erro
+ * que diz o que está no caminho; com `abrirEspaco`, devolve em `empurrar` os itens da mesma coluna abaixo do ponto.
+ */
+export function posicionarEmColuna(
+  alturas: readonly number[],
+  larguras: readonly number[],
+  itens: readonly Item[],
+  alvo: AlvoDaColuna,
+  espaco: number,
+  opcoes: OpcoesDaColuna = {},
+): PosicaoEmColuna {
+  if (alturas.length === 0 || alturas.length !== larguras.length) throw new Error('Nada a posicionar.');
+  const secoes = opcoes.secoes ?? secoesDoQuadro(itens);
+  const largura = Math.max(...larguras);
+  const total = alturas.reduce((s, h) => s + h, 0) + espaco * (alturas.length - 1);
+  const empilhar = (x: number, y0: number): { x: number; y: number }[] => {
+    let y = y0;
+    return alturas.map((h) => {
+      const p = { x, y };
+      y += h + espaco;
+      return p;
+    });
+  };
+  const resposta = (posicoes: { x: number; y: number }[], empurrar: { id: string; dy: number }[]): PosicaoEmColuna => ({
+    posicoes,
+    empurrar,
+    caixa: { x: posicoes[0]!.x, y: posicoes[0]!.y, largura, altura: total },
+  });
+
+  if ('aoLadoDe' in alvo) {
+    const p = posicaoLivre({ largura, altura: total }, itens, alvo.aoLadoDe.caixa);
+    return resposta(empilhar(p.x, p.y), []);
+  }
+
+  // Âncora: x da coluna e fundo do ponto.
+  let x: number;
+  let fimDoPonto: number;
+  let secao: Secao | undefined;
+  if ('abaixoDe' in alvo) {
+    const item = alvo.abaixoDe;
+    if (item.tipo === 'seta') throw new Error(`#${curto(item.id)} é uma seta; escolha um item de texto, imagem ou forma.`);
+    if (item.tipo === 'moldura') throw new Error(`#${curto(item.id)} é uma moldura; passe a seção (id ou título) em abaixo_de.`);
+    secao = secoes.find((s) => s.itemIds.includes(item.id));
+    x = item.x;
+    fimDoPonto = fundo(caixaEnvolventeDeItem(item));
+    const bloco = secao ? blocosDaSecao(secao, itens).find((b) => b.tituloId === item.id) : undefined;
+    if (bloco) {
+      const porId = new Map(itens.map((i) => [i.id, i]));
+      for (const id of bloco.itemIds) {
+        const it = porId.get(id);
+        if (it && solido(it)) fimDoPonto = Math.max(fimDoPonto, fundo(caixaEnvolventeDeItem(it)));
+      }
+    }
+  } else {
+    secao = alvo.abaixoDeSecao;
+    const c = colunaPrincipal(secao, itens);
+    x = c.x;
+    fimDoPonto = c.fundo;
+  }
+
+  const y0 = fimDoPonto + espaco;
+  const posicoes = empilhar(x, y0);
+  const regiao: Caixa = { x, y: y0, largura, altura: total + espaco };
+  const obstaculos = itens
+    .filter(solido)
+    .map((i) => ({ item: i, caixa: caixaEnvolventeDeItem(i) }))
+    .filter((o) => cruza(regiao, o.caixa))
+    .sort((a, b) => a.caixa.y - b.caixa.y);
+  if (obstaculos.length === 0) return resposta(posicoes, []);
+
+  if (!opcoes.abrirEspaco) {
+    const o = obstaculos[0]!.item;
+    const dist = Math.round(obstaculos[0]!.caixa.y - fimDoPonto);
+    const sec = secoes.find((s) => s.itemIds.includes(o.id));
+    const bloco = sec ? blocosDaSecao(sec, itens).find((b) => b.tituloId === o.id || b.itemIds.includes(o.id)) : undefined;
+    const onde = dist >= 0 ? `começa ${dist} px abaixo` : `ocupa o espaço`;
+    const quem = bloco ? `o bloco "${bloco.titulo}"` : `o item #${curto(o.id)}`;
+    throw new Error(`Não há espaço livre: ${quem} ${onde}. Use abrir_espaco: true (desce a coluna) ou outro abaixo_de.`);
+  }
+
+  // Desce, pela altura inserida mais o espaço, o que está abaixo do ponto na coluna e na seção.
+  const dy = total + espaco;
+  const coluna = { x, largura };
+  const empurrados = itens
+    .filter((i) => solido(i) && fundo(caixaEnvolventeDeItem(i)) > fimDoPonto && caixaEnvolventeDeItem(i).y >= fimDoPonto - 1)
+    .filter((i) => {
+      // A coluna e, na mesma seção, o que fica ao lado dela (imagens dos blocos seguintes descem junto com o texto).
+      if (secao?.itemIds.includes(i.id)) return true;
+      const c = caixaEnvolventeDeItem(i);
+      return c.x < coluna.x + coluna.largura && c.x + c.largura > coluna.x;
+    });
+  const ids = new Set(empurrados.map((i) => i.id));
+  const preso = obstaculos.find((o) => !ids.has(o.item.id));
+  if (preso) throw new Error(`Não há espaço livre: o item #${curto(preso.item.id)} atravessa o ponto e não é da coluna; abrir_espaco não o move. Escolha outro abaixo_de ou ao_lado_de.`);
+  for (const i of empurrados) {
+    const depois = { ...caixaEnvolventeDeItem(i) };
+    depois.y += dy;
+    for (const o of itens) {
+      if (!solido(o) || ids.has(o.id)) continue;
+      if (cruza(depois, caixaEnvolventeDeItem(o))) {
+        throw new Error(`Abrir espaço faria o item #${curto(i.id)} bater no item #${curto(o.id)}. Escolha outro abaixo_de ou ao_lado_de.`);
+      }
+    }
+  }
+  return resposta(posicoes, empurrados.map((i) => ({ id: i.id, dy })));
 }

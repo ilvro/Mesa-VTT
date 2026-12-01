@@ -22,7 +22,7 @@ function montar(opcoes: { campanha?: boolean; aberto?: boolean; semArquivo?: boo
   ];
   const itens2: Item[] = [nota('q2bbbb', 'n3zzzzzz', 0, 0, 'Corredor com armadilhas e a coroa verdadeira')];
   const chamadas: { id: string; lado: number }[] = [];
-  const criados: { quadroId: string; itens: Item[]; rotulo: string }[] = [];
+  const criados: { quadroId: string; itens: Item[]; rotulo: string; mover?: { id: string; dy: number }[] }[] = [];
   const capturas: { caixa: { x: number; y: number; largura: number; altura: number }; lado: number; itens: number }[] = [];
   const ctx: ContextoDeQuadros = {
     campanha: async () => (opcoes.campanha === false ? null : { id: 'c1', nome: 'C' }),
@@ -31,7 +31,7 @@ function montar(opcoes: { campanha?: boolean; aberto?: boolean; semArquivo?: boo
     aberto: () => (opcoes.aberto ? { quadro: q1, itens: [...itens1, nota('q1aaaa', 'n9nnnnnn', 600, 400, 'Nota só na memória', 'm1')] } : null),
     async imagem(id, lado) { chamadas.push({ id, lado }); return opcoes.semArquivo ? null : 'data:image/jpeg;base64,QUJD'; },
     resumos: async id => guardados.filter(r => r.quadroId === id),
-    async criarItens(quadroId, novos, rotulo) { criados.push({ quadroId, itens: novos, rotulo }); },
+    async criarItens(quadroId, novos, rotulo, mover) { criados.push({ quadroId, itens: novos, rotulo, ...(mover ? { mover } : {}) }); },
     ...(opcoes.semCaptura ? {} : { async capturar(_q: Quadro, itens: ReadonlyMap<string, Item>, caixa: { x: number; y: number; largura: number; altura: number }, lado: number) { capturas.push({ caixa, lado, itens: itens.size }); return 'data:image/jpeg;base64,QUJD'; } }),
     async salvarResumo(r) { const i = guardados.findIndex(x => x.quadroId === r.quadroId && x.alvo === r.alvo); if (i >= 0) guardados[i] = r; else guardados.push(r); },
   };
@@ -152,11 +152,11 @@ test('erros legíveis: quadro, seção e imagem inexistentes, sem campanha, sem 
 
 test('catálogo: cada ferramenta com menos de 4,5 KB e todas só de leitura', () => {
   const ferramentas = ferramentasDaMesa(Object.fromEntries(['repositorio', 'sessoes', 'entidades', 'campanhas', 'cenas', 'elenco', 'quadros'].map(k => [k, {}])) as never);
-  const nomes = ['quadros_listar', 'quadro_mapa', 'quadro_secao', 'quadro_estilo', 'quadro_buscar', 'quadro_imagem', 'quadro_ver_regiao', 'quadro_resumir', 'quadro_descrever_imagem', 'quadro_propor'];
+  const nomes = ['quadros_listar', 'quadro_mapa', 'quadro_secao', 'quadro_estilo', 'quadro_buscar', 'quadro_imagem', 'quadro_ver_regiao', 'quadro_resumir', 'quadro_descrever_imagem', 'quadro_propor', 'quadro_inserir'];
   for (const n of nomes) {
     const t = ferramentas.find(x => x.nome === n);
     assert.ok(t, n);
-    if (n === 'quadro_resumir' || n === 'quadro_descrever_imagem' || n === 'quadro_propor') assert.equal(t.anotacoes?.destrutiva, false);
+    if (n === 'quadro_resumir' || n === 'quadro_descrever_imagem' || n === 'quadro_propor' || n === 'quadro_inserir') assert.equal(t.anotacoes?.destrutiva, false);
     else assert.ok(t.anotacoes?.leitura);
     assert.ok(JSON.stringify({ nome: t.nome, descricao: t.descricao, esquema: t.esquema }).length < 4500, n);
     // Os mesmos limites que o teste do catálogo do Atlas confere (tests/unit/ponte-mcp.test.ts).
@@ -228,4 +228,47 @@ test('quadro_propor: erros legíveis', async () => {
   await assert.rejects(f.quadro_propor!.executar({ quadro: 'Reino', titulo: 'T', notas: [{ texto: 'a', tipo: 'xyz' }] }), /inválido/);
   await assert.rejects(f.quadro_propor!.executar({ quadro: 'Reino', titulo: 'T', notas: [{ texto: 'a' }], perto: 'nao existe' }), /não encontrada/);
   assert.equal(criados.length, 0);
+});
+
+test('quadro_inserir: continua abaixo de um item, numa única chamada de criação (um passo de desfazer)', async () => {
+  const { f, criados } = montar({ aberto: true });
+  const r = await lerJson(f.quadro_inserir!.executar({
+    quadro: 'Reino',
+    abaixo_de: '#i1yyyy',
+    itens: [{ formato: 'titulo', texto: 'COMBATE' }, { formato: 'texto', texto: 'Três afogados saem da água.' }],
+  }));
+  assert.equal(criados.length, 1);
+  assert.equal(criados[0]!.itens.length, 2);
+  assert.deepEqual(r.criados, criados[0]!.itens.map(i => `#${i.id.slice(0, 6)}`));
+  assert.equal(r.empurrados, 0);
+  assert.match(r.desfazer, /Ctrl\+Z/);
+  assert.match(r.conferir, /quadro_ver_regiao/);
+  const [a, b] = criados[0]!.itens;
+  assert.equal(a!.x, 20);
+  assert.ok(a!.y >= 200 + 24 && b!.y > a!.y + a!.altura);
+  assert.ok(criados[0]!.itens.every(i => i.revisao?.origem === 'assistente' && i.molduraId === null || i.molduraId === 'm1'));
+});
+
+test('quadro_inserir: obstáculo recusa; abrir_espaco empurra no mesmo passo de criação', async () => {
+  const { f, criados } = montar();
+  // n1 (20,40) e a imagem (20,200) estão na mesma coluna; abaixo de n1 a imagem é obstáculo.
+  const pedido = { quadro: 'Reino', abaixo_de: '#n1xxxx', itens: [{ formato: 'texto', texto: 'Um parágrafo novo.' }] };
+  await assert.rejects(f.quadro_inserir!.executar(pedido), /Não há espaço livre.*abrir_espaco: true/);
+  assert.equal(criados.length, 0);
+  const r = await lerJson(f.quadro_inserir!.executar({ ...pedido, abrir_espaco: true }));
+  assert.equal(r.empurrados, 1);
+  assert.equal(criados.length, 1);
+  assert.equal(criados[0]!.mover!.length, 1);
+  assert.equal(criados[0]!.mover![0]!.id, 'i1yyyyyy');
+  assert.match(r.desfazer, /sem histórico/);
+});
+
+test('quadro_inserir: ao_lado_de abre coluna nova; sem alvo ou com dois alvos dá erro legível', async () => {
+  const { f, criados } = montar();
+  const r = await lerJson(f.quadro_inserir!.executar({ quadro: 'Reino', ao_lado_de: 'm1', itens: [{ formato: 'texto', texto: 'Nova coluna' }] }));
+  assert.equal(r.empurrados, 0);
+  assert.ok(criados[0]!.itens[0]!.x >= 900);
+  await assert.rejects(f.quadro_inserir!.executar({ quadro: 'Reino', itens: [{ formato: 'texto', texto: 'a' }] }), /abaixo_de.*ao_lado_de/);
+  await assert.rejects(f.quadro_inserir!.executar({ quadro: 'Reino', abaixo_de: 'm1', ao_lado_de: 'm1', itens: [{ formato: 'texto', texto: 'a' }] }), /só um destino/);
+  await assert.rejects(f.quadro_inserir!.executar({ quadro: 'Reino', abaixo_de: '#zzzz', itens: [{ formato: 'texto', texto: 'a' }] }), /não encontrado/);
 });
