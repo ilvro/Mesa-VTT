@@ -17,7 +17,9 @@ export interface OpcoesDaCaptura {
   prazo?: number;
 }
 
-const esperarQuadro = () => new Promise<void>((r) => (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(() => r()) : setTimeout(r, 16)));
+// setTimeout, não requestAnimationFrame: o WebKit suspende o rAF com a janela escondida (o mestre está em outra
+// janela quando o assistente captura), e a captura ficava parada para sempre.
+const esperarQuadro = () => new Promise<void>((r) => setTimeout(r, 30));
 
 /** Data URL JPEG (qualidade 0,8) da `caixa`, com o maior lado em `lado` px. */
 export async function capturarRegiao(itens: ReadonlyMap<string, Item>, caixa: Caixa, opcoes: OpcoesDaCaptura): Promise<string> {
