@@ -47,6 +47,14 @@ import {
   type TipoSemantico,
 } from '../../dominio/quadro.ts';
 import { buscarNoQuadro } from '../../dominio/busca-quadro.ts';
+import {
+  areaMiroParaPacote,
+  contarIgnoradosDaArea,
+  fatorDeEscala,
+  lerAreaDoMiro,
+  type AreaMiro,
+} from '../../dominio/area-miro.ts';
+import { converterMiro, type MetadadosImagemImportada } from '../../dominio/miro.ts';
 import { NOMES_SEMANTICOS } from '../../dominio/paleta.ts';
 import { refDaEntidade, sugerirEntidades } from '../../dominio/notas.ts';
 import { ROTULO_DO_TIPO } from '../../dominio/entidades.ts';
@@ -201,6 +209,9 @@ type Gesto =
       anguloInicial: number;
       rotacaoInicial: number;
     };
+
+/** Fator de escala por quadro do Miro: colagens seguintes do mesmo quadro usam o mesmo fator. */
+const fatoresDoMiro = new Map<string, number>();
 
 export function Quadro() {
   const q = quadroAberto.value;
@@ -359,6 +370,84 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
     selecao.value = new Set([novo.id]);
   };
 
+  const colarDoMiro = (area: AreaMiro, pontoMundo?: Ponto) => {
+    const chave = area.boardId ?? '';
+    let fator = fatoresDoMiro.get(chave);
+    if (fator === undefined) {
+      fator = fatorDeEscala(area);
+      fatoresDoMiro.set(chave, fator);
+    }
+    const imagensPorItemId = new Map<string, MetadadosImagemImportada>();
+    for (const it of itens.value.values()) {
+      if (it.tipo === 'imagem' && it.origem && !imagensPorItemId.has(it.origem.miro)) {
+        imagensPorItemId.set(it.origem.miro, {
+          imagemId: it.imagemId,
+          larguraOriginal: it.larguraOriginal,
+          alturaOriginal: it.alturaOriginal,
+        });
+      }
+    }
+    const agora = Date.now();
+    const resultado = converterMiro(areaMiroParaPacote(area, fator), {
+      quadroId: q.id,
+      agora,
+      novoId: novoIdItem,
+      paleta: paletaDaCampanha.value,
+      imagensPorItemId,
+      fonteMaxima: 400,
+    });
+    const novos = resultado.itens;
+    if (novos.length === 0) {
+      avisar('Nada do que veio do Miro pôde ser colado.');
+      return;
+    }
+    // Colar não é sincronizar: sem `origem`, colar duas vezes não cria duas "cópias" do mesmo item.
+    for (const it of novos) delete it.origem;
+    const semArquivo = novos.filter(
+      (it) => it.tipo === 'imagem' && it.imagemId.startsWith('miro-img-'),
+    ).length;
+
+    const centro =
+      pontoMundo ??
+      telaParaMundo(camera.value, {
+        x: tamanhoTela.value.largura / 2,
+        y: tamanhoTela.value.altura / 2,
+      });
+    const antes = caixaEnvolventeTotal(novos);
+    if (!antes) return;
+    const dx = centro.x - (antes.x + antes.largura / 2);
+    const dy = centro.y - (antes.y + antes.altura / 2);
+    const maxZ = Math.max(0, ...[...itens.value.values()].map((i) => i.z));
+    const deslocar = (p: Ponta): Ponta =>
+      'ponto' in p ? { ponto: [p.ponto[0] + dx, p.ponto[1] + dy] } : p;
+    const colados = novos.map((it): Item => {
+      const base = { ...it, x: it.x + dx, y: it.y + dy, z: it.z + maxZ };
+      return base.tipo === 'seta'
+        ? { ...base, de: deslocar(base.de), para: deslocar(base.para) }
+        : base;
+    });
+
+    executar({ rotulo: 'Colar do Miro', ops: [{ criar: colados }] });
+    selecao.value = new Set(itensDeTopo(colados).map((i) => i.id));
+    const caixa = caixaEnvolventeTotal(colados);
+    if (caixa) {
+      const t = tamanhoTela.value;
+      const z = camera.value.zoom;
+      if (caixa.largura * z > t.largura || caixa.altura * z > t.altura) {
+        camera.value = enquadrar(caixa, t);
+      }
+    }
+    if (semArquivo > 0) {
+      avisar(
+        `${semArquivo} ${semArquivo === 1 ? 'imagem do Miro veio' : 'imagens do Miro vieram'} sem arquivo; arraste a imagem por cima ou atualize pelo .miro.zip.`,
+      );
+    }
+    const ignorados = contarIgnoradosDaArea(area);
+    if (ignorados > 0) {
+      avisar(`${ignorados} ${ignorados === 1 ? 'item do Miro foi ignorado' : 'itens do Miro foram ignorados'} (tipo sem suporte).`);
+    }
+  };
+
   useEffect(() => {
     const marcar = (e: Event) => {
       const alvo = e.target;
@@ -382,6 +471,12 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
       if (editandoId.value) return;
       const alvo = e.target as HTMLElement | null;
       if (alvo && (alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA' || alvo.isContentEditable)) {
+        return;
+      }
+      const areaMiro = lerAreaDoMiro(e.clipboardData?.getData('text/html') ?? '');
+      if (areaMiro) {
+        e.preventDefault();
+        colarDoMiro(areaMiro);
         return;
       }
       const arquivos: Blob[] = [];
@@ -2253,6 +2348,19 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
               const pm = menuContexto.value?.pontoMundo;
               void (async () => {
                 let texto = ultimoTextoCopiadoRef.current ?? '';
+                try {
+                  const entradas = (await navigator.clipboard?.read?.()) ?? [];
+                  for (const entrada of entradas) {
+                    if (!entrada.types.includes('text/html')) continue;
+                    const area = lerAreaDoMiro(await (await entrada.getType('text/html')).text());
+                    if (area) {
+                      colarDoMiro(area, pm);
+                      return;
+                    }
+                  }
+                } catch {
+                  /* segue como antes */
+                }
                 try {
                   const clip = await navigator.clipboard?.readText();
                   if (clip) texto = clip;

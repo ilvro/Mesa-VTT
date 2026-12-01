@@ -142,6 +142,8 @@ export interface OpcoesConverterMiro {
   idExistente?: (miroId: string) => string | undefined
   paleta?: PaletaDaCampanha
   imagensPorItemId?: ReadonlyMap<string, MetadadosImagemImportada>
+  /** Tamanho máximo de fonte dos textos e formas (padrão 128; a colagem do Miro usa 400). */
+  fonteMaxima?: number
 }
 
 export interface ResultadoConversaoMiro {
@@ -479,6 +481,7 @@ export function converterMiro(
   opcoes: OpcoesConverterMiro,
 ): ResultadoConversaoMiro {
   const { quadroId, agora, paleta = PALETA_PADRAO, imagensPorItemId } = opcoes
+  const fonteMaxima = opcoes.fonteMaxima ?? 128
   const idParaMiro = (miroId: string): string => opcoes.idExistente?.(miroId) ?? opcoes.novoId()
   const nomeDoQuadro =
     typeof bruto.board?.name === 'string' && bruto.board.name.trim()
@@ -591,7 +594,7 @@ export function converterMiro(
       const corFundo = resolverCorMiro(st.fillColor)
       const opacidade = st.fillOpacity !== undefined ? Math.min(1, Math.max(0, Number(st.fillOpacity))) : 1
       const corTexto = resolverCorMiro(st.color) || '#e8efe9'
-      const tam = Math.min(128, Math.max(8, Number(st.fontSize) || 16))
+      const tam = Math.min(fonteMaxima, Math.max(8, Number(st.fontSize) || 16))
       const fonte = mapearFonteMiro(typeof st.fontFamily === 'string' ? st.fontFamily : undefined)
       const alinhamento = mapearAlinhamentoTexto(st.textAlign)
 
@@ -681,7 +684,7 @@ export function converterMiro(
       const espessuraBorda = st.borderWidth !== undefined ? Math.min(24, Math.max(0, Number(st.borderWidth))) : 2
       const tracejado = mapearTracejado(st.borderStyle)
       const corTexto = resolverCorMiro(st.color) || (corFundo ? '#111111' : '#e8efe9')
-      const tam = Math.min(128, Math.max(8, Number(st.fontSize) || 16))
+      const tam = Math.min(fonteMaxima, Math.max(8, Number(st.fontSize) || 16))
       const fonte = mapearFonteMiro(typeof st.fontFamily === 'string' ? st.fontFamily : undefined)
       const alinhamento = mapearAlinhamentoTexto(st.textAlign)
       const vertical = mapearAlinhamentoVertical(st.textAlignVertical)

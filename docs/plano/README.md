@@ -25,3 +25,4 @@ Este diretório guarda o plano de evolução próprio da **Mesa** (`Projects/Mes
 | [fase-6.md](fase-6.md) | Concluída — Quadro: experiência (conviver com o Miro, jogar, plataforma) |
 | [fase-7.md](fase-7.md) | Concluída — Quadro legível pelo assistente (seções, mapa, ponte, resumos) |
 | [fase-8-miniaturas-inspecao-e-combate.md](fase-8-miniaturas-inspecao-e-combate.md) | Planejada — Miniaturas vivas de mapas e pistas no Quadro, modal de inspeção UV na Mesa e painel de combate/iniciativa no Modo Sessão (`M8.1a`–`M8.2c`) |
+| [colar-do-miro.md](colar-do-miro.md) | Concluída — Ctrl+C no Miro, Ctrl+V no Quadro com posição, fontes, cores e setas (`C1`) |

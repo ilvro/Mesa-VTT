@@ -58,3 +58,11 @@ O que acontece com cada item:
 Itens que você criou na Mesa nunca são tocados. O que é da Mesa também é mantido: tipo (semântica), "feito", travado, só mestre, grupos, ordem de empilhamento, cores e fontes, e as ligações. O pacote precisa ser do mesmo quadro do Miro; se for de outro, a Mesa avisa e não muda nada.
 
 **Importante:** quadros importados antes desta versão não sabem de qual item do Miro cada coisa veio, então o botão não aparece neles. Importe o quadro de novo uma vez; dali em diante ele pode ser atualizado.
+
+## 6. Copiar e colar do Miro
+
+Sem token e sem arquivo: selecione itens no Miro, **Ctrl+C**, e no Quadro da Mesa **Ctrl+V** (ou "Colar" no menu de contexto). Chegam textos, molduras, formas e setas com posição, proporção, fonte, cores e ligações, no centro da tela e num único Ctrl+Z.
+
+- **Não vêm:** os bytes das imagens (o Miro só entrega o item). A imagem chega como espaço reservado; arraste o arquivo por cima ou use o `.miro.zip`. Se o quadro aberto já tem essa imagem (veio por `.miro.zip`), ela é reaproveitada.
+- **Escala:** o Miro usa escalas enormes por item. A Mesa divide tudo pela escala do texto de corpo (a que cobre mais caracteres), então o corpo chega com a fonte do Miro e o resto mantém a proporção. O fator fica guardado por quadro do Miro enquanto o app está aberto, para colagens seguintes se encaixarem.
+- Colar não sincroniza: os itens colados não guardam a origem, então "Atualizar do Miro" não os conhece e colar duas vezes não os duplica na revisão.

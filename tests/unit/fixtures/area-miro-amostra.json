@@ -1,0 +1,215 @@
+{
+ "isProtected": false,
+ "boardId": "uXjVGY2ZTMU=",
+ "data": {
+  "objects": [
+   {
+    "widgetData": {
+     "json": {
+      "_position": {
+       "offsetPx": {
+        "x": 0,
+        "y": -10365.68962474144
+       },
+       "schema": "canvasOffsetPx"
+      },
+      "scale": {
+       "scale": 42.857142857142854
+      },
+      "relativeScale": 42.857142857142854,
+      "rotation": {
+       "rotation": 0
+      },
+      "relativeRotation": 0,
+      "size": {
+       "width": 349.46793614168337,
+       "height": 18
+      },
+      "_parent": null,
+      "text": "<p><strong style=\"color:rgb(255,255,255)\">CONTOS DA VIGÍLIA: O PÂNTANO DOS AFOGADOS</strong></p>",
+      "style": "{\"st\":14,\"bc\":-1,\"bo\":1,\"bsc\":0,\"ta\":\"l\",\"tc\":16777215,\"tsc\":0,\"ffn\":\"PT Serif\",\"p\":0,\"b\":1,\"u\":0,\"i\":0,\"s\":0,\"fw\":1,\"brc\":-1,\"bro\":1,\"brw\":0,\"brs\":2,\"hl\":\"\"}"
+     },
+     "type": "text"
+    },
+    "type": 14,
+    "id": 0,
+    "initialId": "3458764689602123728",
+    "meta": {
+     "boardId": "uXjVGY2ZTMU=",
+     "orgId": "3458764625919154602",
+     "widgetToken": 10112
+    }
+   },
+   {
+    "widgetData": {
+     "json": {
+      "_position": {
+       "offsetPx": {
+        "x": -137.69592644344084,
+        "y": -7805.579255674325
+       },
+       "schema": "canvasOffsetPx"
+      },
+      "scale": {
+       "scale": 5.381352618109037
+      },
+      "relativeScale": 5.381352618109037,
+      "rotation": {
+       "rotation": 0
+      },
+      "relativeRotation": 0,
+      "_parent": null,
+      "crop": {
+       "x": 0,
+       "y": 0,
+       "width": 840,
+       "height": 569,
+       "shape": "custom"
+      },
+      "resource": {
+       "id": "3458764518319645737",
+       "boardId": "uXjVGY2ZTMU=",
+       "name": "image.png",
+       "generated": true,
+       "width": 840,
+       "height": 569
+      },
+      "image": {
+       "animated": false,
+       "externalLink": null
+      },
+      "title": "",
+      "altText": "",
+      "style": "{\"brc\":-1,\"bro\":1,\"brw\":5,\"brs\":2,\"brr\":0}"
+     },
+     "type": "image"
+    },
+    "type": 14,
+    "id": 1,
+    "initialId": "3458764689602123866",
+    "meta": {
+     "boardId": "uXjVGY2ZTMU=",
+     "orgId": "3458764625919154602",
+     "widgetToken": 10113
+    }
+   },
+   {
+    "widgetData": {
+     "json": {
+      "_position": {
+       "offsetPx": {
+        "x": 192.34501137089683,
+        "y": -1462.9296884442738
+       },
+       "schema": "canvasOffsetPx"
+      },
+      "scale": {
+       "scale": 27.47435540325434
+      },
+      "relativeScale": 27.47435540325434,
+      "rotation": {
+       "rotation": 0
+      },
+      "relativeRotation": 0,
+      "size": {
+       "width": 97.63225706821329,
+       "height": 18
+      },
+      "_parent": null,
+      "text": "<p><strong style=\"color:rgb(255,255,255)\">INTRODUÇÃO</strong></p>",
+      "style": "{\"st\":14,\"bc\":-1,\"bo\":1,\"bsc\":0,\"ta\":\"l\",\"tc\":16777215,\"tsc\":0,\"ffn\":\"PT Serif\",\"p\":0,\"b\":1,\"u\":0,\"i\":0,\"s\":0,\"fw\":1,\"brc\":-1,\"bro\":1,\"brw\":0,\"brs\":2,\"hl\":\"\"}"
+     },
+     "type": "text"
+    },
+    "type": 14,
+    "id": 12,
+    "initialId": "3458764689602794177",
+    "meta": {
+     "boardId": "uXjVGY2ZTMU=",
+     "orgId": "3458764625919154602",
+     "widgetToken": 10124
+    }
+   },
+   {
+    "widgetData": {
+     "json": {
+      "points": [],
+      "primary": {
+       "point": {
+        "x": 1,
+        "y": 0.5
+       },
+       "positionType": 0,
+       "widgetIndex": 2
+      },
+      "secondary": {
+       "point": {
+        "x": 2371.1040506727295,
+        "y": -1618.2976970752643
+       },
+       "positionType": 0,
+       "widgetIndex": -1
+      },
+      "_position": null,
+      "_parent": null,
+      "style": "{\"lc\":3355443,\"ls\":2,\"t\":2,\"lt\":2,\"a_start\":0,\"a_end\":9,\"VER\":2,\"jump\":0}",
+      "line": {
+       "captions": []
+      }
+     },
+     "type": "line"
+    },
+    "type": 14,
+    "id": 13,
+    "initialId": "3458764689602794509",
+    "meta": {
+     "boardId": "uXjVGY2ZTMU=",
+     "orgId": "3458764625919154602",
+     "widgetToken": 10125
+    }
+   },
+   {
+    "widgetData": {
+     "json": {
+      "_position": {
+       "offsetPx": {
+        "x": 1834.6530100540258,
+        "y": 10153.102953534253
+       },
+       "schema": "canvasOffsetPx"
+      },
+      "scale": {
+       "scale": 8.5
+      },
+      "relativeScale": 8.5,
+      "rotation": {
+       "rotation": 0
+      },
+      "relativeRotation": 0,
+      "size": {
+       "width": 315.49595212024207,
+       "height": 36
+      },
+      "_parent": null,
+      "text": "<p><strong style=\"background-color:rgb(173,240,199)\">[AFOGADO]</strong><span style=\"background-color:rgb(173,240,199)\"> “Oisín… meu pequeno, Oisín… fuja…<br />fuja daqui…”</span></p>",
+      "style": "{\"st\":14,\"bc\":-1,\"bo\":1,\"bsc\":0,\"ta\":\"l\",\"tc\":1710618,\"tsc\":0,\"ffn\":\"PT Serif\",\"p\":0,\"b\":0,\"u\":0,\"i\":0,\"s\":0,\"fw\":1,\"brc\":-1,\"bro\":1,\"brw\":0,\"brs\":2,\"hl\":\"\"}"
+     },
+     "type": "text"
+    },
+    "type": 14,
+    "id": 19,
+    "initialId": "3458764689603062321",
+    "meta": {
+     "boardId": "uXjVGY2ZTMU=",
+     "orgId": "3458764625919154602",
+     "widgetToken": 10131
+    }
+   }
+  ],
+  "meta": {}
+ },
+ "version": 2,
+ "host": "miro.com",
+ "asPortalAmount": 0,
+ "copierType": "COPY"
+}
