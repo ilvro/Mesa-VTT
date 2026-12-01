@@ -97,7 +97,7 @@ Commit: `assistant can view a board region as an image`
 
 ## Etapa B — Escrever no estilo
 
-### Q9d — Montar itens com estilo copiado (puro)  ⬜
+### Q9d — Montar itens com estilo copiado (puro)  ✅
 Objetivo: transformar o pedido do assistente em itens com o mesmo visual dos do mestre.
 Depende de: Q9a.
 Ler: `src/dominio/proposta-quadro.ts`, `src/dominio/quadro.ts` (`novaNotaAdesiva`, `docDeTexto`, validação do `DocRico`), `src/dominio/doc-rico.ts`.
@@ -118,6 +118,7 @@ Como:
 6. A altura vem de `medir(item) → number`, injetado. Saída: `{ itens, alturas }`, ainda sem posição.
 Erros legíveis: `#id` inexistente ou que não é texto ("#it-954 é uma imagem; use um item de texto em estilo_como"); parágrafo vazio; limites.
 Testes: cópia de estilo e largura; `como` aplica o destaque predominante; `tipo` não pinta com estilo; sem estilo usa o detectado; marcadores preservados; revisão marcada.
+Nota: `montarInsercao(pedidos: ItemPedido[], { quadroId, itens, secao?, agora, novoId, medir, paleta? }) → { itens, alturas }` em `src/dominio/insercao-quadro.ts` (`alturas` é `Record<id, altura>`; a altura também fica gravada no item; x e y = 0). Exporta também `marcasPredominantes(doc)`, `ItemPedido` (com a variante `imagem`, recusada com "ainda não suportado" até a Q9f), `MAX_ITENS_POR_INSERCAO` (40) e `MAX_TEXTO_DO_ITEM` (4000). `itens` é o quadro inteiro (resolve `#id` por id exato, depois prefixo; ambíguo ou inexistente dá erro legível). Desvios: sem estilo detectado, `titulo` cai no padrão de `novoTexto` com tamanho 28 (senão não se distinguiria do corpo); `texto` e `paragrafos` são exclusivos (erro se vierem juntos); `como` em parágrafo com `\n` repete as marcas em cada linha; `formato: 'nota'` sem `estilo_como` ignora o estilo detectado (usa a paleta, 240×160, `alturaAuto` falso); `molduraId` só é preenchido se a moldura da seção não for do assistente. Limites: o limite de 4000 caracteres do item soma todos os parágrafos; `como` só olha `bold`, `italic` e `textStyle` (cor, fundo, tamanho, fonte), não sublinhado, tachado nem link; `estilo_como` aceita só item `texto` (não forma). Na revisão: texto e título são sempre medidos (com altura fixa copiada, a caixa nunca fica menor que a medida); antes, a altura do exemplo era copiada e uma narração mais longa estouraria a caixa.
 Commit: `build assistant items that copy the gm text style`
 
 ### Q9e — Posicionar em coluna e a ferramenta `quadro_inserir`  ⬜
