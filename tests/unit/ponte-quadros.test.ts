@@ -70,6 +70,16 @@ test('quadro_secao: titulos por padrão, completo e id curto; seção por id ou 
   await assert.rejects(f.quadro_secao!.executar({ quadro: 'Reino Vermelho', secao: 'm1', pagina: 0 }), /pagina/);
 });
 
+test('quadro_estilo: resumo da seção (escolhida ou pedida) e erro de seção', async () => {
+  const { f } = montar();
+  const t = await lerTexto(f.quadro_estilo!.executar({ quadro: 'Reino Vermelho' }));
+  assert.match(t, /^Seção: "Capítulo 1" \(m1\), escolhida por ter mais itens de texto do mestre; 2 itens de texto\./);
+  assert.match(t, /Semântica: 0% dos itens; o mestre não usa post-its tipados/);
+  const pedida = await lerTexto(f.quadro_estilo!.executar({ quadro: 'Reino Vermelho', secao: 'capitulo 1' }));
+  assert.ok(!pedida.includes('escolhida'));
+  await assert.rejects(f.quadro_estilo!.executar({ quadro: 'Reino Vermelho', secao: 'zzz' }), /Seção "zzz" não encontrada/);
+});
+
 test('quadro_buscar: sem acento, com trecho limitado, em um quadro ou em todos', async () => {
   const { f } = montar();
   const r = await lerJson(f.quadro_buscar!.executar({ termo: 'CORÔA' }));
@@ -123,7 +133,7 @@ test('erros legíveis: quadro, seção e imagem inexistentes, sem campanha, sem 
 
 test('catálogo: cada ferramenta com menos de 4,5 KB e todas só de leitura', () => {
   const ferramentas = ferramentasDaMesa(Object.fromEntries(['repositorio', 'sessoes', 'entidades', 'campanhas', 'cenas', 'elenco', 'quadros'].map(k => [k, {}])) as never);
-  const nomes = ['quadros_listar', 'quadro_mapa', 'quadro_secao', 'quadro_buscar', 'quadro_imagem', 'quadro_resumir', 'quadro_descrever_imagem', 'quadro_propor'];
+  const nomes = ['quadros_listar', 'quadro_mapa', 'quadro_secao', 'quadro_estilo', 'quadro_buscar', 'quadro_imagem', 'quadro_resumir', 'quadro_descrever_imagem', 'quadro_propor'];
   for (const n of nomes) {
     const t = ferramentas.find(x => x.nome === n);
     assert.ok(t, n);

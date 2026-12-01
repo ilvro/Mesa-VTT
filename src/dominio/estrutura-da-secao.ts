@@ -94,7 +94,7 @@ function estiloDoDoc(doc: DocRico): EstiloDoDoc {
   return { total, destaques, negrito: total > 0 && negrito > total / 2, italico: total > 0 && italico > total / 2, cor };
 }
 
-function itensDaSecao(secao: Secao, itens: readonly Item[]): Item[] {
+export function itensDaSecao(secao: Secao, itens: readonly Item[]): Item[] {
   const porId = new Map(itens.map((i) => [i.id, i]));
   const r: Item[] = [];
   for (const id of secao.itemIds) {
@@ -105,7 +105,7 @@ function itensDaSecao(secao: Secao, itens: readonly Item[]): Item[] {
 }
 
 /** Itens de texto/forma com texto que seriam título (semântica, H1/H2 ou fonte maior). */
-function titulosEntre(ordenados: readonly Item[]): Map<string, string> {
+export function titulosEntre(ordenados: readonly Item[]): Map<string, string> {
   const o = OPCOES_PADRAO_SECOES;
   const comTexto: { item: Item; info: NonNullable<ReturnType<typeof infoDoTexto>> }[] = [];
   for (const item of ordenados) {

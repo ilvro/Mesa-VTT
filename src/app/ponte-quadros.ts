@@ -16,6 +16,7 @@ import {
   type RegistroResumo,
 } from '../dominio/resumos-do-quadro.ts';
 import { assinaturaDaSecao, secoesDoQuadro, type Secao } from '../dominio/secoes-do-quadro.ts';
+import { estiloDoQuadro, textoDoEstilo } from '../dominio/estilo-do-quadro.ts';
 import { estruturaDaSecao } from '../dominio/estrutura-da-secao.ts';
 import { LIMITE_TOKENS_PADRAO, textoDaSecao } from '../dominio/texto-da-secao.ts';
 
@@ -172,6 +173,25 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
         const resumo = resumos.get(s.id);
         const topo = resumo ? `Resumo${resumo.desatualizado ? ' (desatualizado)' : ''}${resumo.autor === 'mestre' ? ' (escrito pelo mestre)' : ''}: ${resumo.texto}\n\n` : '';
         return [texto(topo + r.texto)];
+      },
+    },
+    {
+      nome: 'quadro_estilo',
+      descricao: 'Como o mestre escreve numa seção: estilos de título e corpo, destaques por cor, fluxo (coluna, grade), lado das imagens, uso de tipos; cada um com um #id de exemplo. Chame antes de montar ou continuar material no quadro. Sem secao, usa a do mestre com mais texto.',
+      esquema: {
+        type: 'object',
+        properties: {
+          quadro: quadroEsquema,
+          secao: { type: 'string', description: 'Id da seção (do quadro_mapa) ou o título; opcional.' },
+        },
+        required: ['quadro'],
+        additionalProperties: false,
+      },
+      anotacoes: { leitura: true, idempotente: true },
+      async executar(args) {
+        const c = await quadroPor(args.quadro);
+        const s = textoDe(args.secao) ? secaoPor(c, args.secao) : undefined;
+        return [texto(textoDoEstilo(estiloDoQuadro(c.itens, s)))];
       },
     },
     {
