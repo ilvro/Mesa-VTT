@@ -28,7 +28,7 @@ import { caminhoDaSeta, setasLigadasA } from '../../../dominio/setas.ts';
 import { nivelMipmapParaTela, type CacheImagensPixi } from './cache-imagens-pixi.ts';
 import { desenharPolilinha, parsearCorPixi } from './cores-pixi.ts';
 import { desenharSetaPixi } from './render-setas.ts';
-import { CacheTextosPixi, type PedidoTextoPixi } from './render-textos.ts';
+import { CacheTextosPixi, FONTE_MINIMA_NA_TELA, type PedidoTextoPixi } from './render-textos.ts';
 import { desenharTracoPixi } from './render-tracos.ts';
 
 interface EntradaVisual {
@@ -295,7 +295,7 @@ export class GerenciadorItensPixi {
     zoom: number,
     dpr: number,
   ): void {
-    if ((item.tipo === 'texto' || item.tipo === 'forma') && item.texto.tamanho * zoom < 2) {
+    if ((item.tipo === 'texto' || item.tipo === 'forma') && item.texto.tamanho * zoom < FONTE_MINIMA_NA_TELA) {
       if (ent.spriteTexto) ent.spriteTexto.visible = false;
       return;
     }

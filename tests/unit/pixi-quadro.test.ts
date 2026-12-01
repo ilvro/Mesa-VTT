@@ -28,6 +28,7 @@ import {
 } from '../../src/ui/quadro/pixi/hittest-pixi.ts';
 import { CamadaSelecaoPixi } from '../../src/ui/quadro/pixi/selecao-pixi.ts';
 import { GerenciadorItensPixi } from '../../src/ui/quadro/pixi/render-itens.ts';
+import { FATOR_NIVEL_GRADE, niveisDaGrade } from '../../src/ui/quadro/pixi/grade-pixi.ts';
 
 const origCreateImageBitmap = globalThis.createImageBitmap;
 const origOffscreenCanvas = globalThis.OffscreenCanvas;
@@ -199,7 +200,9 @@ describe('pixi-quadro (QW5)', () => {
     assert.equal(blocos[1]!.prefixo, '• ');
     assert.equal(blocos[1]!.trechos[1]!.ehLink, true);
 
-    assert.equal(baldeEscalaTexto(0.2, 1), 0.5);
+    assert.equal(baldeEscalaTexto(0.2, 1), 0.25);
+    assert.equal(baldeEscalaTexto(0.4, 1), 0.5);
+    assert.equal(baldeEscalaTexto(0.01, 1), 1 / 64);
     assert.equal(baldeEscalaTexto(0.8, 1), 1);
     assert.equal(baldeEscalaTexto(1.3, 1), 1.5);
     assert.equal(baldeEscalaTexto(2.5, 1), 2);
@@ -231,7 +234,7 @@ describe('pixi-quadro (QW5)', () => {
     cache.iniciarQuadro();
     const doc = { type: 'doc' as const, content: [{ type: 'paragraph' as const, content: [{ type: 'text' as const, text: 'Olá mundo' }] }] };
 
-    // Abaixo de 2 px na tela: não gera textura (corte sub-pixel).
+    // Abaixo de FONTE_MINIMA_NA_TELA (0,35 px) não gera textura; acima disso, de longe, vira faixas.
     const sub = cache.obter(
       {
         chave: 'sub',
@@ -246,7 +249,7 @@ describe('pixi-quadro (QW5)', () => {
         alinhamento: 'esquerda',
         vertical: 'topo',
       },
-      0.1,
+      0.02,
       1,
     );
     assert.equal(sub, null);
@@ -427,5 +430,21 @@ describe('pixi-quadro (QW5)', () => {
     assert.equal(ger.quantidadeVisual(), 0);
     textos.destruir();
     cache.destruir();
+  });
+});
+
+describe('grade em níveis (como no Miro)', () => {
+  it('o nível fino é o primeiro com espaçamento visível e os seguintes são 4× maiores', () => {
+    const n = niveisDaGrade(24, 0.01);
+    assert.equal(n.length, 3);
+    assert.ok(n[0]!.passo * 0.01 >= 6);
+    assert.equal(n[1]!.passo, n[0]!.passo * FATOR_NIVEL_GRADE);
+    assert.ok(n[0]!.forca <= n[1]!.forca && n[1]!.forca <= n[2]!.forca);
+  });
+  it('perto, o nível base aparece inteiro; em qualquer zoom algum nível aparece', () => {
+    assert.equal(niveisDaGrade(24, 2)[0]!.forca, 1);
+    for (const z of [0.001, 0.003, 0.02, 0.1, 0.5, 4]) {
+      assert.ok(niveisDaGrade(24, z).some((v) => v.forca > 0.5), `zoom ${z}`);
+    }
   });
 });

@@ -135,13 +135,19 @@ export function extrairBlocosDeTexto(doc: DocRico): BlocoTexto[] {
   return blocos;
 }
 
+/** Escalas de raster: de 1/64 a 2, para a textura acompanhar o tamanho na tela mesmo bem longe. */
+const BALDES_ESCALA = [1 / 64, 1 / 32, 1 / 16, 1 / 8, 1 / 4, 0.5, 1, 1.5, 2];
+
 export function baldeEscalaTexto(zoom: number, dpr = 1): number {
   const alvo = zoom * dpr;
-  if (alvo <= 0.5) return 0.5;
-  if (alvo <= 1.0) return 1;
-  if (alvo <= 1.5) return 1.5;
+  for (const b of BALDES_ESCALA) if (alvo <= b) return b;
   return 2;
 }
+
+/** Abaixo disto (px de fonte na tela) o texto nem é desenhado: seria menos que um traço. */
+export const FONTE_MINIMA_NA_TELA = 0.35;
+/** Abaixo disto (px de fonte no raster) as palavras viram faixas, como o Miro faz de longe. */
+const FONTE_MINIMA_LEGIVEL = 2.5;
 
 export interface PedidoTextoPixi {
   chave: string;
@@ -335,7 +341,7 @@ export class CacheTextosPixi {
     zoom: number,
     dpr = 1,
   ): { textura: Texture; larguraCss: number; alturaCss: number } | null {
-    if (pedido.tamanhoFonte * zoom < 2) return null;
+    if (pedido.tamanhoFonte * zoom < FONTE_MINIMA_NA_TELA) return null;
     if (pedido.largura < 4 || pedido.altura < 4) return null;
 
     const escala = baldeEscalaTexto(zoom, dpr);
@@ -434,9 +440,18 @@ export class CacheTextosPixi {
           ctx.fillStyle = seg.fundo;
           ctx.fillRect(x, y, seg.largura, seg.tamanhoPx * 1.15);
         }
-        ctx.font = seg.cssFonte;
         ctx.fillStyle = seg.cor;
-        ctx.fillText(seg.texto, x, y);
+        if (seg.tamanhoPx * escLimitada < FONTE_MINIMA_LEGIVEL) {
+          // Longe demais para glifos: a palavra vira uma faixa na cor do texto.
+          if (seg.texto.trim().length > 0) {
+            ctx.globalAlpha = 0.55;
+            ctx.fillRect(x, y + seg.tamanhoPx * 0.3, seg.largura, seg.tamanhoPx * 0.55);
+            ctx.globalAlpha = 1;
+          }
+        } else {
+          ctx.font = seg.cssFonte;
+          ctx.fillText(seg.texto, x, y);
+        }
         if (seg.sublinhado) {
           ctx.fillRect(x, y + seg.tamanhoPx * 1.02, seg.largura, Math.max(1, seg.tamanhoPx * 0.07));
         }
