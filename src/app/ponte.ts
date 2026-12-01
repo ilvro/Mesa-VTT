@@ -143,6 +143,11 @@ const ferramentas = ferramentasDaMesa({
       const { id, largura, altura } = await guardarImagem(retrato);
       return { imagemId: id, larguraOriginal: largura > 0 ? largura : 320, alturaOriginal: altura > 0 ? altura : 240 };
     },
+    guardarImagemDeDados: async dataUrl => {
+      const blob = await (await fetch(dataUrl)).blob();
+      const { id, largura, altura } = await guardarImagem(blob);
+      return { imagemId: id, larguraOriginal: largura > 0 ? largura : 320, alturaOriginal: altura > 0 ? altura : 240 };
+    },
     resumos: id => listarResumos(id),
     salvarResumo: gravarResumo,
     criarItens: async (quadroId, novos, rotulo, mover = []) => {

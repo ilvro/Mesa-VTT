@@ -45,6 +45,8 @@ export interface ContextoDeQuadros {
   medirLarguraDoTexto?(item: Extract<Item, { tipo: 'texto' }>): number | null;
   /** O retrato da entidade copiado para o banco de imagens do quadro; null se ela não tem retrato. Sem isto, `entidade:` em `quadro_inserir` não é suportado. */
   retratoDaEntidade?(entidadeId: string): Promise<ImagemResolvida | null>;
+  /** Guarda no banco de imagens do quadro uma imagem vinda como data URL (Q9m; o servidor da ponte troca `arquivo:`/`pdf:` por `dados:`). Sem isto, `dados:` não é suportado. */
+  guardarImagemDeDados?(dataUrl: string): Promise<ImagemResolvida>;
   /** Paleta da campanha (cores por tipo); padrão se ausente. */
   paleta?(): PaletaDaCampanha;
   /** A região do quadro como JPEG (data URL), com o maior lado em `lado` px; sem isto, `quadro_ver_regiao` avisa que não há captura. */
@@ -383,14 +385,15 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
                 colunas: { type: 'integer', description: 'Só grade: células por fileira.' },
                 espaco: { type: 'number', description: 'Só grupo: px entre células (padrão: 3 × o da coluna, mín. 24).' },
                 largura_da_celula: { type: 'number', description: 'Só grupo: largura forçada dos itens da célula.' },
-                formato: { type: 'string', enum: ['texto', 'titulo', 'nota', 'imagem'], description: 'texto (corpo), titulo, nota (post-it) ou imagem.' },
-                de: { type: 'string', description: 'Só imagem: #id de imagem do quadro ou entidade:<nome ou id> (retrato).' },
+                formato: { type: 'string', enum: ['texto', 'titulo', 'rotulo', 'nota', 'imagem'], description: 'texto (corpo), titulo, rotulo (só o trecho do papel), nota (post-it) ou imagem.' },
+                papel: { type: 'string', description: 'Papel da legenda (quadro_estilo): o texto todo, ou os parágrafos sem como/papel.' },
+                de: { type: 'string', description: 'Só imagem: #id, entidade:<nome> ou arquivo:/pdf: (ponte).' },
                 lado: { type: 'string', enum: ['direita', 'esquerda'], description: 'Só imagem: ao lado do texto anterior, sem ocupar altura; sem lado, na coluna.' },
                 texto: { type: 'string', description: 'O texto; ou use paragrafos.' },
                 paragrafos: {
                   type: 'array',
-                  description: 'Parágrafos, cada um com o destaque de um item do mestre.',
-                  items: { type: 'object', properties: { texto: { type: 'string' }, como: { type: 'string', description: '#id do item cujo destaque copiar.' } }, required: ['texto'], additionalProperties: false },
+                  description: 'Parágrafos: texto ou trechos, com papel ou como.',
+                  items: { type: 'object', properties: { texto: { type: 'string' }, papel: { type: 'string' }, como: { type: 'string', description: '#id do item cujo destaque copiar.' }, trechos: { type: 'array', description: 'No lugar de texto: partes {texto, papel?, como?}.', items: { type: 'object', properties: { texto: { type: 'string' }, papel: { type: 'string' }, como: { type: 'string' } }, required: ['texto'], additionalProperties: false } } }, additionalProperties: false },
                 },
                 estilo_como: { type: 'string', description: '#id do item de texto cujo estilo copiar (quadro_estilo).' },
                 tipo: { type: 'string', enum: [...TIPOS_SEMANTICOS], description: 'Tipo semântico; opcional, sem cor com estilo.' },
@@ -449,6 +452,14 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
         const retratos = new Map<string, ImagemResolvida>();
         for (const p of pedidos) {
           const de = p && p.formato === 'imagem' && typeof p.de === 'string' ? p.de.trim() : '';
+          if (/^dados:/i.test(de) && !retratos.has(de)) {
+            if (!ctx.guardarImagemDeDados) throw new Error('Imagens de arquivo só pela ponte do assistente.');
+            const dataUrl = de.slice(de.indexOf(':') + 1).trim();
+            validarDataUrlDeImagem(dataUrl);
+            const { nome: _nome, ...img } = await ctx.guardarImagemDeDados(dataUrl);
+            retratos.set(de, img);
+            continue;
+          }
           if (!/^entidade:/i.test(de) || retratos.has(de)) continue;
           const chave = de.slice(de.indexOf(':') + 1).trim();
           if (!chave) throw new Error('Informe o nome ou id da entidade em entidade:<nome ou id>.');
@@ -569,4 +580,17 @@ function estimarAltura(item: Extract<Item, { tipo: 'texto' }>): number {
   const porLinha = Math.max(1, Math.floor((item.largura - pad * 2) / (tam * 0.52)));
   const linhas = textoBuscavel(item).split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / porLinha)), 0);
   return Math.ceil(linhas * tam * 1.4 + pad * 2);
+}
+
+const TIPOS_DE_IMAGEM_ACEITOS = ['image/png', 'image/jpeg', 'image/webp'];
+const TAMANHO_MAXIMO_DA_IMAGEM = 15 * 1024 * 1024;
+
+/** Confere `data:image/(png|jpeg|webp);base64,…` com até 15 MB; erro legível se não. */
+function validarDataUrlDeImagem(dataUrl: string): void {
+  const m = /^data:([^;,]+)(;[^,]*)?,/i.exec(dataUrl);
+  if (!m || !/;base64/i.test(m[2] ?? '')) throw new Error('A imagem "dados:" precisa ser um data URL em base64 (data:image/png;base64,…).');
+  const tipo = m[1]!.toLowerCase();
+  if (!TIPOS_DE_IMAGEM_ACEITOS.includes(tipo)) throw new Error(`Tipo de imagem "${tipo}" não aceito. Use PNG, JPEG ou WebP.`);
+  const base64 = dataUrl.length - m[0].length;
+  if (Math.floor((base64 * 3) / 4) > TAMANHO_MAXIMO_DA_IMAGEM) throw new Error('A imagem passa de 15 MB; reduza-a antes de inserir.');
 }

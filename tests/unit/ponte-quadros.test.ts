@@ -10,7 +10,7 @@ const doc = (...linhas: string[]): DocRico => ({ type: 'doc', content: linhas.ma
 const nota = (qid: string, id: string, x: number, y: number, texto: string, mae: string | null = null) =>
   ({ ...novaNotaAdesiva({ quadroId: qid, x, y, largura: 200, altura: 100, doc: doc(texto) }, 1, id), molduraId: mae }) as Item;
 
-function montar(opcoes: { campanha?: boolean; aberto?: boolean; semArquivo?: boolean; semCaptura?: boolean; retratos?: boolean; resumos?: RegistroResumo[] } = {}) {
+function montar(opcoes: { campanha?: boolean; aberto?: boolean; semArquivo?: boolean; semCaptura?: boolean; retratos?: boolean; dados?: string[]; resumos?: RegistroResumo[] } = {}) {
   const guardados: RegistroResumo[] = opcoes.resumos ?? [];
   const q1: Quadro = novoQuadro('c1', 'Reino Vermelho', 1, 'q1aaaa');
   const q2: Quadro = novoQuadro('c1', 'Masmorra', 1, 'q2bbbb');
@@ -31,6 +31,7 @@ function montar(opcoes: { campanha?: boolean; aberto?: boolean; semArquivo?: boo
     aberto: () => (opcoes.aberto ? { quadro: q1, itens: [...itens1, nota('q1aaaa', 'n9nnnnnn', 600, 400, 'Nota só na memória', 'm1')] } : null),
     entidades: async () => new Map([['e-aldric', { nome: 'Aldric', tipo: 'personagem' }], ['e-vazia', { nome: 'Sem Retrato', tipo: 'personagem' }]]),
     ...(opcoes.retratos ? { async retratoDaEntidade(id: string) { return id === 'e-aldric' ? { imagemId: 'ret-aldric', larguraOriginal: 200, alturaOriginal: 300 } : null; } } : {}),
+    ...(opcoes.dados ? { async guardarImagemDeDados(url: string) { const i = new Set(opcoes.dados).has(url) ? 0 : 1; opcoes.dados!.push(url); return { imagemId: `hash-${url.slice(-4)}`, larguraOriginal: 1000, alturaOriginal: 500 + i * 0 }; } } : {}),
     async imagem(id, lado) { chamadas.push({ id, lado }); return opcoes.semArquivo ? null : 'data:image/jpeg;base64,QUJD'; },
     resumos: async id => guardados.filter(r => r.quadroId === id),
     async criarItens(quadroId, novos, rotulo, mover) { criados.push({ quadroId, itens: novos, rotulo, ...(mover ? { mover } : {}) }); },
@@ -367,4 +368,24 @@ test('quadro_inserir: linha e grade lado a lado, setas pelos índices achatados,
   const muitos = Array.from({ length: 40 }, () => [{ formato: 'texto', texto: 'x' }]);
   await assert.rejects(f.quadro_inserir!.executar({ quadro: 'Reino', abaixo_de: '#i1yyyy', itens: [{ formato: 'texto', texto: 'y' }, { linha: muitos }] }), /máximo por chamada é 40/);
   await assert.rejects(f.quadro_inserir!.executar({ quadro: 'Reino', abaixo_de: '#i1yyyy', itens: [{ linha: [[{ formato: 'imagem', de: '#i1yyyy', lado: 'direita' }]] }] }), /imagem com "lado"/);
+});
+
+test('quadro_inserir: dados: guarda a imagem (solta e em célula de grade), sem repetir a gravação; valida mime, tamanho e contexto', async () => {
+  const dados: string[] = [];
+  const { f, criados } = montar({ dados });
+  const url = 'data:image/png;base64,QUJDRA==';
+  const outra = 'data:image/jpeg;base64,QUJDRQ==';
+  await f.quadro_inserir!.executar({
+    quadro: 'Reino', abaixo_de: '#i1yyyy',
+    itens: [{ formato: 'imagem', de: `dados:${url}`, largura: 200 }, { grade: [[{ formato: 'imagem', de: `dados:${url}` }], [{ formato: 'imagem', de: `dados:${outra}` }]], colunas: 2, largura_da_celula: 200 }],
+  });
+  const imgs = criados[0]!.itens.filter(i => i.tipo === 'imagem');
+  assert.deepEqual(imgs.map(i => i.tipo === 'imagem' && i.imagemId), ['hash-RA==', 'hash-RA==', 'hash-RQ==']);
+  assert.equal(imgs[0]!.tipo === 'imagem' && imgs[0]!.altura, 100);
+  assert.deepEqual(dados, [url, outra]);
+  const pedido = (de: string) => ({ quadro: 'Reino', abaixo_de: '#i1yyyy', itens: [{ formato: 'imagem', de }] });
+  await assert.rejects(f.quadro_inserir!.executar(pedido('dados:data:image/gif;base64,QUJD')), /não aceito/);
+  await assert.rejects(f.quadro_inserir!.executar(pedido('dados:data:image/png;base64,' + 'A'.repeat(21 * 1024 * 1024))), /15 MB/);
+  await assert.rejects(f.quadro_inserir!.executar(pedido('dados:texto')), /data URL/);
+  await assert.rejects(montar().f.quadro_inserir!.executar(pedido(`dados:${url}`)), /só pela ponte do assistente/);
 });

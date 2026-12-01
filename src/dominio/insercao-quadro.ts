@@ -2,6 +2,7 @@
 // de itens de referência; a posição é da Q9e e a medição de altura é injetada.
 import { caixaEnvolventeDeItem, type Caixa } from './camera.ts';
 import { estiloDoQuadro } from './estilo-do-quadro.ts';
+import type { Legenda } from './legenda-do-quadro.ts';
 import { caixaDaSeta } from './setas.ts';
 import { blocosDaSecao, itensDaSecao } from './estrutura-da-secao.ts';
 import { PALETA_PADRAO, type PaletaDaCampanha } from './paleta.ts';
@@ -27,18 +28,25 @@ const TAMANHO_DO_TITULO_PADRAO = 28;
 const LARGURA_PADRAO = 240;
 const LARGURA_PADRAO_DA_IMAGEM = 320;
 
-export interface ParagrafoPedido { texto: string; como?: string }
+/** Trecho de um parágrafo (Q9k): `papel` aplica as marcas da legenda do quadro, `como` copia o destaque de um item; sem os dois, texto simples. */
+export interface TrechoPedido { texto: string; papel?: string; como?: string }
+/** Parágrafo: `texto` (com `papel` ou `como` opcionais para o parágrafo todo) ou `trechos` (exclusivos). */
+export interface ParagrafoPedido { texto?: string; trechos?: TrechoPedido[]; papel?: string; como?: string }
 
 export type ItemPedido =
   | {
       formato: 'texto' | 'titulo';
       texto?: string;
       paragrafos?: ParagrafoPedido[];
+      /** Q9k: papel da legenda para todos os parágrafos sem `como` nem `papel` próprio. */
+      papel?: string;
       estilo_como?: string;
       tipo?: TipoSemantico;
       largura?: number;
     }
   | { formato: 'nota'; texto: string; tipo?: TipoSemantico; estilo_como?: string }
+  // Q9k: item curto que é só o trecho de um papel da legenda (ex.: o `[ARBUSTO]` verde), largura medida pelo texto.
+  | { formato: 'rotulo'; texto: string; papel: string; estilo_como?: string; tipo?: TipoSemantico; largura?: number }
   // Q9f: `de` = "#id" (imagem do quadro) ou "entidade:<nome ou id>" (retrato, resolvido por `retratos`).
   | { formato: 'imagem'; de: string; lado?: 'direita' | 'esquerda'; largura?: number };
 
@@ -63,7 +71,7 @@ export interface OpcoesDaInsercao {
   /** Largura (px) do texto numa linha só, com padding; `null` se não dá para medir (Q9n). Sem isto, o título mantém a largura copiada. */
   medirLargura?: (item: Extract<Item, { tipo: 'texto' }>) => number | null;
   paleta?: PaletaDaCampanha;
-  /** Retratos já resolvidos (e guardados no banco de imagens), pela chave `de` do pedido (ex.: "entidade:Aldric"). */
+  /** Imagens já resolvidas (e guardadas no banco de imagens), pela chave `de` do pedido (ex.: "entidade:Aldric" ou "dados:data:…"). */
   retratos?: ReadonlyMap<string, ImagemResolvida>;
 }
 
@@ -151,21 +159,86 @@ export function marcasPredominantes(doc: DocRico): Marca[] {
   return melhor ? melhor.marcas.map((m) => (m.attrs ? { type: m.type, attrs: { ...m.attrs } } : { type: m.type })) : [];
 }
 
-function docDeParagrafos(itens: readonly Item[], pedidos: readonly ParagrafoPedido[], n: number): DocRico {
+const semAcento = (t: string): string => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
+
+/** Resolve `papel` na legenda do quadro (pelo nome normalizado ou pelo rótulo, sem colchetes nem acento) e devolve as marcas dela. */
+type ResolvePapel = (papel: string, onde: string) => Marca[];
+
+function marcasDoPapel(legenda: Legenda | null | undefined, papel: unknown, onde: string): Marca[] {
+  const nome = typeof papel === 'string' ? semAcento(papel.replace(/^\[|\]$/g, '')) : '';
+  if (!nome) throw new Error(`${onde}: papel vazio.`);
+  if (!legenda || legenda.entradas.length === 0) throw new Error('O quadro não tem legenda; use como/estilo_como ou pergunte ao mestre.');
+  const e = legenda.entradas.find((x) => semAcento(x.papel) === nome) ?? legenda.entradas.find((x) => semAcento(x.rotulo) === nome);
+  if (!e) throw new Error(`${onde}: papel '${String(papel)}' não está na legenda do quadro; papéis: ${legenda.entradas.map((x) => x.papel).join(', ')}.`);
+  const marcas: Marca[] = [];
+  if (e.marcas.negrito) marcas.push({ type: 'bold' });
+  if (e.marcas.italico) marcas.push({ type: 'italic' });
+  const estilo: Record<string, unknown> = {};
+  if (e.marcas.fundo) estilo.backgroundColor = e.marcas.fundo;
+  if (e.marcas.letra) estilo.color = e.marcas.letra;
+  if (Object.keys(estilo).length > 0) marcas.push({ type: 'textStyle', attrs: estilo });
+  return marcas;
+}
+
+const copiarMarcas = (marcas: readonly Marca[]): Marca[] => marcas.map((m) => (m.attrs ? { type: m.type, attrs: { ...m.attrs } } : { type: m.type }));
+
+/** Nós de texto de um trecho; `\n` vira quebra de linha dentro do parágrafo. */
+function nosDeTexto(texto: string, marcas: readonly Marca[]): NoRico[] {
+  const nos: NoRico[] = [];
+  texto.split('\n').forEach((linha, k) => {
+    if (k > 0) nos.push({ type: 'hardBreak' });
+    if (linha === '') return;
+    const no: NoRico = { type: 'text', text: linha };
+    if (marcas.length > 0) no.marks = copiarMarcas(marcas);
+    nos.push(no);
+  });
+  return nos;
+}
+
+/** Caracteres de texto dos parágrafos (para o limite do item). */
+function totalDeCaracteres(pedidos: readonly ParagrafoPedido[]): number {
+  let t = 0;
+  for (const p of pedidos) {
+    if (typeof p?.texto === 'string') t += p.texto.length;
+    if (Array.isArray(p?.trechos)) for (const r of p.trechos) if (typeof r?.texto === 'string') t += r.texto.length;
+  }
+  return t;
+}
+
+function docDeParagrafos(itens: readonly Item[], pedidos: readonly ParagrafoPedido[], n: number, resolver: ResolvePapel, papelDoItem?: string): DocRico {
   const content: NoRico[] = [];
   pedidos.forEach((p, k) => {
     const rotulo = `o parágrafo ${k + 1} do item ${n}`;
+    const onde = rotulo[0]!.toUpperCase() + rotulo.slice(1);
+    const comoTrechos = p?.trechos !== undefined;
+    if (comoTrechos && p.texto !== undefined) throw new Error(`${onde}: use "texto" ou "trechos", não os dois.`);
+    if (comoTrechos) {
+      if (!Array.isArray(p.trechos) || p.trechos.length === 0) throw new Error(`${onde}: "trechos" está vazio.`);
+      if (p.papel !== undefined || p.como !== undefined) throw new Error(`${onde}: com "trechos", o papel e o como vão em cada trecho.`);
+      const nos: NoRico[] = [];
+      p.trechos.forEach((r, j) => {
+        const quem = `O trecho ${j + 1} d${rotulo}`;
+        const texto = typeof r?.texto === 'string' ? r.texto : '';
+        if (texto === '') throw new Error(`${quem} está vazio.`);
+        if (r.papel !== undefined && r.como !== undefined) throw new Error(`${quem}: use "papel" ou "como", não os dois.`);
+        const marcas = r.papel !== undefined ? resolver(r.papel, quem) : r.como ? marcasPredominantes(itemDeTexto(itens, r.como, `como (${quem.toLowerCase()})`).doc) : [];
+        nos.push(...nosDeTexto(texto, marcas));
+      });
+      if (nos.every((x) => x.type === 'hardBreak')) throw new Error(`${onde} está vazio.`);
+      content.push({ type: 'paragraph', content: nos });
+      return;
+    }
     const texto = typeof p?.texto === 'string' ? p.texto : '';
-    if (texto.trim() === '') throw new Error(`${rotulo[0]!.toUpperCase()}${rotulo.slice(1)} está vazio.`);
-    const marcas = p.como ? marcasPredominantes(itemDeTexto(itens, p.como, `como (${rotulo})`).doc) : [];
+    if (texto.trim() === '') throw new Error(`${onde} está vazio.`);
+    if (p.papel !== undefined && p.como !== undefined) throw new Error(`${onde}: use "papel" ou "como", não os dois.`);
+    const papel = p.papel ?? (p.como ? undefined : papelDoItem);
+    const marcas = papel !== undefined ? resolver(papel, onde) : p.como ? marcasPredominantes(itemDeTexto(itens, p.como, `como (${rotulo})`).doc) : [];
     for (const linha of texto.split('\n')) {
       if (linha === '') {
         content.push({ type: 'paragraph' });
         continue;
       }
-      const no: NoRico = { type: 'text', text: linha };
-      if (marcas.length > 0) no.marks = marcas.map((m) => (m.attrs ? { type: m.type, attrs: { ...m.attrs } } : { type: m.type }));
-      content.push({ type: 'paragraph', content: [no] });
+      content.push({ type: 'paragraph', content: nosDeTexto(linha, marcas) });
     }
   });
   return { type: 'doc', content };
@@ -199,6 +272,12 @@ export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaI
     return item && item.tipo === 'texto' ? item : null;
   };
 
+  // Legenda do quadro todo (Q9k), só calculada se algum item usar `papel`.
+  const legendaDoQuadroTodo = (): Legenda | null => {
+    if (detectado === undefined) detectado = estiloDoQuadro(itens, secao);
+    return detectado?.legenda ?? null;
+  };
+
   const resultado: Item[] = [];
   const lados: (LadoDaImagem | null)[] = [];
   const alturas: Record<string, number> = {};
@@ -217,7 +296,11 @@ export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaI
       const chave = typeof pi.de === 'string' ? pi.de.trim() : '';
       if (!chave) throw new Error(`Item ${n}: imagem sem "de" (#id de uma imagem do quadro ou entidade:<nome>).`);
       let origem: ImagemResolvida;
-      if (/^entidade:/i.test(chave)) {
+      if (/^dados:/i.test(chave)) {
+        const r = opcoes.retratos?.get(chave);
+        if (!r) throw new Error(`Item ${n}: a imagem de arquivo não está disponível (só pela ponte do assistente).`);
+        origem = r;
+      } else if (/^entidade:/i.test(chave)) {
         const r = opcoes.retratos?.get(chave);
         if (!r) throw new Error(`Item ${n}: o retrato de "${chave.slice(chave.indexOf(':') + 1).trim()}" não está disponível.`);
         origem = r;
@@ -242,8 +325,8 @@ export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaI
       lados.push(lado ?? null);
       return;
     }
-    if (formato !== 'texto' && formato !== 'titulo' && formato !== 'nota') {
-      throw new Error(`Item ${n}: formato "${String(formato)}" inválido. Use texto, titulo ou nota.`);
+    if (formato !== 'texto' && formato !== 'titulo' && formato !== 'nota' && formato !== 'rotulo') {
+      throw new Error(`Item ${n}: formato "${String(formato)}" inválido. Use texto, titulo, rotulo, nota ou imagem.`);
     }
     const pedido = p as Exclude<ItemPedido, { formato: 'imagem' }>;
 
@@ -257,19 +340,25 @@ export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaI
     const comoParagrafos = 'paragrafos' in pedido && pedido.paragrafos !== undefined;
     const textoSimples = typeof pedido.texto === 'string' ? pedido.texto : undefined;
     if (comoParagrafos && textoSimples !== undefined) throw new Error(`Item ${n}: use "texto" ou "paragrafos", não os dois.`);
+    const papelDoItem = (pedido as { papel?: unknown }).papel;
+    if (papelDoItem !== undefined && typeof papelDoItem !== 'string') throw new Error(`Item ${n}: papel deve ser um texto.`);
+    if (formato === 'rotulo' && !papelDoItem) throw new Error(`Item ${n}: o rótulo precisa de "papel" (um papel da legenda do quadro).`);
+    if (formato === 'nota' && papelDoItem !== undefined) throw new Error(`Item ${n}: papel não vale em nota; use texto, titulo ou rotulo.`);
+    if (formato === 'rotulo' && comoParagrafos) throw new Error(`Item ${n}: o rótulo usa "texto", não "paragrafos".`);
+    const resolver: ResolvePapel = (papel, onde) => marcasDoPapel(legendaDoQuadroTodo(), papel, onde);
     let doc: DocRico;
     let total: number;
     if (comoParagrafos) {
       const lista = (pedido as { paragrafos: ParagrafoPedido[] }).paragrafos;
       if (!Array.isArray(lista) || lista.length === 0) throw new Error(`Item ${n}: "paragrafos" está vazio.`);
-      total = lista.reduce((s, q) => s + (typeof q?.texto === 'string' ? q.texto.length : 0), 0);
+      total = totalDeCaracteres(lista);
       if (total > MAX_TEXTO_DO_ITEM) throw new Error(`O item ${n} tem ${total} caracteres; o máximo é ${MAX_TEXTO_DO_ITEM}.`);
-      doc = docDeParagrafos(itens, lista, n);
+      doc = docDeParagrafos(itens, lista, n, resolver, papelDoItem);
     } else {
       if (textoSimples === undefined || textoSimples.trim() === '') throw new Error(`O item ${n} está sem texto.`);
       total = textoSimples.length;
       if (total > MAX_TEXTO_DO_ITEM) throw new Error(`O item ${n} tem ${total} caracteres; o máximo é ${MAX_TEXTO_DO_ITEM}.`);
-      doc = docDeTexto(textoSimples);
+      doc = papelDoItem !== undefined ? docDeParagrafos(itens, [{ texto: textoSimples }], n, resolver, papelDoItem) : docDeTexto(textoSimples);
     }
 
     const largura = (pedido as { largura?: unknown }).largura;
@@ -280,7 +369,7 @@ export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaI
     // Item de referência de estilo.
     let ref: ItemTexto | null = null;
     if (pedido.estilo_como) ref = itemDeTexto(itens, pedido.estilo_como, `estilo_como (item ${n})`);
-    else if (formato !== 'nota') ref = estiloDetectado(formato === 'titulo' ? 'titulo' : 'corpo');
+    else if (formato !== 'nota') ref = estiloDetectado(formato === 'titulo' ? 'titulo' : 'corpo'); // rotulo: o corpo
 
     const id = novoId();
     let item: ItemTexto;
@@ -307,7 +396,7 @@ export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaI
     // O texto é novo: a altura do exemplo não serve (o corpo copia o estilo de um exemplo qualquer, e a caixa dele
     // pode ter o triplo do texto novo). Texto e título têm a altura medida; a nota mantém o tamanho do post-it.
     // Título sem largura explícita: alarga até caber numa linha (limite 1,5×) antes de medir a altura.
-    if (formato === 'titulo' && largura === undefined && opcoes.medirLargura) {
+    if ((formato === 'titulo' || formato === 'rotulo') && largura === undefined && opcoes.medirLargura) {
       item.largura = larguraDeUmaLinha(item.largura, opcoes.medirLargura(item));
     }
     if (formato !== 'nota') item.altura = medir(item);
@@ -541,7 +630,7 @@ export function achatarPedidos(entradas: readonly EntradaPedida[]): { itens: Ite
           throw new Error(`${onde}, célula ${c + 1}: imagem com "lado" não vale dentro de célula; ela entra empilhada. Tire o lado.`);
         }
         const copia = (it && typeof it === 'object' ? { ...it } : it) as ItemPedido;
-        if (forcada !== undefined && (f === 'texto' || f === 'titulo' || f === 'imagem')) (copia as { largura?: number }).largura = forcada;
+        if (forcada !== undefined && (f === 'texto' || f === 'titulo' || f === 'rotulo' || f === 'imagem')) (copia as { largura?: number }).largura = forcada;
         indices.push(itens.length);
         itens.push(copia);
       }
