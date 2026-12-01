@@ -1,6 +1,6 @@
 import type { Item, NoRico } from './quadro.ts';
 import { ordemDeLeituraDeItens } from './roteiro-do-quadro.ts';
-import { itensDaSecao, titulosEntre } from './estrutura-da-secao.ts';
+import { itensDaSecao, numeroCurto, titulosEntre } from './estrutura-da-secao.ts';
 import { infoDoTexto, mediana, secoesDoQuadro, type Secao } from './secoes-do-quadro.ts';
 import { idsCurtos } from './texto-da-secao.ts';
 
@@ -11,7 +11,7 @@ import { idsCurtos } from './texto-da-secao.ts';
  */
 
 export type PapelDoTexto = 'titulo' | 'corpo';
-export type FluxoDoQuadro = 'coluna' | 'grade' | 'livre';
+export type FluxoDoQuadro = 'coluna' | 'centrado' | 'grade' | 'livre';
 
 export interface GrupoDeEstilo {
   formato: string;
@@ -35,7 +35,7 @@ export interface DestaqueDetectado {
   exemplo: string;
   exemploCurto: string;
   /** Palpite de uso (sempre incerto), ou null. */
-  uso: 'fala' | 'condição/rótulo' | 'narração' | null;
+  uso: 'fala' | 'condição/rótulo' | 'narração' | 'regras/instruções' | null;
 }
 
 export interface EstiloDetectado {
@@ -48,6 +48,10 @@ export interface EstiloDetectado {
   fluxo: FluxoDoQuadro;
   /** x relativo à seção, largura mediana e espaço vertical mediano; só quando `fluxo === 'coluna'`. */
   coluna: { x: number; largura: number; espacoVertical: number } | null;
+  /**
+   * Eixo do fluxo centrado (`fluxo === 'centrado'`): centro horizontal dos itens, relativo à seção e absoluto.
+   */
+  eixo: { x: number; xAbsoluto: number; largura: number; espacoVertical: number } | null;
   /** Atalhos para a Q9e. */
   espacoVertical: number | null;
   larguraDaColuna: number | null;
@@ -64,6 +68,10 @@ export interface EstiloDetectado {
 const TOLERANCIA_X = 24;
 const LIMITE_COLUNA = 0.6;
 const LIMITE_SEMANTICA = 0.2;
+const TOLERANCIA_EIXO = 60;
+/** Segunda pessoa: no mínimo 1 ocorrência a cada 300 caracteres para o palpite de narração. */
+const LIMITE_SEGUNDA_PESSOA = 1 / 300;
+const SEGUNDA_PESSOA = /(?<![\p{L}])(?:vocês|você|seus|suas|vos)(?![\p{L}])/giu;
 const MAX_GRUPOS = 6;
 const arred4 = (v: number): number => Math.round(v / 4) * 4;
 
@@ -98,6 +106,22 @@ function corridasDoItem(item: Extract<Item, { tipo: 'texto' | 'forma' }>): Corri
   return r;
 }
 
+/** Luminância aproximada (0 a 1) de `#rgb`, `#rrggbb` ou `rgb(r,g,b)`; null se não reconhecer. */
+function luminancia(cor: string): number | null {
+  const c = cor.trim().toLowerCase();
+  let r: number;
+  let g: number;
+  let b: number;
+  const m = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/.exec(c);
+  const h = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(c);
+  if (m) [r, g, b] = [Number(m[1]), Number(m[2]), Number(m[3])] as [number, number, number];
+  else if (h) {
+    const x = h[1]!.length === 3 ? [...h[1]!].map((d) => d + d).join('') : h[1]!;
+    [r, g, b] = [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2, 4), 16), parseInt(x.slice(4, 6), 16)];
+  } else return null;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+}
+
 function detectarDestaques(ordenados: readonly Item[], curtos: Map<string, string>): DestaqueDetectado[] {
   interface Acc {
     caracteres: number;
@@ -128,15 +152,32 @@ function detectarDestaques(ordenados: readonly Item[], curtos: Map<string, strin
     .filter(([, a]) => a.caracteres > 0 && a.melhor)
     .sort((a, b) => b[1].caracteres - a[1].caracteres);
   const comMarcador = (t: string) => /\[[^\]]+\]/.test(t);
+  const segunda = lista.map(([, a]) => a.corridas.reduce((n, t) => n + (t.match(SEGUNDA_PESSOA)?.length ?? 0), 0));
+  const densidade = lista.map(([, a], i) => (a.caracteres > 0 ? segunda[i]! / a.caracteres : 0));
   const usos = lista.map(([, a]): DestaqueDetectado['uso'] => {
     const n = a.corridas.length;
     if (a.corridas.some((t) => /\[[^\]]+\]\s*["“”«]/.test(t))) return 'fala';
     if (a.corridas.filter(comMarcador).length * 2 >= n) return 'condição/rótulo';
     return null;
   });
-  // O mais longo, sem marcadores, é a narração (palpite).
-  const iNarracao = usos.findIndex((u) => u === null);
-  if (iNarracao >= 0) usos[iNarracao] = 'narração';
+  // Narração (palpite): o destaque com mais palavras da segunda pessoa por caractere, se for relevante e maior que a dos outros
+  // (as falas e os rótulos já têm palpite e ficam de fora: o NPC também fala com "você").
+  let iNarracao = -1;
+  lista.forEach((_, i) => {
+    if (usos[i] !== null || densidade[i]! < LIMITE_SEGUNDA_PESSOA) return;
+    if (iNarracao < 0 || densidade[i]! > densidade[iNarracao]!) iNarracao = i;
+  });
+  if (iNarracao >= 0 && densidade.every((d, i) => i === iNarracao || usos[i] !== null || d < densidade[iNarracao]!)) usos[iNarracao] = 'narração';
+  // Letra clara sobre fundo escuro, sem segunda pessoa: regras e instruções ao mestre.
+  lista.forEach(([cor, a], i) => {
+    if (usos[i] !== null || segunda[i]! > 0) return;
+    let letra = '';
+    let max = -1;
+    for (const [l, n] of a.letras) if (n > max) { max = n; letra = l; }
+    const fundo = luminancia(cor);
+    const tinta = luminancia(letra);
+    if (fundo !== null && tinta !== null && fundo < 0.4 && tinta > 0.6) usos[i] = 'regras/instruções';
+  });
   return lista.map(([cor, a], i) => {
     let letra = '';
     let max = -1;
@@ -175,6 +216,28 @@ function ehGrade(itens: readonly Item[]): boolean {
   const emColuna = (i: Item) => itens.filter((o) => Math.abs(o.x - i.x) <= TOLERANCIA_X).length >= 2;
   const emLinha = (i: Item) => itens.filter((o) => Math.abs(o.y - i.y) <= TOLERANCIA_X).length >= 2;
   return itens.filter((i) => emColuna(i) && emLinha(i)).length / itens.length >= LIMITE_COLUNA;
+}
+
+/**
+ * Fluxo centrado: entre os itens em fila única (sem outro item de texto ao lado, na mesma altura), pelo menos 60% têm o
+ * centro horizontal a até 60 px da mediana dos centros. Devolve o centro (mediana dos itens centrados) e esses itens.
+ */
+function eixoCentrado(textos: readonly Item[]): { centro: number; itens: Item[] } | null {
+  const aoLado = (a: Item) =>
+    textos.some((b) => b !== a && a.y < b.y + b.altura && a.y + a.altura > b.y && (a.x + a.largura <= b.x || b.x + b.largura <= a.x));
+  const fila = textos.filter((i) => !aoLado(i));
+  if (fila.length < 2) return null;
+  const centro = (i: Item) => i.x + i.largura / 2;
+  const med = mediana(fila.map(centro));
+  const perto = fila.filter((i) => Math.abs(centro(i) - med) <= TOLERANCIA_EIXO);
+  if (perto.length / fila.length < LIMITE_COLUNA) return null;
+  return { centro: mediana(perto.map(centro)), itens: perto };
+}
+
+/** Itens de referência para o lado das imagens: os centrados no eixo, ou todos os textos. */
+function eixoItens(textos: readonly Item[], eixo: EstiloDetectado['eixo']): readonly Item[] {
+  if (!eixo) return textos;
+  return textos.filter((i) => Math.abs(i.x + i.largura / 2 - eixo.xAbsoluto) <= TOLERANCIA_EIXO);
 }
 
 /** Seção com mais itens de texto do mestre (a primeira em caso de empate). */
@@ -231,6 +294,7 @@ export function estiloDoQuadro(itens: readonly Item[], secao?: Secao): EstiloDet
   const colunaItens = maiorGrupoPorX(textos);
   let fluxo: FluxoDoQuadro = 'livre';
   let coluna: EstiloDetectado['coluna'] = null;
+  let eixo: EstiloDetectado['eixo'] = null;
   if (textos.length >= 2 && colunaItens.length >= 2 && colunaItens.length / textos.length > LIMITE_COLUNA) {
     fluxo = 'coluna';
     const ord = [...colunaItens].sort((a, b) => a.y - b.y);
@@ -241,15 +305,30 @@ export function estiloDoQuadro(itens: readonly Item[], secao?: Secao): EstiloDet
       largura: arred4(mediana(colunaItens.map((i) => i.largura))),
       espacoVertical: arred4(mediana(vaos)),
     };
-  } else if (ehGrade(textos)) {
-    fluxo = 'grade';
+  } else {
+    const c = eixoCentrado(textos);
+    if (c) {
+      fluxo = 'centrado';
+      const ord = [...c.itens].sort((a, b) => a.y - b.y);
+      const vaos: number[] = [];
+      for (let i = 1; i < ord.length; i++) vaos.push(Math.max(0, ord[i]!.y - (ord[i - 1]!.y + ord[i - 1]!.altura)));
+      const xAbsoluto = Math.round(c.centro);
+      eixo = {
+        x: xAbsoluto - Math.round(alvo.caixa.x),
+        xAbsoluto,
+        largura: arred4(mediana(c.itens.map((i) => i.largura))),
+        espacoVertical: arred4(mediana(vaos)),
+      };
+    } else if (ehGrade(textos)) {
+      fluxo = 'grade';
+    }
   }
 
   // Imagens.
   const imgs = mestre.filter((i) => i.tipo === 'imagem');
   let imagens: EstiloDetectado['imagens'] = null;
   if (imgs.length > 0 && textos.length > 0) {
-    const ref = colunaItens.length >= 2 && coluna ? colunaItens : textos;
+    const ref = colunaItens.length >= 2 && coluna ? colunaItens : eixoItens(textos, eixo);
     const esq = Math.min(...ref.map((i) => i.x));
     const dir = Math.max(...ref.map((i) => i.x + i.largura));
     const lados = { direita: 0, esquerda: 0, dentro: 0 };
@@ -271,8 +350,9 @@ export function estiloDoQuadro(itens: readonly Item[], secao?: Secao): EstiloDet
     itensDeTexto: textos.length,
     fluxo,
     coluna,
-    espacoVertical: coluna?.espacoVertical ?? null,
-    larguraDaColuna: coluna?.largura ?? null,
+    eixo,
+    espacoVertical: coluna?.espacoVertical ?? eixo?.espacoVertical ?? null,
+    larguraDaColuna: coluna?.largura ?? eixo?.largura ?? null,
     imagens,
     grupos,
     destaques: detectarDestaques(textos, curtos),
@@ -291,10 +371,11 @@ export function textoDoEstilo(e: EstiloDetectado | null): string {
   l.push(`Seção: "${e.secaoTitulo}" (${e.secaoId})${e.secaoEscolhida ? ', escolhida por ter mais itens de texto do mestre' : ''}; ${e.itensDeTexto} itens de texto.`);
   const img = e.imagens ? `; imagens ${e.imagens.lado === 'dentro' ? 'dentro da coluna' : `à ${e.imagens.lado}`} (~${e.imagens.largura} px)` : '';
   if (e.coluna) l.push(`Fluxo: coluna em x=${e.coluna.x}, largura ~${e.coluna.largura}, ${e.coluna.espacoVertical} px entre itens${img}.`);
+  else if (e.eixo) l.push(`Fluxo: centrado num eixo em x≈${e.eixo.x} (itens centrados), ${e.eixo.espacoVertical} px entre itens${img}.`);
   else l.push(`Fluxo: ${e.fluxo}${img}.`);
   const rotulo = { titulo: 'Título', corpo: 'Corpo' } as const;
   for (const g of e.grupos.slice(0, MAX_GRUPOS)) {
-    l.push(`${rotulo[g.papel]} (${g.contagem}): ${g.formato} ${g.fonte} ${g.tamanho} ${g.cor}${g.fundo !== null ? `, caixa ${g.fundo}` : ''}, largura ~${g.larguraMediana} (exemplo #${g.exemploCurto}).`);
+    l.push(`${rotulo[g.papel]} (${g.contagem}): ${g.formato} ${g.fonte} ${numeroCurto(g.tamanho)} ${g.cor}${g.fundo !== null ? `, caixa ${g.fundo}` : ''}, largura ~${g.larguraMediana} (exemplo #${g.exemploCurto}).`);
   }
   if (e.grupos.length > MAX_GRUPOS) l.push(`(+${e.grupos.length - MAX_GRUPOS} estilos menores)`);
   if (e.destaques.length > 0) {

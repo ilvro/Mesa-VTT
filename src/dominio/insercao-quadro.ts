@@ -315,6 +315,10 @@ export interface OpcoesDaColuna {
   abrirEspaco?: boolean;
   /** Seções do quadro (calculadas de `itens` se faltar). */
   secoes?: readonly Secao[];
+  /** `esquerda` (padrão): todos pela borda esquerda; `centro`: o centro de cada item no eixo da coluna. */
+  alinhar?: 'esquerda' | 'centro';
+  /** Eixo absoluto (x) com `abaixoDeSecao` e `centro`; sem ele, o centro da coluna principal da seção. */
+  eixo?: number;
 }
 
 export interface PosicaoEmColuna {
@@ -363,23 +367,29 @@ export function posicionarEmColuna(
   const secoes = opcoes.secoes ?? secoesDoQuadro(itens);
   const largura = Math.max(...larguras);
   const total = alturas.reduce((s, h) => s + h, 0) + espaco * (alturas.length - 1);
+  const centrado = opcoes.alinhar === 'centro';
+  /** Com `x` = borda esquerda (esquerda) ou eixo (centro). */
   const empilhar = (x: number, y0: number): { x: number; y: number }[] => {
     let y = y0;
-    return alturas.map((h) => {
-      const p = { x, y };
+    return alturas.map((h, k) => {
+      const p = { x: centrado ? Math.round(x - larguras[k]! / 2) : x, y };
       y += h + espaco;
       return p;
     });
   };
-  const resposta = (posicoes: { x: number; y: number }[], empurrar: { id: string; dy: number }[]): PosicaoEmColuna => ({
-    posicoes,
-    empurrar,
-    caixa: { x: posicoes[0]!.x, y: posicoes[0]!.y, largura, altura: total },
-  });
+  /** Extensão horizontal real dos itens novos. */
+  const extensao = (posicoes: { x: number }[]): { x: number; largura: number } => {
+    const x0 = Math.min(...posicoes.map((p) => p.x));
+    return { x: x0, largura: Math.max(...posicoes.map((p, k) => p.x + larguras[k]!)) - x0 };
+  };
+  const resposta = (posicoes: { x: number; y: number }[], empurrar: { id: string; dy: number }[]): PosicaoEmColuna => {
+    const ext = extensao(posicoes);
+    return { posicoes, empurrar, caixa: { x: ext.x, y: posicoes[0]!.y, largura: ext.largura, altura: total } };
+  };
 
   if ('aoLadoDe' in alvo) {
     const p = posicaoLivre({ largura, altura: total }, itens, alvo.aoLadoDe.caixa);
-    return resposta(empilhar(p.x, p.y), []);
+    return resposta(empilhar(centrado ? p.x + largura / 2 : p.x, p.y), []);
   }
 
   // Âncora: x da coluna e fundo do ponto.
@@ -391,7 +401,7 @@ export function posicionarEmColuna(
     if (item.tipo === 'seta') throw new Error(`#${curto(item.id)} é uma seta; escolha um item de texto, imagem ou forma.`);
     if (item.tipo === 'moldura') throw new Error(`#${curto(item.id)} é uma moldura; passe a seção (id ou título) em abaixo_de.`);
     secao = secoes.find((s) => s.itemIds.includes(item.id));
-    x = item.x;
+    x = centrado ? item.x + item.largura / 2 : item.x;
     fimDoPonto = fundo(caixaEnvolventeDeItem(item));
     const bloco = secao ? blocosDaSecao(secao, itens).find((b) => b.tituloId === item.id) : undefined;
     if (bloco) {
@@ -404,13 +414,14 @@ export function posicionarEmColuna(
   } else {
     secao = alvo.abaixoDeSecao;
     const c = colunaPrincipal(secao, itens);
-    x = c.x;
+    x = centrado ? (opcoes.eixo ?? c.x + largura / 2) : c.x;
     fimDoPonto = c.fundo;
   }
 
   const y0 = fimDoPonto + espaco;
   const posicoes = empilhar(x, y0);
-  const regiao: Caixa = { x, y: y0, largura, altura: total + espaco };
+  const ext = extensao(posicoes);
+  const regiao: Caixa = { x: ext.x, y: y0, largura: ext.largura, altura: total + espaco };
   const obstaculos = itens
     .filter(solido)
     .map((i) => ({ item: i, caixa: caixaEnvolventeDeItem(i) }))
@@ -430,7 +441,7 @@ export function posicionarEmColuna(
 
   // Desce, pela altura inserida mais o espaço, o que está abaixo do ponto na coluna e na seção.
   const dy = total + espaco;
-  const coluna = { x, largura };
+  const coluna = { x: ext.x, largura: ext.largura };
   const empurrados = itens
     .filter((i) => solido(i) && fundo(caixaEnvolventeDeItem(i)) > fimDoPonto && caixaEnvolventeDeItem(i).y >= fimDoPonto - 1)
     .filter((i) => {

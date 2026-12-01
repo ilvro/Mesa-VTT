@@ -51,6 +51,9 @@ function cortar(texto: string, max: number): string {
 
 const arredondar = (v: number): number => Math.round(v / 4) * 4;
 
+/** Número para texto com no máximo 1 casa decimal e sem `.0` (14, 45.3). */
+export const numeroCurto = (v: number): string => String(Math.round(v * 10) / 10);
+
 interface EstiloDoDoc {
   total: number;
   destaques: { cor: string; fracao: number }[];
@@ -194,7 +197,7 @@ export function estruturaDaSecao(
       const partes = [
         `- ${id} ${formato} ${geo}`,
         item.texto.fonte,
-        String(info.tamanho),
+        numeroCurto(info.tamanho),
         estilo.cor ?? item.texto.cor,
       ];
       if (item.caixa.fundo !== null) partes.push(`caixa:${item.caixa.fundo}`);

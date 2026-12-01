@@ -54,7 +54,7 @@ test('coluna do mestre: fluxo, estilos, destaques, imagens e semântica', () => 
   assert.equal(por['rgb(255,246,182)']!.uso, 'narração');
   assert.equal(por['rgb(101,157,242)']!.uso, 'condição/rótulo');
   assert.equal(por['rgb(173,240,199)']!.uso, 'fala');
-  assert.equal(por['rgb(26,26,26)']!.uso, null);
+  assert.equal(por['rgb(26,26,26)']!.uso, 'regras/instruções');
   assert.equal(por['rgb(26,26,26)']!.corDaLetra, '#ffffff');
   assert.equal(por['rgb(26,26,26)']!.exemplo, 'it-regra');
   assert.equal(e.semantica.fracao, 0);
@@ -63,7 +63,7 @@ test('coluna do mestre: fluxo, estilos, destaques, imagens e semântica', () => 
   assert.ok(estimarTokens(t2) < 600);
   assert.match(t2, /Fluxo: coluna em x=0, largura ~400, 24 px entre itens; imagens à direita \(~200 px\)/);
   assert.match(t2, /Título \(2\): texto pt-serif 28 #1a1a1a, caixa #ffffff, largura ~400 \(exemplo #it-tit1\)/);
-  assert.match(t2, /rgb\(26,26,26\) letra #ffffff 46 car\. \(#it-regr\)/);
+  assert.match(t2, /rgb\(26,26,26\) letra #ffffff regras\/instruções\? 46 car\. \(#it-regr\)/);
   assert.match(t2, /rgb\(173,240,199\) fala\?/);
   assert.match(t2, /o mestre não usa post-its tipados; não use cores por tipo/);
   assert.ok(t2.includes('\n'));

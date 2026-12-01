@@ -411,6 +411,7 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
           abaixo_de: { type: 'string', description: '#id de um item (abaixo do bloco dele) ou seção (fim da coluna).' },
           ao_lado_de: { type: 'string', description: 'Seção (id ou título): abre uma coluna nova à direita.' },
           abrir_espaco: { type: 'boolean', description: 'Desce a coluna abaixo se algo estiver no caminho.' },
+          alinhar: { type: 'string', enum: ['esquerda', 'centro'], description: 'centro: itens centrados no eixo; esquerda: pela borda. Padrão: o do estilo.' },
         },
         required: ['quadro', 'itens'],
         additionalProperties: false,
@@ -462,11 +463,15 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
           medir,
           ...(paleta ? { paleta } : {}),
         });
-        const espaco = (secao ? estiloDoQuadro(c.itens, secao)?.espacoVertical : null) || ESPACO_VERTICAL_PADRAO;
+        const estilo = secao ? estiloDoQuadro(c.itens, secao) : null;
+        const espaco = estilo?.espacoVertical || ESPACO_VERTICAL_PADRAO;
+        const pedidoAlinhar = textoDe(args.alinhar);
+        if (pedidoAlinhar && pedidoAlinhar !== 'esquerda' && pedidoAlinhar !== 'centro') throw new Error('alinhar deve ser "esquerda" ou "centro".');
+        const alinhar = pedidoAlinhar ? (pedidoAlinhar as 'esquerda' | 'centro') : estilo?.fluxo === 'centrado' ? 'centro' : 'esquerda';
         // As imagens com `lado` não entram na coluna: ficam ao lado do texto anterior, sem ocupar altura.
         const naColuna = insercao.itens.filter((_, k) => insercao.lados[k] === null);
         if (naColuna.length === 0) throw new Error('A imagem com lado precisa de um item de texto antes dela na mesma chamada.');
-        const pos = posicionarEmColuna(naColuna.map(i => i.altura), naColuna.map(i => i.largura), c.itens, alvo, espaco, { abrirEspaco: args.abrir_espaco === true, secoes: c.secoes });
+        const pos = posicionarEmColuna(naColuna.map(i => i.altura), naColuna.map(i => i.largura), c.itens, alvo, espaco, { abrirEspaco: args.abrir_espaco === true, secoes: c.secoes, alinhar, ...(estilo?.eixo ? { eixo: estilo.eixo.xAbsoluto } : {}) });
         let proxima = 0;
         const dasColunas = insercao.itens.map((_, k) => (insercao.lados[k] === null ? pos.posicoes[proxima++]! : null));
         const finais = posicionarImagensAoLado(insercao.itens, insercao.lados, dasColunas, c.itens, pos.empurrar);
