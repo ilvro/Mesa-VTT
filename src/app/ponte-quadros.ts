@@ -41,6 +41,8 @@ export interface ContextoDeQuadros {
   criarItens(quadroId: string, itens: Item[], rotulo: string, mover?: { id: string; dy: number }[]): Promise<void>;
   /** Altura (px) que o texto do item precisa, com as regras do render; sem isto, `quadro_inserir` estima pelo tamanho do texto. */
   medirTexto?(item: Extract<Item, { tipo: 'texto' }>): number;
+  /** Largura (px) que o texto precisa numa linha só (com padding e folga), ou null se não dá para medir; sem isto, títulos mantêm a largura copiada. */
+  medirLarguraDoTexto?(item: Extract<Item, { tipo: 'texto' }>): number | null;
   /** O retrato da entidade copiado para o banco de imagens do quadro; null se ela não tem retrato. Sem isto, `entidade:` em `quadro_inserir` não é suportado. */
   retratoDaEntidade?(entidadeId: string): Promise<ImagemResolvida | null>;
   /** Paleta da campanha (cores por tipo); padrão se ausente. */
@@ -461,6 +463,7 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
           agora: Date.now(),
           novoId: () => crypto.randomUUID(),
           medir,
+          ...(ctx.medirLarguraDoTexto ? { medirLargura: ctx.medirLarguraDoTexto } : {}),
           ...(paleta ? { paleta } : {}),
         });
         const estilo = secao ? estiloDoQuadro(c.itens, secao) : null;

@@ -310,3 +310,36 @@ test('setas: estilo da mais comum do mestre; pontas por índice e #id; erros leg
   assert.equal(padrao.rota, 'curva');
   assert.equal(padrao.fim, 'seta');
 });
+
+// Q9n: título que cabe numa linha.
+const tituloCom = (medida: number | null, pedido: { largura?: number } = {}) =>
+  montarInsercao([{ formato: 'titulo', texto: 'A ENXURRADA', estilo_como: 'it-tit1', ...pedido }], { ...opcoes(coluna()), medirLargura: () => medida }).itens[0]!;
+
+test('título curto mantém a largura copiada', () => {
+  assert.equal(tituloCom(250).largura, 400);
+});
+
+test('título longo alarga até caber, arredondando para cima', () => {
+  assert.equal(tituloCom(450.2).largura, 451);
+});
+
+test('título muito longo é limitado a 1,5 vezes a largura copiada (e quebra)', () => {
+  assert.equal(tituloCom(900).largura, 600);
+});
+
+test('largura explícita vence a medida', () => {
+  assert.equal(tituloCom(900, { largura: 300 }).largura, 300);
+});
+
+test('sem medidor ou sem medida, o título mantém a largura copiada', () => {
+  assert.equal(tituloCom(null).largura, 400);
+  const r = montarInsercao([{ formato: 'titulo', texto: 'X', estilo_como: 'it-tit1' }], opcoes(coluna()));
+  assert.equal(r.itens[0]!.largura, 400);
+});
+
+test('a altura é medida depois de alargar o título', () => {
+  let larguraVista = 0;
+  const r = montarInsercao([{ formato: 'titulo', texto: 'A ENXURRADA', estilo_como: 'it-tit1' }], { ...opcoes(coluna()), medirLargura: () => 480, medir: (i) => { larguraVista = i.largura; return 77; } });
+  assert.equal(larguraVista, 480);
+  assert.equal(r.itens[0]!.altura, 77);
+});

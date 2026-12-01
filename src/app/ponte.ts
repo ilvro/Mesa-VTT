@@ -1,6 +1,6 @@
 // Só em desenvolvimento: carregado por `main.tsx` dentro de `if (import.meta.env.DEV)`; o Vite elimina o chunk do build.
 import { conectarPonte, type FerramentaDaPonte } from '#mesa/ponte';
-import { capturadorDoQuadro, estadoDaPonte, medidorDeTexto } from './assistente-slot.ts';
+import { capturadorDoQuadro, estadoDaPonte, medidorDeLargura, medidorDeTexto } from './assistente-slot.ts';
 import { abrirAplicativo } from './aplicativos.ts';
 import { alternarEncontroDaCena, alterarEntidade, atualizar, campanhaAtiva, campanhas, criarCampanha, criarEntidade, definirMomentoDaCena, ligarRefs, obterRepositorio, salvarElencoDaCampanha, vincularMapaNaCena, vincularParticipanteNaCena, vincularPistaNaCena, vincularTrilhaNaCena } from './campanha.ts';
 import { ferramentasDaMesa } from './ponte-ferramentas.ts';
@@ -165,6 +165,11 @@ const ferramentas = ferramentasDaMesa({
       const medida = medidorDeTexto.value?.({ doc: item.doc, largura: item.largura, padding: item.caixa.padding, tamanhoFonte: item.texto.tamanho, fonte: item.texto.fonte, corPadrao: item.texto.cor, alinhamento: item.texto.alinhamento });
       // Folga de 6% para a fonte que ainda não carregou (como ao colar do Miro); texto vazio ou sem medidor: a altura atual.
       return medida == null ? item.altura : Math.ceil(medida * 1.06);
+    },
+    medirLarguraDoTexto: item => {
+      const medida = medidorDeLargura.value?.({ doc: item.doc, padding: item.caixa.padding, tamanhoFonte: item.texto.tamanho, fonte: item.texto.fonte, corPadrao: item.texto.cor, alinhamento: item.texto.alinhamento });
+      // Mesma folga de 6% do medirTexto; sem medida, null (o domínio mantém a largura copiada).
+      return medida == null ? null : Math.ceil(medida * 1.06);
     },
     paleta: () => paletaDaCampanha.value,
     capturar: async (quadro, itens, caixa, lado) => {

@@ -206,7 +206,7 @@ Fonte do teste: `~/Documents/RPG - Conteúdo/RPG - Conteúdo/Arquivos Secretos/A
 |---|---|---|
 | D — Estilo do mestre de verdade | Q9j–Q9p | Legenda lida do quadro, escrita por papel e por trecho, linhas e cartões, imagens de PDF e pastas locais, guia de transcrição e a aceitação refeita |
 
-### Q9j — Legenda do quadro (puro + `quadro_estilo`)  ⬜
+### Q9j — Legenda do quadro (puro + `quadro_estilo`)  ✅
 Objetivo: os papéis e as cores vêm da legenda do mestre, não de palpite.
 Ler: `src/dominio/estilo-do-quadro.ts`, `src/dominio/estrutura-da-secao.ts` (`estiloDoDoc`, `marcasPredominantes` em `insercao-quadro.ts`), `src/dominio/marcadores.ts`, `src/dominio/secoes-do-quadro.ts`.
 Arquivos: criar `src/dominio/legenda-do-quadro.ts` + teste; mudar `estilo-do-quadro.ts` e `ponte-quadros.ts`.
@@ -216,6 +216,7 @@ Como:
 3. `quadro_estilo` passa a mostrar a legenda no lugar dos palpites ("Legenda do mestre (GUIA DE LEGENDA): narração = fundo rgb(255,246,182) (…); teste = …"), com `#id` de exemplo. Sem legenda, mantém os palpites e diz "sem legenda no quadro; pergunte ao mestre o que cada cor significa antes de escrever".
 4. A legenda sai de `estiloDoQuadro` como campo, para a Q9k.
 Testes: a legenda real acima (10 itens, um rótulo por item, a descrição em texto simples depois); duas variantes de segredo; quadro sem "GUIA DE LEGENDA", só com marcadores destacados (`[TECNOLOGIA] [10]` azul, `[LOOT] …`, `[AFOGADO] "…"` verde); explícita vencendo marcador discordante; rótulo desconhecido.
+Nota: `legendaDoQuadro(itens) → Legenda | null` e `textoDaLegenda(legenda) → string[]` em `src/dominio/legenda-do-quadro.ts`. `Legenda = { secaoTitulo: string | null; entradas: EntradaDaLegenda[] }`; `EntradaDaLegenda = { papel, rotulo (sem colchetes), descricao?, marcas: { fundo?, letra?, negrito?, italico? }, exemplo (id completo), exemploCurto, origem: 'legenda' | 'marcadores' }`. `EstiloDetectado.legenda` (sempre a do quadro todo, não só da seção). A explícita é a seção cujo título contém "legenda" (sem acento/caixa); cada linha cujo rótulo `[…]` tem fundo vira entrada (segredo repetido ou com "destaque" na descrição = `segredo-destaque`). Os marcadores vêm de `analisarMarcadores` nos itens do mestre fora da seção da legenda, com fundo no trecho; por papel vale a combinação de marcas mais comum (empate: a primeira na ordem de leitura). Desvios: (1) o nome do rótulo é consultado primeiro numa tabela (`PONTO DE INTERAÇÃO`, `NARRAÇÃO`, `TESTE E DT`, `TRANSIÇÃO`, `GANCHO`, `HANDOUT`…) e só depois o tipo do marcador (`teste`, `loot`, `fala`, `rotulo`, `musica`…), senão `[NARRAÇÃO]` viraria `fala`; `[SE …]` é `condicao` (descrição fixa sobre agrupar com teste) e `[X] [10]` (rótulo seguido de `[número]`) é `teste`; (2) a entrada ganhou `exemploCurto`; (3) `textoDoEstilo` mostra a legenda (uma linha por papel, `[inferida]` nas de marcadores) e, em vez de apagar os palpites, mantém uma linha "Outros destaques (…, palpite)" só com os fundos que a legenda não cobre (narração e regras sem colchete continuam úteis); sem legenda: palpites e o aviso "Sem legenda no quadro; pergunte ao mestre…"; (4) a descrição da ferramenta `quadro_estilo` não mudou. Limites: só rótulo com fundo conta como legenda (letra colorida ou negrito sem fundo, não); o rótulo da entrada de marcadores é o do primeiro exemplo (`fala` junta todos os `[NOME]`, o rótulo é de um só). Testes: `tests/unit/legenda-do-quadro.test.ts`; `estilo-do-quadro.test.ts` ajustado (a fala e a condição agora saem na legenda, não nos palpites).
 Commit: `board legend drives roles and colors`
 
 ### Q9k — Escrever por papel e por trecho (`quadro_inserir`)  ⬜
@@ -253,9 +254,10 @@ Como:
 Testes: listagem de pasta; filtro de fundos repetidos e máscaras com uma saída de `pdfimages -list` gravada; recorte em frações; caminho fora da raiz recusado.
 Commit (Atlas e Mesa): `assistant brings images from local pdfs and folders`
 
-### Q9n — Título e rótulo que cabem numa linha  ⬜
+### Q9n — Título e rótulo que cabem numa linha  ✅
 Objetivo: "A ENXURRADA" não quebra em duas linhas.
 Como: o contexto ganha `medirLarguraDoTexto` (pela mesma régua de `render-textos.ts`, entrando pelo `assistente-slot.ts`). `titulo` e `rotulo` sem `largura` explícita ficam com a largura do texto numa linha (mais o padding), com o máximo de 1,5 × a largura da coluna; acima disso, quebram.
+Nota: `larguraNecessariaDoTexto(pedido)` em `render-textos.ts` (linha mais longa sem quebra + padding dos dois lados; compartilha `medirLinhasDoTexto` com a altura), signal `medidorDeLargura` em `assistente-slot.ts`, `ctx.medirLarguraDoTexto?(item)` (folga de 6%, `null` sem medida) e `medirLargura?` em `OpcoesDaInsercao`. A regra mora em `larguraDeUmaLinha(copiada, medida)` (`max(copiada, min(ceil(medida), 1,5 × copiada))`), pronta para o `rotulo`. Desvio: só `titulo` usa a regra agora; o formato `rotulo` é da Q9k. Sem medidor, o título mantém a largura copiada. A função de `render-textos.ts` depende de canvas e ficou sem teste unitário (a regra é testada com medidores falsos).
 Commit: `titles and labels fit on one line`
 
 ### Q9o — Guia: transcrever uma fonte  ⬜  *(Opus)*

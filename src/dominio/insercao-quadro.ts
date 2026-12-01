@@ -60,9 +60,23 @@ export interface OpcoesDaInsercao {
   novoId: () => string;
   /** Altura necessária do texto (injetada para manter o domínio puro). */
   medir: (item: Extract<Item, { tipo: 'texto' }>) => number;
+  /** Largura (px) do texto numa linha só, com padding; `null` se não dá para medir (Q9n). Sem isto, o título mantém a largura copiada. */
+  medirLargura?: (item: Extract<Item, { tipo: 'texto' }>) => number | null;
   paleta?: PaletaDaCampanha;
   /** Retratos já resolvidos (e guardados no banco de imagens), pela chave `de` do pedido (ex.: "entidade:Aldric"). */
   retratos?: ReadonlyMap<string, ImagemResolvida>;
+}
+
+/** Quanto o título (e o futuro rótulo) pode alargar além da largura copiada do exemplo. */
+export const FATOR_MAXIMO_DE_LARGURA = 1.5;
+
+/**
+ * Largura de um item que deve caber numa linha (título; futuro rótulo): a medida do texto arredondada para cima,
+ * no mínimo a largura copiada (se o texto cabe nela) e no máximo 1,5 × a copiada. Sem medida, a copiada.
+ */
+export function larguraDeUmaLinha(copiada: number, medida: number | null | undefined): number {
+  if (medida == null || !Number.isFinite(medida)) return copiada;
+  return Math.max(copiada, Math.min(Math.ceil(medida), copiada * FATOR_MAXIMO_DE_LARGURA));
 }
 
 export interface Insercao {
@@ -292,6 +306,10 @@ export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaI
     item.revisao = revisao;
     // O texto é novo: a altura do exemplo não serve (o corpo copia o estilo de um exemplo qualquer, e a caixa dele
     // pode ter o triplo do texto novo). Texto e título têm a altura medida; a nota mantém o tamanho do post-it.
+    // Título sem largura explícita: alarga até caber numa linha (limite 1,5×) antes de medir a altura.
+    if (formato === 'titulo' && largura === undefined && opcoes.medirLargura) {
+      item.largura = larguraDeUmaLinha(item.largura, opcoes.medirLargura(item));
+    }
     if (formato !== 'nota') item.altura = medir(item);
     alturas[item.id] = item.altura;
     resultado.push(item);

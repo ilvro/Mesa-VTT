@@ -301,6 +301,28 @@ function montarLinhas(
 export function alturaNecessariaDoTexto(
   pedido: Pick<PedidoTextoPixi, 'doc' | 'largura' | 'padding' | 'tamanhoFonte' | 'fonte' | 'corPadrao' | 'alinhamento'>,
 ): number | null {
+  const medida = medirLinhasDoTexto(pedido, (wCss) => wCss);
+  if (!medida) return null;
+  return medida.linhas.reduce((acc, l) => acc + l.altura, 0) + medida.pad * 2;
+}
+
+/**
+ * Largura (px do quadro) que o texto precisa para caber sem quebrar: a da linha mais longa (cada parágrafo numa linha),
+ * com as mesmas regras de fonte e marcas da altura, mais o padding dos dois lados. `null` sem canvas ou sem conteúdo.
+ */
+export function larguraNecessariaDoTexto(
+  pedido: Pick<PedidoTextoPixi, 'doc' | 'padding' | 'tamanhoFonte' | 'fonte' | 'corPadrao' | 'alinhamento'>,
+): number | null {
+  const medida = medirLinhasDoTexto({ ...pedido, largura: 0 }, () => Number.POSITIVE_INFINITY);
+  if (!medida) return null;
+  return medida.linhas.reduce((acc, l) => Math.max(acc, l.largura), 0) + pedido.padding * 2;
+}
+
+/** Monta as linhas do texto (base da medição de altura e de largura); `maxW(larguraCss)` dá a largura útil de quebra. */
+function medirLinhasDoTexto(
+  pedido: Pick<PedidoTextoPixi, 'doc' | 'largura' | 'padding' | 'tamanhoFonte' | 'fonte' | 'corPadrao' | 'alinhamento'>,
+  larguraUtil: (wCss: number) => number,
+): { linhas: LinhaLayout[]; pad: number } | null {
   const blocos = extrairBlocosDeTexto(pedido.doc);
   if (!blocos.some((b) => b.trechos.some((t) => t.texto.trim().length > 0))) return null;
   const surface = criarSurface(1, 1);
@@ -308,8 +330,9 @@ export function alturaNecessariaDoTexto(
   if (!ctx) return null;
   const wCss = Math.max(4, pedido.largura);
   const pad = Math.min(pedido.padding, wCss * 0.2);
-  const linhas = montarLinhas(ctx, blocos, pedido, Math.max(4, wCss - pad * 2));
-  return linhas.reduce((acc, l) => acc + l.altura, 0) + pad * 2;
+  const util = larguraUtil(wCss);
+  const linhas = montarLinhas(ctx, blocos, pedido, Number.isFinite(util) ? Math.max(4, util - pad * 2) : util);
+  return { linhas, pad };
 }
 
 /**

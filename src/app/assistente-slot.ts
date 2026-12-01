@@ -18,3 +18,7 @@ export const capturadorDoQuadro = signal<CapturadorDoQuadro | null>(null);
 type EstiloTexto = Extract<Item, { tipo: 'texto' }>['texto'];
 export type MedidorDeTexto = (pedido: { doc: DocRico; largura: number; padding: number; tamanhoFonte: number; fonte: EstiloTexto['fonte']; corPadrao: string; alinhamento: EstiloTexto['alinhamento'] }) => number | null;
 export const medidorDeTexto = signal<MedidorDeTexto | null>(null);
+
+/** Largura (px) que o texto precisa para caber numa linha, mais o padding dos dois lados (Q9n); a UI preenche (`main.tsx`). */
+export type MedidorDeLargura = (pedido: { doc: DocRico; padding: number; tamanhoFonte: number; fonte: EstiloTexto['fonte']; corPadrao: string; alinhamento: EstiloTexto['alinhamento'] }) => number | null;
+export const medidorDeLargura = signal<MedidorDeLargura | null>(null);
