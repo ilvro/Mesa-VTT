@@ -163,7 +163,7 @@ Commit: `assistant items show a proposed mark without a frame`
 
 ## Etapa C — Guia e aceitação
 
-### Q9h — Guia: montar ou transcrever material  ⬜
+### Q9h — Guia: montar ou transcrever material  ✅
 Objetivo: o assistente escolhe a ferramenta certa e imita o mestre em vez de impor um estilo.
 Ler: `Atlas/docs/assistente/guia/quadros.md`, `Atlas/docs/assistente/nucleo.md`.
 Arquivos: `Atlas/docs/assistente/guia/quadros.md` (e o `resumo:` do topo).
@@ -176,6 +176,7 @@ Como:
 2. Deixar explícito: se `quadro_estilo` diz que o mestre não usa post-its tipados, **não** use `quadro_propor` nem cores por tipo para material; `tipo` só como semântica.
 3. "Propor ideias" passa a dizer que vale para sugestões soltas ("me dê ideias de…"), não para montar a missão.
 4. Atualizar a lista de ferramentas no topo do guia.
+Nota: feito pelo Opus no Atlas (`4c9ded0`). A seção nova ficou antes de "Propor ideias" e já cita `setas` e `formato: "imagem"` da Q9f; a ordem de leitura ganhou o `nivel: "estrutura"` como passo 6 (só para escrever). O `abrir_espaco` só deve ser usado quando o mestre pediu para inserir no meio.
 Commit (Atlas): `(docs) board guide covers building material in the gm style`
 
 ### Q9i — Teste de aceitação no Pântano  ⬜  *(Opus)*
