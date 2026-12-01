@@ -1,5 +1,7 @@
-// Captura de uma região do quadro como JPEG, fora da tela (Q9c). Funciona com o quadro aberto ou fechado:
-// monta um palco Pixi próprio, espera textos e imagens, exporta e destrói tudo.
+// Captura de uma região do quadro como JPEG, fora da tela (Q9c). Funciona com o quadro aberto ou fechado.
+// Um único palco Pixi fora da tela, criado na primeira captura e reaproveitado: criar e destruir um contexto WebGL a
+// cada captura fez o WebKit do app de desktop derrubar o contexto do quadro principal (tela vazia, quadro montado
+// duas vezes). As capturas rodam uma de cada vez.
 import { Application, Container, Graphics, Rectangle } from 'pixi.js';
 import type { Caixa } from '../../../dominio/camera.ts';
 import { escalaDaCaptura, itensDaRegiao } from '../../../dominio/caixa-da-captura.ts';
@@ -21,22 +23,34 @@ export interface OpcoesDaCaptura {
 // janela quando o assistente captura), e a captura ficava parada para sempre.
 const esperarQuadro = () => new Promise<void>((r) => setTimeout(r, 30));
 
+interface Palco { app: Application }
+let palco: Promise<Palco> | null = null;
+let fila: Promise<unknown> = Promise.resolve();
+
+function palcoDaCaptura(): Promise<Palco> {
+  if (!palco) {
+    palco = (async () => {
+      const app = new Application();
+      await app.init({ canvas: document.createElement('canvas'), preference: 'webgl', antialias: true, autoStart: false, resolution: 1, width: 64, height: 64, backgroundAlpha: 1 });
+      return { app };
+    })();
+    palco.catch(() => { palco = null; });
+  }
+  return palco;
+}
+
 /** Data URL JPEG (qualidade 0,8) da `caixa`, com o maior lado em `lado` px. */
-export async function capturarRegiao(itens: ReadonlyMap<string, Item>, caixa: Caixa, opcoes: OpcoesDaCaptura): Promise<string> {
+export function capturarRegiao(itens: ReadonlyMap<string, Item>, caixa: Caixa, opcoes: OpcoesDaCaptura): Promise<string> {
+  const vez = fila.then(() => capturarAgora(itens, caixa, opcoes));
+  fila = vez.catch(() => undefined);
+  return vez;
+}
+
+async function capturarAgora(itens: ReadonlyMap<string, Item>, caixa: Caixa, opcoes: OpcoesDaCaptura): Promise<string> {
   const { zoom, largura, altura } = escalaDaCaptura(caixa, opcoes.lado);
   const regiao = itensDaRegiao(itens, caixa);
-  const app = new Application();
-  await app.init({
-    canvas: document.createElement('canvas'),
-    preference: 'webgl',
-    antialias: true,
-    autoStart: false,
-    resolution: 1,
-    width: largura,
-    height: altura,
-    background: opcoes.fundo,
-    backgroundAlpha: 1,
-  });
+  const { app } = await palcoDaCaptura();
+  app.renderer.resize(largura, altura);
   let mudou = true;
   const cacheImagens = new CacheImagensPixi({ aoCarregar: () => { mudou = true; } });
   const mundo = new Container();
@@ -71,8 +85,14 @@ export async function capturarRegiao(itens: ReadonlyMap<string, Item>, caixa: Ca
     app.render();
     return await app.renderer.extract.base64({ target: app.stage, format: 'jpg', quality: 0.8, frame: new Rectangle(0, 0, largura, altura) });
   } finally {
-    gerenciador.destruir();
-    cacheImagens.destruir();
-    app.destroy(true, { children: true });
+    // Cada passo isolado: um erro na limpeza não pode deixar o palco sujo para a próxima captura.
+    const passos = [
+      () => app.stage.removeChildren(),
+      () => gerenciador.destruir(),
+      () => cacheImagens.destruir(),
+      () => fundo.destroy(),
+      () => mundo.destroy({ children: true }),
+    ];
+    for (const p of passos) { try { p(); } catch { /* segue limpando */ } }
   }
 }
