@@ -1,8 +1,10 @@
+import { semAcento } from './entidades.ts';
 import type { Item, NoRico } from './quadro.ts';
 import { ordemDeLeituraDeItens } from './roteiro-do-quadro.ts';
 import { itensDaSecao, numeroCurto, titulosEntre } from './estrutura-da-secao.ts';
 import { infoDoTexto, mediana, secoesDoQuadro, type Secao } from './secoes-do-quadro.ts';
 import { idsCurtos } from './texto-da-secao.ts';
+import { legendaDoQuadro, textoDaLegenda, type Legenda } from './legenda-do-quadro.ts';
 
 /**
  * Convenções visuais de uma seção do quadro, só a partir dos itens do mestre: estilos de item,
@@ -63,6 +65,8 @@ export interface EstiloDetectado {
   exemploCorpo: string | null;
   exemploCorpoCurto: string | null;
   semantica: { fracao: number; itens: number; total: number };
+  /** Legenda do quadro todo (seção LEGENDA e trechos [..] destacados), ou null. */
+  legenda: Legenda | null;
 }
 
 const TOLERANCIA_X = 24;
@@ -240,12 +244,13 @@ function eixoItens(textos: readonly Item[], eixo: EstiloDetectado['eixo']): read
   return textos.filter((i) => Math.abs(i.x + i.largura / 2 - eixo.xAbsoluto) <= TOLERANCIA_EIXO);
 }
 
-/** Seção com mais itens de texto do mestre (a primeira em caso de empate). */
+/** Seção com mais itens de texto do mestre (a primeira em caso de empate). A seção da legenda não conta: ela descreve o estilo, não é o material. */
 function secaoComMaisTexto(itens: readonly Item[]): Secao | null {
   let melhor: Secao | null = null;
   let max = 0;
   const porId = new Map(itens.map((i) => [i.id, i]));
   for (const s of secoesDoQuadro(itens)) {
+    if (/legenda/.test(semAcento(s.titulo))) continue;
     let n = 0;
     for (const id of s.itemIds) {
       const it = porId.get(id);
@@ -361,6 +366,7 @@ export function estiloDoQuadro(itens: readonly Item[], secao?: Secao): EstiloDet
     exemploCorpo: cor?.exemplo ?? null,
     exemploCorpoCurto: cor?.exemploCurto ?? null,
     semantica: { fracao: textos.length > 0 ? comSemantica / textos.length : 0, itens: comSemantica, total: textos.length },
+    legenda: legendaDoQuadro(itens),
   };
 }
 
@@ -378,10 +384,14 @@ export function textoDoEstilo(e: EstiloDetectado | null): string {
     l.push(`${rotulo[g.papel]} (${g.contagem}): ${g.formato} ${g.fonte} ${numeroCurto(g.tamanho)} ${g.cor}${g.fundo !== null ? `, caixa ${g.fundo}` : ''}, largura ~${g.larguraMediana} (exemplo #${g.exemploCurto}).`);
   }
   if (e.grupos.length > MAX_GRUPOS) l.push(`(+${e.grupos.length - MAX_GRUPOS} estilos menores)`);
-  if (e.destaques.length > 0) {
-    const corpo = e.grupos.find((g) => g.papel === 'corpo')?.cor;
-    l.push(`Destaques (fundo do trecho): ${e.destaques.map((d) => `${d.cor}${d.corDaLetra !== corpo ? ` letra ${d.corDaLetra}` : ''}${d.uso ? ` ${d.uso}?` : ''} ${d.caracteres} car. (#${d.exemploCurto})`).join(' · ')}.`);
+  const corpo = e.grupos.find((g) => g.papel === 'corpo')?.cor;
+  const cobertas = new Set(e.legenda?.entradas.map((x) => x.marcas.fundo) ?? []);
+  const destaques = e.destaques.filter((d) => !cobertas.has(d.cor));
+  if (e.legenda) l.push(...textoDaLegenda(e.legenda));
+  if (destaques.length > 0) {
+    l.push(`${e.legenda ? 'Outros destaques (fundo do trecho, palpite)' : 'Destaques (fundo do trecho)'}: ${destaques.map((d) => `${d.cor}${d.corDaLetra !== corpo ? ` letra ${d.corDaLetra}` : ''}${d.uso ? ` ${d.uso}?` : ''} ${d.caracteres} car. (#${d.exemploCurto})`).join(' · ')}.`);
   }
+  if (!e.legenda) l.push('Sem legenda no quadro; pergunte ao mestre o que cada cor significa antes de escrever.');
   const pct = Math.round(e.semantica.fracao * 100);
   l.push(`Semântica: ${pct}% dos itens${e.semantica.fracao < LIMITE_SEMANTICA ? '; o mestre não usa post-its tipados; não use cores por tipo' : ''}.`);
   return l.join('\n');

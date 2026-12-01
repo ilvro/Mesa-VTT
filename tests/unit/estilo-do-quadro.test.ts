@@ -64,7 +64,8 @@ test('coluna do mestre: fluxo, estilos, destaques, imagens e semântica', () => 
   assert.match(t2, /Fluxo: coluna em x=0, largura ~400, 24 px entre itens; imagens à direita \(~200 px\)/);
   assert.match(t2, /Título \(2\): texto pt-serif 28 #1a1a1a, caixa #ffffff, largura ~400 \(exemplo #it-tit1\)/);
   assert.match(t2, /rgb\(26,26,26\) letra #ffffff regras\/instruções\? 46 car\. \(#it-regr\)/);
-  assert.match(t2, /rgb\(173,240,199\) fala\?/);
+  assert.match(t2, /- fala \[AFOGADO\]: fundo rgb\(173,240,199\)/);
+  assert.match(t2, /- condicao \[SE UM OU MAIS PERSONAGENS PASSAREM\]: fundo rgb\(101,157,242\)/);
   assert.match(t2, /o mestre não usa post-its tipados; não use cores por tipo/);
   assert.ok(t2.includes('\n'));
 });
