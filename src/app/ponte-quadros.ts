@@ -19,6 +19,8 @@ import { assinaturaDaSecao, secoesDoQuadro, type Secao } from '../dominio/secoes
 import { estiloDoQuadro, textoDoEstilo } from '../dominio/estilo-do-quadro.ts';
 import { estruturaDaSecao } from '../dominio/estrutura-da-secao.ts';
 import { LIMITE_TOKENS_PADRAO, textoDaSecao } from '../dominio/texto-da-secao.ts';
+import type { Caixa } from '../dominio/camera.ts';
+import { caixaDaCaptura, LADO_MAXIMO_CAPTURA, LADO_PADRAO_CAPTURA, MAIOR_LADO_DA_REGIAO, MARGEM_DA_CAPTURA } from '../dominio/caixa-da-captura.ts';
 
 export interface ContextoDeQuadros {
   campanha(): Promise<{ id: string; nome: string } | null>;
@@ -38,6 +40,8 @@ export interface ContextoDeQuadros {
   criarItens(quadroId: string, itens: Item[], rotulo: string): Promise<void>;
   /** Paleta da campanha (cores por tipo); padrão se ausente. */
   paleta?(): PaletaDaCampanha;
+  /** A região do quadro como JPEG (data URL), com o maior lado em `lado` px; sem isto, `quadro_ver_regiao` avisa que não há captura. */
+  capturar?(quadro: Quadro, itens: ReadonlyMap<string, Item>, caixa: Caixa, lado: number): Promise<string>;
 }
 
 export const LADO_PADRAO_IMAGEM = 768;
@@ -102,6 +106,16 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
     }
     if (achadas.length > 1) throw new Error(`#${id} é ambíguo: ${achadas.slice(0, 8).map(i => i.id.slice(0, 10)).join(', ')}. Use mais caracteres do id.`);
     return achadas[0]!;
+  }
+  /** Qualquer item pelo #id curto (prefixo) ou id completo; erro legível se faltar ou for ambíguo. */
+  function itemPor(c: QuadroCarregado, chave: string): Item {
+    const id = chave.replace(/^#/, '');
+    const exato = c.itens.find(i => i.id === id);
+    if (exato) return exato;
+    const achados = c.itens.filter(i => i.id.startsWith(id));
+    if (achados.length === 0) throw new Error(`Item #${id} não encontrado em "${c.quadro.nome}". Veja os ids em quadro_secao.`);
+    if (achados.length > 1) throw new Error(`#${id} é ambíguo: ${achados.slice(0, 8).map(i => i.id.slice(0, 10)).join(', ')}. Use mais caracteres do id.`);
+    return achados[0]!;
   }
   /** Grava (sem sobrescrever o que o mestre escreveu); o texto passa do limite → erro legível. */
   async function gravar(c: QuadroCarregado, alvo: string, textoBruto: unknown, limite: number, assinatura: string, rotulo: string): Promise<RegistroResumo> {
@@ -257,6 +271,47 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
         const descricao = (await ctx.resumos(c.quadro.id)).find(r => r.alvo === alvoDaImagem(item.id))?.texto;
         const legenda = descricao || item.legenda?.trim() || 'sem legenda';
         return [imagem(dataUrl), texto(`[imagem #${item.id.slice(0, 6)}: ${legenda}, ${Math.round(item.larguraOriginal)}x${Math.round(item.alturaOriginal)}]`)];
+      },
+    },
+    {
+      nome: 'quadro_ver_regiao',
+      descricao: `Vê uma região do quadro como imagem (JPEG), como o mestre a vê: uma seção inteira ou a caixa de alguns itens (#id). Use para conferir o estilo antes de escrever e o resultado depois. Propostas do assistente aparecem com contorno tracejado e uma estrela. Lado padrão ${LADO_PADRAO_CAPTURA}, máximo ${LADO_MAXIMO_CAPTURA}.`,
+      esquema: {
+        type: 'object',
+        properties: {
+          quadro: quadroEsquema,
+          secao: { type: 'string', description: 'Id da seção (do quadro_mapa) ou o título.' },
+          itens: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 60, description: 'Os #ids curtos; a imagem cobre a caixa deles.' },
+          lado: { type: 'integer', minimum: 256, maximum: LADO_MAXIMO_CAPTURA, description: 'Lado maior em px.' },
+        },
+        required: ['quadro'],
+        additionalProperties: false,
+      },
+      anotacoes: { leitura: true, idempotente: true },
+      async executar(args) {
+        const c = await quadroPor(args.quadro);
+        const ids = Array.isArray(args.itens) ? (args.itens as unknown[]).map(textoDe).filter(Boolean) : [];
+        const temSecao = Boolean(textoDe(args.secao));
+        if (!temSecao && ids.length === 0) throw new Error('Informe a seção ou os itens (#id) da região.');
+        if (temSecao && ids.length > 0) throw new Error('Informe a seção ou os itens, não os dois.');
+        let caixa: Caixa | null;
+        let rotulo: string;
+        if (temSecao) {
+          const s = secaoPor(c, args.secao);
+          const m = MARGEM_DA_CAPTURA;
+          caixa = { x: s.caixa.x - m, y: s.caixa.y - m, largura: s.caixa.largura + 2 * m, altura: s.caixa.altura + 2 * m };
+          rotulo = `seção "${s.titulo}"`;
+        } else {
+          caixa = caixaDaCaptura(ids.map(id => itemPor(c, id)));
+          rotulo = `${ids.length} ${ids.length === 1 ? 'item' : 'itens'}`;
+        }
+        if (!caixa) throw new Error('Os itens não ocupam área (só setas?).');
+        const maior = Math.max(caixa.largura, caixa.altura);
+        if (maior > MAIOR_LADO_DA_REGIAO) throw new Error(`A região tem ${Math.round(maior)} px de lado; acima de ${MAIOR_LADO_DA_REGIAO} o texto fica ilegível. Peça uma seção menor ou alguns itens (#id).`);
+        if (!ctx.capturar) throw new Error('A captura do quadro não está disponível neste ambiente.');
+        const lado = args.lado === undefined ? LADO_PADRAO_CAPTURA : Math.min(LADO_MAXIMO_CAPTURA, Math.max(256, Math.round(Number(args.lado)) || LADO_PADRAO_CAPTURA));
+        const url = await ctx.capturar(c.quadro, new Map(c.itens.map(i => [i.id, i])), caixa, lado);
+        return [imagem(url), texto(`[região do quadro "${c.quadro.nome}": ${rotulo}, ${Math.round(caixa.largura)}×${Math.round(caixa.altura)} px]`)];
       },
     },
     {

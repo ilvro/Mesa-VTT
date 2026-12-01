@@ -158,6 +158,11 @@ export class CacheImagensPixi {
     return { miniaturas: this.miniaturas.size, completas: this.completas.size };
   }
 
+  /** Quantas imagens ainda estão carregando (a captura espera chegar a zero). */
+  emCarregamento(): number {
+    return this.emVoo.size;
+  }
+
   destruir(): void {
     this.destruido = true;
     for (const t of this.miniaturas.values()) t.destroy(true);

@@ -66,12 +66,14 @@ if (ehAtividadeDoDiscord(location.search)) {
 
   // Ponte do assistente: em desenvolvimento e no app de desktop (o build do Pages não a contém; ver `npm run ponte:verificar` no Atlas).
   if (import.meta.env.DEV || import.meta.env.VITE_PONTE === '1') {
-    void import('./app/assistente-slot.ts').then(async ({ seloDoAssistente }) => {
-      const [{ SeloDoAssistente }] = await Promise.all([
+    void import('./app/assistente-slot.ts').then(async ({ seloDoAssistente, capturadorDoQuadro }) => {
+      const [{ SeloDoAssistente }, { capturarRegiao }] = await Promise.all([
         import('./ui/SeloDoAssistente.tsx'),
+        import('./ui/quadro/pixi/captura-quadro.ts'),
         import('./app/ponte.ts'),
       ]);
       seloDoAssistente.value = SeloDoAssistente;
+      capturadorDoQuadro.value = capturarRegiao;
     });
   }
 }

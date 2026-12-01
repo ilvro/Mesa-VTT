@@ -1,6 +1,6 @@
 // Só em desenvolvimento: carregado por `main.tsx` dentro de `if (import.meta.env.DEV)`; o Vite elimina o chunk do build.
 import { conectarPonte, type FerramentaDaPonte } from '#mesa/ponte';
-import { estadoDaPonte } from './assistente-slot.ts';
+import { capturadorDoQuadro, estadoDaPonte } from './assistente-slot.ts';
 import { abrirAplicativo } from './aplicativos.ts';
 import { alternarEncontroDaCena, alterarEntidade, atualizar, campanhaAtiva, campanhas, criarCampanha, criarEntidade, definirMomentoDaCena, ligarRefs, obterRepositorio, salvarElencoDaCampanha, vincularMapaNaCena, vincularParticipanteNaCena, vincularPistaNaCena, vincularTrilhaNaCena } from './campanha.ts';
 import { ferramentasDaMesa } from './ponte-ferramentas.ts';
@@ -142,6 +142,11 @@ const ferramentas = ferramentasDaMesa({
       else await gravarItens(novos, []);
     },
     paleta: () => paletaDaCampanha.value,
+    capturar: async (quadro, itens, caixa, lado) => {
+      const capturar = capturadorDoQuadro.value;
+      if (!capturar) throw new Error('A captura do quadro ainda não carregou; tente de novo em instantes.');
+      return capturar(itens, caixa, { lado, fundo: quadro.fundo.cor, paleta: paletaDaCampanha.value });
+    },
   },
   campanhaAtual: () => campanhaAtiva.value,
   oQueVejo,

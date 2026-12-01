@@ -84,12 +84,13 @@ Testes: com um quadro montado igual ao do Pântano (pt-serif, 4 cores de destaqu
 Nota: `estiloDoQuadro(itens, secao?) → EstiloDetectado | null` e `textoDoEstilo(e) → string` em `src/dominio/estilo-do-quadro.ts`. `EstiloDetectado` traz `fluxo`, `coluna {x, largura, espacoVertical}`, atalhos `espacoVertical` e `larguraDaColuna`, `imagens {lado, largura}`, `grupos[]` (formato, papel, fonte, tamanho, cor, fundo, contagem, larguraMediana, `exemplo` completo e `exemploCurto`), `destaques[]` (cor, caracteres, corDaLetra, exemplo, uso), `exemploTitulo`/`exemploCorpo` (e `...Curto`) e `semantica`. Ferramenta `quadro_estilo(quadro, secao?)` na ponte. Exportados sem mudar comportamento: `itensDaSecao` e `titulosEntre` (de `estrutura-da-secao.ts`). Desvios: sem `secao`, retorna `null` (texto "Não há seção…") se nenhuma seção tem texto do mestre; a `cor` do grupo é a cor base do item (`texto.cor`), não a das marcas (o branco sobre preto aparece nos destaques como `letra #ffffff`, mostrada só quando difere da cor do corpo); o título/corpo usa `titulosEntre` só com os itens do mestre; palpites de uso: `fala` (`[NOME] "…`), `condição/rótulo` (metade ou mais dos trechos com `[...]`) e `narração` (o de mais caracteres entre os sem palpite), sempre com `?`; grade = ≥4 itens, ≥2 colunas e ≥2 linhas de x/y (±24 px) e ≥60% dos itens com vizinho em ambas; coluna exige ≥2 itens e >60% no mesmo x. Limites: o espaço vertical usa a `altura` gravada do item (texto com `alturaAuto` pode estar defasado); no máximo 6 grupos de estilo no texto.
 Commit: `board style summary tool for the assistant`
 
-### Q9c — Ver uma região do quadro como imagem (`quadro_ver_regiao`)  ⬜  *(Opus: é render)*
+### Q9c — Ver uma região do quadro como imagem (`quadro_ver_regiao`)  ✅  *(Opus: é render)*
 Objetivo: o assistente confere visualmente o que leu e o que escreveu.
 Ler: `src/ui/quadro/pixi/viewport-quadro.ts`, `render-itens.ts` (`GerenciadorItensPixi`), `cache-imagens-pixi.ts`; `quadro_imagem` em `src/app/ponte-quadros.ts` (formato de retorno).
 Arquivos: criar `src/ui/quadro/pixi/captura-quadro.ts`; mudar `src/app/ponte-quadros.ts` (`ctx.capturar?(quadroId, caixa, lado)`) e o contexto da ponte.
 Como: um `Application` Pixi fora da tela, com um `GerenciadorItensPixi` próprio, sincroniza os itens que tocam a caixa, espera as imagens carregarem (com prazo de 3 s) e exporta com `renderer.extract.base64` como JPEG 0,8, com lado maior ≤ `lado` (padrão 1024, máximo 1568). Depois destrói tudo. Funciona com o quadro aberto ou fechado. Argumentos: `quadro` e `secao` **ou** `itens: ["#id", …]` (a caixa envolvente + 40 px), mais `lado`. Os itens do assistente saem com a marca de proposto (Q9g) para o mestre e o assistente verem a diferença.
 Testes: unitário só da escolha da caixa (por seção e por ids); conferir a imagem à mão pelo MCP no Pântano.
+Nota: puro em `src/dominio/caixa-da-captura.ts` (`caixaDaCaptura`, `escalaDaCaptura` (nunca amplia além de 2×), `itensDaRegiao`, que leva junto as setas ligadas e o item da outra ponta); render em `src/ui/quadro/pixi/captura-quadro.ts` (`capturarRegiao`, ~110 ms num quadro pequeno). O `extract` do Pixi ignora o fundo do renderer (o JPEG saía preto): o fundo do quadro vai num retângulo. `CacheImagensPixi.emCarregamento()` novo. A ferramenta aceita `secao` **ou** `itens` (até 60 #ids; o `itemPor` aceita qualquer item, não só imagem) e recusa regiões acima de 12 000 px de lado. Desvio: `src/app` não pode importar `src/ui` (teste de arquitetura), então o capturador entra por `capturadorDoQuadro` em `assistente-slot.ts`, preenchido pelo `main.tsx`. Limite: sem a grade de pontos do fundo; texto abaixo do tamanho mínimo na tela some, como no quadro.
 Commit: `assistant can view a board region as an image`
 
 ---
@@ -148,10 +149,11 @@ Como:
 Testes: seta entre um item novo e um existente; ponta inválida = erro legível; imagem à direita alinhada pelo topo; retrato de entidade sem arquivo = erro legível.
 Commit: `quadro_inserir places arrows and campaign images`
 
-### Q9g — Marca de proposto sem moldura  ⬜  *(Opus: visual)*
+### Q9g — Marca de proposto sem moldura  ✅  *(Opus: visual)*
 Objetivo: um item do assistente solto na coluna do mestre se distingue à primeira vista, sem mudar o layout.
 Ler: `src/ui/quadro/Item.tsx` e `ItemMoldura.tsx` (`em-revisao-assistente`), `src/ui/quadro/pixi/render-itens.ts`, `estilo.css` (bloco `/* Propostas do assistente */`).
 Como: primeiro conferir se o render Pixi atual desenha o contorno tracejado de `em-revisao-assistente` em itens de texto soltos. Se não, desenhar em `render-itens.ts` um contorno tracejado no `--acento`, por fora da caixa (sem mexer na largura ou na altura), e uma etiqueta pequena "✦" no canto superior direito, que some quando o item é aceito. A marca não sai na projeção aos jogadores (os itens em revisão já ficam fora dela). Ela sai na captura da Q9c.
+Nota: o render do quadro é Pixi, e o contorno CSS `em-revisao-assistente` só aparecia no overlay DOM (item em edição ou referência); nos textos comuns não havia marca nenhuma. Agora `desenharMarcaDoAssistente` em `render-itens.ts` desenha o contorno tracejado no `--acento` (#a58de0) 5 px por fora e uma etiqueta com estrela no canto. Itens dentro de uma moldura que também é proposta não repetem a marca. Setas e traços ficam sem marca. Limite: a marca dos itens do Miro em revisão (contorno amarelo do CSS) continua só no overlay DOM.
 Commit: `assistant items show a proposed mark without a frame`
 
 ---

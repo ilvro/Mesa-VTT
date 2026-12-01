@@ -10,7 +10,7 @@ const doc = (...linhas: string[]): DocRico => ({ type: 'doc', content: linhas.ma
 const nota = (qid: string, id: string, x: number, y: number, texto: string, mae: string | null = null) =>
   ({ ...novaNotaAdesiva({ quadroId: qid, x, y, largura: 200, altura: 100, doc: doc(texto) }, 1, id), molduraId: mae }) as Item;
 
-function montar(opcoes: { campanha?: boolean; aberto?: boolean; semArquivo?: boolean; resumos?: RegistroResumo[] } = {}) {
+function montar(opcoes: { campanha?: boolean; aberto?: boolean; semArquivo?: boolean; semCaptura?: boolean; resumos?: RegistroResumo[] } = {}) {
   const guardados: RegistroResumo[] = opcoes.resumos ?? [];
   const q1: Quadro = novoQuadro('c1', 'Reino Vermelho', 1, 'q1aaaa');
   const q2: Quadro = novoQuadro('c1', 'Masmorra', 1, 'q2bbbb');
@@ -23,6 +23,7 @@ function montar(opcoes: { campanha?: boolean; aberto?: boolean; semArquivo?: boo
   const itens2: Item[] = [nota('q2bbbb', 'n3zzzzzz', 0, 0, 'Corredor com armadilhas e a coroa verdadeira')];
   const chamadas: { id: string; lado: number }[] = [];
   const criados: { quadroId: string; itens: Item[]; rotulo: string }[] = [];
+  const capturas: { caixa: { x: number; y: number; largura: number; altura: number }; lado: number; itens: number }[] = [];
   const ctx: ContextoDeQuadros = {
     campanha: async () => (opcoes.campanha === false ? null : { id: 'c1', nome: 'C' }),
     quadros: async () => [q1, q2],
@@ -31,10 +32,11 @@ function montar(opcoes: { campanha?: boolean; aberto?: boolean; semArquivo?: boo
     async imagem(id, lado) { chamadas.push({ id, lado }); return opcoes.semArquivo ? null : 'data:image/jpeg;base64,QUJD'; },
     resumos: async id => guardados.filter(r => r.quadroId === id),
     async criarItens(quadroId, novos, rotulo) { criados.push({ quadroId, itens: novos, rotulo }); },
+    ...(opcoes.semCaptura ? {} : { async capturar(_q: Quadro, itens: ReadonlyMap<string, Item>, caixa: { x: number; y: number; largura: number; altura: number }, lado: number) { capturas.push({ caixa, lado, itens: itens.size }); return 'data:image/jpeg;base64,QUJD'; } }),
     async salvarResumo(r) { const i = guardados.findIndex(x => x.quadroId === r.quadroId && x.alvo === r.alvo); if (i >= 0) guardados[i] = r; else guardados.push(r); },
   };
   const f = Object.fromEntries(ferramentasDeQuadros(ctx).map(t => [t.nome, t]));
-  return { f, chamadas, guardados, criados };
+  return { f, chamadas, guardados, criados, capturas };
 }
 const lerJson = async (p: Promise<{ tipo: string; texto?: string }[]>) => JSON.parse((await p)[0]!.texto!);
 const lerTexto = async (p: Promise<{ tipo: string; texto?: string }[]>) => (await p)[0]!.texto!;
@@ -120,6 +122,23 @@ test('quadro_imagem: imagem reduzida com a legenda; lado limitado a 1568', async
   assert.equal(chamadas[1]!.lado, 1568);
 });
 
+test('quadro_ver_regiao: seção com margem, caixa dos #ids, lado limitado e erros legíveis', async () => {
+  const { f, capturas } = montar();
+  const r = await f.quadro_ver_regiao!.executar({ quadro: 'Reino Vermelho', secao: 'Capítulo 1' });
+  assert.equal(r[0]!.tipo, 'imagem');
+  assert.match((r[1] as { texto: string }).texto, /seção "Capítulo 1"/);
+  assert.deepEqual(capturas[0]!.caixa, { x: -40, y: -40, largura: 980, altura: 680 });
+  assert.equal(capturas[0]!.lado, 1024);
+  await f.quadro_ver_regiao!.executar({ quadro: 'Reino Vermelho', itens: ['#n1xxxx', 'n2xxxx'], lado: 9000 });
+  assert.deepEqual(capturas[1]!.caixa, { x: -20, y: 0, largura: 520, altura: 180 });
+  assert.equal(capturas[1]!.lado, 1568);
+  await assert.rejects(f.quadro_ver_regiao!.executar({ quadro: 'Reino Vermelho' }), /seção ou os itens/);
+  await assert.rejects(f.quadro_ver_regiao!.executar({ quadro: 'Reino Vermelho', secao: 'Capítulo 1', itens: ['n1xxxx'] }), /não os dois/);
+  await assert.rejects(f.quadro_ver_regiao!.executar({ quadro: 'Reino Vermelho', itens: ['nope'] }), /#nope não encontrado/);
+  await assert.rejects(f.quadro_ver_regiao!.executar({ quadro: 'Reino Vermelho', itens: ['n'] }), /ambíguo/);
+  await assert.rejects(montar({ semCaptura: true }).f.quadro_ver_regiao!.executar({ quadro: 'Reino Vermelho', secao: 'Capítulo 1' }), /não está disponível/);
+});
+
 test('erros legíveis: quadro, seção e imagem inexistentes, sem campanha, sem arquivo', async () => {
   const { f } = montar();
   await assert.rejects(f.quadro_mapa!.executar({ quadro: 'Nada' }), /Quadro "Nada" não encontrado.*Reino Vermelho/);
@@ -133,7 +152,7 @@ test('erros legíveis: quadro, seção e imagem inexistentes, sem campanha, sem 
 
 test('catálogo: cada ferramenta com menos de 4,5 KB e todas só de leitura', () => {
   const ferramentas = ferramentasDaMesa(Object.fromEntries(['repositorio', 'sessoes', 'entidades', 'campanhas', 'cenas', 'elenco', 'quadros'].map(k => [k, {}])) as never);
-  const nomes = ['quadros_listar', 'quadro_mapa', 'quadro_secao', 'quadro_estilo', 'quadro_buscar', 'quadro_imagem', 'quadro_resumir', 'quadro_descrever_imagem', 'quadro_propor'];
+  const nomes = ['quadros_listar', 'quadro_mapa', 'quadro_secao', 'quadro_estilo', 'quadro_buscar', 'quadro_imagem', 'quadro_ver_regiao', 'quadro_resumir', 'quadro_descrever_imagem', 'quadro_propor'];
   for (const n of nomes) {
     const t = ferramentas.find(x => x.nome === n);
     assert.ok(t, n);
