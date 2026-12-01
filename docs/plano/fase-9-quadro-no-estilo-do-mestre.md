@@ -189,3 +189,78 @@ Como: pela ponte (MCP), pedir "continue a missão abaixo de COMBATE no mesmo est
 - `quadro_ver_regiao` da coluna inteira, lado a lado com a parte do mestre, sem diferença visível de estilo.
 Registrar na `Nota:` o que ficou diferente e, se for limite do motor, dizer qual.
 Nota (em andamento, 25/11): a missão é a do PDF do playtest; a coluna do mestre são as anotações dele até COMBATE. O teste real mostrou que o fluxo dele é **centrado num eixo** (x≈910, com pares lado a lado), não uma coluna à esquerda: `quadro_estilo` passou a detectar `centrado` e `quadro_inserir` ganhou `alinhar` (`cf33e5e`). A transcrição do PDF (p. 32–47, do "Rodada a rodada" da Cena 1 ao "O que de fato aconteceu") entrou em 3 chamadas, 53 itens, centrados no eixo do COMBATE, sem moldura e na fila do assistente; os estilos vêm por `estilo_como` dos itens do mestre (título `#it-420`, narração `#it-cb6`, regra `#it-6b2`, rótulo `#it-b1c`). Achados: (1) título longo quebra em duas linhas com a largura copiada (332 px): "A ENXURRADA" ficou com 136 px; os títulos longos seguintes receberam `largura`. Limite: o motor mede só a altura, não alarga o título para caber numa linha. (2) `quadro_ver_regiao` travava no app de desktop: o WebKit suspende o `requestAnimationFrame` com a janela escondida (`2aaba00`); falta confirmar no app depois de recarregar a aba. (3) Sem a ficha do aughisk no quadro: não há imagem dela na campanha (upload fica fora).
+
+---
+
+## Etapa D — Depois do teste real: legenda, trechos, 2D e imagens
+
+O teste no Pântano (Q9i) produziu uma tira vertical de texto. O mestre organiza o Miro de outro jeito (prints de 25/11, quadros "Investigação – Delegacia", "Circo dos Psikolera", mapa do Deserto):
+- **Legenda:** o quadro tem um "GUIA DE LEGENDA" à esquerda (seção própria). Cada linha é um rótulo em negrito com fundo colorido mais a descrição: `[PONTO DE INTERAÇÃO]` verde `rgb(77,255,165)`, `[NARRAÇÃO]` amarelo `rgb(255,246,182)` ("cores diversas"), `[SEGREDO]` escuro `rgb(26,26,26)` ou rosa `rgb(255,198,198)` (destaque), `[TESTE E DT]` azul `rgb(101,157,242)` (ou "condicional"), `[LOOT]` dourado `rgb(232,196,48)` (item ou documento), `[TRANSIÇÃO]` roxo `rgb(143,127,238)` (música ou cena da Jukebox, luz), `[EVENTO]` laranja `rgb(254,159,77)`, `[GANCHO]` magenta `rgb(255,25,100)`. Isso **não** está no código: `marcadores.ts` só conhece a sintaxe de texto (`[PERCEPÇÃO 13]`, `[LOOT]`…), e `PALETA_PADRAO` é a paleta da Mesa, que não é a do mestre. A importação do Miro não lê cores.
+- **Trechos, não itens:** cada linha mistura papéis: `[TECNOLOGIA] [10]` em azul seguido do resultado em texto simples; `[LOOT] MUNIÇÃO DE PISTOLA`; uma frase de segredo destacada no meio da narração.
+- **2D:** cada cena é um título com faixa colorida e, ao redor, os pontos de interação como **cartões** (imagem em cima, rótulo verde, linhas curtas), espalhados como na sala; fichas de NPC com a arte ao lado; mapas com caixas e linhas.
+- **Imagens:** o PDF tem o mapa da ilhota, a arte das páginas e as ilustrações das criaturas (extraíveis com `pdfimages`; a ficha do Aughisk se recorta da página 45 com `pdftoppm`). A pasta de extras tem um handout por ponto de interesse (`HANDOUT ARBUSTO.jpg`…), tokens e mapas. O assistente não tinha como trazer nada disso: a Q9f deixou o upload de fora.
+
+Fonte do teste: `~/Documents/RPG - Conteúdo/RPG - Conteúdo/Arquivos Secretos/Arquivos-Secretos-10/` (`O Pântano dos Afogados.pdf`, `A Caverna de Cruachan.pdf` e a pasta `Ordem-2-Playtest-Beta-Missão-1-Extras/` com Handouts, Tokens, Mapas e Músicas).
+
+| Etapa | Fichas | Resultado |
+|---|---|---|
+| D — Estilo do mestre de verdade | Q9j–Q9p | Legenda lida do quadro, escrita por papel e por trecho, linhas e cartões, imagens de PDF e pastas locais, guia de transcrição e a aceitação refeita |
+
+### Q9j — Legenda do quadro (puro + `quadro_estilo`)  ⬜
+Objetivo: os papéis e as cores vêm da legenda do mestre, não de palpite.
+Ler: `src/dominio/estilo-do-quadro.ts`, `src/dominio/estrutura-da-secao.ts` (`estiloDoDoc`, `marcasPredominantes` em `insercao-quadro.ts`), `src/dominio/marcadores.ts`, `src/dominio/secoes-do-quadro.ts`.
+Arquivos: criar `src/dominio/legenda-do-quadro.ts` + teste; mudar `estilo-do-quadro.ts` e `ponte-quadros.ts`.
+Como:
+1. `legendaDoQuadro(itens) → Legenda | null`: acha a seção cujo título contém "LEGENDA" (sem acento/caixa). Cada linha dela com um rótulo entre colchetes destacado vira uma entrada `{ papel, rotulo, descricao, marcas, exemplo: #id }`: `marcas` são as do trecho do rótulo (fundo, letra, negrito). `papel` normalizado por nome: `ponto` (PONTO DE INTERAÇÃO), `narracao`, `segredo` (duas variantes: a primeira é `segredo`, a "(destaque)" é `segredo-destaque`), `teste` (TESTE E DT), `loot`, `transicao`, `evento`, `gancho`; rótulo desconhecido vira papel com o próprio nome em minúsculas. Itens de texto com várias linhas valem linha a linha.
+2. `quadro_estilo` passa a mostrar a legenda no lugar dos palpites ("Legenda do mestre (GUIA DE LEGENDA): narração = fundo rgb(255,246,182) (…); teste = …"), com `#id` de exemplo. Sem legenda, mantém os palpites e diz "sem legenda no quadro; pergunte ao mestre o que cada cor significa antes de escrever".
+3. A legenda sai de `estiloDoQuadro` como campo, para a Q9k.
+Testes: a legenda real acima (10 itens, um rótulo por item, a descrição em texto simples depois); duas variantes de segredo; quadro sem legenda; rótulo desconhecido.
+Commit: `board legend drives roles and colors`
+
+### Q9k — Escrever por papel e por trecho (`quadro_inserir`)  ⬜
+Objetivo: o assistente escreve como o mestre: linhas com trechos de papéis diferentes, cores da legenda.
+Depende de: Q9j.
+Ler: `src/dominio/insercao-quadro.ts` (`montarInsercao`, `marcasPredominantes`), a validação de doc em `quadro.ts`.
+Como:
+1. Parágrafo aceita `trechos: [{ texto, papel? , como? }]` além de `texto`/`como`. `papel` aplica as marcas do rótulo da legenda (fundo, letra, negrito). Exemplo: `{ trechos: [{ papel: "teste", texto: "[APTIDÃO (GUERRA) / OFÍCIO] [8]" }, { texto: " A balista é antiga, mas parece funcional." }] }`.
+2. Parágrafo e item aceitam `papel` direto (o parágrafo inteiro com as marcas do papel).
+3. `formato: "rotulo"`: item curto só com o trecho do papel (o `[ARBUSTO]` verde do ponto de interação), largura medida pelo texto (Q9n).
+4. Sem legenda, `papel` dá erro legível ("o quadro não tem legenda; use como/estilo_como ou pergunte ao mestre").
+Testes: trechos mistos numa linha; papel no parágrafo; rótulo; doc válido; sem legenda.
+Commit: `assistant writes mixed role runs from the board legend`
+
+### Q9l — Linhas e cartões (`quadro_inserir` em 2D)  ⬜
+Objetivo: o que é paralelo na fonte fica lado a lado; pontos de interesse viram cartões.
+Depende de: Q9e (eixo, `alinhar`), Q9f (imagens), Q9k.
+Ler: `posicionarEmColuna`, `posicionarImagensAoLado` em `insercao-quadro.ts`.
+Como:
+1. `itens` aceita, além de itens, **grupos**: `{ linha: [celula, …], espaco? }` e `{ grade: [celula, …], colunas, espaco? }`. Uma `celula` é uma lista de itens empilhados (um cartão: imagem em cima, rótulo, linhas). Larguras: a de cada item, ou `largura_da_celula` do grupo.
+2. A linha (ou cada fileira da grade) fica centrada no eixo (ou alinhada à esquerda, conforme `alinhar`), com as células alinhadas pelo topo; a altura do grupo é a da célula mais alta. A coluna continua abaixo do grupo.
+3. Obstáculos, `abrir_espaco` e `caixa` consideram a largura total do grupo.
+4. Limite por chamada: 40 itens no total, contando os de dentro dos grupos.
+Testes: três regras lado a lado centradas; grade 3×2 de cartões com imagem; altura do grupo pela célula mais alta; obstáculo ao lado.
+Commit: `quadro_inserir lays out rows and card grids`
+
+### Q9m — Imagens de PDF e pastas locais  ⬜
+Objetivo: o assistente traz o mapa, a arte, as fichas e os handouts do material de origem.
+Ler: `Atlas/scripts/ponte/mcp.ts` e `servidor.ts` (onde a ponte roda em Node, com acesso a disco), `Mesa/scripts/launch-desktop.mjs` (quem hospeda `/__ponte` no app de desktop), `src/app/imagens-quadro.ts`, `banco-quadros.ts` (`guardarImagem`), o `retratoDaEntidade` da Q9f.
+Como:
+1. Ferramenta local do servidor MCP (Node) `arquivo_imagens(caminho)`: numa **pasta**, lista as imagens (nome, tamanho em px); num **PDF**, lista as imagens embutidas por página com `pdfimages -list` (descartando máscaras `smask`, imagens menores que 300 px e as que se repetem em muitas páginas, que são fundos de página), com o id `pdf:<caminho>#p=<pagina>&i=<num>`. Opcional `ver: id` devolve a miniatura (lado ≤ 768) para o assistente escolher.
+2. `de` em `formato: "imagem"` aceita `arquivo:<caminho>`, `pdf:<caminho>#p=&i=` e `pdf:<caminho>#p=<pagina>&recorte=x,y,l,a` (frações da página, renderizada com `pdftoppm -r 150`; para fichas e tabelas). O servidor Node lê, converte em PNG/JPEG e entrega os bytes à aba (pela mensagem da ponte, ou por um endereço temporário do host da ponte, o que for mais simples); a aba guarda com `guardarImagem` (hash = id, sem duplicar).
+3. Segurança: só caminhos dentro de raízes permitidas (padrão `~/Documents`, configurável por variável de ambiente), sem seguir links para fora delas. Erro legível fora disso. Só na ponte de desenvolvimento, como todo o resto.
+4. Atualizar o catálogo base (ferramenta local nova + o esquema de `quadro_inserir`).
+Testes: listagem de pasta; filtro de fundos repetidos e máscaras com uma saída de `pdfimages -list` gravada; recorte em frações; caminho fora da raiz recusado.
+Commit (Atlas e Mesa): `assistant brings images from local pdfs and folders`
+
+### Q9n — Título e rótulo que cabem numa linha  ⬜
+Objetivo: "A ENXURRADA" não quebra em duas linhas.
+Como: o contexto ganha `medirLarguraDoTexto` (pela mesma régua de `render-textos.ts`, entrando pelo `assistente-slot.ts`). `titulo` e `rotulo` sem `largura` explícita ficam com a largura do texto numa linha (mais o padding), com o máximo de 1,5 × a largura da coluna; acima disso, quebram.
+Commit: `titles and labels fit on one line`
+
+### Q9o — Guia: transcrever uma fonte  ⬜  *(Opus)*
+Arquivo: `Atlas/docs/assistente/guia/quadros.md`.
+Como: seção "Transcrever um material (PDF, extras)": (1) ler a **legenda** do quadro e as prints do mestre como referência de layout; (2) mapear a estrutura da fonte: caixa de narração → narração; tabela de perícias → uma linha por teste com o trecho `teste` (`[PERÍCIA] [DT]`) e o resultado em texto; itens/loot → `loot`; ponto de interesse → cartão (handout ou recorte em cima, rótulo `ponto`, linhas); boxes paralelos (regras da perseguição, fôlego, ações) → `linha`; criatura/NPC → ficha (recorte da página) ao lado do bloco; mapa → imagem com os cartões em volta; tabela-resumo de rodadas → linha por rodada; (3) procurar imagens na fonte e nos extras (`arquivo_imagens`) antes de escrever; (4) **antes de inserir, listar ao mestre o que não dá para reproduzir e perguntar**; (5) conferir com `quadro_ver_regiao` cena a cena, não só no fim.
+Commit (Atlas): `board guide for transcribing source material`
+
+### Q9p — Aceitação refeita no Pântano  ⬜  *(Opus)*
+Como: descartar a transcrição da Q9i pela fila ("Descartar todas"), e refazer a partir da Cena 1 / Concluindo a cena, com a legenda, trechos, cartões dos pontos de interesse em volta do mapa da ilhota, handouts dos extras, ficha do Aughisk recortada, regras da perseguição em linha. Conferir cena a cena com `quadro_ver_regiao`. Depois, a mesma coisa com "A Caverna de Cruachan".

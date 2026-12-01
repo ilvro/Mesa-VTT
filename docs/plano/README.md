@@ -26,4 +26,4 @@ Este diretório guarda o plano de evolução próprio da **Mesa** (`Projects/Mes
 | [fase-7.md](fase-7.md) | Concluída — Quadro legível pelo assistente (seções, mapa, ponte, resumos) |
 | [fase-8-miniaturas-inspecao-e-combate.md](fase-8-miniaturas-inspecao-e-combate.md) | Planejada — Miniaturas vivas de mapas e pistas no Quadro, modal de inspeção UV na Mesa e painel de combate/iniciativa no Modo Sessão (`M8.1a`–`M8.2c`) |
 | [colar-do-miro.md](colar-do-miro.md) | Concluída — Ctrl+C no Miro, Ctrl+V no Quadro com posição, fontes, cores, setas e imagens (`C1`, `C2`) |
-| [fase-9-quadro-no-estilo-do-mestre.md](fase-9-quadro-no-estilo-do-mestre.md) | Planejada: o assistente lê o estilo do mestre (estrutura, convenções e captura) e escreve no quadro nesse estilo com `quadro_inserir` (`Q9a`–`Q9i`) |
+| [fase-9-quadro-no-estilo-do-mestre.md](fase-9-quadro-no-estilo-do-mestre.md) | Planejada: o assistente lê o estilo do mestre (estrutura, convenções e captura) e escreve no quadro nesse estilo com `quadro_inserir` (`Q9a`–`Q9i`); Etapa D (`Q9j`–`Q9p`): legenda do mestre, trechos, linhas e cartões, imagens de PDF |
