@@ -231,7 +231,7 @@ Como:
 Testes: trechos mistos numa linha; papel no parágrafo; rótulo; doc válido; sem legenda.
 Commit: `assistant writes mixed role runs from the board legend`
 
-### Q9l — Linhas e cartões (`quadro_inserir` em 2D)  ⬜
+### Q9l — Linhas e cartões (`quadro_inserir` em 2D)  ✅
 Objetivo: o que é paralelo na fonte fica lado a lado; pontos de interesse viram cartões.
 Depende de: Q9e (eixo, `alinhar`), Q9f (imagens), Q9k.
 Ler: `posicionarEmColuna`, `posicionarImagensAoLado` em `insercao-quadro.ts`.
@@ -241,6 +241,7 @@ Como:
 3. Obstáculos, `abrir_espaco` e `caixa` consideram a largura total do grupo.
 4. Limite por chamada: 40 itens no total, contando os de dentro dos grupos.
 Testes: três regras lado a lado centradas; grade 3×2 de cartões com imagem; altura do grupo pela célula mais alta; obstáculo ao lado.
+Nota: `itens` de `quadro_inserir` aceita itens e grupos `{ linha: Celula[], espaco?, largura_da_celula? }` e `{ grade: Celula[], colunas, espaco?, largura_da_celula? }` (`Celula` = lista de itens empilhados). Ex.: `itens: [{ formato: "titulo", texto: "PERSEGUIÇÃO" }, { linha: [[{ formato: "texto", texto: "Regras" }], [{ formato: "texto", texto: "Fôlego" }]], largura_da_celula: 200 }, { grade: [[{ formato: "imagem", de: "#abc123" }, { formato: "titulo", texto: "ARBUSTO" }], [{ formato: "imagem", de: "#def456" }, { formato: "titulo", texto: "POÇO" }]], colunas: 2, largura_da_celula: 200 }]`. No domínio (`insercao-quadro.ts`): `achatarPedidos(entradas) → { itens, estrutura }` (achata fileira por fileira, célula por célula, item por item; é a ordem dos índices das setas e do limite de 40) e `layoutDeBlocos(estrutura, itens, espacoDaColuna, alinhar) → { alturas, larguras, espalhar(posicoes) }`: cada item solto e cada grupo é um bloco da coluna, e `posicionarEmColuna` roda sobre os blocos, então obstáculos, `abrir_espaco` (recorte = largura total do grupo) e `caixa` usam as posições reais sem mudar a função. Desvios: (1) `largura_da_celula` sobrescreve a `largura` de texto, título e imagem (a nota não muda); (2) o espaço entre fileiras da grade é o mesmo `espaco` das células; (3) na grade, todas as células têm a largura da maior (colunas alinhadas); na linha, cada célula tem a do seu item mais largo; (4) imagem com `lado` em célula dá erro, grupo dentro de célula também; (5) imagem com `lado` fora de grupo que venha depois de um grupo ancora no último item de texto dele; (6) esquema: os campos do grupo ficaram no mesmo objeto de item (sem `required`, validado no domínio) e as células usam `items: { type: 'object' }` frouxo, em vez de `$defs`, para caber (3563 bytes de 4500). Limites: a validação dos itens dentro das células só acontece na execução, o esquema não a descreve; sem título de grupo nem moldura em volta do cartão. Testes: `tests/unit/grupos-quadro.test.ts` e um da ferramenta em `ponte-quadros.test.ts`.
 Commit: `quadro_inserir lays out rows and card grids`
 
 ### Q9m — Imagens de PDF e pastas locais  ⬜

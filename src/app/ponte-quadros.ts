@@ -5,7 +5,7 @@ import { semAcento } from '../dominio/entidades.ts';
 import { textoBuscavel } from '../dominio/busca-quadro.ts';
 import { mapaDoQuadro } from '../dominio/mapa-do-quadro.ts';
 import type { PaletaDaCampanha } from '../dominio/paleta.ts';
-import { ESPACO_VERTICAL_PADRAO, MAX_ITENS_POR_INSERCAO, montarInsercao, montarSetas, posicionarEmColuna, posicionarImagensAoLado, type AlvoDaColuna, type ImagemResolvida, type ItemPedido, type PedidoDeSeta } from '../dominio/insercao-quadro.ts';
+import { achatarPedidos, ESPACO_VERTICAL_PADRAO, layoutDeBlocos, MAX_ITENS_POR_INSERCAO, montarInsercao, montarSetas, posicionarEmColuna, posicionarImagensAoLado, type AlvoDaColuna, type EntradaPedida, type ImagemResolvida, type ItemPedido, type PedidoDeSeta } from '../dominio/insercao-quadro.ts';
 import { MAX_NOTAS_POR_PROPOSTA, MAX_TEXTO_DA_NOTA, montarProposta, posicaoLivre, tamanhoDaProposta } from '../dominio/proposta-quadro.ts';
 import { TIPOS_SEMANTICOS, type Item, type Quadro } from '../dominio/quadro.ts';
 import {
@@ -365,7 +365,7 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
     },
     {
       nome: 'quadro_inserir',
-      descricao: 'Insere texto, títulos, notas, imagens do quadro ou retratos e setas, no estilo do mestre, numa coluna: abaixo_de (#id ou seção) ou ao_lado_de (seção). Para montar, transcrever ou continuar material; para ideias em post-its numa moldura, use quadro_propor. Confira depois com quadro_ver_regiao. Ctrl+Z desfaz.',
+      descricao: 'Insere texto, títulos, notas, imagens do quadro ou retratos e setas, no estilo do mestre, numa coluna (grupos linha/grade põem cartões lado a lado): abaixo_de (#id ou seção) ou ao_lado_de (seção). Para montar, transcrever ou continuar material; para ideias em post-its numa moldura, use quadro_propor. Confira depois com quadro_ver_regiao. Ctrl+Z desfaz.',
       esquema: {
         type: 'object',
         properties: {
@@ -374,10 +374,15 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
             type: 'array',
             minItems: 1,
             maxItems: MAX_ITENS_POR_INSERCAO,
-            description: 'Itens na ordem de cima para baixo.',
+            description: 'Itens e grupos (linha, grade) de cima para baixo; até 40 itens no total.',
             items: {
               type: 'object',
               properties: {
+                linha: { type: 'array', description: 'Grupo: células lado a lado; célula = lista de itens empilhados (um cartão).', items: { type: 'array', items: { type: 'object', description: 'Item com os mesmos campos (sem lado).' } } },
+                grade: { type: 'array', description: 'Grupo: células em fileiras de "colunas" células.', items: { type: 'array', items: { type: 'object', description: 'Item com os mesmos campos (sem lado).' } } },
+                colunas: { type: 'integer', description: 'Só grade: células por fileira.' },
+                espaco: { type: 'number', description: 'Só grupo: px entre células (padrão: 3 × o da coluna, mín. 24).' },
+                largura_da_celula: { type: 'number', description: 'Só grupo: largura forçada dos itens da célula.' },
                 formato: { type: 'string', enum: ['texto', 'titulo', 'nota', 'imagem'], description: 'texto (corpo), titulo, nota (post-it) ou imagem.' },
                 de: { type: 'string', description: 'Só imagem: #id de imagem do quadro ou entidade:<nome ou id> (retrato).' },
                 lado: { type: 'string', enum: ['direita', 'esquerda'], description: 'Só imagem: ao lado do texto anterior, sem ocupar altura; sem lado, na coluna.' },
@@ -391,7 +396,6 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
                 tipo: { type: 'string', enum: [...TIPOS_SEMANTICOS], description: 'Tipo semântico; opcional, sem cor com estilo.' },
                 largura: { type: 'number', description: 'Largura em px; padrão: a do estilo (imagem: mediana das imagens).' },
               },
-              required: ['formato'],
               additionalProperties: false,
             },
           },
@@ -402,7 +406,7 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
             items: {
               type: 'object',
               properties: {
-                de: { type: ['integer', 'string'], description: 'Índice (de 0) de um item novo ou #id existente.' },
+                de: { type: ['integer', 'string'], description: 'Índice (de 0, também dentro de grupos) de um item novo ou #id.' },
                 para: { type: ['integer', 'string'], description: 'Índice (de 0) de um item novo ou #id existente.' },
                 rotulo: { type: 'string', description: 'Texto sobre a seta; opcional.' },
               },
@@ -440,7 +444,7 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
         }
         const paleta = ctx.paleta?.();
         const medir = ctx.medirTexto ?? estimarAltura;
-        const pedidos = (Array.isArray(args.itens) ? args.itens : []) as ItemPedido[];
+        const { itens: pedidos, estrutura } = achatarPedidos((Array.isArray(args.itens) ? args.itens : []) as EntradaPedida[]);
         // Retratos de entidade: resolvidos aqui (assíncrono) e entregues ao domínio já guardados no banco de imagens.
         const retratos = new Map<string, ImagemResolvida>();
         for (const p of pedidos) {
@@ -472,11 +476,12 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
         if (pedidoAlinhar && pedidoAlinhar !== 'esquerda' && pedidoAlinhar !== 'centro') throw new Error('alinhar deve ser "esquerda" ou "centro".');
         const alinhar = pedidoAlinhar ? (pedidoAlinhar as 'esquerda' | 'centro') : estilo?.fluxo === 'centrado' ? 'centro' : 'esquerda';
         // As imagens com `lado` não entram na coluna: ficam ao lado do texto anterior, sem ocupar altura.
-        const naColuna = insercao.itens.filter((_, k) => insercao.lados[k] === null);
-        if (naColuna.length === 0) throw new Error('A imagem com lado precisa de um item de texto antes dela na mesma chamada.');
-        const pos = posicionarEmColuna(naColuna.map(i => i.altura), naColuna.map(i => i.largura), c.itens, alvo, espaco, { abrirEspaco: args.abrir_espaco === true, secoes: c.secoes, alinhar, ...(estilo?.eixo ? { eixo: estilo.eixo.xAbsoluto } : {}) });
-        let proxima = 0;
-        const dasColunas = insercao.itens.map((_, k) => (insercao.lados[k] === null ? pos.posicoes[proxima++]! : null));
+        const blocos = estrutura.filter(sg => sg.tipo === 'grupo' || insercao.lados[sg.indice] === null);
+        if (blocos.length === 0) throw new Error('A imagem com lado precisa de um item de texto antes dela na mesma chamada.');
+        // Itens soltos e grupos viram blocos da coluna (um grupo é um bloco com a largura e a altura reais do conjunto).
+        const layout = layoutDeBlocos(blocos, insercao.itens, espaco, alinhar);
+        const pos = posicionarEmColuna(layout.alturas, layout.larguras, c.itens, alvo, espaco, { abrirEspaco: args.abrir_espaco === true, secoes: c.secoes, alinhar, ...(estilo?.eixo ? { eixo: estilo.eixo.xAbsoluto } : {}) });
+        const dasColunas = layout.espalhar(pos.posicoes);
         const finais = posicionarImagensAoLado(insercao.itens, insercao.lados, dasColunas, c.itens, pos.empurrar);
         insercao.itens.forEach((it, k) => { it.x = finais[k]!.x; it.y = finais[k]!.y; });
         const pedidosDeSeta = (args.setas === undefined ? [] : args.setas) as PedidoDeSeta[];

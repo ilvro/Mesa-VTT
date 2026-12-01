@@ -333,3 +333,38 @@ test('quadro_inserir: ao_lado_de abre coluna nova; sem alvo ou com dois alvos d�
   await assert.rejects(f.quadro_inserir!.executar({ quadro: 'Reino', abaixo_de: 'm1', ao_lado_de: 'm1', itens: [{ formato: 'texto', texto: 'a' }] }), /só um destino/);
   await assert.rejects(f.quadro_inserir!.executar({ quadro: 'Reino', abaixo_de: '#zzzz', itens: [{ formato: 'texto', texto: 'a' }] }), /não encontrado/);
 });
+
+test('quadro_inserir: linha e grade lado a lado, setas pelos índices achatados, limite com os itens dos grupos', async () => {
+  const { f, criados } = montar({ aberto: true });
+  const r = await lerJson(f.quadro_inserir!.executar({
+    quadro: 'Reino',
+    abaixo_de: '#i1yyyy',
+    alinhar: 'esquerda',
+    itens: [
+      { formato: 'titulo', texto: 'PERSEGUIÇÃO' },
+      { linha: [[{ formato: 'texto', texto: 'Regras' }], [{ formato: 'texto', texto: 'Fôlego' }], [{ formato: 'texto', texto: 'Ações' }]], largura_da_celula: 200 },
+      { grade: [[{ formato: 'imagem', de: '#i1yyyy' }, { formato: 'texto', texto: 'Arbusto' }], [{ formato: 'texto', texto: 'Poço' }]], colunas: 2, largura_da_celula: 200, espaco: 40 },
+    ],
+    setas: [{ de: 0, para: 6 }],
+  }));
+  assert.equal(criados.length, 1);
+  const [tit, a, b, c, img, arb, poco, seta] = criados[0]!.itens;
+  assert.equal(r.criados.length, 7);
+  assert.equal(a!.y, b!.y);
+  assert.equal(b!.y, c!.y);
+  assert.equal(b!.x, a!.x + 200 + 72);
+  assert.equal(c!.x, b!.x + 200 + 72);
+  assert.equal(a!.y, tit!.y + tit!.altura + 24);
+  assert.equal(img!.largura, 200);
+  assert.equal(img!.x, a!.x);
+  assert.equal(arb!.x, img!.x);
+  assert.equal(poco!.x, img!.x + 200 + 40);
+  assert.equal(poco!.y, img!.y);
+  assert.ok(img!.y > a!.y + a!.altura);
+  if (seta!.tipo !== 'seta') throw new Error('seta');
+  assert.deepEqual(seta!.para, { itemId: poco!.id, lado: 'auto' });
+  assert.equal(r.caixa.largura, 3 * 200 + 2 * 72);
+  const muitos = Array.from({ length: 40 }, () => [{ formato: 'texto', texto: 'x' }]);
+  await assert.rejects(f.quadro_inserir!.executar({ quadro: 'Reino', abaixo_de: '#i1yyyy', itens: [{ formato: 'texto', texto: 'y' }, { linha: muitos }] }), /máximo por chamada é 40/);
+  await assert.rejects(f.quadro_inserir!.executar({ quadro: 'Reino', abaixo_de: '#i1yyyy', itens: [{ linha: [[{ formato: 'imagem', de: '#i1yyyy', lado: 'direita' }]] }] }), /imagem com "lado"/);
+});

@@ -486,6 +486,144 @@ export function posicionarEmColuna(
 
 
 // ---------------------------------------------------------------------------------------------------------
+// Q9l: grupos (linha e grade de células) em 2D.
+
+/** Uma célula é uma lista de itens empilhados (um cartão). */
+export type CelulaPedida = ItemPedido[];
+export interface GrupoEmLinha { linha: CelulaPedida[]; espaco?: number; largura_da_celula?: number }
+export interface GrupoEmGrade { grade: CelulaPedida[]; colunas: number; espaco?: number; largura_da_celula?: number }
+export type GrupoPedido = GrupoEmLinha | GrupoEmGrade;
+export type EntradaPedida = ItemPedido | GrupoPedido;
+
+/** Estrutura dos pedidos: itens soltos e grupos, em ordem; os números são índices na lista achatada de itens. */
+export type SegmentoPedido =
+  | { tipo: 'solto'; indice: number }
+  | { tipo: 'grupo'; espaco: number | undefined; fileiras: number[][][] };
+
+const ehGrupo = (e: unknown): e is GrupoPedido => !!e && typeof e === 'object' && ('linha' in e || 'grade' in e);
+
+/**
+ * Achata as entradas (itens e grupos) na lista de itens que `montarInsercao` aceita, na ordem fileira por fileira, célula por
+ * célula, item por item (a dos índices das setas). `largura_da_celula` força a largura de texto, título e imagem das células.
+ */
+export function achatarPedidos(entradas: readonly EntradaPedida[]): { itens: ItemPedido[]; estrutura: SegmentoPedido[] } {
+  if (!Array.isArray(entradas) || entradas.length === 0) throw new Error('Informe ao menos um item.');
+  const itens: ItemPedido[] = [];
+  const estrutura: SegmentoPedido[] = [];
+  entradas.forEach((e, k) => {
+    if (!ehGrupo(e)) {
+      estrutura.push({ tipo: 'solto', indice: itens.length });
+      itens.push(e);
+      return;
+    }
+    const onde = `Grupo ${k + 1}`;
+    const g = e as { linha?: unknown; grade?: unknown; colunas?: unknown; espaco?: unknown; largura_da_celula?: unknown };
+    if (g.linha !== undefined && g.grade !== undefined) throw new Error(`${onde}: use "linha" ou "grade", não os dois.`);
+    const celulas = g.linha !== undefined ? g.linha : g.grade;
+    const nome = g.linha !== undefined ? 'linha' : 'grade';
+    if (!Array.isArray(celulas) || celulas.length === 0) throw new Error(`${onde}: "${nome}" deve ser uma lista de células (cada uma, uma lista de itens).`);
+    let colunas = celulas.length;
+    if (nome === 'grade') {
+      if (typeof g.colunas !== 'number' || !Number.isInteger(g.colunas) || g.colunas < 1) throw new Error(`${onde}: a grade precisa de "colunas" (inteiro a partir de 1).`);
+      colunas = g.colunas;
+    } else if (g.colunas !== undefined) throw new Error(`${onde}: "colunas" é só da grade.`);
+    if (g.espaco !== undefined && (typeof g.espaco !== 'number' || !Number.isFinite(g.espaco) || g.espaco < 0)) throw new Error(`${onde}: espaco deve ser um número a partir de 0.`);
+    const forcada = g.largura_da_celula;
+    if (forcada !== undefined && (typeof forcada !== 'number' || !Number.isFinite(forcada) || forcada < 40)) throw new Error(`${onde}: largura_da_celula deve ser um número a partir de 40.`);
+    const fileiras: number[][][] = [];
+    celulas.forEach((cel: unknown, c: number) => {
+      if (!Array.isArray(cel) || cel.length === 0) throw new Error(`${onde}, célula ${c + 1}: deve ser uma lista com ao menos um item.`);
+      const indices: number[] = [];
+      for (const it of cel as ItemPedido[]) {
+        if (ehGrupo(it)) throw new Error(`${onde}, célula ${c + 1}: grupo dentro de célula não é suportado.`);
+        const f = (it as { formato?: unknown } | null)?.formato;
+        if (f === 'imagem' && (it as { lado?: unknown }).lado !== undefined) {
+          throw new Error(`${onde}, célula ${c + 1}: imagem com "lado" não vale dentro de célula; ela entra empilhada. Tire o lado.`);
+        }
+        const copia = (it && typeof it === 'object' ? { ...it } : it) as ItemPedido;
+        if (forcada !== undefined && (f === 'texto' || f === 'titulo' || f === 'imagem')) (copia as { largura?: number }).largura = forcada;
+        indices.push(itens.length);
+        itens.push(copia);
+      }
+      if (c % colunas === 0) fileiras.push([]);
+      fileiras[fileiras.length - 1]!.push(indices);
+    });
+    estrutura.push({ tipo: 'grupo', espaco: typeof g.espaco === 'number' ? g.espaco : undefined, fileiras });
+  });
+  return { itens, estrutura };
+}
+
+export interface LayoutDeBlocos {
+  /** Altura e largura de cada bloco da coluna (item solto ou grupo), na ordem da estrutura. */
+  alturas: number[];
+  larguras: number[];
+  /** Com as posições dos blocos (de `posicionarEmColuna`), a posição de cada item achatado (null: nenhum bloco o contém, ex.: imagem com `lado`). */
+  espalhar(posicoes: readonly { x: number; y: number }[]): ({ x: number; y: number } | null)[];
+}
+
+/**
+ * Mede os blocos da coluna. Itens soltos são blocos de um item; um grupo é um bloco com as células lado a lado (alinhadas pelo
+ * topo, `espaco` entre elas, padrão: espaço da coluna × 3, mínimo 24; entre as fileiras da grade vale o mesmo espaço). Cada fileira
+ * fica centrada no bloco (alinhar `centro`) ou à esquerda; na grade as células têm todas a mesma largura (a maior). Dentro da
+ * célula os itens empilham com `espacoDaColuna`, cada um centrado se a célula for mais larga.
+ */
+export function layoutDeBlocos(estrutura: readonly SegmentoPedido[], itens: readonly Item[], espacoDaColuna: number, alinhar: 'esquerda' | 'centro'): LayoutDeBlocos {
+  const alturas: number[] = [];
+  const larguras: number[] = [];
+  type Interno = { indice: number; dx: number; dy: number };
+  const internos: Interno[][] = [];
+  const centrado = alinhar === 'centro';
+  for (const seg of estrutura) {
+    if (seg.tipo === 'solto') {
+      const it = itens[seg.indice]!;
+      alturas.push(it.altura);
+      larguras.push(it.largura);
+      internos.push([{ indice: seg.indice, dx: 0, dy: 0 }]);
+      continue;
+    }
+    const gap = seg.espaco ?? Math.max(24, espacoDaColuna * 3);
+    const celulaW = (cel: number[]) => Math.max(...cel.map((i) => itens[i]!.largura));
+    const celulaH = (cel: number[]) => cel.reduce((s, i) => s + itens[i]!.altura, 0) + espacoDaColuna * (cel.length - 1);
+    const todas = seg.fileiras.flat();
+    const uniforme = seg.fileiras.length > 1 ? Math.max(...todas.map(celulaW)) : undefined;
+    const larguraDaCelula = (cel: number[]) => uniforme ?? celulaW(cel);
+    const larguraDaFileira = (f: number[][]) => f.reduce((s, c) => s + larguraDaCelula(c), 0) + gap * (f.length - 1);
+    const larguraTotal = Math.max(...seg.fileiras.map(larguraDaFileira));
+    const lista: Interno[] = [];
+    let y = 0;
+    seg.fileiras.forEach((f, r) => {
+      let x = centrado ? Math.round((larguraTotal - larguraDaFileira(f)) / 2) : 0;
+      const altura = Math.max(...f.map(celulaH));
+      for (const cel of f) {
+        const w = larguraDaCelula(cel);
+        let yi = y;
+        for (const i of cel) {
+          lista.push({ indice: i, dx: x + Math.round((w - itens[i]!.largura) / 2), dy: yi });
+          yi += itens[i]!.altura + espacoDaColuna;
+        }
+        x += w + gap;
+      }
+      y += altura + (r < seg.fileiras.length - 1 ? gap : 0);
+    });
+    alturas.push(y);
+    larguras.push(larguraTotal);
+    internos.push(lista);
+  }
+  return {
+    alturas,
+    larguras,
+    espalhar(posicoes) {
+      const saida: ({ x: number; y: number } | null)[] = itens.map(() => null);
+      internos.forEach((lista, b) => {
+        const p = posicoes[b]!;
+        for (const { indice, dx, dy } of lista) saida[indice] = { x: p.x + dx, y: p.y + dy };
+      });
+      return saida;
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------
 // Q9f: imagens ao lado do texto anterior e setas.
 
 /**
