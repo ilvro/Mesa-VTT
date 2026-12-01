@@ -55,6 +55,7 @@ import {
   type AreaMiro,
 } from '../../dominio/area-miro.ts';
 import { converterMiro, type MetadadosImagemImportada } from '../../dominio/miro.ts';
+import { alturaNecessariaDoTexto } from './pixi/render-textos.ts';
 import { NOMES_SEMANTICOS } from '../../dominio/paleta.ts';
 import { refDaEntidade, sugerirEntidades } from '../../dominio/notas.ts';
 import { ROTULO_DO_TIPO } from '../../dominio/entidades.ts';
@@ -403,6 +404,26 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
     }
     // Colar não é sincronizar: sem `origem`, colar duas vezes não cria duas "cópias" do mesmo item.
     for (const it of novos) delete it.origem;
+    // Texto do Miro não tem margem: alarga pela margem da Mesa (mesma quebra de linha) e
+    // mede a altura com as regras do raster, que corta o que passa da altura do item.
+    for (const it of novos) {
+      if (it.tipo !== 'texto') continue;
+      const pad = it.caixa.padding;
+      it.x -= pad;
+      it.y -= pad;
+      it.largura += pad * 2;
+      const medida = alturaNecessariaDoTexto({
+        doc: it.doc,
+        largura: it.largura,
+        padding: pad,
+        tamanhoFonte: it.texto.tamanho,
+        fonte: it.texto.fonte,
+        corPadrao: it.texto.cor,
+        alinhamento: it.texto.alinhamento,
+      });
+      // Folga de 6% para a fonte que ainda não carregou (métrica do fallback).
+      if (medida !== null) it.altura = Math.max(it.altura + pad * 2, Math.ceil(medida * 1.06));
+    }
     const semArquivo = novos.filter(
       (it) => it.tipo === 'imagem' && it.imagemId.startsWith('miro-img-'),
     ).length;

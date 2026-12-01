@@ -200,6 +200,112 @@ function criarSurface(w: number, h: number): OffscreenCanvas | HTMLCanvasElement
   return null;
 }
 
+type ContextoTexto = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
+
+/** Quebra o texto em linhas com as mesmas regras do raster (usado também para medir a altura). */
+function montarLinhas(
+  ctx: ContextoTexto,
+  blocos: BlocoTexto[],
+  pedido: Pick<PedidoTextoPixi, 'tamanhoFonte' | 'fonte' | 'corPadrao' | 'alinhamento'>,
+  maxW: number,
+): LinhaLayout[] {
+  const alinPadrao = pedido.alinhamento === 'justificado' ? 'esquerda' : pedido.alinhamento;
+  const linhas: LinhaLayout[] = [];
+  for (const bloco of blocos) {
+    const alinBloco = bloco.alinhamento ?? alinPadrao;
+    const trechos = bloco.prefixo
+      ? [
+          {
+            texto: bloco.prefixo,
+            negrito: false,
+            italico: false,
+            sublinhado: false,
+            riscado: false,
+            ehLink: false,
+          },
+          ...bloco.trechos,
+        ]
+      : bloco.trechos;
+
+    if (trechos.length === 0) {
+      const alt = pedido.tamanhoFonte * bloco.escalaTitulo * 1.25;
+      linhas.push({ segmentos: [], largura: 0, altura: alt, alinhamento: alinBloco });
+      continue;
+    }
+
+    let segsLinha: SegmentoLinha[] = [];
+    let largLinha = 0;
+    let altLinha = pedido.tamanhoFonte * bloco.escalaTitulo * 1.25;
+
+    const fecharLinha = () => {
+      linhas.push({
+        segmentos: segsLinha,
+        largura: largLinha,
+        altura: altLinha,
+        alinhamento: alinBloco,
+      });
+      segsLinha = [];
+      largLinha = 0;
+      altLinha = pedido.tamanhoFonte * bloco.escalaTitulo * 1.25;
+    };
+
+    for (const tr of trechos) {
+      if (tr.texto === '\n') {
+        fecharLinha();
+        continue;
+      }
+      const tam = (tr.tamanho ?? pedido.tamanhoFonte) * bloco.escalaTitulo;
+      const peso = tr.negrito || bloco.escalaTitulo > 1 ? '700 ' : '';
+      const estilo = tr.italico ? 'italic ' : '';
+      const fam = tr.fonte ?? familiaCss(pedido.fonte);
+      const cssFonte = `${estilo}${peso}${tam}px ${fam}`;
+      const cor = tr.ehLink ? '#8bd197' : (tr.cor ?? pedido.corPadrao);
+      ctx.font = cssFonte;
+
+      const tokens = tr.texto.split(/(\s+)/).filter((p) => p.length > 0);
+      for (const tok of tokens) {
+        const wTok = ctx.measureText(tok).width;
+        if (largLinha > 0 && largLinha + wTok > maxW && tok.trim().length > 0) {
+          fecharLinha();
+        }
+        if (segsLinha.length === 0 && tok.trim().length === 0) continue;
+        segsLinha.push({
+          texto: tok,
+          cssFonte,
+          tamanhoPx: tam,
+          largura: wTok,
+          cor,
+          fundo: tr.fundo,
+          sublinhado: tr.sublinhado || tr.ehLink,
+          riscado: tr.riscado,
+        });
+        largLinha += wTok;
+        altLinha = Math.max(altLinha, tam * 1.25);
+      }
+    }
+    if (segsLinha.length > 0) fecharLinha();
+  }
+  return linhas;
+}
+
+/**
+ * Altura (px do quadro) que o texto precisa nesta largura, com as regras do raster.
+ * `null` sem canvas (testes em Node) ou sem conteúdo.
+ */
+export function alturaNecessariaDoTexto(
+  pedido: Pick<PedidoTextoPixi, 'doc' | 'largura' | 'padding' | 'tamanhoFonte' | 'fonte' | 'corPadrao' | 'alinhamento'>,
+): number | null {
+  const blocos = extrairBlocosDeTexto(pedido.doc);
+  if (!blocos.some((b) => b.trechos.some((t) => t.texto.trim().length > 0))) return null;
+  const surface = criarSurface(1, 1);
+  const ctx = surface?.getContext('2d') as ContextoTexto | null | undefined;
+  if (!ctx) return null;
+  const wCss = Math.max(4, pedido.largura);
+  const pad = Math.min(pedido.padding, wCss * 0.2);
+  const linhas = montarLinhas(ctx, blocos, pedido, Math.max(4, wCss - pad * 2));
+  return linhas.reduce((acc, l) => acc + l.altura, 0) + pad * 2;
+}
+
 /**
  * Gera e mantém texturas de texto rico em LRU com orçamento por frame
  * e corte sub-pixel para manter 60 FPS em quadros com milhares de textos.
@@ -304,83 +410,8 @@ export class CacheTextosPixi {
     ctx.scale(escLimitada, escLimitada);
     const pad = Math.min(pedido.padding, wCss * 0.2, hCss * 0.2);
     const maxW = Math.max(4, wCss - pad * 2);
-    const alinPadrao = pedido.alinhamento === 'justificado' ? 'esquerda' : pedido.alinhamento;
 
-    const linhas: LinhaLayout[] = [];
-    for (const bloco of blocos) {
-      const alinBloco = bloco.alinhamento ?? alinPadrao;
-      const trechos = bloco.prefixo
-        ? [
-            {
-              texto: bloco.prefixo,
-              negrito: false,
-              italico: false,
-              sublinhado: false,
-              riscado: false,
-              ehLink: false,
-            },
-            ...bloco.trechos,
-          ]
-        : bloco.trechos;
-
-      if (trechos.length === 0) {
-        const alt = pedido.tamanhoFonte * bloco.escalaTitulo * 1.25;
-        linhas.push({ segmentos: [], largura: 0, altura: alt, alinhamento: alinBloco });
-        continue;
-      }
-
-      let segsLinha: SegmentoLinha[] = [];
-      let largLinha = 0;
-      let altLinha = pedido.tamanhoFonte * bloco.escalaTitulo * 1.25;
-
-      const fecharLinha = () => {
-        linhas.push({
-          segmentos: segsLinha,
-          largura: largLinha,
-          altura: altLinha,
-          alinhamento: alinBloco,
-        });
-        segsLinha = [];
-        largLinha = 0;
-        altLinha = pedido.tamanhoFonte * bloco.escalaTitulo * 1.25;
-      };
-
-      for (const tr of trechos) {
-        if (tr.texto === '\n') {
-          fecharLinha();
-          continue;
-        }
-        const tam = (tr.tamanho ?? pedido.tamanhoFonte) * bloco.escalaTitulo;
-        const peso = tr.negrito || bloco.escalaTitulo > 1 ? '700 ' : '';
-        const estilo = tr.italico ? 'italic ' : '';
-        const fam = tr.fonte ?? familiaCss(pedido.fonte);
-        const cssFonte = `${estilo}${peso}${tam}px ${fam}`;
-        const cor = tr.ehLink ? '#8bd197' : (tr.cor ?? pedido.corPadrao);
-        ctx.font = cssFonte;
-
-        const tokens = tr.texto.split(/(\s+)/).filter((p) => p.length > 0);
-        for (const tok of tokens) {
-          const wTok = ctx.measureText(tok).width;
-          if (largLinha > 0 && largLinha + wTok > maxW && tok.trim().length > 0) {
-            fecharLinha();
-          }
-          if (segsLinha.length === 0 && tok.trim().length === 0) continue;
-          segsLinha.push({
-            texto: tok,
-            cssFonte,
-            tamanhoPx: tam,
-            largura: wTok,
-            cor,
-            fundo: tr.fundo,
-            sublinhado: tr.sublinhado || tr.ehLink,
-            riscado: tr.riscado,
-          });
-          largLinha += wTok;
-          altLinha = Math.max(altLinha, tam * 1.25);
-        }
-      }
-      if (segsLinha.length > 0) fecharLinha();
-    }
+    const linhas = montarLinhas(ctx, blocos, pedido, maxW);
 
     const alturaTotal = linhas.reduce((acc, l) => acc + l.altura, 0);
     const espacoV = Math.max(0, hCss - pad * 2 - alturaTotal);
