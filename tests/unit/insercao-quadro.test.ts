@@ -97,11 +97,11 @@ test('estilo_como copia estilo e largura; largura do pedido vence; altura copiad
   assert.equal(a!.largura, 300);
   assert.equal(a!.altura, 123);
   assert.equal(b!.alturaAuto, false);
-  // Altura fixa copiada (90) vence a medida menor; a medida maior (123) vence a fixa.
+  // A altura é sempre a medida, mesmo copiando de um item de altura fixa (90).
   assert.equal(b!.altura, 123);
   assert.equal(r.alturas[b!.id], 123);
   const curto = montarInsercao([{ formato: 'texto', texto: 'b', estilo_como: 'it-fixo' }], { ...opcoes(itens), medir: () => 40 });
-  assert.equal(curto.itens[0]!.altura, 90);
+  assert.equal(curto.itens[0]!.altura, 40);
 });
 
 test('sem estilo_como usa o estilo de título e de corpo detectados', () => {

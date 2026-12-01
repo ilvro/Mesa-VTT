@@ -159,7 +159,7 @@ function docDeParagrafos(itens: readonly Item[], pedidos: readonly ParagrafoPedi
 
 /**
  * Valida (erros legíveis) e monta os itens pedidos, todos com `revisao.origem = 'assistente'` e sem posição
- * (x = y = 0). A altura de texto e título vem de `medir` (com altura fixa copiada, nunca menor que a medida); a nota mantém o tamanho.
+ * (x = y = 0). A altura de texto e título vem de `medir`; a nota mantém o tamanho.
  */
 export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaInsercao): Insercao {
   if (!Array.isArray(pedidos) || pedidos.length === 0) throw new Error('Informe ao menos um item.');
@@ -290,9 +290,9 @@ export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaI
     item.molduraId = molduraId;
     const revisao: Revisao = { origem: 'assistente', tipoSugerido: tipo, motivos: [MOTIVO_DO_ASSISTENTE] };
     item.revisao = revisao;
-    // O texto é novo: a altura do exemplo não serve. Altura automática = a medida; fixa = nunca menor que a medida
-    // (o texto não estoura a caixa). A nota mantém o tamanho do post-it.
-    if (formato !== 'nota') item.altura = item.alturaAuto ? medir(item) : Math.max(item.altura, medir(item));
+    // O texto é novo: a altura do exemplo não serve (o corpo copia o estilo de um exemplo qualquer, e a caixa dele
+    // pode ter o triplo do texto novo). Texto e título têm a altura medida; a nota mantém o tamanho do post-it.
+    if (formato !== 'nota') item.altura = medir(item);
     alturas[item.id] = item.altura;
     resultado.push(item);
     lados.push(null);
