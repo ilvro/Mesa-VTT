@@ -156,3 +156,22 @@ test('formato inválido cita rotulo; nota não aceita papel', () => {
   assert.throws(() => montar([{ formato: 'x' } as unknown as ItemPedido], comLegenda()), /texto, titulo, rotulo, nota ou imagem/);
   assert.throws(() => montar([{ formato: 'nota', texto: 'a', papel: 'loot' } as unknown as ItemPedido], comLegenda()), /papel não vale em nota/);
 });
+
+test('contraste: trecho com fundo copiado para item de letra branca ganha letra escura; o que já contrasta fica', async () => {
+  const { garantirContraste } = await import('../../src/dominio/insercao-quadro.ts');
+  const doc = { type: 'doc', content: [{ type: 'paragraph', content: [
+    { type: 'text', text: 'narração', marks: [{ type: 'textStyle', attrs: { backgroundColor: 'rgb(255,246,182)' } }] },
+    { type: 'text', text: 'regra', marks: [{ type: 'textStyle', attrs: { backgroundColor: 'rgb(26,26,26)' } }] },
+    { type: 'text', text: 'com cor', marks: [{ type: 'textStyle', attrs: { backgroundColor: 'rgb(255,246,182)', color: '#ff0000' } }] },
+    { type: 'text', text: 'simples' },
+  ] }] };
+  const r = garantirContraste(doc as never, '#ffffff');
+  const nos = r.content[0]!.content!;
+  assert.equal((nos[0]!.marks![0]!.attrs as { color?: string }).color, '#1a1a1a');
+  assert.equal((nos[1]!.marks![0]!.attrs as { color?: string }).color, undefined);
+  assert.equal((nos[2]!.marks![0]!.attrs as { color?: string }).color, '#ff0000');
+  assert.equal(nos[3]!.marks, undefined);
+  // Em item de letra escura, a regra (fundo escuro) ganha letra branca.
+  const escuro = garantirContraste(doc as never, '#1a1a1a').content[0]!.content!;
+  assert.equal((escuro[1]!.marks![0]!.attrs as { color?: string }).color, '#ffffff');
+});

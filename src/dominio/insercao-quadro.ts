@@ -5,7 +5,7 @@ import { estiloDoQuadro } from './estilo-do-quadro.ts';
 import type { Legenda } from './legenda-do-quadro.ts';
 import { caixaDaSeta } from './setas.ts';
 import { blocosDaSecao, itensDaSecao } from './estrutura-da-secao.ts';
-import { PALETA_PADRAO, type PaletaDaCampanha } from './paleta.ts';
+import { luminanciaRelativa, PALETA_PADRAO, type PaletaDaCampanha } from './paleta.ts';
 import { MOTIVO_DO_ASSISTENTE, NOTA_ALTURA, NOTA_LARGURA, posicaoLivre } from './proposta-quadro.ts';
 import { secoesDoQuadro, type Secao } from './secoes-do-quadro.ts';
 import {
@@ -391,6 +391,7 @@ export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaI
       if (formato === 'titulo') item.texto = { ...item.texto, tamanho: TAMANHO_DO_TITULO_PADRAO };
     }
     item.molduraId = molduraId;
+    if (item.tipo === 'texto') item.doc = garantirContraste(item.doc, item.texto.cor);
     const revisao: Revisao = { origem: 'assistente', tipoSugerido: tipo, motivos: [MOTIVO_DO_ASSISTENTE] };
     item.revisao = revisao;
     // O texto é novo: a altura do exemplo não serve (o corpo copia o estilo de um exemplo qualquer, e a caixa dele
@@ -837,4 +838,45 @@ export function montarSetas(pedidos: readonly PedidoDeSeta[], opcoes: OpcoesDasS
     seta.revisao = { origem: 'assistente', tipoSugerido: null, motivos: [MOTIVO_DO_ASSISTENTE] };
     return seta;
   });
+}
+
+
+// --- Contraste dos trechos destacados (Q9p) ---
+
+/** `#rgb`, `#rrggbb` ou `rgb(r,g,b)` em `#rrggbb`; null se não reconhecer. */
+function corEmHex(cor: string): string | null {
+  const t = cor.trim();
+  if (/^#[0-9a-f]{6}$/i.test(t)) return t;
+  if (/^#[0-9a-f]{3}$/i.test(t)) return '#' + [...t.slice(1)].map((c) => c + c).join('');
+  const m = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/i.exec(t);
+  if (!m) return null;
+  return '#' + [m[1], m[2], m[3]].map((v) => Math.min(255, Number(v)).toString(16).padStart(2, '0')).join('');
+}
+
+function razaoDeContraste(a: string, b: string): number {
+  const la = luminanciaRelativa(a);
+  const lb = luminanciaRelativa(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/**
+ * Trecho com fundo e sem cor de letra própria herda a cor do item; copiado de outro item (`como`) ou da legenda
+ * (`papel`), o fundo pode não combinar com ela (narração amarela num item de letra branca). Abaixo de 3:1, o trecho
+ * ganha a letra escura ou branca, a que contrastar mais com o fundo.
+ */
+export function garantirContraste(doc: DocRico, corBase: string): DocRico {
+  const base = corEmHex(corBase);
+  if (!base) return doc;
+  const visitar = (no: NoRico): NoRico => {
+    if (no.type === 'text' && no.marks) {
+      const estilo = no.marks.find((m) => m.type === 'textStyle');
+      const fundo = typeof estilo?.attrs?.backgroundColor === 'string' ? corEmHex(estilo.attrs.backgroundColor) : null;
+      if (!estilo || !fundo || typeof estilo.attrs?.color === 'string') return no;
+      if (razaoDeContraste(base, fundo) >= 3) return no;
+      const letra = razaoDeContraste('#1a1a1a', fundo) >= razaoDeContraste('#ffffff', fundo) ? '#1a1a1a' : '#ffffff';
+      return { ...no, marks: no.marks.map((m) => (m === estilo ? { ...m, attrs: { ...m.attrs, color: letra } } : m)) };
+    }
+    return no.content ? { ...no, content: no.content.map(visitar) } : no;
+  };
+  return { ...doc, content: doc.content.map(visitar) };
 }
