@@ -1,6 +1,7 @@
 /**
- * Efeitos sonoros procedurais (Web Audio API) para os desafios de Ordem Paranormal 2.
- * Leve, tátil, discreto e 100% seguro em ambientes sem `AudioContext`.
+ * Efeitos sonoros (samples CC0 Kenney RPG Audio com fallback procedural Web Audio API)
+ * para os desafios de Ordem Paranormal 2.
+ * Leve, tátil, discreto e 100% seguro em ambientes sem `AudioContext` ou `fetch`.
  * Respeita o volume de efeitos e o mudo configurados em `lerPreferenciasDeSom`.
  */
 import { ganhoEfetivo, lerPreferenciasDeSom } from '../online/sincronia.ts';
@@ -8,6 +9,9 @@ import { ganhoEfetivo, lerPreferenciasDeSom } from '../online/sincronia.ts';
 export type EfeitoDesafio =
   | 'pino-girar'
   | 'pino-tentar'
+  | 'pino-exato'
+  | 'pino-erro'
+  | 'pino-trancado'
   | 'lockpick-aberto'
   | 'lockpick-travado'
   | 'balanca-inclinar'
@@ -22,6 +26,34 @@ export type EfeitoDesafio =
   | 'escalada-subir'
   | 'escalada-queda';
 
+interface CamadaSample {
+  readonly arquivo: string;
+  readonly rate: number;
+  readonly variacaoRate?: number;
+  readonly ganho: number;
+  readonly atraso?: number;
+  readonly duracao?: number;
+}
+
+const SAMPLES_POR_EFEITO: Partial<Record<EfeitoDesafio, readonly CamadaSample[]>> = {
+  'pino-girar': [{ arquivo: 'metalClick.ogg', rate: 1.12, variacaoRate: 0.06, ganho: 0.55 }],
+  'pino-tentar': [{ arquivo: 'drawKnife1.ogg', rate: 1.15, ganho: 0.45 }],
+  'pino-exato': [{ arquivo: 'metalLatch.ogg', rate: 1.08, ganho: 0.72 }],
+  'pino-erro': [{ arquivo: 'metalClick.ogg', rate: 0.8, ganho: 0.6 }],
+  'pino-trancado': [{ arquivo: 'doorClose_3.ogg', rate: 1.4, ganho: 0.55, duracao: 0.22 }],
+  'lockpick-aberto': [
+    { arquivo: 'metalLatch.ogg', rate: 1.05, ganho: 0.72 },
+    { arquivo: 'doorOpen_1.ogg', rate: 1.0, ganho: 0.78, atraso: 0.12 },
+  ],
+  'lockpick-travado': [{ arquivo: 'doorClose_3.ogg', rate: 0.88, ganho: 0.75 }],
+  'balanca-inclinar': [{ arquivo: 'creak1.ogg', rate: 1.05, variacaoRate: 0.06, ganho: 0.48 }],
+  'esconderijo-dado': [{ arquivo: 'cloth2.ogg', rate: 1.0, variacaoRate: 0.08, ganho: 0.52 }],
+  'perseguicao-avanco': [{ arquivo: 'footstep04.ogg', rate: 1.0, variacaoRate: 0.08, ganho: 0.6 }],
+  'perseguicao-derrubado': [{ arquivo: 'chop.ogg', rate: 0.82, ganho: 0.7 }],
+  'escalada-subir': [{ arquivo: 'footstep04.ogg', rate: 1.25, ganho: 0.48 }],
+  'escalada-queda': [{ arquivo: 'dropLeather.ogg', rate: 0.85, ganho: 0.75 }],
+};
+
 const NIVEL_BASE = 0.36;
 const LIMIAR_SILENCIO = 0.001;
 const MIN_EXP = 0.0001;
@@ -30,6 +62,88 @@ type ConstrutorAudioContext = new () => AudioContext;
 
 let contextoUnico: AudioContext | null = null;
 let bufferRuidoCache: AudioBuffer | null = null;
+const buffersSampleCache = new Map<string, AudioBuffer>();
+const promessasSampleCache = new Map<string, Promise<AudioBuffer | null>>();
+
+function urlSampleDesafio(arquivo: string): string {
+  const base = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? './';
+  return `${base.endsWith('/') ? base : `${base}/`}sons/desafios/${arquivo}`;
+}
+
+function limparCacheSamples(): void {
+  buffersSampleCache.clear();
+  promessasSampleCache.clear();
+}
+
+function carregarSample(ctx: AudioContext, arquivo: string): Promise<AudioBuffer | null> {
+  const emCache = buffersSampleCache.get(arquivo);
+  if (emCache) return Promise.resolve(emCache);
+
+  const pendente = promessasSampleCache.get(arquivo);
+  if (pendente) return pendente;
+
+  if (typeof fetch !== 'function' || typeof ctx.decodeAudioData !== 'function') {
+    return Promise.resolve(null);
+  }
+
+  const promessa = (async (): Promise<AudioBuffer | null> => {
+    try {
+      const resposta = await fetch(urlSampleDesafio(arquivo));
+      if (!resposta.ok) return null;
+      const dados = await resposta.arrayBuffer();
+      const buffer = await ctx.decodeAudioData(dados);
+      if (contextoUnico === ctx) {
+        buffersSampleCache.set(arquivo, buffer);
+      }
+      return buffer;
+    } catch {
+      return null;
+    }
+  })();
+
+  promessasSampleCache.set(arquivo, promessa);
+  return promessa;
+}
+
+function reproduzirCamadasSample(
+  ctx: AudioContext,
+  saida: AudioNode,
+  camadas: readonly CamadaSample[],
+  buffers: readonly AudioBuffer[],
+  t: number,
+): void {
+  for (let i = 0; i < camadas.length; i++) {
+    const camada = camadas[i]!;
+    const buffer = buffers[i]!;
+    const inicio = t + (camada.atraso ?? 0);
+    const variacao = camada.variacaoRate ? (Math.random() * 2 - 1) * camada.variacaoRate : 0;
+    const rate = Math.max(0.25, camada.rate + variacao);
+
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    if (src.playbackRate) {
+      src.playbackRate.setValueAtTime(rate, inicio);
+    }
+
+    const env = ctx.createGain();
+    const ganho = Math.max(MIN_EXP, camada.ganho);
+    env.gain.setValueAtTime(ganho, inicio);
+
+    src.connect(env);
+    env.connect(saida);
+
+    if (camada.duracao !== undefined) {
+      const fim = inicio + camada.duracao;
+      const inicioFade = Math.max(inicio, fim - 0.04);
+      env.gain.setValueAtTime(ganho, inicioFade);
+      env.gain.exponentialRampToValueAtTime(MIN_EXP, fim);
+      src.start(inicio);
+      src.stop(fim + 0.01);
+    } else {
+      src.start(inicio);
+    }
+  }
+}
 
 function obterConstrutorAudioContext(): ConstrutorAudioContext | null {
   const g = globalThis as typeof globalThis & {
@@ -47,6 +161,7 @@ function obterContexto(): AudioContext | null {
   if (!Ctor) return null;
   contextoUnico = new Ctor();
   bufferRuidoCache = null;
+  limparCacheSamples();
   return contextoUnico;
 }
 
@@ -63,10 +178,11 @@ function obterBufferRuido(ctx: AudioContext): AudioBuffer {
   return buffer;
 }
 
-/** Reinicia o contexto de áudio em cache (útil para testes). */
+/** Reinicia o contexto de áudio e o cache de samples (útil para testes). */
 export function resetarSomDesafios(): void {
   contextoUnico = null;
   bufferRuidoCache = null;
+  limparCacheSamples();
 }
 
 function criarTom(
@@ -221,6 +337,75 @@ function sintetizarEfeito(ctx: AudioContext, saida: AudioNode, efeito: EfeitoDes
         freqFinal: 680,
         ataque: 0.002,
         ganho: 0.22,
+      });
+      return;
+    }
+
+    case 'pino-exato': {
+      criarRuido(ctx, saida, {
+        inicio: t,
+        duracao: 0.032,
+        ataque: 0.002,
+        ganho: 0.5,
+        filtroTipo: 'bandpass',
+        freqInicial: 2300,
+        q: 4.5,
+      });
+      criarTom(ctx, saida, {
+        tipo: 'triangle',
+        inicio: t + 0.01,
+        duracao: 0.09,
+        freqInicial: 1320,
+        freqFinal: 1760,
+        ataque: 0.003,
+        ganho: 0.26,
+      });
+      return;
+    }
+
+    case 'pino-erro': {
+      criarRuido(ctx, saida, {
+        inicio: t,
+        duracao: 0.045,
+        ataque: 0.002,
+        ganho: 0.48,
+        filtroTipo: 'bandpass',
+        freqInicial: 1200,
+        freqFinal: 720,
+        q: 3.5,
+      });
+      criarTom(ctx, saida, {
+        tipo: 'sine',
+        inicio: t,
+        duracao: 0.055,
+        freqInicial: 620,
+        freqFinal: 340,
+        ataque: 0.002,
+        ganho: 0.24,
+      });
+      return;
+    }
+
+    case 'pino-trancado': {
+      criarTom(ctx, saida, {
+        tipo: 'sawtooth',
+        inicio: t,
+        duracao: 0.09,
+        freqInicial: 165,
+        freqFinal: 72,
+        ataque: 0.002,
+        ganho: 0.48,
+        filtro: { tipo: 'lowpass', freqInicial: 480, freqFinal: 180, q: 1.5 },
+      });
+      criarRuido(ctx, saida, {
+        inicio: t,
+        duracao: 0.05,
+        ataque: 0.002,
+        ganho: 0.42,
+        filtroTipo: 'bandpass',
+        freqInicial: 820,
+        freqFinal: 420,
+        q: 3,
       });
       return;
     }
@@ -618,7 +803,36 @@ export function tocarEfeitoDesafio(efeito: EfeitoDesafio): void {
     saida.gain.setValueAtTime(volume * NIVEL_BASE, ctx.currentTime);
     saida.connect(ctx.destination);
 
-    sintetizarEfeito(ctx, saida, efeito, ctx.currentTime);
+    const camadas = SAMPLES_POR_EFEITO[efeito];
+    if (!camadas || typeof fetch !== 'function' || typeof ctx.decodeAudioData !== 'function') {
+      sintetizarEfeito(ctx, saida, efeito, ctx.currentTime);
+      return;
+    }
+
+    const emCache = camadas.map((c) => buffersSampleCache.get(c.arquivo));
+    if (emCache.every((b): b is AudioBuffer => b !== undefined)) {
+      reproduzirCamadasSample(ctx, saida, camadas, emCache, ctx.currentTime);
+      return;
+    }
+
+    void Promise.all(camadas.map((c) => carregarSample(ctx, c.arquivo)))
+      .then((buffers) => {
+        if (ctx.state === 'closed') return;
+        if (buffers.every((b): b is AudioBuffer => b !== null)) {
+          reproduzirCamadasSample(ctx, saida, camadas, buffers, ctx.currentTime);
+        } else {
+          sintetizarEfeito(ctx, saida, efeito, ctx.currentTime);
+        }
+      })
+      .catch(() => {
+        try {
+          if (ctx.state !== 'closed') {
+            sintetizarEfeito(ctx, saida, efeito, ctx.currentTime);
+          }
+        } catch {
+          /* silencioso */
+        }
+      });
   } catch {
     /* silencioso quando Web Audio não estiver disponível ou falhar */
   }

@@ -6,6 +6,9 @@ import { resetarSomDesafios, tocarEfeitoDesafio, type EfeitoDesafio } from '../.
 const TODOS_EFEITOS: readonly EfeitoDesafio[] = [
   'pino-girar',
   'pino-tentar',
+  'pino-exato',
+  'pino-erro',
+  'pino-trancado',
   'lockpick-aberto',
   'lockpick-travado',
   'balanca-inclinar',
@@ -95,6 +98,7 @@ class MockAudioContext {
     return {
       ...this.criarNoBase(),
       buffer: null as AudioBuffer | null,
+      playbackRate: criarParamMock(),
       start: (_t?: number) => {},
       stop: (_t?: number) => {},
     };
@@ -121,6 +125,7 @@ describe('som-desafios', () => {
   const audioContextOriginal = (globalThis as Record<string, unknown>).AudioContext;
   const webkitAudioContextOriginal = (globalThis as Record<string, unknown>).webkitAudioContext;
   const localStorageOriginal = (globalThis as Record<string, unknown>).localStorage;
+  const fetchOriginal = (globalThis as Record<string, unknown>).fetch;
 
   beforeEach(() => {
     resetarSomDesafios();
@@ -161,6 +166,15 @@ describe('som-desafios', () => {
         writable: true,
       });
     }
+    if (fetchOriginal === undefined) {
+      delete (globalThis as Record<string, unknown>).fetch;
+    } else {
+      Object.defineProperty(globalThis, 'fetch', {
+        value: fetchOriginal,
+        configurable: true,
+        writable: true,
+      });
+    }
   });
 
   it('não lança exceção quando AudioContext não existe', () => {
@@ -188,14 +202,14 @@ describe('som-desafios', () => {
     assert.equal(MockAudioContext.instancias.length, 0);
   });
 
-  it('executa todos os 15 tipos de EfeitoDesafio sem erro, reutiliza o contexto e conecta ao destino', () => {
+  it('executa todos os 18 tipos de EfeitoDesafio sem erro, reutiliza o contexto e conecta ao destino', () => {
     Object.defineProperty(globalThis, 'AudioContext', {
       value: MockAudioContext,
       configurable: true,
       writable: true,
     });
 
-    assert.equal(TODOS_EFEITOS.length, 15);
+    assert.equal(TODOS_EFEITOS.length, 18);
 
     for (let i = 0; i < TODOS_EFEITOS.length; i++) {
       const efeito = TODOS_EFEITOS[i]!;
@@ -203,6 +217,87 @@ describe('som-desafios', () => {
       assert.equal(MockAudioContext.instancias.length, 1);
       assert.equal(MockAudioContext.instancias[0]!.conexoesAoDestino, i + 1);
     }
+  });
+
+  it('carrega sample via fetch + decodeAudioData e reutiliza cache sem buscar duas vezes', async () => {
+    const urlsBuscadas: string[] = [];
+    const bufferFake = { sample: true } as unknown as AudioBuffer;
+    const buffersTocados: (AudioBuffer | null)[] = [];
+
+    class MockSampleAudioContext extends MockAudioContext {
+      async decodeAudioData(_dados: ArrayBuffer): Promise<AudioBuffer> {
+        return bufferFake;
+      }
+
+      override createBufferSource() {
+        const src = super.createBufferSource();
+        const startOriginal = src.start;
+        src.start = (t?: number) => {
+          buffersTocados.push(src.buffer);
+          startOriginal(t);
+        };
+        return src;
+      }
+    }
+
+    Object.defineProperty(globalThis, 'AudioContext', {
+      value: MockSampleAudioContext,
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, 'fetch', {
+      value: async (url: string) => {
+        urlsBuscadas.push(url);
+        return {
+          ok: true,
+          arrayBuffer: async () => new ArrayBuffer(8),
+        };
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    tocarEfeitoDesafio('pino-exato');
+    await new Promise((r) => setTimeout(r, 10));
+    tocarEfeitoDesafio('pino-exato');
+
+    assert.equal(urlsBuscadas.length, 1);
+    assert.ok(urlsBuscadas[0]!.endsWith('sons/desafios/metalLatch.ogg'));
+    assert.equal(buffersTocados.length, 2);
+    assert.equal(buffersTocados[0], bufferFake);
+    assert.equal(buffersTocados[1], bufferFake);
+  });
+
+  it('cai silenciosamente no fallback procedural quando fetch falha', async () => {
+    let osciladoresCriados = 0;
+
+    class MockFallbackAudioContext extends MockAudioContext {
+      async decodeAudioData(_dados: ArrayBuffer): Promise<AudioBuffer> {
+        return {} as AudioBuffer;
+      }
+
+      override createOscillator() {
+        osciladoresCriados++;
+        return super.createOscillator();
+      }
+    }
+
+    Object.defineProperty(globalThis, 'AudioContext', {
+      value: MockFallbackAudioContext,
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, 'fetch', {
+      value: async () => {
+        throw new Error('rede indisponível');
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    assert.doesNotThrow(() => tocarEfeitoDesafio('pino-trancado'));
+    await new Promise((r) => setTimeout(r, 10));
+    assert.ok(osciladoresCriados > 0);
   });
 
   it('chama resume() quando o AudioContext está suspenso', () => {
