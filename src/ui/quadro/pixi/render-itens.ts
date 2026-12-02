@@ -609,6 +609,12 @@ export class GerenciadorItensPixi {
   }
 }
 
+/** Quantiza o inverso do zoom em degraus logarítmicos para evitar re-rasterizar títulos de moldura a cada tick de roda. */
+export function degrauZoomMoldura(zoom: number): number {
+  const invZoom = 1 / Math.max(ZOOM_MIN, zoom);
+  return Math.round(Math.log2(invZoom) * 3) + 0;
+}
+
 function montarPedidoTexto(
   item: Item,
   todos: ReadonlyMap<string, Item>,
@@ -663,18 +669,22 @@ function montarPedidoTexto(
   }
 
   if (item.tipo === 'moldura' && item.titulo.trim()) {
-    const invZoom = 1 / Math.max(ZOOM_MIN, zoom);
-    const tamFonte = 14 * invZoom;
+    const degrauZoom = degrauZoomMoldura(zoom);
+    const invZoomQuantizado = Math.pow(2, degrauZoom / 3);
+    const tamFonte = 14 * invZoomQuantizado;
     return {
       x: 0,
-      y: -26 * invZoom,
+      y: -26 * invZoomQuantizado,
       pedido: {
         chave: item.id,
-        versaoItem: `${item.titulo}:${Math.round(invZoom * 100)}`,
+        versaoItem: `${item.titulo}:${degrauZoom}`,
         doc: docDeTexto(item.titulo),
-        largura: Math.max(140 * invZoom, Math.min(item.largura, item.titulo.length * 10 * invZoom)),
-        altura: 24 * invZoom,
-        padding: 4 * invZoom,
+        largura: Math.max(
+          140 * invZoomQuantizado,
+          Math.min(item.largura, item.titulo.length * 10 * invZoomQuantizado),
+        ),
+        altura: 24 * invZoomQuantizado,
+        padding: 4 * invZoomQuantizado,
         fonte: 'hanken',
         tamanhoFonte: tamFonte,
         corPadrao: '#e8efe9',

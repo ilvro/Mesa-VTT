@@ -9,17 +9,51 @@ export const FORMATOS_IMAGEM_ACEITOS = new Set([
 
 const LADO_MAXIMO_IMAGEM = 4096;
 const LARGURA_INICIAL_MAXIMA = 600;
+const MAX_CACHE_URLS = 150;
 
 const cacheUrls = new Map<string, string>();
 const carregandoUrls = new Map<string, Promise<string | null>>();
 
+function tocarCacheUrl(imagemId: string, url: string): void {
+  cacheUrls.delete(imagemId);
+  cacheUrls.set(imagemId, url);
+}
+
+function guardarCacheUrl(imagemId: string, url: string): void {
+  const antiga = cacheUrls.get(imagemId);
+  if (antiga && antiga !== url) {
+    URL.revokeObjectURL(antiga);
+  }
+  cacheUrls.delete(imagemId);
+  while (cacheUrls.size >= MAX_CACHE_URLS) {
+    let chaveEvictar: string | null = null;
+    for (const chave of cacheUrls.keys()) {
+      if (!carregandoUrls.has(chave)) {
+        chaveEvictar = chave;
+        break;
+      }
+    }
+    if (!chaveEvictar) break;
+    const urlEvictada = cacheUrls.get(chaveEvictar);
+    cacheUrls.delete(chaveEvictar);
+    if (urlEvictada) URL.revokeObjectURL(urlEvictada);
+  }
+  cacheUrls.set(imagemId, url);
+}
+
 export function obterUrlImagemSincrona(imagemId: string): string | null {
-  return cacheUrls.get(imagemId) ?? null;
+  const emCache = cacheUrls.get(imagemId);
+  if (!emCache) return null;
+  tocarCacheUrl(imagemId, emCache);
+  return emCache;
 }
 
 export async function urlDaImagem(imagemId: string): Promise<string | null> {
   const emCache = cacheUrls.get(imagemId);
-  if (emCache) return emCache;
+  if (emCache) {
+    tocarCacheUrl(imagemId, emCache);
+    return emCache;
+  }
 
   const pendente = carregandoUrls.get(imagemId);
   if (pendente) return pendente;
@@ -29,9 +63,12 @@ export async function urlDaImagem(imagemId: string): Promise<string | null> {
       const registro = await lerImagem(imagemId);
       if (!registro) return null;
       const jaCriada = cacheUrls.get(imagemId);
-      if (jaCriada) return jaCriada;
+      if (jaCriada) {
+        tocarCacheUrl(imagemId, jaCriada);
+        return jaCriada;
+      }
       const url = URL.createObjectURL(registro.blob);
-      cacheUrls.set(imagemId, url);
+      guardarCacheUrl(imagemId, url);
       return url;
     } finally {
       carregandoUrls.delete(imagemId);
@@ -110,7 +147,7 @@ export async function importarArquivoImagem(arquivo: Blob): Promise<ImagemImport
   const { id, largura: wOrig, altura: hOrig } = await guardarImagem(blob);
 
   if (!cacheUrls.has(id)) {
-    cacheUrls.set(id, URL.createObjectURL(blob));
+    guardarCacheUrl(id, URL.createObjectURL(blob));
   }
 
   const larguraOriginal = wOrig > 0 ? wOrig : 320;

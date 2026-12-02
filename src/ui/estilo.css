@@ -2478,3 +2478,43 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .menu-contexto-btn.confirmar:hover {
   background: color-mix(in srgb, var(--perigo), transparent 72%);
 }
+
+/* ---- Modo Leve (menos compositing GPU, sem backdrop-filter) ---- */
+:root.modo-leve *,
+:root.modo-leve *::before,
+:root.modo-leve *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+:root.modo-leve .busca-rapida-fundo,
+:root.modo-leve .desafios-fundo,
+:root.modo-leve .saguao-seletor-fundo {
+  background: rgba(6, 5, 10, 0.84);
+}
+:root.modo-leve .mesa-inspecao {
+  background: #090710;
+}
+:root.modo-leve .mesa-inspecao-barra {
+  background: rgba(12, 10, 20, 0.94);
+}
+:root.modo-leve .casca-ficha-backdrop {
+  background: rgba(8, 7, 14, 0.88);
+}
+:root.modo-leve .saguao {
+  background: var(--fundo);
+}
+:root.modo-leve .cartao-tipo-selo,
+:root.modo-leve .cartao-abrir-atalho,
+:root.modo-leve .casca-recolher-ficha,
+:root.modo-leve .casca-recolher-construcao,
+:root.modo-leve .casca-voltar,
+:root.modo-leve .feed-botao,
+:root.modo-leve .casca-saguao-botao,
+:root.modo-leve .casca-som-botao {
+  background: rgba(14, 12, 22, 0.94);
+}
+:root.modo-leve .busca-rapida-dialogo,
+:root.modo-leve .desafios-gaveta,
+:root.modo-leve .cartao {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}

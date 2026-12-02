@@ -83,7 +83,7 @@ import { pararProjecao, projetando } from '../../app/projecao.ts';
 import { mensagemDe, avisar } from '../../app/toasts.ts';
 import { baixarImagensDoMiro, dialogoTokenMiroAberto, lerTokenMiro } from '../../app/imagens-miro.ts';
 import { DialogoTokenMiro } from './DialogoTokenMiro.tsx';
-import { FORMATOS_IMAGEM_ACEITOS, importarArquivoImagem } from '../../app/imagens-quadro.ts';
+import { FORMATOS_IMAGEM_ACEITOS, importarArquivoImagem, revogarImagensDoQuadro } from '../../app/imagens-quadro.ts';
 import {
   agruparSelecao,
   alternarFato,
@@ -257,7 +257,11 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
   const espacoPressionado = useSignal(false);
   // Espelho para o tutor (src/app/quadro-ui.ts): lê a ferramenta e o modo sem tocar na UI.
   useEffect(() => { ferramentaDoQuadro.value = ferramenta.value; modoDoQuadro.value = modoQuadro.value; });
-  useEffect(() => () => { ferramentaDoQuadro.value = 'selecionar'; modoDoQuadro.value = 'quadro'; }, []);
+  useEffect(() => () => {
+    ferramentaDoQuadro.value = 'selecionar';
+    modoDoQuadro.value = 'quadro';
+    revogarImagensDoQuadro();
+  }, []);
   // No modo sessão o quadro divide a tela com outros painéis: os atalhos e a colagem só valem com ele ativo
   // (o último clique ou foco foi dentro dele). Fora do modo sessão, ele nasce ativo.
   const quadroAtivo = useSignal(tela.value !== 'sessao');

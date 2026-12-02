@@ -1,4 +1,5 @@
 import { Application, Container, Graphics } from 'pixi.js';
+import { modoLeve } from '../../../app/desempenho.ts';
 import type { Camera, Ponto, Tamanho } from '../../../dominio/camera.ts';
 import type { IndiceEspacial } from '../../../dominio/indice-espacial.ts';
 import type { Item } from '../../../dominio/quadro.ts';
@@ -60,13 +61,16 @@ export class ViewportQuadro {
   }
 
   async iniciar(): Promise<void> {
+    const leve = modoLeve.peek();
+    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
     await this.app.init({
       canvas: this.opcoes.canvas,
       preference: 'webgl',
-      antialias: true,
+      antialias: !leve,
+      powerPreference: leve ? 'low-power' : undefined,
       autoDensity: true,
       autoStart: false,
-      resolution: Math.max(1, Math.min(2, window.devicePixelRatio || 1)),
+      resolution: leve ? 1 : Math.max(1, Math.min(1.5, dpr)),
       width: Math.max(1, this.tamanhoAtual.largura),
       height: Math.max(1, this.tamanhoAtual.altura),
       background: this.fundoAtual.cor,

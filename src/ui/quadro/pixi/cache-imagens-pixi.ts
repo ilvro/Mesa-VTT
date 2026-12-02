@@ -1,11 +1,15 @@
 import { ImageSource, Texture } from 'pixi.js';
 import { lerImagem } from '../../../app/banco-quadros.ts';
+import { modoLeve } from '../../../app/desempenho.ts';
 
 export type NivelMipmap = 'miniatura' | 'completa';
 
 const LADO_MINIATURA_PIXI = 256;
 const LIMIAR_TELA_MINIATURA = 180;
-const MAX_COMPLETAS_PADRAO = 120;
+const MAX_COMPLETAS_PADRAO = 48;
+const MAX_COMPLETAS_MODO_LEVE = 20;
+const MAX_MINIATURAS_PADRAO = 240;
+const MAX_MINIATURAS_MODO_LEVE = 100;
 
 /** Escolhe entre miniatura (<= 256 px) e textura completa conforme o tamanho do item na tela. */
 export function nivelMipmapParaTela(
@@ -50,13 +54,14 @@ async function decodificarParaNivel(blob: Blob, nivel: NivelMipmap): Promise<Ima
 
 export interface OpcoesCacheImagensPixi {
   maxCompletas?: number;
+  maxMiniaturas?: number;
   aoCarregar: () => void;
   carregarBlob?: (imagemId: string) => Promise<Blob | null>;
 }
 
 /**
  * Gerencia texturas de imagem em duas resoluções para o palco PixiJS:
- * - `miniatura` (<= 256 px): mantida durante o quadro aberto para zoom distante sem pesar na VRAM.
+ * - `miniatura` (<= 256 px): mantida com evicção LRU para zoom distante sem pesar na VRAM.
  * - `completa` (até 2048 px): carregada sob demanda ao aproximar, com evicção LRU.
  */
 export class CacheImagensPixi {
@@ -65,12 +70,17 @@ export class CacheImagensPixi {
   private readonly falhas = new Set<string>();
   private readonly emVoo = new Map<string, Promise<void>>();
   private readonly maxCompletas: number;
+  private readonly maxMiniaturas: number;
   private readonly aoCarregar: () => void;
   private readonly carregarBlob: (imagemId: string) => Promise<Blob | null>;
   private destruido = false;
 
   constructor(opcoes: OpcoesCacheImagensPixi) {
-    this.maxCompletas = Math.max(8, opcoes.maxCompletas ?? MAX_COMPLETAS_PADRAO);
+    const leve = modoLeve.peek();
+    const padraoCompletas = leve ? MAX_COMPLETAS_MODO_LEVE : MAX_COMPLETAS_PADRAO;
+    const padraoMiniaturas = leve ? MAX_MINIATURAS_MODO_LEVE : MAX_MINIATURAS_PADRAO;
+    this.maxCompletas = Math.max(8, opcoes.maxCompletas ?? padraoCompletas);
+    this.maxMiniaturas = Math.max(8, opcoes.maxMiniaturas ?? padraoMiniaturas);
     this.aoCarregar = opcoes.aoCarregar;
     this.carregarBlob =
       opcoes.carregarBlob ??
@@ -92,13 +102,26 @@ export class CacheImagensPixi {
         return comp;
       }
       this.agendar(imagemId, 'completa');
-      return this.miniaturas.get(imagemId) ?? null;
+      const miniFallback = this.miniaturas.get(imagemId);
+      if (miniFallback) {
+        this.miniaturas.delete(imagemId);
+        this.miniaturas.set(imagemId, miniFallback);
+      }
+      return miniFallback ?? null;
     }
 
     const mini = this.miniaturas.get(imagemId);
-    if (mini) return mini;
+    if (mini) {
+      this.miniaturas.delete(imagemId);
+      this.miniaturas.set(imagemId, mini);
+      return mini;
+    }
     const comp = this.completas.get(imagemId);
-    if (comp) return comp;
+    if (comp) {
+      this.completas.delete(imagemId);
+      this.completas.set(imagemId, comp);
+      return comp;
+    }
     this.agendar(imagemId, 'miniatura');
     return null;
   }
@@ -126,11 +149,9 @@ export class CacheImagensPixi {
       }
       const tex = texturaDeBitmap(bmp);
       if (nivel === 'miniatura') {
-        const antiga = this.miniaturas.get(imagemId);
-        if (antiga) antiga.destroy(true);
-        this.miniaturas.set(imagemId, tex);
+        this.guardarComLru(this.miniaturas, this.maxMiniaturas, imagemId, tex);
       } else {
-        this.guardarCompleta(imagemId, tex);
+        this.guardarComLru(this.completas, this.maxCompletas, imagemId, tex);
       }
       this.aoCarregar();
     } catch {
@@ -138,20 +159,25 @@ export class CacheImagensPixi {
     }
   }
 
-  private guardarCompleta(imagemId: string, tex: Texture): void {
-    const antiga = this.completas.get(imagemId);
+  private guardarComLru(
+    mapa: Map<string, Texture>,
+    limite: number,
+    imagemId: string,
+    tex: Texture,
+  ): void {
+    const antiga = mapa.get(imagemId);
     if (antiga) {
-      this.completas.delete(imagemId);
+      mapa.delete(imagemId);
       antiga.destroy(true);
     }
-    while (this.completas.size >= this.maxCompletas) {
-      const primeiro = this.completas.keys().next().value;
+    while (mapa.size >= limite) {
+      const primeiro = mapa.keys().next().value;
       if (!primeiro) break;
-      const removida = this.completas.get(primeiro);
-      this.completas.delete(primeiro);
+      const removida = mapa.get(primeiro);
+      mapa.delete(primeiro);
       removida?.destroy(true);
     }
-    this.completas.set(imagemId, tex);
+    mapa.set(imagemId, tex);
   }
 
   quantidadeEmCache(): { miniaturas: number; completas: number } {
