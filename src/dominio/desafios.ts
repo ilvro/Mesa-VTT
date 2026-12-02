@@ -902,6 +902,7 @@ function aplicarEscalada(
       }
       return {
         ...p,
+        pontos: 0,
         status: 'caiu',
         ultimoDanoQueda: p.pontos,
       };
