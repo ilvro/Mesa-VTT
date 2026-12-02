@@ -7,7 +7,7 @@ import { baseDoApp, inventario, sondarAplicativos } from '../app/inventario.ts';
 import { campanhaAtiva, entidades, ligacoes } from '../app/campanha.ts';
 import { enderecoDe } from '../app/aplicativos.ts';
 import { ehEncontro } from '../dominio/entidades.ts';
-import { alternarPainel, escalaDoPainel, LARGURA_LOGICA_MINIMA, presetDe, PRESETS, redimensionar, ROTULO_DO_PAINEL, ROTULO_DO_PRESET, visiveis, type Layout, type PainelId, type PresetId } from '../dominio/layout.ts';
+import { alternarEmpilhamentoPainel, alternarPainelLayout, aplicarPresetLayout, escalaDoPainel, LARGURA_LOGICA_MINIMA, moverColuna, moverPainel, PAINEIS, painelVisivel, presetDe, PRESETS, redimensionarColunas, redimensionarPilhaVertical, ROTULO_DO_PAINEL, ROTULO_DO_PRESET, totalPaineisVisiveis, type Layout, type ModoMoverPainel, type PainelId, type PresetId } from '../dominio/layout.ts';
 import { enderecoDaFicha, enderecoDoAtlas, filtrarPersonagensSessao, passosDoGuia } from '../dominio/sessao.ts';
 import { cx } from './cx.ts';
 import { Diario } from './Diario.tsx';
@@ -284,7 +284,7 @@ function ControleDaSessao() {
       ev.preventDefault();
       void iniciarSessao(nome).then(nova => {
         setNome('');
-        if (nova && !layout.value.find(p => p.id === 'diario')?.visivel) mudarLayout(alternarPainel(layout.value, 'diario'));
+        if (nova && !painelVisivel(layout.value, 'diario')) mudarLayout(alternarPainelLayout(layout.value, 'diario'));
       });
     };
     return (
@@ -318,10 +318,10 @@ function MenuDePaineis({ l, preset }: { l: Layout; preset: PresetId | null }) {
     <details class="menu-paineis-caixa" ref={caixa} data-testid="menu-paineis">
       <summary class="botao-pilula" data-testid="abrir-menu-paineis">Painéis ▾</summary>
       <div class="menu-fichas menu-paineis">
-        {l.map(p => (
-          <label key={p.id} data-testid={`painel-${p.id}`}>
-            <input type="checkbox" checked={p.visivel} onChange={() => mudarLayout(alternarPainel(layout.value, p.id))} />
-            {ROTULO_DO_PAINEL[p.id]}
+        {PAINEIS.map(id => (
+          <label key={id} data-testid={`painel-${id}`}>
+            <input type="checkbox" checked={painelVisivel(l, id)} onChange={() => mudarLayout(alternarPainelLayout(layout.value, id))} />
+            {ROTULO_DO_PAINEL[id]}
           </label>
         ))}
         <hr class="menu-separador" />
@@ -338,9 +338,26 @@ function MenuDePaineis({ l, preset }: { l: Layout; preset: PresetId | null }) {
   );
 }
 
+const ROTULO_ZONA_SOLTAR: Readonly<Record<ModoMoverPainel, string>> = {
+  antes: 'Soltar à esquerda',
+  depois: 'Soltar à direita',
+  empilhar: 'Empilhar aqui',
+  'empilhar-acima': 'Empilhar acima',
+  'empilhar-abaixo': 'Empilhar abaixo',
+  trocar: 'Trocar de lugar',
+};
+
+const PRESETS_RAPIDOS: readonly { id: PresetId; rotulo: string }[] = [
+  { id: 'padrao', rotulo: 'Lado a lado' },
+  { id: 'mapa-lateral', rotulo: 'Mapa + Pilha' },
+  { id: 'so-mapa', rotulo: 'Foco no Mapa' },
+];
+
 export function ModoSessao() {
   const c = campanhaAtiva.value, area = useRef<HTMLDivElement>(null);
-  const [arrastando, setArrastando] = useState(false);
+  const [arrastando, setArrastando] = useState<'col' | 'row' | null>(null);
+  const [arrastandoPainel, setArrastandoPainel] = useState<PainelId | null>(null);
+  const [alvoSoltar, setAlvoSoltar] = useState<{ destino: PainelId; modo: ModoMoverPainel } | null>(null);
   const [desafiosAberto, setDesafiosAberto] = useState(false);
   useEffect(() => { carregarEscolhas(c?.id ?? null); void sondarAplicativos(); void carregarSessoes(); }, [c?.id]);
   useEffect(() => { iniciarCanalDesafiosMestre(); }, []);
@@ -349,21 +366,91 @@ export function ModoSessao() {
   }, [pedidoLockpickObjeto.value]);
 
   if (!c) return <section class="pagina"><div class="vazio"><h2>Escolha uma campanha</h2><p>O modo sessão junta o mapa, as fichas e a música da campanha ativa.</p></div></section>;
-  const l = layout.value, v = visiveis(l), preset = presetDe(l);
+  const l = layout.value, colunas = l.colunas, preset = presetDe(l), totalPaineis = totalPaineisVisiveis(l);
   const cenasDisponiveis = entidades.value.filter(e => e.tipo === 'cena');
 
   const arrastar = (indice: number) => (ev: PointerEvent) => {
     const alvo = ev.currentTarget as HTMLElement, caixa = area.current; if (!caixa) return;
-    ev.preventDefault(); alvo.setPointerCapture(ev.pointerId); setArrastando(true);
-    const inicio = ev.clientX, original: Layout = layout.value, larguraUtil = caixa.clientWidth - (v.length - 1) * LARGURA_DO_DIVISOR;
-    const mover = (m: PointerEvent) => mudarLayout(redimensionar(original, indice, m.clientX - inicio, larguraUtil), false);
-    const soltar = () => { alvo.removeEventListener('pointermove', mover); alvo.removeEventListener('pointerup', soltar); alvo.removeEventListener('pointercancel', soltar); setArrastando(false); mudarLayout(layout.value); };
+    ev.preventDefault(); alvo.setPointerCapture(ev.pointerId); setArrastando('col');
+    const inicio = ev.clientX, original: Layout = layout.value, larguraUtil = caixa.clientWidth - (colunas.length - 1) * LARGURA_DO_DIVISOR;
+    const mover = (m: PointerEvent) => mudarLayout(redimensionarColunas(original, indice, m.clientX - inicio, larguraUtil), false);
+    const soltar = () => { alvo.removeEventListener('pointermove', mover); alvo.removeEventListener('pointerup', soltar); alvo.removeEventListener('pointercancel', soltar); setArrastando(null); mudarLayout(layout.value); };
     alvo.addEventListener('pointermove', mover); alvo.addEventListener('pointerup', soltar); alvo.addEventListener('pointercancel', soltar);
   };
   const teclar = (indice: number) => (ev: KeyboardEvent) => {
     if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
     ev.preventDefault(); const caixa = area.current; if (!caixa) return;
-    mudarLayout(redimensionar(layout.value, indice, (ev.key === 'ArrowRight' ? 1 : -1) * 32, caixa.clientWidth - (v.length - 1) * LARGURA_DO_DIVISOR));
+    mudarLayout(redimensionarColunas(layout.value, indice, (ev.key === 'ArrowRight' ? 1 : -1) * 32, caixa.clientWidth - (colunas.length - 1) * LARGURA_DO_DIVISOR));
+  };
+
+  const arrastarVertical = (colIdx: number, idxSuperior: number) => (ev: PointerEvent) => {
+    const alvo = ev.currentTarget as HTMLElement, colEl = alvo.parentElement; if (!colEl) return;
+    const qtdPaineis = colunas[colIdx]?.paineis.length ?? 1;
+    ev.preventDefault(); alvo.setPointerCapture(ev.pointerId); setArrastando('row');
+    const inicio = ev.clientY, original: Layout = layout.value, alturaUtil = colEl.clientHeight - (qtdPaineis - 1) * LARGURA_DO_DIVISOR;
+    const mover = (m: PointerEvent) => mudarLayout(redimensionarPilhaVertical(original, colIdx, idxSuperior, m.clientY - inicio, alturaUtil), false);
+    const soltar = () => { alvo.removeEventListener('pointermove', mover); alvo.removeEventListener('pointerup', soltar); alvo.removeEventListener('pointercancel', soltar); setArrastando(null); mudarLayout(layout.value); };
+    alvo.addEventListener('pointermove', mover); alvo.addEventListener('pointerup', soltar); alvo.addEventListener('pointercancel', soltar);
+  };
+  const teclarVertical = (colIdx: number, idxSuperior: number) => (ev: KeyboardEvent) => {
+    if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
+    const colEl = (ev.currentTarget as HTMLElement).parentElement; if (!colEl) return;
+    const qtdPaineis = colunas[colIdx]?.paineis.length ?? 1;
+    ev.preventDefault();
+    mudarLayout(redimensionarPilhaVertical(layout.value, colIdx, idxSuperior, (ev.key === 'ArrowDown' ? 1 : -1) * 32, colEl.clientHeight - (qtdPaineis - 1) * LARGURA_DO_DIVISOR));
+  };
+
+  const detectarAlvoSoltar = (x: number, y: number, origem: PainelId): { destino: PainelId; modo: ModoMoverPainel } | null => {
+    const paineisEls = area.current?.querySelectorAll<HTMLElement>('.painel[data-painel]') ?? [];
+    for (const el of paineisEls) {
+      const id = el.getAttribute('data-painel') as PainelId | null;
+      if (!id || id === origem) continue;
+      const r = el.getBoundingClientRect();
+      if (x < r.left || x > r.right || y < r.top || y > r.bottom) continue;
+      const relX = (x - r.left) / Math.max(1, r.width);
+      const relY = (y - r.top) / Math.max(1, r.height);
+      const modo: ModoMoverPainel =
+        relX < 0.22 ? 'antes' :
+        relX > 0.78 ? 'depois' :
+        relY < 0.28 ? 'empilhar-acima' :
+        relY > 0.72 ? 'empilhar-abaixo' :
+        'trocar';
+      return { destino: id, modo };
+    }
+    return null;
+  };
+
+  const iniciarArrastePainel = (id: PainelId) => (ev: PointerEvent) => {
+    if (ev.button !== 0) return;
+    if ((ev.target as HTMLElement | null)?.closest('button')) return;
+    const inicioX = ev.clientX, inicioY = ev.clientY;
+    let ativo = false;
+    let ultimoAlvo: { destino: PainelId; modo: ModoMoverPainel } | null = null;
+
+    const mover = (m: PointerEvent) => {
+      if (!ativo && Math.hypot(m.clientX - inicioX, m.clientY - inicioY) > 6) {
+        ativo = true;
+        setArrastandoPainel(id);
+      }
+      if (!ativo) return;
+      ultimoAlvo = detectarAlvoSoltar(m.clientX, m.clientY, id);
+      setAlvoSoltar(ultimoAlvo);
+    };
+
+    const finalizar = () => {
+      window.removeEventListener('pointermove', mover);
+      window.removeEventListener('pointerup', finalizar);
+      window.removeEventListener('pointercancel', finalizar);
+      if (ativo && ultimoAlvo) {
+        mudarLayout(moverPainel(layout.value, id, ultimoAlvo.destino, ultimoAlvo.modo));
+      }
+      setArrastandoPainel(null);
+      setAlvoSoltar(null);
+    };
+
+    window.addEventListener('pointermove', mover);
+    window.addEventListener('pointerup', finalizar);
+    window.addEventListener('pointercancel', finalizar);
   };
   const ultimaAssinaturaFatosRef = useRef<string | null>(null);
   useEffect(() => {
@@ -521,39 +608,143 @@ export function ModoSessao() {
           >
             📽 Projetor
           </button>
+          <div class="sessao-presets-rapidos" role="group" aria-label="Arranjos rápidos" data-testid="sessao-presets-rapidos">
+            {PRESETS_RAPIDOS.map(pr => (
+              <button
+                key={pr.id}
+                type="button"
+                class={cx('sessao-controle-btn', preset === pr.id && 'ativo')}
+                aria-pressed={preset === pr.id}
+                data-testid={`preset-rapido-${pr.id}`}
+                onClick={() => mudarLayout(aplicarPresetLayout(pr.id))}
+              >
+                {pr.rotulo}
+              </button>
+            ))}
+          </div>
           <button type="button" class="botao-icone-texto" data-testid="guia-sessao-abrir" title="Como usar o modo sessão" aria-label="Como usar o modo sessão" onClick={() => { guiaVisivel.value = true; }}>?</button>
           <MenuDePaineis l={l} preset={preset} />
         </div>
       </div>
       <GuiaDaSessao />
-      <div class={cx('sessao-paineis', arrastando && 'arrastando')} ref={area} data-testid="sessao-paineis">
-        {v.map((p, i) => {
-          const Corpo = CORPO[p.id];
-          const emTelaCheia = painelEmTelaCheia.value === p.id;
-          return (
-            <Fragment key={p.id}>
-              <section class="painel" data-painel={p.id} data-testid={`painel-corpo-${p.id}`} style={{ flex: `${p.peso} 1 0` }}>
-                <header class="painel-topo">
-                  <h3>{ROTULO_DO_PAINEL[p.id]}</h3>
-                  <span class="espaco" />
-                  <button
-                    type="button"
-                    class="botao-icone-texto"
-                    title={emTelaCheia ? 'Sair da tela cheia' : 'Tela cheia (Esc volta)'}
-                    aria-label={emTelaCheia ? 'Sair da tela cheia' : 'Tela cheia'}
-                    aria-pressed={emTelaCheia}
-                    data-testid={`tela-cheia-${p.id}`}
-                    onClick={() => { void alternarTelaCheia(p.id); }}
-                  >
-                    {emTelaCheia ? '✕' : '⛶'}
-                  </button>
-                </header>
-                <div class="painel-corpo"><Corpo /></div>
-              </section>
-              {i < v.length - 1 && <div class="divisor" role="separator" aria-orientation="vertical" aria-label={`Largura: ${ROTULO_DO_PAINEL[p.id]} e ${ROTULO_DO_PAINEL[v[i + 1]!.id]}`} tabIndex={0} data-testid={`divisor-${i}`} onPointerDown={arrastar(i)} onKeyDown={teclar(i)} />}
-            </Fragment>
-          );
-        })}
+      <div class={cx('sessao-paineis', arrastando === 'col' && 'arrastando', arrastando === 'row' && 'arrastando-vertical', arrastandoPainel && 'arrastando-painel')} ref={area} data-testid="sessao-paineis">
+        {colunas.map((col, colIdx) => (
+          <Fragment key={colIdx}>
+            <div class="sessao-coluna" data-coluna={colIdx} style={{ flex: `${col.peso} 1 0` }}>
+              {col.paineis.map((pId, pIdx) => {
+                const Corpo = CORPO[pId];
+                const emTelaCheia = painelEmTelaCheia.value === pId;
+                const estaEmPilha = col.paineis.length > 1;
+                const ehOrigemArraste = arrastandoPainel === pId;
+                const zonaAlvo = alvoSoltar?.destino === pId ? alvoSoltar.modo : null;
+                return (
+                  <Fragment key={pId}>
+                    <section
+                      class={cx('painel', ehOrigemArraste && 'painel-arrastando', zonaAlvo && 'painel-alvo-soltar')}
+                      data-painel={pId}
+                      data-testid={`painel-corpo-${pId}`}
+                      style={{ flex: `${col.alturas[pId] ?? 1} 1 0` }}
+                    >
+                      <header class="painel-topo" onPointerDown={iniciarArrastePainel(pId)} title="Arraste para mover ou empilhar este painel">
+                        <h3>{ROTULO_DO_PAINEL[pId]}</h3>
+                        <span class="espaco" />
+                        <div class="painel-acoes">
+                          <button
+                            type="button"
+                            class="botao-icone-texto"
+                            disabled={colIdx === 0}
+                            title="Mover coluna para a esquerda"
+                            aria-label={`Mover ${ROTULO_DO_PAINEL[pId]} para a esquerda`}
+                            data-testid={`mover-esq-${pId}`}
+                            onClick={() => mudarLayout(moverColuna(layout.value, pId, -1))}
+                          >
+                            ←
+                          </button>
+                          <button
+                            type="button"
+                            class="botao-icone-texto"
+                            disabled={colIdx === colunas.length - 1}
+                            title="Mover coluna para a direita"
+                            aria-label={`Mover ${ROTULO_DO_PAINEL[pId]} para a direita`}
+                            data-testid={`mover-dir-${pId}`}
+                            onClick={() => mudarLayout(moverColuna(layout.value, pId, 1))}
+                          >
+                            →
+                          </button>
+                          <button
+                            type="button"
+                            class="botao-icone-texto"
+                            disabled={!estaEmPilha && colunas.length <= 1}
+                            title={estaEmPilha ? 'Separar em coluna própria' : 'Empilhar na coluna vizinha'}
+                            aria-label={estaEmPilha ? `Separar ${ROTULO_DO_PAINEL[pId]} em coluna própria` : `Empilhar ${ROTULO_DO_PAINEL[pId]} na coluna vizinha`}
+                            data-testid={`empilhar-${pId}`}
+                            onClick={() => mudarLayout(alternarEmpilhamentoPainel(layout.value, pId))}
+                          >
+                            ⬓
+                          </button>
+                          <button
+                            type="button"
+                            class="botao-icone-texto"
+                            title={emTelaCheia ? 'Sair da tela cheia' : 'Tela cheia (Esc volta)'}
+                            aria-label={emTelaCheia ? 'Sair da tela cheia' : 'Tela cheia'}
+                            aria-pressed={emTelaCheia}
+                            data-testid={`tela-cheia-${pId}`}
+                            onClick={() => { void alternarTelaCheia(pId); }}
+                          >
+                            {emTelaCheia ? '✕' : '⛶'}
+                          </button>
+                          <button
+                            type="button"
+                            class="botao-icone-texto"
+                            disabled={totalPaineis <= 1}
+                            title="Fechar painel"
+                            aria-label={`Fechar ${ROTULO_DO_PAINEL[pId]}`}
+                            data-testid={`fechar-painel-${pId}`}
+                            onClick={() => mudarLayout(alternarPainelLayout(layout.value, pId))}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </header>
+                      <div class="painel-corpo">
+                        <Corpo />
+                        {zonaAlvo && (
+                          <div class={cx('zona-soltar-sobreposicao', `zona-soltar-${zonaAlvo}`)} data-testid={`zona-soltar-${pId}`}>
+                            <span>{ROTULO_ZONA_SOLTAR[zonaAlvo]}</span>
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                    {pIdx < col.paineis.length - 1 && (
+                      <div
+                        class="divisor-vertical"
+                        role="separator"
+                        aria-orientation="horizontal"
+                        aria-label={`Altura: ${ROTULO_DO_PAINEL[pId]} e ${ROTULO_DO_PAINEL[col.paineis[pIdx + 1]!]}`}
+                        tabIndex={0}
+                        data-testid={`divisor-vertical-${colIdx}-${pIdx}`}
+                        onPointerDown={arrastarVertical(colIdx, pIdx)}
+                        onKeyDown={teclarVertical(colIdx, pIdx)}
+                      />
+                    )}
+                  </Fragment>
+                );
+              })}
+            </div>
+            {colIdx < colunas.length - 1 && (
+              <div
+                class="divisor"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={`Largura da coluna ${colIdx + 1} e ${colIdx + 2}`}
+                tabIndex={0}
+                data-testid={`divisor-${colIdx}`}
+                onPointerDown={arrastar(colIdx)}
+                onKeyDown={teclar(colIdx)}
+              />
+            )}
+          </Fragment>
+        ))}
       </div>
       {checandoProntidaoSessao.value && (
         <DialogoChecagemSessao aoFechar={() => { checandoProntidaoSessao.value = false; }} />

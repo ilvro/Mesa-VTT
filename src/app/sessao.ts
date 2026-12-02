@@ -1,6 +1,6 @@
 import { computed, signal } from '@preact/signals';
 import { CATALOGO, type Entidade, type Ref } from '#mesa';
-import { alternarPainel, LAYOUT_PADRAO, lerLayout, type Layout, type PainelId } from '../dominio/layout.ts';
+import { alternarPainel, LAYOUT_PADRAO, lerLayout, painelVisivel, type Layout, type PainelId } from '../dominio/layout.ts';
 import { ESCOLHAS_VAZIAS, fichaAtiva, fichasDaSessao, lerEscolhas, mapaEscolhido, mapasDaCampanha, personagensComFicha, type EscolhasDaSessao } from '../dominio/sessao.ts';
 import { extrairPacoteDeCena, planejarAtivacaoDeCena } from '../dominio/cenas.ts';
 import { ehEncontro } from '../dominio/entidades.ts';
@@ -76,7 +76,7 @@ export function alternarFicha(fichaId: string): void {
 /** Antes de abrir uma coisa pelo roteiro: garante que o painel dela está à vista (e, para ficha e mapa, que a aba ou o mapa certo está escolhido). */
 export function garantirPainelPara(ref: Ref): void {
   const painel: PainelId | undefined = ref.app === 'atlas' ? 'atlas' : ref.app === 'ficha' ? 'fichas' : ref.app === 'jukebox' ? 'jukebox' : ref.app === 'mesa' && (ref.tipo === 'quadro' || ref.tipo === 'item') ? 'quadro' : undefined;
-  if (painel && !layout.value.find(p => p.id === painel)?.visivel) mudarLayout(alternarPainel(layout.value, painel));
+  if (painel && !painelVisivel(layout.value, painel)) mudarLayout(alternarPainel(layout.value, painel));
   if (ref.app === 'ficha') {
     const f = personagens.value.find(p => p.fichaId === ref.id);
     if (f) { if (!fichasEmAbas.value.some(x => x.fichaId === f.fichaId)) alternarFicha(f.fichaId); mudarEscolhas({ ativa: f.fichaId }); }
