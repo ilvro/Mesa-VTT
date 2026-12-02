@@ -65,8 +65,8 @@ export interface EstiloDetectado {
   exemploCorpo: string | null;
   exemploCorpoCurto: string | null;
   semantica: { fracao: number; itens: number; total: number };
-  /** Legenda do quadro todo (seção LEGENDA e trechos [..] destacados), ou null. */
-  legenda: Legenda | null;
+  /** Legenda do quadro todo (padrão fixo, seção LEGENDA e trechos [..] destacados). */
+  legenda: Legenda;
 }
 
 const TOLERANCIA_X = 24;
@@ -385,13 +385,12 @@ export function textoDoEstilo(e: EstiloDetectado | null): string {
   }
   if (e.grupos.length > MAX_GRUPOS) l.push(`(+${e.grupos.length - MAX_GRUPOS} estilos menores)`);
   const corpo = e.grupos.find((g) => g.papel === 'corpo')?.cor;
-  const cobertas = new Set(e.legenda?.entradas.map((x) => x.marcas.fundo) ?? []);
+  const cobertas = new Set(e.legenda.entradas.map((x) => x.marcas.fundo));
   const destaques = e.destaques.filter((d) => !cobertas.has(d.cor));
-  if (e.legenda) l.push(...textoDaLegenda(e.legenda));
+  l.push(...textoDaLegenda(e.legenda));
   if (destaques.length > 0) {
-    l.push(`${e.legenda ? 'Outros destaques (fundo do trecho, palpite)' : 'Destaques (fundo do trecho)'}: ${destaques.map((d) => `${d.cor}${d.corDaLetra !== corpo ? ` letra ${d.corDaLetra}` : ''}${d.uso ? ` ${d.uso}?` : ''} ${d.caracteres} car. (#${d.exemploCurto})`).join(' · ')}.`);
+    l.push(`Outros destaques (fundo do trecho, palpite): ${destaques.map((d) => `${d.cor}${d.corDaLetra !== corpo ? ` letra ${d.corDaLetra}` : ''}${d.uso ? ` ${d.uso}?` : ''} ${d.caracteres} car. (#${d.exemploCurto})`).join(' · ')}.`);
   }
-  if (!e.legenda) l.push('Sem legenda no quadro; pergunte ao mestre o que cada cor significa antes de escrever.');
   const pct = Math.round(e.semantica.fracao * 100);
   l.push(`Semântica: ${pct}% dos itens${e.semantica.fracao < LIMITE_SEMANTICA ? '; o mestre não usa post-its tipados; não use cores por tipo' : ''}.`);
   return l.join('\n');

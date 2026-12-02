@@ -77,8 +77,9 @@ test('caso real: o fluxo é centrado num eixo, com palpites de uso e fontes arre
   assert.match(texto, /pt-serif 45\.3 /);
   assert.match(texto, /pt-serif 14 /);
   assert.ok(!/\d\.\d{2,}/.test(texto.split('\n').filter((l) => /^(Título|Corpo)/.test(l)).join('\n')));
-  assert.match(texto, /rgb\(26,26,26\) letra #ffffff regras\/instruções\?/);
-  assert.match(texto, /rgb\(255,246,182\) narração\?/);
+  // Essas cores já estão na legenda fixa; não sobram como palpite.
+  assert.match(texto, /- segredo \[SEGREDO\]: fundo rgb\(26,26,26\), letra #ffffff/);
+  assert.ok(!/Outros destaques.*rgb\((26,26,26|255,246,182)\)/.test(texto), texto);
   const est = estruturaDaSecao(secao, itens).texto;
   assert.ok(!/\d\.\d{2,}/.test(est));
   assert.match(est, /pt-serif 45\.3 /);

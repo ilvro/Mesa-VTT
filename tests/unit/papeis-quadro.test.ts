@@ -132,11 +132,12 @@ test('o doc gerado passa pela validação do quadro', () => {
   assert.equal(JSON.stringify(ehTexto(itens[0]!).doc).includes('hardBreak'), true);
 });
 
-test('papel desconhecido lista os papéis; quadro sem legenda orienta', () => {
-  assert.throws(() => montar([{ formato: 'texto', papel: 'x', texto: 'a' }], comLegenda()), /papel 'x' não está na legenda do quadro; papéis: ponto, teste, loot/);
+test('papel desconhecido lista os papéis; quadro sem legenda usa a fixa', () => {
+  assert.throws(() => montar([{ formato: 'texto', papel: 'x', texto: 'a' }], comLegenda()), /papel 'x' não está na legenda do quadro; papéis: ponto, narracao, segredo/);
   assert.throws(() => montar([{ formato: 'texto', paragrafos: [{ trechos: [{ papel: 'nada', texto: 'a' }] }] }], comLegenda()), /papel 'nada' não está na legenda/);
-  assert.throws(() => montar([{ formato: 'rotulo', papel: 'ponto', texto: '[A]' }], semLegenda()), /o quadro não tem legenda; use como\/estilo_como ou pergunte ao mestre/i);
-  // Sem papel, o quadro sem legenda continua funcionando.
+  // Sem seção de legenda no quadro, os papéis vêm da legenda fixa da Mesa.
+  const r = ehTexto(montar([{ formato: 'rotulo', papel: 'ponto', texto: '[A]' }], semLegenda()).itens[0]!);
+  assert.match(JSON.stringify(r.doc), /rgb\(77,255,165\)/);
   assert.equal(montar([{ formato: 'texto', texto: 'ok' }], semLegenda()).itens.length, 1);
 });
 

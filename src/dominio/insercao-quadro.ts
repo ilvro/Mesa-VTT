@@ -2,7 +2,7 @@
 // de itens de referência; a posição é da Q9e e a medição de altura é injetada.
 import { caixaEnvolventeDeItem, type Caixa } from './camera.ts';
 import { estiloDoQuadro } from './estilo-do-quadro.ts';
-import type { Legenda } from './legenda-do-quadro.ts';
+import { legendaDoQuadro, type Legenda } from './legenda-do-quadro.ts';
 import { caixaDaSeta } from './setas.ts';
 import { blocosDaSecao, itensDaSecao } from './estrutura-da-secao.ts';
 import { luminanciaRelativa, PALETA_PADRAO, type PaletaDaCampanha } from './paleta.ts';
@@ -164,10 +164,9 @@ const semAcento = (t: string): string => t.normalize('NFD').replace(/\p{M}/gu, '
 /** Resolve `papel` na legenda do quadro (pelo nome normalizado ou pelo rótulo, sem colchetes nem acento) e devolve as marcas dela. */
 type ResolvePapel = (papel: string, onde: string) => Marca[];
 
-function marcasDoPapel(legenda: Legenda | null | undefined, papel: unknown, onde: string): Marca[] {
+function marcasDoPapel(legenda: Legenda, papel: unknown, onde: string): Marca[] {
   const nome = typeof papel === 'string' ? semAcento(papel.replace(/^\[|\]$/g, '')) : '';
   if (!nome) throw new Error(`${onde}: papel vazio.`);
-  if (!legenda || legenda.entradas.length === 0) throw new Error('O quadro não tem legenda; use como/estilo_como ou pergunte ao mestre.');
   const e = legenda.entradas.find((x) => semAcento(x.papel) === nome) ?? legenda.entradas.find((x) => semAcento(x.rotulo) === nome);
   if (!e) throw new Error(`${onde}: papel '${String(papel)}' não está na legenda do quadro; papéis: ${legenda.entradas.map((x) => x.papel).join(', ')}.`);
   const marcas: Marca[] = [];
@@ -273,9 +272,9 @@ export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaI
   };
 
   // Legenda do quadro todo (Q9k), só calculada se algum item usar `papel`.
-  const legendaDoQuadroTodo = (): Legenda | null => {
+  const legendaDoQuadroTodo = (): Legenda => {
     if (detectado === undefined) detectado = estiloDoQuadro(itens, secao);
-    return detectado?.legenda ?? null;
+    return detectado?.legenda ?? legendaDoQuadro(itens);
   };
 
   const resultado: Item[] = [];

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { estiloDoQuadro, textoDoEstilo } from '../../src/dominio/estilo-do-quadro.ts';
-import { legendaDoQuadro } from '../../src/dominio/legenda-do-quadro.ts';
+import { LEGENDA_PADRAO, legendaDoQuadro } from '../../src/dominio/legenda-do-quadro.ts';
 import type { DocRico, Item, NoRico } from '../../src/dominio/quadro.ts';
 import { estiloDeCaixaPadrao, estiloDeTextoPadrao, novaNotaAdesiva } from '../../src/dominio/quadro.ts';
 import { estimarTokens } from '../../src/dominio/texto-da-secao.ts';
@@ -57,12 +57,23 @@ function colunaDoPantano(): Item[] {
   ];
 }
 
-const porPapel = (itens: Item[]) => Object.fromEntries(legendaDoQuadro(itens)!.entradas.map((e) => [e.papel, e]));
+const porPapel = (itens: Item[]) => Object.fromEntries(legendaDoQuadro(itens).entradas.map((e) => [e.papel, e]));
+const PADRAO = LEGENDA_PADRAO.entradas.map((e) => e.papel);
 
-test('legenda real: 9 papéis, rótulo com marcas e descrição em texto simples', () => {
-  const l = legendaDoQuadro(guiaDeLegenda())!;
+test('sem nada no quadro: a legenda fixa da Mesa, com os 11 papéis', () => {
+  const l = legendaDoQuadro([]);
+  assert.equal(l.secaoTitulo, null);
+  assert.deepEqual(l.entradas.map((e) => e.papel), ['ponto', 'narracao', 'segredo', 'segredo-destaque', 'teste', 'loot', 'transicao', 'evento', 'gancho', 'condicao', 'fala']);
+  assert.ok(l.entradas.every((e) => e.origem === 'padrao' && e.exemplo === undefined));
+  const p = porPapel([]);
+  assert.deepEqual(p.teste!.marcas, { fundo: 'rgb(101,157,242)', letra: '#1a1a1a', negrito: true });
+  assert.deepEqual(p.fala!.marcas, { fundo: 'rgb(173,240,199)', letra: '#1a1a1a' });
+});
+
+test('legenda real: a seção do quadro sobrescreve os 9 papéis dela, o padrão completa', () => {
+  const l = legendaDoQuadro(guiaDeLegenda());
   assert.equal(l.secaoTitulo, 'GUIA DE LEGENDA');
-  assert.deepEqual(l.entradas.map((e) => e.papel), ['ponto', 'narracao', 'segredo', 'segredo-destaque', 'teste', 'loot', 'transicao', 'evento', 'gancho']);
+  assert.deepEqual(l.entradas.map((e) => e.papel), PADRAO);
   const p = porPapel(guiaDeLegenda());
   assert.deepEqual(p.ponto!.marcas, { fundo: 'rgb(77,255,165)', letra: '#1a1a1a', negrito: true });
   assert.equal(p.ponto!.descricao, undefined);
@@ -70,7 +81,9 @@ test('legenda real: 9 papéis, rótulo com marcas e descrição em texto simples
   assert.equal(p.narracao!.descricao, 'ler em voz alta (cores diversas)');
   assert.deepEqual(p.narracao!.marcas, { fundo: 'rgb(255,246,182)', negrito: true });
   assert.equal(p.teste!.exemplo, 'it-leg5');
-  assert.ok(l.entradas.every((e) => e.origem === 'legenda'));
+  assert.equal(p.ponto!.origem, 'legenda');
+  assert.equal(p.condicao!.origem, 'padrao');
+  assert.equal(p.fala!.origem, 'padrao');
 });
 
 test('duas variantes de segredo', () => {
@@ -79,68 +92,58 @@ test('duas variantes de segredo', () => {
   assert.equal(p['segredo-destaque']!.marcas.fundo, 'rgb(255,198,198)');
 });
 
-test('sem GUIA DE LEGENDA: os trechos destacados formam a legenda', () => {
-  const l = legendaDoQuadro(colunaDoPantano())!;
+test('sem GUIA DE LEGENDA: o padrão vale, e trechos destacados não o sobrescrevem', () => {
+  const l = legendaDoQuadro(colunaDoPantano());
   assert.equal(l.secaoTitulo, null);
-  assert.ok(l.entradas.every((e) => e.origem === 'marcadores'));
-  const p = porPapel(colunaDoPantano());
-  assert.equal(p.condicao!.exemplo, 'it-p-1');
-  assert.match(p.condicao!.descricao!, /agrupa com teste/);
-  assert.deepEqual(p.condicao!.marcas, { fundo: AZUL, negrito: true });
-  assert.equal(p.fala!.rotulo, 'AFOGADO');
-  assert.equal(p.fala!.marcas.fundo, 'rgb(173,240,199)');
-  assert.equal(p.teste!.exemplo, 'it-p-3');
-  assert.equal(p.teste!.rotulo, 'TECNOLOGIA');
-  // A combinação mais comum de LOOT (dourado, 2 de 3).
-  assert.equal(p.loot!.marcas.fundo, 'rgb(232,196,48)');
-  assert.equal(p.loot!.exemplo, 'it-p-4');
+  assert.deepEqual(l.entradas.map((e) => e.papel), PADRAO);
+  assert.ok(l.entradas.every((e) => e.origem === 'padrao'));
+  // O LOOT azul do mestre (1 de 3) não muda a cor fixa.
+  assert.equal(porPapel(colunaDoPantano()).loot!.marcas.fundo, 'rgb(232,196,48)');
 });
 
-test('a explícita vence o marcador discordante; o marcador completa o que falta', () => {
-  const itens = [...guiaDeLegenda(), ...colunaDoPantano()];
+test('marcador com rótulo fora do padrão acrescenta o papel', () => {
+  const itens = [...colunaDoPantano(), texto('it-p-7', 3000, 700, doc(trecho('[HANDOUT] a carta', fundo('rgb(1,2,3)'))), 14, 'pt-serif')];
   const p = porPapel(itens);
-  assert.equal(p.loot!.origem, 'legenda');
-  assert.equal(p.loot!.marcas.fundo, 'rgb(232,196,48)');
-  assert.equal(p.teste!.origem, 'legenda');
-  assert.equal(p.condicao!.origem, 'marcadores');
-  assert.equal(p.fala!.origem, 'marcadores');
+  assert.equal(p.handout!.origem, 'marcadores');
+  assert.equal(p.handout!.exemplo, 'it-p-7');
+  assert.equal(p.handout!.marcas.fundo, 'rgb(1,2,3)');
 });
 
-test('rótulo desconhecido vira papel com o próprio nome; sem destaque não entra', () => {
+test('rótulo desconhecido na seção vira papel com o próprio nome; sem destaque não entra', () => {
   const itens = [
     texto('it-t', 0, 0, doc(trecho('LEGENDA')), 70, 'pt-serif'),
     texto('it-x', 0, 70, doc(trecho('[PISTA FALSA]', fundo('rgb(1,2,3)')), trecho(' o que sobra'))),
     texto('it-y', 0, 120, doc(trecho('[SEM COR]'), trecho(' texto'))),
   ];
-  const l = legendaDoQuadro(itens)!;
-  assert.deepEqual(l.entradas.map((e) => e.papel), ['pista falsa']);
-  assert.equal(l.entradas[0]!.descricao, 'o que sobra');
+  const l = legendaDoQuadro(itens);
+  assert.deepEqual(l.entradas.map((e) => e.papel), [...PADRAO, 'pista falsa']);
+  assert.equal(l.entradas.at(-1)!.descricao, 'o que sobra');
 });
 
-test('itens do assistente nunca entram; sem nada destacado não há legenda', () => {
+test('itens do assistente nunca entram: só o padrão', () => {
   const itens = guiaDeLegenda().map((i) => ({ ...i, revisao: { origem: 'assistente' } }) as unknown as Item);
-  assert.equal(legendaDoQuadro(itens), null);
-  assert.equal(legendaDoQuadro([texto('it-a', 0, 0, doc(trecho('[LOOT] sem cor')))]), null);
+  const l = legendaDoQuadro(itens);
+  assert.equal(l.secaoTitulo, null);
+  assert.ok(l.entradas.every((e) => e.origem === 'padrao'));
 });
 
-test('quadro_estilo mostra a legenda real e a coluna do Pântano, abaixo de 600 tokens', () => {
+test('quadro_estilo mostra a legenda e a coluna do Pântano, abaixo de 600 tokens', () => {
   const itens = [...guiaDeLegenda(), ...colunaDoPantano()];
   const e = estiloDoQuadro(itens)!;
-  assert.equal(e.legenda!.entradas.length, 11);
+  assert.equal(e.legenda.entradas.length, 11);
   const t = textoDoEstilo(e);
   assert.ok(estimarTokens(t) < 600, `tokens: ${estimarTokens(t)}\n${t}`);
-  assert.match(t, /Legenda do mestre \("GUIA DE LEGENDA"/);
-  assert.match(t, /- narracao \[NARRAÇÃO\]: fundo rgb\(255,246,182\), negrito — ler em voz alta \(cores diversas\) \(#it-leg2\)/);
-  assert.match(t, /- condicao .*\[inferida\]/);
-  assert.ok(!t.includes('Sem legenda no quadro'));
+  assert.match(t, /Legenda do mestre \(fixa na Mesa/);
+  assert.match(t, /- narracao \[NARRAÇÃO\]: fundo rgb\(255,246,182\), negrito — ler em voz alta \(cores diversas\) \(#it-leg2\) \[do quadro\]/);
+  assert.match(t, /- condicao \[SE …\]: fundo rgb\(101,157,242\)/);
   // A seção da legenda descreve o estilo; a escolhida é a do material, mesmo com menos itens de texto.
   assert.ok(!/legenda/i.test(e.secaoTitulo), e.secaoTitulo);
 });
 
-test('sem legenda: palpites e aviso', () => {
+test('quadro sem seção nem marcadores: legenda fixa, destaques soltos viram palpite', () => {
   const e = estiloDoQuadro([texto('it-a', 0, 0, doc(trecho('Texto corrido.', fundo('rgb(200,200,200)'))))])!;
-  assert.equal(e.legenda, null);
+  assert.ok(e.legenda.entradas.every((x) => x.origem === 'padrao'));
   const t = textoDoEstilo(e);
-  assert.match(t, /Destaques \(fundo do trecho\)/);
-  assert.match(t, /Sem legenda no quadro; pergunte ao mestre/);
+  assert.match(t, /Outros destaques \(fundo do trecho, palpite\): rgb\(200,200,200\)/);
+  assert.ok(!t.includes('pergunte ao mestre'));
 });

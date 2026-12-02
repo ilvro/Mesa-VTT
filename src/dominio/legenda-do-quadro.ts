@@ -7,8 +7,9 @@ import { idsCurtos } from './texto-da-secao.ts';
 
 /**
  * Legenda do mestre: o que cada cor e cada rótulo entre colchetes significa no quadro. Duas fontes: a seção
- * "LEGENDA" (explícita) e os trechos `[…]` destacados dos itens do mestre (marcadores). A explícita vence; os
- * marcadores completam os papéis que faltarem. Puro: sem UI, DOM, signals nem banco.
+ * "LEGENDA" (explícita) e os trechos `[…]` destacados dos itens do mestre (marcadores). A base é a `LEGENDA_PADRAO`,
+ * fixa no código e válida para todo quadro; a seção LEGENDA do quadro sobrescreve por papel; os marcadores só completam
+ * papéis que nenhum dos dois tem. Puro: sem UI, DOM, signals nem banco.
  */
 
 export interface MarcasDaLegenda {
@@ -25,17 +26,41 @@ export interface EntradaDaLegenda {
   rotulo: string;
   descricao?: string;
   marcas: MarcasDaLegenda;
-  /** Id completo do item de exemplo. */
-  exemplo: string;
-  exemploCurto: string;
-  origem: 'legenda' | 'marcadores';
+  /** Id completo do item de exemplo (as entradas padrão não têm). */
+  exemplo?: string;
+  exemploCurto?: string;
+  origem: 'padrao' | 'legenda' | 'marcadores';
 }
 
 export interface Legenda {
-  /** Título da seção da legenda explícita, ou null se só há marcadores. */
+  /** Título da seção da legenda explícita, ou null se o quadro não tem uma. */
   secaoTitulo: string | null;
   entradas: EntradaDaLegenda[];
 }
+
+const ESCURO = '#1a1a1a';
+
+function padrao(papel: string, rotulo: string, fundo: string, letra: string, descricao?: string, negrito = true): EntradaDaLegenda {
+  return { papel, rotulo, ...(descricao ? { descricao } : {}), marcas: { fundo, letra, ...(negrito ? { negrito: true } : {}) }, origem: 'padrao' };
+}
+
+/** Legenda do mestre fixa no código: vale para todo quadro, com ou sem seção LEGENDA. */
+export const LEGENDA_PADRAO: Legenda = {
+  secaoTitulo: null,
+  entradas: [
+    padrao('ponto', 'PONTO DE INTERAÇÃO', 'rgb(77,255,165)', ESCURO),
+    padrao('narracao', 'NARRAÇÃO', 'rgb(255,246,182)', ESCURO, 'ler em voz alta (cores diversas)'),
+    padrao('segredo', 'SEGREDO', 'rgb(26,26,26)', '#ffffff', 'apenas para o mestre'),
+    padrao('segredo-destaque', 'SEGREDO', 'rgb(255,198,198)', ESCURO, 'apenas para o mestre (destaque)'),
+    padrao('teste', 'TESTE E DT', 'rgb(101,157,242)', ESCURO, 'ou condicional'),
+    padrao('loot', 'LOOT', 'rgb(232,196,48)', ESCURO, 'item ou documento'),
+    padrao('transicao', 'TRANSIÇÃO', 'rgb(143,127,238)', ESCURO, 'música/cena Jukebox ou luz'),
+    padrao('evento', 'EVENTO', 'rgb(254,159,77)', ESCURO, 'algo que acontece depois de um tempo'),
+    padrao('gancho', 'GANCHO', 'rgb(255,25,100)', '#ffffff', 'a definir com os jogadores ou condicional'),
+    padrao('condicao', 'SE …', 'rgb(101,157,242)', ESCURO, 'condição; agrupada com teste'),
+    padrao('fala', 'NOME', 'rgb(173,240,199)', ESCURO, 'fala de NPC', false),
+  ],
+};
 
 const semAcento = (t: string): string => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
@@ -52,8 +77,6 @@ const PAPEL_POR_NOME: Record<string, string> = {
   gancho: 'gancho',
   handout: 'handout',
 };
-
-const NOTA_CONDICAO = 'condição; a legenda do mestre agrupa com teste ("ou condicional")';
 
 interface Segmento {
   texto: string;
@@ -192,13 +215,18 @@ function ocorrenciasDeMarcadores(itens: readonly Item[]): Ocorrencia[] {
   return r;
 }
 
-/** Legenda do quadro todo (itens do mestre), ou null se não houver legenda explícita nem trechos destacados. */
-export function legendaDoQuadro(itens: readonly Item[]): Legenda | null {
+/** Legenda do quadro todo: padrão como base, a seção LEGENDA sobrescreve por papel, os marcadores completam o que falta. */
+export function legendaDoQuadro(itens: readonly Item[]): Legenda {
   const curtos = idsCurtos(itens.map((i) => i.id));
   const curto = (id: string) => curtos.get(id) ?? id.slice(0, 6);
   const mestre = itens.filter((i) => i.revisao?.origem !== 'assistente');
   const explicita = entradasExplicitas(mestre, curto);
-  const entradas: EntradaDaLegenda[] = explicita ? [...explicita.entradas] : [];
+  const entradas: EntradaDaLegenda[] = LEGENDA_PADRAO.entradas.map((e) => ({ ...e }));
+  for (const e of explicita?.entradas ?? []) {
+    const k = entradas.findIndex((x) => x.papel === e.papel);
+    if (k >= 0) entradas[k] = e;
+    else entradas.push(e);
+  }
 
   // Marcadores: fora da seção da legenda, que já foi lida; a combinação de marcas mais comum de cada papel.
   let doMarcador = mestre;
@@ -224,17 +252,8 @@ export function legendaDoQuadro(itens: readonly Item[]): Legenda | null {
     for (const c of combos.values()) if (!melhor || c.n > melhor.n) melhor = c;
     if (!melhor) continue;
     const { oc } = melhor;
-    entradas.push({
-      papel,
-      rotulo: oc.rotulo,
-      ...(papel === 'condicao' ? { descricao: NOTA_CONDICAO } : {}),
-      marcas: oc.marcas,
-      exemplo: oc.item,
-      exemploCurto: curto(oc.item),
-      origem: 'marcadores',
-    });
+    entradas.push({ papel, rotulo: oc.rotulo, marcas: oc.marcas, exemplo: oc.item, exemploCurto: curto(oc.item), origem: 'marcadores' });
   }
-  if (entradas.length === 0) return null;
   return { secaoTitulo: explicita?.titulo ?? null, entradas };
 }
 
@@ -249,13 +268,12 @@ function descreverMarcas(m: MarcasDaLegenda): string {
 
 /** Linhas de texto da legenda (cabeçalho e uma linha por papel), para `quadro_estilo`. */
 export function textoDaLegenda(l: Legenda): string[] {
-  const cab = l.secaoTitulo !== null
-    ? `Legenda do mestre ("${l.secaoTitulo}", vale para o quadro todo; "inferida" = só vista nos trechos [..] destacados):`
-    : 'Legenda inferida dos trechos [..] destacados do mestre (vale para o quadro todo; não há seção de legenda):';
+  const cab = 'Legenda do mestre (fixa na Mesa; o quadro pode sobrescrever com uma seção LEGENDA):';
   const linhas = l.entradas.map((e) => {
     const d = e.descricao ? ` — ${e.descricao}` : '';
-    const o = e.origem === 'marcadores' ? ' [inferida]' : '';
-    return `- ${e.papel} [${e.rotulo}]: ${descreverMarcas(e.marcas)}${d} (#${e.exemploCurto})${o}`;
+    const ex = e.exemploCurto ? ` (#${e.exemploCurto})` : '';
+    const o = e.origem === 'marcadores' ? ' [inferida]' : e.origem === 'legenda' ? ' [do quadro]' : '';
+    return `- ${e.papel} [${e.rotulo}]: ${descreverMarcas(e.marcas)}${d}${ex}${o}`;
   });
   return [cab, ...linhas];
 }
