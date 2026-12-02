@@ -96,27 +96,73 @@ export async function iniciarCampanhas(idb?: IDBFactory): Promise<void> {
   await atualizar();
 }
 
-/** Relê campanhas e entidades: o Atlas, a Ficha e os outros escrevem no mesmo banco por fora. */
-export async function atualizar(): Promise<void> {
+export function assinaturaCampanha(c: Campanha | null): string {
+  if (!c) return '';
+  return `${c.id}\0${c.atualizadaEm}\0${c.nome}\0${c.sistema}\0${c.tema ?? ''}\0${c.capa ?? ''}\0${(c.elenco ?? []).join(',')}`;
+}
+
+export function assinaturaCampanhas(lista: readonly Campanha[]): string {
+  return lista.map(assinaturaCampanha).join('\n');
+}
+
+export function assinaturaEntidades(lista: readonly Entidade[]): string {
+  return lista
+    .map(e => `${e.id}\0${e.campanhaId}\0${e.tipo}\0${e.nome}\0${e.atualizadaEm}\0${e.tags.join(',')}\0${e.refs.map(r => `${r.app}:${r.tipo}:${r.id}`).join(',')}\0${e.notas.length}\0${e.retrato ? e.retrato.size : 0}`)
+    .join('\n');
+}
+
+export function assinaturaLigacoes(lista: readonly Ligacao[]): string {
+  return lista
+    .map(l => `${l.id}\0${l.campanhaId}\0${l.tipo}\0${l.de.app}:${l.de.tipo}:${l.de.id}\0${l.para.app}:${l.para.tipo}:${l.para.id}\0${l.criadaEm}`)
+    .join('\n');
+}
+
+let atualizacaoEmVoo: Promise<void> | null = null;
+let atualizacaoPendente = false;
+
+async function executarAtualizacao(): Promise<void> {
   const r = repositorio.value;
   if (!r || r === 'indisponivel') return;
   try {
     const lista = await r.listarCampanhas();
-    campanhas.value = lista;
+    if (assinaturaCampanhas(lista) !== assinaturaCampanhas(campanhas.value)) {
+      campanhas.value = lista;
+    }
     const id = lerCampanhaAtivaSalva();
     const ativa = lista.find(c => c.id === id) ?? null;
-    if (
-      ativa?.id !== campanhaAtiva.value?.id ||
-      ativa?.atualizadaEm !== campanhaAtiva.value?.atualizadaEm ||
-      JSON.stringify(ativa?.elenco) !== JSON.stringify(campanhaAtiva.value?.elenco)
-    ) {
+    const mudouAtiva = ativa?.id !== campanhaAtiva.value?.id;
+    if (assinaturaCampanha(ativa) !== assinaturaCampanha(campanhaAtiva.value)) {
       campanhaAtiva.value = ativa;
     }
-    entidades.value = ativa ? await r.listarEntidades(ativa.id) : [];
-    ligacoes.value = ativa ? await r.listarLigacoes(ativa.id) : [];
+    const novasEntidades = ativa ? await r.listarEntidades(ativa.id) : [];
+    if (mudouAtiva || assinaturaEntidades(novasEntidades) !== assinaturaEntidades(entidades.value)) {
+      entidades.value = novasEntidades;
+    }
+    const novasLigacoes = ativa ? await r.listarLigacoes(ativa.id) : [];
+    if (mudouAtiva || assinaturaLigacoes(novasLigacoes) !== assinaturaLigacoes(ligacoes.value)) {
+      ligacoes.value = novasLigacoes;
+    }
     if (selecionadaId.value && !entidades.value.some(e => e.id === selecionadaId.value)) selecionadaId.value = null;
     if (ativa) agendarSincronizacaoCofre(ativa, entidades.value, ligacoes.value);
   } catch (erro) { console.warn('Mesa: não consegui atualizar', erro); }
+}
+
+/** Relê campanhas e entidades: o Atlas, a Ficha e os outros escrevem no mesmo banco por fora. */
+export async function atualizar(): Promise<void> {
+  if (atualizacaoEmVoo) {
+    atualizacaoPendente = true;
+    return atualizacaoEmVoo;
+  }
+  const executar = async (): Promise<void> => {
+    do {
+      atualizacaoPendente = false;
+      await executarAtualizacao();
+    } while (atualizacaoPendente);
+  };
+  atualizacaoEmVoo = executar().finally(() => {
+    atualizacaoEmVoo = null;
+  });
+  return atualizacaoEmVoo;
 }
 
 /** Quando outra aba troca a campanha ativa, esta acompanha. */

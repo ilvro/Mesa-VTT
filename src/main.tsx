@@ -18,6 +18,7 @@ import '@fontsource/jetbrains-mono/700-italic.css';
 import './ui/estilo.css';
 import './ui/tutor.css';
 import { render } from 'preact';
+import { barramentoDaMesa } from './app/barramento.ts';
 import { atualizar, campanhaAtiva, campanhas, entidades, iniciarCampanhas, observarCampanhaAtiva, repositorio } from './app/campanha.ts';
 import { iniciarFocoDoQuadro } from './app/foco-do-quadro.ts';
 import { sondarAplicativos } from './app/inventario.ts';
@@ -50,11 +51,22 @@ if (ehAtividadeDoDiscord(location.search)) {
   void iniciarCampanhas();
   observarCampanhaAtiva();
 
-  // O Atlas, a Ficha e os outros escrevem no mesmo banco por fora: relê ao voltar para a aba e, com a aba à vista, a cada poucos segundos.
+  // O Atlas, a Ficha e os outros escrevem no mesmo banco por fora: relê ao voltar para a aba, em mutações do barramento e num fallback espaçado.
   const reler = () => { if (document.visibilityState === 'visible') void atualizar(); };
   document.addEventListener('visibilitychange', reler);
   window.addEventListener('focus', reler);
-  setInterval(reler, 3000);
+  const EVENTOS_MUTACAO = new Set([
+    'atelie.documento-salvo',
+    'atlas.cena-aberta',
+    'atlas.revelado',
+    'atlas.inspecionado',
+    'ficha.recursos',
+    'mesa.sessao-iniciada',
+  ]);
+  barramentoDaMesa()?.ouvir('*', evento => {
+    if (EVENTOS_MUTACAO.has(evento.tipo)) reler();
+  });
+  setInterval(reler, 30_000);
 
   // O inventário de aplicativos: sonda ao abrir a aba (ver o cabeçalho) e, com a tela à vista, a cada 5 s (um aplicativo que sobe depois aparece sozinho).
   setInterval(() => { if (document.visibilityState === 'visible' && tela.value === 'aplicativos') void sondarAplicativos(); }, 5000);

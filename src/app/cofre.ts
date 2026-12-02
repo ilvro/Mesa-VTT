@@ -16,7 +16,16 @@ import {
   markdownParaEntidade,
 } from '../dominio/cofre.ts';
 import { avisar } from './toasts.ts';
-import { campanhaAtiva, escolherCampanha, ligacoes, entidades, obterRepositorio } from './campanha.ts';
+import {
+  assinaturaCampanha,
+  assinaturaEntidades,
+  assinaturaLigacoes,
+  campanhaAtiva,
+  escolherCampanha,
+  ligacoes,
+  entidades,
+  obterRepositorio,
+} from './campanha.ts';
 
 export interface DriverDePasta {
   lerTexto(caminho: string): Promise<string | null>;
@@ -229,23 +238,47 @@ export const ultimaSincronizacao = signal<number | null>(null);
 
 let driverAtivo: DriverDePasta | null = null;
 let timerDebounce: ReturnType<typeof setTimeout> | null = null;
+let ultimaSincronizacaoCofre: { driver: DriverDePasta; campanhaId: string; assinatura: string } | null = null;
+
+function assinaturaSincronizacaoCofre(
+  campanha: Campanha,
+  entidadesLista: readonly Entidade[],
+  ligacoesLista: readonly Ligacao[],
+  sessoesLista: readonly Sessao[],
+): string {
+  const sigSessoes = sessoesLista.map(s => `${s.id}\0${s.atualizadaEm}\0${s.nome}`).join('\n');
+  return `${assinaturaCampanha(campanha)}\n---\n${assinaturaEntidades(entidadesLista)}\n---\n${assinaturaLigacoes(ligacoesLista)}\n---\n${sigSessoes}`;
+}
 
 export function obterDriverAtivo(): DriverDePasta | null {
   return driverAtivo;
 }
 
 export function definirDriverAtivo(driver: DriverDePasta | null, nome: string | null = null): void {
+  if (timerDebounce) {
+    clearTimeout(timerDebounce);
+    timerDebounce = null;
+  }
   driverAtivo = driver;
+  ultimaSincronizacaoCofre = null;
   pastaVinculadaNome.value = nome;
 }
 
 /** Dispara a sincronização imediata com a pasta conectada (se houver). */
 export async function sincronizarAgora(): Promise<ResultadoSincronizacao | null> {
   const c = campanhaAtiva.value;
-  if (!driverAtivo || !c) return null;
+  const driver = driverAtivo;
+  if (!driver || !c) return null;
   sincronizandoCofre.value = true;
   try {
-    const res = await sincronizarCampanhaComPasta(driverAtivo, c, entidades.value, ligacoes.value);
+    const ents = entidades.value;
+    const ligs = ligacoes.value;
+    const res = await sincronizarCampanhaComPasta(driver, c, ents, ligs);
+    ultimaSincronizacaoCofre = {
+      driver,
+      campanhaId: c.id,
+      assinatura: assinaturaSincronizacaoCofre(c, ents, ligs, []),
+    };
     ultimaSincronizacao.value = Date.now();
     return res;
   } catch (erro) {
@@ -263,12 +296,31 @@ export function agendarSincronizacaoCofre(
   ligacoesLista: readonly Ligacao[] = [],
   sessoesLista: readonly Sessao[] = [],
 ): void {
-  if (!driverAtivo || !campanha) return;
+  const driver = driverAtivo;
+  if (!driver || !campanha) return;
+  const assinatura = assinaturaSincronizacaoCofre(campanha, entidadesLista, ligacoesLista, sessoesLista);
+  if (
+    ultimaSincronizacaoCofre &&
+    ultimaSincronizacaoCofre.driver === driver &&
+    ultimaSincronizacaoCofre.campanhaId === campanha.id &&
+    ultimaSincronizacaoCofre.assinatura === assinatura
+  ) {
+    return;
+  }
   if (timerDebounce) clearTimeout(timerDebounce);
   timerDebounce = setTimeout(() => {
+    timerDebounce = null;
+    if (driverAtivo !== driver) return;
     sincronizandoCofre.value = true;
-    void sincronizarCampanhaComPasta(driverAtivo!, campanha, entidadesLista, ligacoesLista, sessoesLista)
+    void sincronizarCampanhaComPasta(driver, campanha, entidadesLista, ligacoesLista, sessoesLista)
       .then(res => {
+        if (driverAtivo === driver) {
+          ultimaSincronizacaoCofre = {
+            driver,
+            campanhaId: campanha.id,
+            assinatura,
+          };
+        }
         ultimaSincronizacao.value = Date.now();
         return res;
       })
