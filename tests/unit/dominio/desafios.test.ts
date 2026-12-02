@@ -79,6 +79,85 @@ describe('dominio/desafios — Lockpick', () => {
     assert.deepEqual(apos2.tentativas[1]?.feedbackPosicional, ['exato', 'exato', 'exato']);
   });
 
+  it('modo trancado só revela feedback do pino quando a tranca dependente está correta (inclusive em cadeia)', () => {
+    const inicial = criarLockpick({
+      id: 'lp-trancado',
+      dados: [6, 6, 6],
+      senha: [3, 5, 2],
+      dependencias: [null, 0, 1],
+      modoDica: 'posicional',
+      maxTentativas: 5,
+      agora: 100,
+    });
+
+    // Pino 1 errado: Pinos 2 e 3 ficam trancados mesmo se acertar o valor de Pino 2!
+    const t1 = aplicarAcaoDesafio(
+      inicial,
+      { tipo: 'lockpick.tentar', valores: [4, 5, 2], autorNome: 'Arthur' },
+      { agora: 200 },
+    ) as DesafioLockpick;
+    assert.deepEqual(t1.tentativas[0]?.feedbackPosicional, ['baixo', 'trancado', 'trancado']);
+
+    // Pino 1 exato, Pino 2 errado: Pino 2 destranca (mostra 'alto'), Pino 3 segue trancado
+    const t2 = aplicarAcaoDesafio(
+      t1,
+      { tipo: 'lockpick.tentar', valores: [3, 2, 2], autorNome: 'Arthur' },
+      { agora: 300 },
+    ) as DesafioLockpick;
+    assert.deepEqual(t2.tentativas[1]?.feedbackPosicional, ['exato', 'alto', 'trancado']);
+
+    // Pinos 1 e 2 exatos, Pino 3 errado: Pino 3 destranca (mostra 'baixo')
+    const t3 = aplicarAcaoDesafio(
+      t2,
+      { tipo: 'lockpick.tentar', valores: [3, 5, 6], autorNome: 'Arthur' },
+      { agora: 400 },
+    ) as DesafioLockpick;
+    assert.deepEqual(t3.tentativas[2]?.feedbackPosicional, ['exato', 'exato', 'baixo']);
+
+    // Todos exatos: abre a fechadura
+    const t4 = aplicarAcaoDesafio(
+      t3,
+      { tipo: 'lockpick.tentar', valores: [3, 5, 2], autorNome: 'Arthur' },
+      { agora: 500 },
+    ) as DesafioLockpick;
+    assert.equal(t4.status, 'aberto');
+    assert.deepEqual(t4.tentativas[3]?.feedbackPosicional, ['exato', 'exato', 'exato']);
+  });
+
+  it('modo trancado também separa contagem no modo embaralhado e quebra ciclos inválidos', () => {
+    const emb = criarLockpick({
+      id: 'lp-trancado-emb',
+      dados: [6, 6, 6],
+      senha: [3, 5, 2],
+      dependencias: [null, 0, null],
+      modoDica: 'embaralhado',
+      maxTentativas: 5,
+      agora: 100,
+    });
+    const t1 = aplicarAcaoDesafio(
+      emb,
+      { tipo: 'lockpick.tentar', valores: [4, 5, 2], autorNome: 'Arthur' },
+      { agora: 200 },
+    ) as DesafioLockpick;
+    // Pino 1: baixo; Pino 2: trancado (mesmo com valor 5!); Pino 3: exato
+    assert.deepEqual(t1.tentativas[0]?.feedbackEmbaralhado, {
+      corretos: 1,
+      altos: 0,
+      baixos: 1,
+      trancados: 1,
+    });
+
+    // Ciclo 0 -> 1 -> 0 é quebrado na criação
+    const ciclico = criarLockpick({
+      id: 'lp-ciclo',
+      dados: [6, 6],
+      senha: [2, 4],
+      dependencias: [1, 0],
+      agora: 100,
+    });
+    assert.equal(ciclico.dependencias?.[0], null);
+  });
+
   it('modo embaralhado conta corretos, altos e baixos sem revelar posições e trava ao esgotar tentativas', () => {
     const inicial = criarLockpick({
       id: 'lp-2',

@@ -338,6 +338,21 @@
   animation: ovd-pulso-perigo 1.6s ease-in-out infinite;
 }
 
+.ovd-dado[data-variante='trancado'] .ovd-dado-forma {
+  fill: #24212d;
+  stroke: #7a738a;
+  stroke-dasharray: 4 2;
+}
+.ovd-dado[data-variante='trancado'] .ovd-dado-faceta {
+  stroke: #565066;
+}
+.ovd-dado[data-variante='trancado'] .ovd-dado-valor {
+  fill: #b6afc4;
+}
+.ovd-dado[data-variante='trancado'] {
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.55));
+}
+
 .ovd-dado-interativo {
   cursor: ns-resize;
 }
@@ -560,6 +575,30 @@
   color: var(--ovd-ciano);
 }
 
+.ovd-lock-dica-pino[data-res='trancado'] {
+  background: rgba(122, 115, 138, 0.18);
+  border: 1px solid rgba(154, 146, 173, 0.45);
+  color: #c5bed4;
+}
+
+.ovd-lock-pino-dep {
+  padding: 2px 7px;
+  border-radius: 999px;
+  font: 700 9.5px var(--ovd-fonte-corpo);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(122, 115, 138, 0.18);
+  border: 1px solid rgba(154, 146, 173, 0.35);
+  color: #bfb8ce;
+  white-space: nowrap;
+}
+
+.ovd-lock-pino-dep[data-aberto='1'] {
+  background: rgba(83, 226, 161, 0.12);
+  border-color: rgba(83, 226, 161, 0.4);
+  color: var(--ovd-esmeralda);
+}
+
 .ovd-lock-harpa {
   position: relative;
   z-index: 2;
@@ -586,6 +625,7 @@
 .ovd-lock-harpa-linha[data-tom='acerto'] { color: var(--ovd-esmeralda); }
 .ovd-lock-harpa-linha[data-tom='alto'] { color: var(--ovd-ouro); }
 .ovd-lock-harpa-linha[data-tom='baixo'] { color: var(--ovd-ciano); }
+.ovd-lock-harpa-linha[data-tom='trancado'] { color: #b6afc4; }
 
 .ovd-lock-banner {
   position: relative;

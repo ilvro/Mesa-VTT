@@ -11,14 +11,14 @@ export interface ParticipanteDesafio {
 }
 
 export type ModoDicaLockpick = 'posicional' | 'embaralhado';
-export type ResultadoPino = 'baixo' | 'exato' | 'alto';
+export type ResultadoPino = 'baixo' | 'exato' | 'alto' | 'trancado';
 
 export interface TentativaLockpick {
   numero: number;
   autorNome: string;
   valores: number[];
   feedbackPosicional?: ResultadoPino[];
-  feedbackEmbaralhado?: { corretos: number; altos: number; baixos: number };
+  feedbackEmbaralhado?: { corretos: number; altos: number; baixos: number; trancados?: number };
   acertou: boolean;
   em: number;
 }
@@ -29,6 +29,8 @@ export interface DesafioLockpick {
   titulo: string;
   dados: LadosDado[];
   senha?: number[];
+  /** Índice (0-based) do pino que precisa estar exato para revelar o feedback deste pino, ou `null` se livre. */
+  dependencias?: Array<number | null>;
   modoDica: ModoDicaLockpick;
   maxTentativas: number;
   tentativasPorRodada?: number;
@@ -201,11 +203,40 @@ function clonarParticipante(p: ParticipanteDesafio): ParticipanteDesafio {
   return copia;
 }
 
+function sanitizarDependenciasLockpick(
+  deps: ReadonlyArray<number | null | undefined> | undefined,
+  tamanho: number,
+): Array<number | null> | undefined {
+  if (!deps || deps.length === 0) return undefined;
+  const normalizadas: Array<number | null> = Array.from({ length: tamanho }, (_, idx) => {
+    const dep = deps[idx];
+    if (typeof dep !== 'number' || !Number.isInteger(dep) || dep < 0 || dep >= tamanho || dep === idx) {
+      return null;
+    }
+    return dep;
+  });
+  // Quebra ciclos caso existam
+  for (let i = 0; i < tamanho; i++) {
+    const visitados = new Set<number>([i]);
+    let atual = normalizadas[i];
+    while (atual !== null && atual !== undefined) {
+      if (visitados.has(atual)) {
+        normalizadas[i] = null;
+        break;
+      }
+      visitados.add(atual);
+      atual = normalizadas[atual];
+    }
+  }
+  return normalizadas.some((d) => d !== null) ? normalizadas : undefined;
+}
+
 export function criarLockpick(opts: {
   id?: string;
   titulo?: string;
   dados?: LadosDado[];
   senha?: number[];
+  dependencias?: Array<number | null>;
   modoDica?: ModoDicaLockpick;
   maxTentativas?: number;
   tentativasPorRodada?: number;
@@ -221,6 +252,7 @@ export function criarLockpick(opts: {
     const informado = opts.senha?.[idx];
     return informado !== undefined ? limitarValorDado(informado, lados) : rolarDado(lados, rng);
   });
+  const dependencias = sanitizarDependenciasLockpick(opts.dependencias, dados.length);
 
   const desafio: DesafioLockpick = {
     tipo: 'lockpick',
@@ -235,6 +267,9 @@ export function criarLockpick(opts: {
     status: 'ativo',
     atualizadoEm: agora,
   };
+  if (dependencias) {
+    desafio.dependencias = dependencias;
+  }
   if (opts.tentativasPorRodada !== undefined) {
     desafio.tentativasPorRodada = Math.max(1, Math.floor(opts.tentativasPorRodada));
   }
@@ -402,14 +437,27 @@ function aplicarLockpick(
 
   const senha = desafio.senha;
   const valores = senha.map((_, idx) => acao.valores[idx] ?? 0);
-  const feedbackPosicional: ResultadoPino[] = senha.map((alvo, idx) => {
+  const bruto: Array<'baixo' | 'exato' | 'alto'> = senha.map((alvo, idx) => {
     const palpite = valores[idx] ?? 0;
     if (palpite > alvo) return 'baixo';
     if (palpite < alvo) return 'alto';
     return 'exato';
   });
 
-  const acertou = feedbackPosicional.every((r) => r === 'exato');
+  const deps = desafio.dependencias;
+  const destrancado = (idx: number, visitados = new Set<number>()): boolean => {
+    const dep = deps?.[idx];
+    if (dep === null || dep === undefined) return true;
+    if (dep < 0 || dep >= senha.length || dep === idx || visitados.has(dep)) return true;
+    visitados.add(idx);
+    return bruto[dep] === 'exato' && destrancado(dep, visitados);
+  };
+
+  const feedbackPosicional: ResultadoPino[] = bruto.map((res, idx) =>
+    destrancado(idx) ? res : 'trancado',
+  );
+
+  const acertou = bruto.every((r) => r === 'exato');
   const tentativa: TentativaLockpick = {
     numero: desafio.tentativas.length + 1,
     autorNome: acao.autorNome,
@@ -424,12 +472,17 @@ function aplicarLockpick(
     let corretos = 0;
     let altos = 0;
     let baixos = 0;
+    let trancados = 0;
     for (const r of feedbackPosicional) {
       if (r === 'exato') corretos += 1;
       else if (r === 'alto') altos += 1;
-      else baixos += 1;
+      else if (r === 'baixo') baixos += 1;
+      else trancados += 1;
     }
-    tentativa.feedbackEmbaralhado = { corretos, altos, baixos };
+    tentativa.feedbackEmbaralhado =
+      trancados > 0
+        ? { corretos, altos, baixos, trancados }
+        : { corretos, altos, baixos };
   }
 
   const tentativas = [...desafio.tentativas, tentativa];

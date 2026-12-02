@@ -49,6 +49,7 @@ interface PresetLockpick {
   resumo: string;
   titulo: string;
   dados: LadosDado[];
+  dependencias?: Array<number | null>;
   modoDica: ModoDicaLockpick;
   maxTentativas: number;
 }
@@ -98,6 +99,16 @@ const PRESETS_LOCKPICK: readonly PresetLockpick[] = [
     dados: [4, 4, 4],
     modoDica: 'embaralhado',
     maxTentativas: 6,
+  },
+  {
+    id: 'trancada',
+    nome: 'Cadeia Trancada',
+    resumo: '3d6 • 2→1, 3→2',
+    titulo: 'Fechadura Encadeada',
+    dados: [6, 6, 6],
+    dependencias: [null, 0, 1],
+    modoDica: 'posicional',
+    maxTentativas: 7,
   },
 ];
 
@@ -220,6 +231,7 @@ function ConfigLockpick({
   const [presetId, setPresetId] = useState<string>('simples');
   const [titulo, setTitulo] = useState('Fechadura Simples');
   const [dados, setDados] = useState<LadosDado[]>([6, 6, 6]);
+  const [dependencias, setDependencias] = useState<Array<number | null>>([null, null, null]);
   const [modoDica, setModoDica] = useState<ModoDicaLockpick>('posicional');
   const [maxTentativas, setMaxTentativas] = useState(5);
   const [autorizadoId, setAutorizadoId] = useState<string>('');
@@ -231,6 +243,7 @@ function ConfigLockpick({
     setPresetId(p.id);
     setTitulo(p.titulo);
     setDados([...p.dados]);
+    setDependencias(p.dados.map((_, i) => p.dependencias?.[i] ?? null));
     setModoDica(p.modoDica);
     setMaxTentativas(p.maxTentativas);
     setSenhaManual(p.dados.map(() => 1));
@@ -239,6 +252,7 @@ function ConfigLockpick({
   const adicionarDado = (lados: LadosDado) => {
     setPresetId('');
     setDados((prev) => [...prev, lados]);
+    setDependencias((prev) => [...prev, null]);
     setSenhaManual((prev) => [...prev, 1]);
   };
 
@@ -246,6 +260,14 @@ function ConfigLockpick({
     if (dados.length <= 1) return;
     setPresetId('');
     setDados((prev) => prev.filter((_, i) => i !== idx));
+    setDependencias((prev) =>
+      prev
+        .filter((_, i) => i !== idx)
+        .map((dep) => {
+          if (dep === null || dep === idx) return null;
+          return dep > idx ? dep - 1 : dep;
+        }),
+    );
     setSenhaManual((prev) => prev.filter((_, i) => i !== idx));
   };
 
@@ -267,6 +289,9 @@ function ConfigLockpick({
       maxTentativas,
       jogadorAutorizadoId: selecionado ? (selecionado.donoDiscordId ?? selecionado.id) : null,
     };
+    if (dependencias.some((d) => d !== null)) {
+      opts.dependencias = [...dependencias];
+    }
     if (selecionado) {
       opts.jogadorAutorizadoNome = selecionado.nome;
       opts.tentativasPorRodada = tentativasPorRodada;
@@ -350,6 +375,40 @@ function ConfigLockpick({
           ))}
         </div>
       </div>
+
+      {dados.length > 1 && (
+        <div class="desafios-campo">
+          <span>Modo trancado — pino só revela dica se outro estiver correto</span>
+          <div class="desafios-grade-campos">
+            {dados.map((lados, idx) => (
+              <label key={idx} class="desafios-campo">
+                Pino {idx + 1} (d{lados})
+                <select
+                  value={dependencias[idx] === null || dependencias[idx] === undefined ? '' : String(dependencias[idx])}
+                  onChange={(ev) => {
+                    const bruto = ev.currentTarget.value;
+                    setPresetId('');
+                    setDependencias((prev) => {
+                      const prox = dados.map((_, i) => prev[i] ?? null);
+                      prox[idx] = bruto === '' ? null : Number(bruto);
+                      return prox;
+                    });
+                  }}
+                >
+                  <option value="">Livre</option>
+                  {dados.map((_, outroIdx) =>
+                    outroIdx === idx ? null : (
+                      <option key={outroIdx} value={String(outroIdx)}>
+                        🔒 Trancado até Pino {outroIdx + 1}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div class="desafios-grade-campos">
         <div class="desafios-campo">
@@ -983,6 +1042,9 @@ function VivoLockpick({ desafio }: { desafio: DesafioLockpick }) {
       maxTentativas: desafio.maxTentativas,
       jogadorAutorizadoId: desafio.jogadorAutorizadoId ?? null,
     };
+    if (desafio.dependencias) {
+      opts.dependencias = [...desafio.dependencias];
+    }
     if (desafio.tentativasPorRodada !== undefined) {
       opts.tentativasPorRodada = desafio.tentativasPorRodada;
     }
@@ -1098,7 +1160,16 @@ function VivoLockpick({ desafio }: { desafio: DesafioLockpick }) {
                 <div class="desafios-senha-valores">
                   {t.valores.map((v, idx) => {
                     const fb = t.feedbackPosicional?.[idx];
-                    const seta = fb === 'alto' ? ' ↑' : fb === 'baixo' ? ' ↓' : fb === 'exato' ? ' ✓' : '';
+                    const seta =
+                      fb === 'alto'
+                        ? ' ↑'
+                        : fb === 'baixo'
+                          ? ' ↓'
+                          : fb === 'exato'
+                            ? ' ✓'
+                            : fb === 'trancado'
+                              ? ' 🔒'
+                              : '';
                     return (
                       <span key={idx} class={cx('desafios-pino', fb)}>
                         {v}
@@ -1111,6 +1182,9 @@ function VivoLockpick({ desafio }: { desafio: DesafioLockpick }) {
                   <span class="meta">
                     ✓ {t.feedbackEmbaralhado.corretos} • ↑ {t.feedbackEmbaralhado.altos} • ↓{' '}
                     {t.feedbackEmbaralhado.baixos}
+                    {(t.feedbackEmbaralhado.trancados ?? 0) > 0
+                      ? ` • 🔒 ${t.feedbackEmbaralhado.trancados}`
+                      : ''}
                   </span>
                 )}
               </li>

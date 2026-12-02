@@ -37,7 +37,7 @@ export interface OverlayDesafioProps {
   aoAgir?: (acao: AcaoDesafio) => void;
 }
 
-type VarianteDado = 'osso' | 'sombra' | 'acerto' | 'alto' | 'baixo' | 'perigo';
+type VarianteDado = 'osso' | 'sombra' | 'acerto' | 'alto' | 'baixo' | 'perigo' | 'trancado';
 
 function iniciaisNome(nome: string): string {
   const partes = nome.trim().split(/\s+/).filter(Boolean);
@@ -496,16 +496,18 @@ function BalancaSvg({
    1. ABRIR FECHADURAS (LOCKPICK)
    ═══════════════════════════════════════════════════════════════════════════ */
 
-function fraseEmbaralhada(tipo: 'corretos' | 'altos' | 'baixos', qtd: number): string {
+function fraseEmbaralhada(tipo: 'corretos' | 'altos' | 'baixos' | 'trancados', qtd: number): string {
   if (tipo === 'corretos') return qtd === 1 ? 'ALGUM ESTÁ CORRETO' : `${qtd} ESTÃO CORRETOS`;
   if (tipo === 'altos') return qtd === 1 ? 'ALGUM ESTÁ ALTO' : `${qtd} ESTÃO ALTOS`;
-  return qtd === 1 ? 'ALGUM ESTÁ BAIXO' : `${qtd} ESTÃO BAIXOS`;
+  if (tipo === 'baixos') return qtd === 1 ? 'ALGUM ESTÁ BAIXO' : `${qtd} ESTÃO BAIXOS`;
+  return qtd === 1 ? 'ALGUM ESTÁ TRANCADO' : `${qtd} ESTÃO TRANCADOS`;
 }
 
 function rotuloPino(res: ResultadoPino): string {
   if (res === 'exato') return '✓ EXATO';
   if (res === 'alto') return '▲ MAIS ALTO';
-  return '▼ MAIS BAIXO';
+  if (res === 'baixo') return '▼ MAIS BAIXO';
+  return '🔒 TRANCADO';
 }
 
 function variantePino(res: ResultadoPino | undefined, status: DesafioLockpick['status']): VarianteDado {
@@ -514,6 +516,7 @@ function variantePino(res: ResultadoPino | undefined, status: DesafioLockpick['s
   if (res === 'exato') return 'acerto';
   if (res === 'alto') return 'alto';
   if (res === 'baixo') return 'baixo';
+  if (res === 'trancado') return 'trancado';
   return 'osso';
 }
 
@@ -613,7 +616,15 @@ function OverlayLockpick({
                     : (ultimaTentativa?.valores[idx] ?? valores[idx] ?? 1);
               const dicaPosicional =
                 desafio.modoDica === 'posicional' ? ultimaTentativa?.feedbackPosicional?.[idx] : undefined;
-              const variante = variantePino(dicaPosicional, desafio.status);
+              const dep = desafio.dependencias?.[idx] ?? null;
+              const depDestrancada =
+                dep === null ||
+                desafio.status === 'aberto' ||
+                (dicaPosicional !== undefined && dicaPosicional !== 'trancado');
+              const variante =
+                dicaPosicional === undefined && dep !== null && desafio.status === 'ativo'
+                  ? 'trancado'
+                  : variantePino(dicaPosicional, desafio.status);
 
               return (
                 <div
@@ -628,6 +639,11 @@ function OverlayLockpick({
                   <span class="ovd-lock-pino-rotulo">
                     Pino {idx + 1} • d{lados}
                   </span>
+                  {dep !== null && (
+                    <span class="ovd-lock-pino-dep" data-aberto={depDestrancada ? '1' : '0'}>
+                      {depDestrancada ? `🔓 Pino ${dep + 1}` : `🔒 Requer Pino ${dep + 1}`}
+                    </span>
+                  )}
                   {podeAgir && (
                     <button
                       type="button"
@@ -685,6 +701,11 @@ function OverlayLockpick({
               {ultimaTentativa.feedbackEmbaralhado.baixos > 0 && (
                 <p class="ovd-lock-harpa-linha" data-tom="baixo">
                   {fraseEmbaralhada('baixos', ultimaTentativa.feedbackEmbaralhado.baixos)}
+                </p>
+              )}
+              {(ultimaTentativa.feedbackEmbaralhado.trancados ?? 0) > 0 && (
+                <p class="ovd-lock-harpa-linha" data-tom="trancado">
+                  {fraseEmbaralhada('trancados', ultimaTentativa.feedbackEmbaralhado.trancados ?? 0)}
                 </p>
               )}
             </div>
