@@ -184,40 +184,57 @@ function DadoPoligono({
   );
 }
 
-/** Ícone SVG de figura encapuzada branca pura com capuz pontudo, manto estreito e rosto sombreado (Furtividade — prints 4 e 5). */
-function IconeSombra({ tamanho = 28 }: { tamanho?: number }) {
+/** Ícone SVG de figura encapuzada branca pura fazendo gesto de silêncio ("shhh", dedo sobre os lábios — A Vigília). */
+function IconeSombra({ tamanho = 30 }: { tamanho?: number }) {
   return (
     <svg
       class="ovd-esc-sombra-icone"
       width={tamanho}
       height={tamanho}
-      viewBox="0 0 28 28"
+      viewBox="0 0 32 32"
       fill="none"
       aria-hidden="true"
     >
-      {/* Capuz pontudo e manto estreito em branco puro */}
+      {/* Silhueta externa: capuz arqueado e ombros em branco puro */}
       <path
-        d="M14 1.4L8.6 9.2C7.4 10.9 6.8 13.1 6.5 15.6L5.6 25.4C5.5 26.1 6.1 26.6 6.8 26.6H21.2C21.9 26.6 22.5 26.1 22.4 25.4L21.5 15.6C21.2 13.1 20.6 10.9 19.4 9.2L14 1.4Z"
+        d="M16 2.2C11.4 3.4 8.3 7.4 7.5 12.2L5.2 26.8C5 28.2 6.1 29.4 7.5 29.4H24.5C25.9 29.4 27 28.2 26.8 26.8L24.5 12.2C23.7 7.4 20.6 3.4 16 2.2Z"
         fill="currentColor"
       />
-      {/* Rosto sombreado em preto com recorte vertical contrastante */}
+      {/* Abertura do capuz (rosto sombreado em preto profundo) */}
       <path
-        d="M14 6.6C11.5 8 10.3 10.4 10.3 13.3C10.3 16 11.8 18 14 18.8C16.2 18 17.7 16 17.7 13.3C17.7 10.4 16.5 8 14 6.6Z"
+        d="M16 6.4C12.7 7.8 10.9 10.8 11.1 14.6C11.3 17.6 13.1 20 16 20.8C18.9 20 20.7 17.6 20.9 14.6C21.1 10.8 19.3 7.8 16 6.4Z"
         fill="#08090d"
       />
-      {/* Recorte vertical central no manto */}
+      {/* Recorte escuro da gola/manto abaixo do queixo */}
       <path
-        d="M14 18.4V26.6"
+        d="M12.2 21.8L10.8 29.4M19.8 21.8L21.2 29.4"
         stroke="#08090d"
-        stroke-width="1.8"
+        stroke-width="1.4"
+        stroke-linecap="round"
+        stroke-opacity="0.7"
+      />
+      {/* Contorno escuro em volta do dedo/mão para destacar o gesto "shhh" */}
+      <path
+        d="M16 12.6V23.2"
+        stroke="#08090d"
+        stroke-width="5.2"
         stroke-linecap="round"
       />
+      {/* Dedo indicador erguido verticalmente sobre os lábios ("shhh") */}
+      <rect
+        x="14.6"
+        y="12.2"
+        width="2.8"
+        height="10.4"
+        rx="1.4"
+        fill="currentColor"
+      />
+      {/* Punho/mão recolhida segurando o gesto na base do dedo */}
       <path
-        d="M10.2 26.6L11.8 19.6M17.8 26.6L16.2 19.6"
+        d="M12.6 22.8C12.6 21.3 13.8 20.2 15.3 20.2H17.2C18.7 20.2 19.8 21.3 19.8 22.8V24.6C19.8 26.1 18.6 27.2 17.1 27.2H15.1C13.7 27.2 12.6 26.1 12.6 24.7V22.8Z"
+        fill="currentColor"
         stroke="#08090d"
-        stroke-opacity="0.55"
-        stroke-width="1.15"
-        stroke-linecap="round"
+        stroke-width="1.3"
       />
     </svg>
   );
@@ -1932,7 +1949,7 @@ function OverlayEsconderijo({
 
                 <span class="ovd-esc-nome">{primeiroNome(p.nome)}</span>
                 <div class="ovd-esc-par">
-                  <IconeSombra tamanho={28} />
+                  <IconeSombra tamanho={30} />
 
                   <div class="ovd-esc-dados">
                     {p.encontrado ? (

@@ -315,15 +315,17 @@
 }
 
 .ovd-dado[data-variante='sombra'] .ovd-dado-forma {
-  fill: #22262d;
-  stroke: rgba(255, 255, 255, 0.22);
+  fill: #f2f4f8;
+  stroke: #14171f;
+  stroke-width: 2.6;
 }
 .ovd-dado[data-variante='sombra'] .ovd-dado-valor {
-  fill: #ffffff;
+  fill: #11141a;
   font-weight: 900;
+  font-family: var(--ovd-fonte-corpo);
 }
 .ovd-dado[data-variante='sombra'] {
-  filter: drop-shadow(0 2px 7px rgba(0, 0, 0, 0.92));
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.92));
 }
 
 .ovd-dado[data-variante='acerto'] .ovd-dado-forma {
