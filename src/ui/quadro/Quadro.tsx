@@ -241,7 +241,6 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
   const termoBusca = useSignal('');
   const indiceBusca = useSignal(0);
   const tiposFiltro = useSignal<ReadonlySet<TipoSemantico>>(new Set());
-  const esconderSegredos = useSignal(false);
   const modoQuadro = useSignal<'quadro' | 'ler'>('quadro');
   const seletorEntidade = useSignal<{ ponto: Ponto; busca: string } | null>(null);
   const navegadorAberto = useSignal(false);
@@ -302,7 +301,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
   const ultimoUpDireitoEmRef = useRef(0);
   const viewportRef = useRef<ViewportQuadro | null>(null);
   const acharItemNoPonto = (p: Ponto, permitirMoldura = false): Item | null =>
-    viewportRef.current?.itemNoPonto(p, permitirMoldura, esconderSegredos.value) ??
+    viewportRef.current?.itemNoPonto(p, permitirMoldura) ??
     itemNoPonto(itens.value, p, permitirMoldura);
   const moverPendenteRef = useRef<{
     clientX: number;
@@ -2031,18 +2030,6 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
         <button
           type="button"
           class="botao-pilula"
-          aria-pressed={esconderSegredos.value}
-          data-testid="botao-esconder-segredos"
-          title="Esconder segredos e itens só do mestre"
-          onClick={() => {
-            esconderSegredos.value = !esconderSegredos.value;
-          }}
-        >
-          {esconderSegredos.value ? 'Segredos ocultos' : 'Esconder segredos'}
-        </button>
-        <button
-          type="button"
-          class="botao-pilula"
           aria-pressed={painelRevisaoAberto.value}
           data-testid="botao-fila-revisao"
           onClick={() => {
@@ -2291,7 +2278,6 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
           tracoEmDesenho={tracoEmDesenho.value}
           linhasGuia={linhasGuia.value}
           tiposFiltro={tiposFiltro.value}
-          esconderSegredos={esconderSegredos.value}
           onViewportPronto={(vp) => {
             viewportRef.current = vp;
           }}
@@ -2454,9 +2440,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
         {buscaAberta.value ? (
           <BuscaNoQuadro
             termo={termoBusca.value}
-            resultados={buscarNoQuadro(itens.value.values(), termoBusca.value, {
-              esconderSegredos: esconderSegredos.value,
-            })}
+            resultados={buscarNoQuadro(itens.value.values(), termoBusca.value)}
             indiceAtivo={indiceBusca.value}
             onMudarTermo={(novoTermo) => {
               termoBusca.value = novoTermo;
@@ -2653,7 +2637,7 @@ function QuadroAberto({ q }: { q: QuadroModelo }) {
       {modoQuadro.value === 'ler' ? (
         <LeituraDoQuadro
           itens={itens.value}
-          esconderSegredos={esconderSegredos.value}
+          esconderSegredos={false}
           aoVerNoQuadro={(alvo) => {
             modoQuadro.value = 'quadro';
             camera.value = enquadrar(caixaEnvolventeDeItem(alvo), tamanhoTela.value, 80);
