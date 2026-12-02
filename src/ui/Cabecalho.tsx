@@ -2,6 +2,7 @@ import { campanhaAtiva, campanhas, escolherCampanha } from '../app/campanha.ts';
 import { sondarAplicativos } from '../app/inventario.ts';
 import { seloDoAssistente } from '../app/assistente-slot.ts';
 import { quadroAberto } from '../app/quadros.ts';
+import { definirModoLeve, modoLeve } from '../app/desempenho.ts';
 import { navegarParaQuadro, tela } from '../app/rotas.ts';
 import { cx } from './cx.ts';
 
@@ -28,6 +29,16 @@ export function Cabecalho() {
         <button type="button" class={cx('ficha', tela.value === 'aplicativos' && 'ativa')} data-testid="aba-aplicativos" onClick={() => { tela.value = 'aplicativos'; void sondarAplicativos(); }}>Aplicativos</button>
       </nav>
       <span class="espaco" />
+      <button
+        type="button"
+        class="botao-pilula"
+        data-testid="toggle-modo-leve"
+        aria-pressed={modoLeve.value}
+        title="Modo Leve: reduz resolução do canvas, limite de cache e efeitos blur para PCs modestos"
+        onClick={() => definirModoLeve(!modoLeve.value)}
+      >
+        Modo leve
+      </button>
       {Selo ? <Selo /> : null}
     </header>
   );

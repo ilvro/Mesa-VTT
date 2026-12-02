@@ -10,30 +10,63 @@ import { Avisos } from './Avisos.tsx';
 import { Cabecalho } from './Cabecalho.tsx';
 import { Campanhas } from './Campanhas.tsx';
 import { Entidades } from './Entidades.tsx';
-import { MesaOnline } from './MesaOnline.tsx';
-import { ModoSessao } from './ModoSessao.tsx';
 import { FaixaDeCombateSessao } from './FaixaDeCombateSessao.tsx';
 import { BuscaRapida, buscaRapidaAberta } from './BuscaRapida.tsx';
 import { InspecaoDePista } from './InspecaoDePista.tsx';
 import { MenuDeContexto } from './MenuDeContexto.tsx';
 import { quadroAberto } from '../app/quadros.ts';
-import { Quadro } from './quadro/Quadro.tsx';
 import { Quadros } from './quadro/Quadros.tsx';
-import { ProjecaoDoQuadro } from './quadro/ProjecaoDoQuadro.tsx';
-import { TelaoLocal } from './TelaoLocal.tsx';
+
+function carregarSobDemanda<P extends object>(
+  carregar: () => Promise<ComponentType<P>>,
+  mensagem = 'Carregando…',
+): ComponentType<P> {
+  let emCache: ComponentType<P> | null = null;
+  return function TelaSobDemanda(props: P) {
+    const [Comp, setComp] = useState<ComponentType<P> | null>(() => emCache);
+    useEffect(() => {
+      if (emCache) return;
+      let ativo = true;
+      void carregar().then((c) => {
+        emCache = c;
+        if (ativo) setComp(() => c);
+      });
+      return () => { ativo = false; };
+    }, []);
+    return Comp ? <Comp {...props} /> : <div class="carregando">{mensagem}</div>;
+  };
+}
+
+const CascaSobDemanda = carregarSobDemanda(
+  () => import('../jogar/Casca.tsx').then(m => m.Casca),
+  'Abrindo a mesa…',
+);
+const TelaoLocalSobDemanda = carregarSobDemanda(
+  () => import('./TelaoLocal.tsx').then(m => m.TelaoLocal),
+  'Abrindo o telão…',
+);
+const ProjecaoDoQuadroSobDemanda = carregarSobDemanda(
+  () => import('./quadro/ProjecaoDoQuadro.tsx').then(m => m.ProjecaoDoQuadro),
+  'Abrindo projeção…',
+);
+const QuadroSobDemanda = carregarSobDemanda(
+  () => import('./quadro/Quadro.tsx').then(m => m.Quadro),
+  'Abrindo o quadro…',
+);
+const ModoSessaoSobDemanda = carregarSobDemanda(
+  () => import('./ModoSessao.tsx').then(m => m.ModoSessao),
+  'Abrindo a sessão…',
+);
+const MesaOnlineSobDemanda = carregarSobDemanda(
+  () => import('./MesaOnline.tsx').then(m => m.MesaOnline),
+  'Abrindo mesa online…',
+);
 
 /** A janela de projeção é a própria Mesa numa rota: sem cabeçalho, avisos nem atalhos do mestre. */
 export function App() {
   if (jogarSalaId.value) return <CascaSobDemanda salaId={jogarSalaId.value} />;
-  if (telaoLocal.value.ativo) return <TelaoLocal mapaId={telaoLocal.value.mapaId} />;
-  return projecaoQuadroId.value ? <ProjecaoDoQuadro /> : <AppDoMestre />;
-}
-
-/** `#/jogar/<sala>`: a casca do jogador carrega por `import()` só quando a rota abre, para não pesar no hub. */
-function CascaSobDemanda({ salaId }: { salaId: string }) {
-  const [Casca, setCasca] = useState<ComponentType<{ salaId: string }> | null>(null);
-  useEffect(() => { void import('../jogar/Casca.tsx').then(m => setCasca(() => m.Casca)); }, []);
-  return Casca ? <Casca salaId={salaId} /> : <div class="carregando">Abrindo a mesa…</div>;
+  if (telaoLocal.value.ativo) return <TelaoLocalSobDemanda mapaId={telaoLocal.value.mapaId} />;
+  return projecaoQuadroId.value ? <ProjecaoDoQuadroSobDemanda /> : <AppDoMestre />;
 }
 
 function AppDoMestre() {
@@ -67,7 +100,7 @@ function AppDoMestre() {
         ? <div class="carregando">Abrindo a campanha…</div>
         : r === 'indisponivel'
           ? <section class="pagina"><div class="aviso">Este navegador não deixa a Mesa guardar a campanha (IndexedDB indisponível). Abra em uma janela normal, fora do modo privado.</div></section>
-          : tela.value === 'aprender' ? <Aprender /> : tela.value === 'campanhas' ? <Campanhas /> : tela.value === 'aplicativos' ? <Aplicativos /> : tela.value === 'online' ? <MesaOnline /> : tela.value === 'sessao' ? <div class="sessao-envoltorio"><FaixaDeCombateSessao /><ModoSessao /></div> : tela.value === 'quadros' ? (quadroAberto.value ? <Quadro /> : <Quadros />) : <Entidades />}
+          : tela.value === 'aprender' ? <Aprender /> : tela.value === 'campanhas' ? <Campanhas /> : tela.value === 'aplicativos' ? <Aplicativos /> : tela.value === 'online' ? <MesaOnlineSobDemanda /> : tela.value === 'sessao' ? <div class="sessao-envoltorio"><FaixaDeCombateSessao /><ModoSessaoSobDemanda /></div> : tela.value === 'quadros' ? (quadroAberto.value ? <QuadroSobDemanda /> : <Quadros />) : <Entidades />}
       <Avisos />
       <BuscaRapida />
       <MenuDeContexto />
