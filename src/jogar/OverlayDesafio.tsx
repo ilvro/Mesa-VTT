@@ -186,7 +186,7 @@ function DadoPoligono({
 }
 
 /** Ícone SVG de figura encapuzada/sombra para Furtividade. */
-function IconeSombra({ tamanho = 22 }: { tamanho?: number }) {
+function IconeSombra({ tamanho = 18 }: { tamanho?: number }) {
   return (
     <svg
       class="ovd-esc-sombra-icone"
@@ -217,9 +217,9 @@ function IconeSombra({ tamanho = 22 }: { tamanho?: number }) {
 }
 
 /** Ícone SVG de silhueta correndo para Perseguição. */
-function IconeCorrendo({ tamanho = 24 }: { tamanho?: number }) {
+function IconeCorrendo({ tamanho = 24, classe }: { tamanho?: number; classe?: string }) {
   return (
-    <svg width={tamanho} height={tamanho} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg class={classe} width={tamanho} height={tamanho} viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle cx="15.5" cy="4.5" r="2" fill="currentColor" />
       <path
         d="M9.5 9.5L12.6 8.2L15.4 10.6L18.6 9.8M12.6 8.2L10.8 13.4L14.6 15.6L13.8 20.2M10.8 13.4L7.2 16.4L4.5 16"
@@ -232,7 +232,7 @@ function IconeCorrendo({ tamanho = 24 }: { tamanho?: number }) {
   );
 }
 
-/** SVG de contorno anatômico de pulmão com dados d6 de fôlego no interior. */
+/** SVG de contorno anatômico fino branco de pulmão com dados d6 de fôlego no interior. */
 function PulmaoFolego({
   restante,
   total,
@@ -255,73 +255,70 @@ function PulmaoFolego({
         data-interativo={interativo && restante > 0 ? '1' : '0'}
         disabled={!interativo || restante <= 0}
         onClick={aoUsar}
-        title={interativo && restante > 0 ? 'Usar 1 dado de Fôlego (d6)' : `Fôlego: ${restante}/${total}`}
+        title={interativo && restante > 0 ? 'Clique para gastar 1 dado de Fôlego (d6)' : `Fôlego: ${restante}/${total}`}
         aria-label={`Fôlego: ${restante} de ${total} dados d6`}
       >
-        <svg width="96" height="76" viewBox="0 0 120 96" fill="none" aria-hidden="true">
+        <svg width="82" height="64" viewBox="0 0 120 96" fill="none" aria-hidden="true">
           {/* Traqueia e brônquios */}
           <path
             d="M60 6V30M60 28L47 38M60 28L73 38"
-            stroke="rgba(225, 240, 255, 0.72)"
-            stroke-width="2.4"
+            stroke="rgba(246, 248, 255, 0.88)"
+            stroke-width="1.8"
             stroke-linecap="round"
           />
           {/* Pulmão esquerdo */}
           <path
             d="M52 24C40 20 22 30 16 50C12 64 14 78 24 83C34 88 47 82 52 74C54 70 55 58 55 44C55 34 54 27 52 24Z"
-            fill="rgba(108, 214, 247, 0.08)"
-            stroke="rgba(230, 244, 255, 0.84)"
-            stroke-width="2"
+            fill="rgba(10, 10, 16, 0.22)"
+            stroke="rgba(246, 248, 255, 0.9)"
+            stroke-width="1.7"
             stroke-linejoin="round"
           />
           {/* Pulmão direito */}
           <path
             d="M68 24C80 20 98 30 104 50C108 64 106 78 96 83C86 88 73 82 68 74C66 70 65 58 65 44C65 34 66 27 68 24Z"
-            fill="rgba(108, 214, 247, 0.08)"
-            stroke="rgba(230, 244, 255, 0.84)"
-            stroke-width="2"
+            fill="rgba(10, 10, 16, 0.22)"
+            stroke="rgba(246, 248, 255, 0.9)"
+            stroke-width="1.7"
             stroke-linejoin="round"
           />
         </svg>
         <div class="ovd-pulmao-dados">
           {itens.map((ativo, i) => (
             <span key={i} class={ativo ? undefined : 'ovd-pulmao-gasto'}>
-              <DadoPoligono lados={6} valor="d6" variante={ativo ? 'osso' : 'sombra'} tamanho={22} />
+              <DadoPoligono lados={6} valor="d6" variante={ativo ? 'osso' : 'sombra'} tamanho={19} />
             </span>
           ))}
         </div>
       </button>
-      <span class="ovd-pulmao-legenda">
-        Fôlego {restante}/{total}
-      </span>
     </div>
   );
 }
 
-/** Selo circular de pedra escura entalhada em SVG (estética A Vigília). */
+/** Selo circular de pedra escura entalhada em SVG (flutuante sobre a cena). */
 function SeloPedraSvg({ angulo, status }: { angulo: number; status: DesafioLockpick['status'] }) {
   const corAcento =
     status === 'aberto'
-      ? 'rgba(232, 185, 90, 0.62)'
+      ? 'rgba(232, 185, 90, 0.78)'
       : status === 'travado'
-        ? 'rgba(255, 92, 108, 0.55)'
-        : 'rgba(234, 230, 221, 0.24)';
+        ? 'rgba(255, 92, 108, 0.7)'
+        : 'rgba(240, 236, 227, 0.34)';
   const marcas = Array.from({ length: 24 }, (_, i) => i * 15);
 
   return (
     <svg class="ovd-lock-selo-svg" viewBox="0 0 400 400" fill="none" aria-hidden="true">
       <defs>
         <radialGradient id="ovd-pedra-grad" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#221d30" stop-opacity="0.52" />
-          <stop offset="72%" stop-color="#110e19" stop-opacity="0.72" />
-          <stop offset="100%" stop-color="#09070e" stop-opacity="0" />
+          <stop offset="0%" stop-color="#191624" stop-opacity="0.54" />
+          <stop offset="68%" stop-color="#0d0b14" stop-opacity="0.34" />
+          <stop offset="100%" stop-color="#07060b" stop-opacity="0" />
         </radialGradient>
       </defs>
       <circle cx="200" cy="200" r="186" fill="url(#ovd-pedra-grad)" />
       {/* Anel externo rotativo */}
       <g class="ovd-selo-anel-ext" style={{ transform: `rotate(${angulo}deg)` }}>
         <circle cx="200" cy="200" r="174" stroke={corAcento} stroke-width="2" stroke-dasharray="18 8 4 8" />
-        <circle cx="200" cy="200" r="158" stroke="rgba(234, 230, 221, 0.14)" stroke-width="1.2" />
+        <circle cx="200" cy="200" r="158" stroke="rgba(240, 236, 227, 0.18)" stroke-width="1.2" />
         {marcas.map((deg) => (
           <line
             key={deg}
@@ -329,7 +326,7 @@ function SeloPedraSvg({ angulo, status }: { angulo: number; status: DesafioLockp
             y1="28"
             x2="200"
             y2={deg % 45 === 0 ? '44' : '36'}
-            stroke={deg % 90 === 0 ? corAcento : 'rgba(234, 230, 221, 0.18)'}
+            stroke={deg % 90 === 0 ? corAcento : 'rgba(240, 236, 227, 0.22)'}
             stroke-width={deg % 90 === 0 ? '2' : '1'}
             transform={`rotate(${deg} 200 200)`}
           />
@@ -349,13 +346,13 @@ function SeloPedraSvg({ angulo, status }: { angulo: number; status: DesafioLockp
         <circle cx="200" cy="200" r="118" stroke={corAcento} stroke-width="1.5" stroke-dasharray="6 6" />
         <polygon
           points="200,92 293,254 107,254"
-          stroke="rgba(234, 230, 221, 0.1)"
+          stroke="rgba(240, 236, 227, 0.14)"
           stroke-width="1.2"
           fill="none"
         />
         <polygon
           points="200,308 293,146 107,146"
-          stroke="rgba(234, 230, 221, 0.1)"
+          stroke="rgba(240, 236, 227, 0.14)"
           stroke-width="1.2"
           fill="none"
         />
@@ -364,7 +361,7 @@ function SeloPedraSvg({ angulo, status }: { angulo: number; status: DesafioLockp
   );
 }
 
-/** Balança SVG animada para o desafio de Equilíbrio. */
+/** Balança SVG animada para o desafio de Equilíbrio (flutuante sem cartão). */
 function BalancaSvg({
   esq,
   dir,
@@ -382,112 +379,136 @@ function BalancaSvg({
       ? '#53e2a1'
       : status === 'caiu'
         ? '#ff5c6c'
-        : '#e8b95a';
+        : '#f0ece3';
 
   return (
     <svg
       class={compacto ? 'ovd-balanca-svg ovd-eq-compacto-svg' : 'ovd-balanca-svg'}
-      viewBox="0 0 440 230"
+      viewBox="0 0 440 220"
       fill="none"
       aria-label={`Balança: esquerda ${esq}, direita ${dir}`}
     >
-      {/* Pedestal e pilar ornamentado */}
+      {/* Pedestal e pilar delicado */}
       <path
-        d="M168 214H272L260 200H180L168 214Z"
-        fill="rgba(234, 230, 221, 0.14)"
+        d="M172 208H268L257 195H183L172 208Z"
+        fill="rgba(12, 10, 18, 0.45)"
         stroke={corMetal}
-        stroke-width="1.8"
+        stroke-width="2"
         stroke-linejoin="round"
       />
-      <rect x="214" y="64" width="12" height="136" rx="4" fill="rgba(234, 230, 221, 0.12)" stroke={corMetal} stroke-width="1.6" />
+      <rect
+        x="216"
+        y="64"
+        width="8"
+        height="131"
+        rx="4"
+        fill="rgba(12, 10, 18, 0.45)"
+        stroke={corMetal}
+        stroke-width="1.8"
+      />
       {/* Ornamento central */}
-      <polygon points="220,30 231,48 220,66 209,48" fill="rgba(20, 16, 30, 0.95)" stroke={corMetal} stroke-width="2" />
-      <circle cx="220" cy="48" r="3.5" fill={corMetal} />
+      <polygon
+        points="220,30 230,47 220,64 210,47"
+        fill="rgba(12, 10, 18, 0.72)"
+        stroke={corMetal}
+        stroke-width="2"
+      />
+      <circle cx="220" cy="47" r="3" fill={corMetal} />
 
       {/* Haste inclinável */}
       <g class="ovd-balanca-haste" style={{ transform: `rotate(${angulo}deg)` }}>
         <path
           d="M84 64C128 54 176 58 220 64C264 58 312 54 356 64"
           stroke={corMetal}
-          stroke-width="4.5"
+          stroke-width="4"
           stroke-linecap="round"
         />
-        <circle cx="96" cy="64" r="5" fill={corMetal} />
-        <circle cx="344" cy="64" r="5" fill={corMetal} />
+        <circle cx="96" cy="64" r="4.5" fill={corMetal} />
+        <circle cx="344" cy="64" r="4.5" fill={corMetal} />
 
         {/* Prato esquerdo (contra-rotação para manter nivelado) */}
         <g class="ovd-balanca-prato-esq" style={{ transform: `rotate(${-angulo}deg)` }}>
-          <line x1="96" y1="68" x2="64" y2="146" stroke="rgba(234, 230, 221, 0.55)" stroke-width="1.6" />
-          <line x1="96" y1="68" x2="128" y2="146" stroke="rgba(234, 230, 221, 0.55)" stroke-width="1.6" />
+          <line x1="96" y1="68" x2="64" y2="144" stroke="rgba(240, 236, 227, 0.7)" stroke-width="1.6" />
+          <line x1="96" y1="68" x2="128" y2="144" stroke="rgba(240, 236, 227, 0.7)" stroke-width="1.6" />
           <path
-            d="M48 146H144C140 162 122 170 96 170C70 170 52 162 48 146Z"
-            fill="rgba(24, 20, 34, 0.92)"
+            d="M48 144H144C140 160 122 168 96 168C70 168 52 160 48 144Z"
+            fill="rgba(12, 10, 18, 0.62)"
             stroke={corMetal}
             stroke-width="2"
             stroke-linejoin="round"
           />
           <text
             x="96"
-            y="134"
+            y="132"
             text-anchor="middle"
-            fill="#eae6dd"
-            font-size="28"
+            fill="#ffffff"
+            stroke="rgba(0, 0, 0, 0.65)"
+            stroke-width="3"
+            paint-order="stroke"
+            font-size={compacto ? '34' : '30'}
             font-weight="800"
             font-family="var(--ovd-fonte-titulo)"
           >
             {esq}
           </text>
-          <text
-            x="96"
-            y="186"
-            text-anchor="middle"
-            fill="rgba(234, 230, 221, 0.62)"
-            font-size="10.5"
-            font-weight="700"
-            letter-spacing="2"
-          >
-            ESQUERDA
-          </text>
+          {!compacto && (
+            <text
+              x="96"
+              y="186"
+              text-anchor="middle"
+              fill="rgba(240, 236, 227, 0.78)"
+              font-size="10.5"
+              font-weight="700"
+              letter-spacing="2"
+            >
+              ESQUERDA
+            </text>
+          )}
         </g>
 
         {/* Prato direito (contra-rotação para manter nivelado) */}
         <g class="ovd-balanca-prato-dir" style={{ transform: `rotate(${-angulo}deg)` }}>
-          <line x1="344" y1="68" x2="312" y2="146" stroke="rgba(234, 230, 221, 0.55)" stroke-width="1.6" />
-          <line x1="344" y1="68" x2="376" y2="146" stroke="rgba(234, 230, 221, 0.55)" stroke-width="1.6" />
+          <line x1="344" y1="68" x2="312" y2="144" stroke="rgba(240, 236, 227, 0.7)" stroke-width="1.6" />
+          <line x1="344" y1="68" x2="376" y2="144" stroke="rgba(240, 236, 227, 0.7)" stroke-width="1.6" />
           <path
-            d="M296 146H392C388 162 370 170 344 170C318 170 300 162 296 146Z"
-            fill="rgba(24, 20, 34, 0.92)"
+            d="M296 144H392C388 160 370 168 344 168C318 168 300 160 296 144Z"
+            fill="rgba(12, 10, 18, 0.62)"
             stroke={corMetal}
             stroke-width="2"
             stroke-linejoin="round"
           />
           <text
             x="344"
-            y="134"
+            y="132"
             text-anchor="middle"
-            fill="#eae6dd"
-            font-size="28"
+            fill="#ffffff"
+            stroke="rgba(0, 0, 0, 0.65)"
+            stroke-width="3"
+            paint-order="stroke"
+            font-size={compacto ? '34' : '30'}
             font-weight="800"
             font-family="var(--ovd-fonte-titulo)"
           >
             {dir}
           </text>
-          <text
-            x="344"
-            y="186"
-            text-anchor="middle"
-            fill="rgba(234, 230, 221, 0.62)"
-            font-size="10.5"
-            font-weight="700"
-            letter-spacing="2"
-          >
-            DIREITA
-          </text>
+          {!compacto && (
+            <text
+              x="344"
+              y="186"
+              text-anchor="middle"
+              fill="rgba(240, 236, 227, 0.78)"
+              font-size="10.5"
+              font-weight="700"
+              letter-spacing="2"
+            >
+              DIREITA
+            </text>
+          )}
         </g>
       </g>
 
       {/* Pivô central sobre a haste */}
-      <circle cx="220" cy="64" r="7" fill="#16131c" stroke={corMetal} stroke-width="2.2" />
+      <circle cx="220" cy="64" r="6.5" fill="#120f1a" stroke={corMetal} stroke-width="2.2" />
     </svg>
   );
 }
@@ -585,6 +606,10 @@ function OverlayLockpick({
 
   return (
     <div class="ovd-palco-backdrop" data-testid="overlay-lockpick">
+      <button type="button" class="ovd-btn-recolher ovd-palco-espiar" onClick={aoRecolher}>
+        Espiar mapa
+      </button>
+
       <section class="ovd-palco ovd-palco-lockpick" data-status={desafio.status} aria-label={desafio.titulo}>
         <header class="ovd-palco-topo">
           <div class="ovd-palco-titulos">
@@ -596,9 +621,6 @@ function OverlayLockpick({
               </p>
             )}
           </div>
-          <button type="button" class="ovd-btn-recolher" onClick={aoRecolher}>
-            Espiar mapa
-          </button>
         </header>
 
         <div class="ovd-lock-arena">
@@ -658,7 +680,7 @@ function OverlayLockpick({
                     lados={lados}
                     valor={valorExibido}
                     variante={variante}
-                    tamanho={76}
+                    tamanho={72}
                     interativo={podeAgir}
                     rotulo={`Pino ${idx + 1} (d${lados}): ${valorExibido}`}
                   />
@@ -711,7 +733,7 @@ function OverlayLockpick({
             </div>
           )}
 
-        {/* Banners finais */}
+        {/* Banners finais flutuantes */}
         {desafio.status === 'aberto' && (
           <div class="ovd-lock-banner" data-status="aberto" role="status">
             FECHADURA DESTRANCADA
@@ -732,7 +754,7 @@ function OverlayLockpick({
 
           <div class="ovd-lock-pips-wrap">
             <span class="ovd-lock-pips-rotulo">
-              Tentativas restantes: {restantes}/{desafio.maxTentativas}
+              Tentativas: {restantes}/{desafio.maxTentativas}
             </span>
             <span class="ovd-lock-pips" aria-hidden="true">
               {Array.from({ length: desafio.maxTentativas }, (_, i) => (
@@ -769,7 +791,7 @@ function textoStatusEquilibrio(status: DesafioEquilibrio['status'], diferenca: n
     case 'equilibrado':
       return 'EQUILIBRADO';
     case 'desequilibrado':
-      return `EM RISCO — DIFERENÇA ${diferenca}`;
+      return `EM RISCO — DIF. ${diferenca}`;
     case 'caiu':
       return 'CAIU!';
   }
@@ -806,65 +828,71 @@ function OverlayEquilibrio({
       {desafio.dadoEsq === null || desafio.dadoDir === null ? (
         <button
           type="button"
-          class="ovd-btn ovd-btn-primario"
+          class="ovd-btn ovd-btn-primario ovd-btn-pequeno"
           onClick={() => aoAgir({ tipo: 'equilibrio.rolar-inicial' })}
         >
           Rolar 2d10
         </button>
       ) : desafio.d4Pendente !== null ? (
         <div class="ovd-eq-pendente">
-          <DadoPoligono lados={4} valor={desafio.d4Pendente} variante="alto" tamanho={46} />
+          <DadoPoligono lados={4} valor={desafio.d4Pendente} variante="alto" tamanho={34} />
           <button
             type="button"
             class="ovd-btn ovd-btn-primario ovd-btn-pequeno"
             onClick={() => aoAgir({ tipo: 'equilibrio.aplicar-d4', lado: 'esq' })}
           >
-            Colocar na Esquerda
+            ← Esq
           </button>
           <button
             type="button"
             class="ovd-btn ovd-btn-primario ovd-btn-pequeno"
             onClick={() => aoAgir({ tipo: 'equilibrio.aplicar-d4', lado: 'dir' })}
           >
-            Colocar na Direita
+            Dir →
           </button>
         </div>
       ) : desafio.status === 'desequilibrado' && restantes > 0 ? (
         <button
           type="button"
-          class="ovd-btn ovd-btn-primario"
+          class="ovd-btn ovd-btn-primario ovd-btn-pequeno"
           onClick={() => aoAgir({ tipo: 'equilibrio.rolar-d4' })}
         >
-          Rolar d4 de Equilíbrio ({restantes})
+          Rolar d4 ({restantes})
         </button>
       ) : null}
     </div>
   );
 
   if (desafio.exibicao === 'compacto') {
+    const totalD4 = Math.max(desafio.dadosEquilibrioTotal, restantes);
     return (
       <div class="ovd-eq-compacto-wrap" data-testid="overlay-equilibrio-compacto">
         <section class="ovd-eq-compacto-card" data-status={desafio.status} aria-label={desafio.titulo}>
           <header class="ovd-eq-compacto-topo">
             <div class="ovd-eq-personagem">
               <RetratoParticipante participante={desafio.personagem} retratos={retratos} tamanho="pequeno" />
-              <div>
-                <div class="ovd-eyebrow">{desafio.titulo}</div>
-                <strong style={{ fontSize: '13px' }}>{desafio.personagem.nome}</strong>
-              </div>
+              <span class="ovd-eq-compacto-nome">{desafio.personagem.nome}</span>
             </div>
-            <button type="button" class="ovd-btn-recolher" onClick={aoRecolher}>
-              Recolher
+            <button type="button" class="ovd-btn-recolher" onClick={aoRecolher} title="Recolher balança">
+              ×
             </button>
           </header>
 
           <BalancaSvg esq={esq} dir={dir} status={desafio.status} compacto />
 
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <span class="ovd-eq-status" data-status={desafio.status}>
-              {statusTexto}
-            </span>
-          </div>
+          {totalD4 > 0 && (
+            <div class="ovd-eq-compacto-d4s" aria-label={`Dados d4 restantes: ${restantes} de ${totalD4}`}>
+              {Array.from({ length: totalD4 }, (_, idx) => (
+                <span key={idx} class={idx < restantes ? undefined : 'ovd-eq-compacto-d4-gasto'}>
+                  <DadoPoligono lados={4} valor="4" variante={idx < restantes ? 'osso' : 'sombra'} tamanho={18} />
+                </span>
+              ))}
+            </div>
+          )}
+
+          <span class="ovd-eq-status ovd-eq-compacto-status" data-status={desafio.status}>
+            {statusTexto}
+          </span>
 
           {acoes}
         </section>
@@ -874,6 +902,10 @@ function OverlayEquilibrio({
 
   return (
     <div class="ovd-palco-backdrop" data-testid="overlay-equilibrio-destaque">
+      <button type="button" class="ovd-btn-recolher ovd-palco-espiar" onClick={aoRecolher}>
+        Espiar mapa
+      </button>
+
       <section class="ovd-palco" aria-label={desafio.titulo}>
         <header class="ovd-palco-topo">
           <div class="ovd-eq-personagem">
@@ -882,13 +914,10 @@ function OverlayEquilibrio({
               <span class="ovd-eyebrow">Desafio de Equilíbrio</span>
               <h2 class="ovd-titulo">{desafio.titulo}</h2>
               <p class="ovd-subtitulo">
-                {desafio.personagem.nome} • Dados d4 restantes: <strong>{restantes}</strong>/{desafio.dadosEquilibrioTotal}
+                {desafio.personagem.nome} • d4 restantes: <strong>{restantes}</strong>/{desafio.dadosEquilibrioTotal}
               </p>
             </div>
           </div>
-          <button type="button" class="ovd-btn-recolher" onClick={aoRecolher}>
-            Espiar mapa
-          </button>
         </header>
 
         <div class="ovd-balanca-wrap">
@@ -900,31 +929,31 @@ function OverlayEquilibrio({
 
           <div class="ovd-eq-dados-linha">
             <div class="ovd-eq-lado-box">
-              <span class="ovd-eq-lado-titulo">Prato Esquerdo ({esq})</span>
+              <span class="ovd-eq-lado-titulo">Esquerda ({esq})</span>
               <div class="ovd-eq-lado-dados">
                 <DadoPoligono
                   lados={10}
                   valor={desafio.dadoEsq ?? '—'}
                   variante={desafio.status === 'caiu' ? 'perigo' : 'osso'}
-                  tamanho={48}
+                  tamanho={42}
                 />
                 {dadosEsq.map((d) => (
-                  <DadoPoligono key={d.id} lados={4} valor={d.valor} variante="alto" tamanho={34} />
+                  <DadoPoligono key={d.id} lados={4} valor={d.valor} variante="alto" tamanho={30} />
                 ))}
               </div>
             </div>
 
             <div class="ovd-eq-lado-box">
-              <span class="ovd-eq-lado-titulo">Prato Direito ({dir})</span>
+              <span class="ovd-eq-lado-titulo">Direita ({dir})</span>
               <div class="ovd-eq-lado-dados">
                 <DadoPoligono
                   lados={10}
                   valor={desafio.dadoDir ?? '—'}
                   variante={desafio.status === 'caiu' ? 'perigo' : 'osso'}
-                  tamanho={48}
+                  tamanho={42}
                 />
                 {dadosDir.map((d) => (
-                  <DadoPoligono key={d.id} lados={4} valor={d.valor} variante="alto" tamanho={34} />
+                  <DadoPoligono key={d.id} lados={4} valor={d.valor} variante="alto" tamanho={30} />
                 ))}
               </div>
             </div>
@@ -973,11 +1002,11 @@ function OverlayEsconderijo({
   return (
     <div class="ovd-hud-topo" data-testid="overlay-esconderijo">
       <header class="ovd-hud-barra">
-        <IconeSombra tamanho={18} />
+        <IconeSombra tamanho={15} />
         <span class="ovd-hud-barra-titulo">{desafio.titulo}</span>
-        <span class="ovd-hud-chip">Rodada {desafio.rodada}</span>
+        <span class="ovd-hud-chip">R{desafio.rodada}</span>
         <span class="ovd-hud-chip" data-tom={desafio.fase === 'criaturas' ? 'carmesim' : 'ouro'}>
-          {desafio.fase === 'criaturas' ? 'Turno das Criaturas' : 'Turno dos Personagens'}
+          {desafio.fase === 'criaturas' ? 'Criaturas' : 'Personagens'}
         </span>
         <span class="ovd-hud-chip">Distrair DT {desafio.dtDistrair}</span>
         <button type="button" class="ovd-btn-recolher" onClick={aoRecolher}>
@@ -991,7 +1020,7 @@ function OverlayEsconderijo({
             <span class="ovd-busca-rotulo">Busca da Criatura</span>
             <div class="ovd-busca-dados">
               {desafio.ultimaBusca.dados.map((d, i) => (
-                <DadoPoligono key={i} lados={d.lados} valor={d.valor} variante="perigo" tamanho={34} />
+                <DadoPoligono key={i} lados={d.lados} valor={d.valor} variante="perigo" tamanho={28} />
               ))}
             </div>
             <span class="ovd-busca-atingidos">
@@ -1000,7 +1029,7 @@ function OverlayEsconderijo({
                 : desafio.ultimaBusca.atingidos
                     .map((a) =>
                       a.ficouEncontrado
-                        ? `${a.nome} perdeu [${a.valores.join(', ')}] e foi ENCONTRADO!`
+                        ? `${a.nome} perdeu [${a.valores.join(', ')}] — ENCONTRADO!`
                         : `${a.nome} perdeu [${a.valores.join(', ')}]`,
                     )
                     .join(' • ')}
@@ -1011,7 +1040,7 @@ function OverlayEsconderijo({
             class="ovd-btn-recolher"
             onClick={() => setBuscaOcultaId(desafio.ultimaBusca?.id ?? null)}
           >
-            Fechar
+            ×
           </button>
         </div>
       )}
@@ -1039,23 +1068,17 @@ function OverlayEsconderijo({
               class="ovd-esc-card"
               data-meu={souEu ? '1' : '0'}
               data-encontrado={p.encontrado ? '1' : '0'}
+              title={`${p.nome} • Esconder-se DT ${p.dtEsconderSe}`}
             >
-              <div class="ovd-esc-topo">
-                <RetratoParticipante participante={p} retratos={retratos} tamanho="padrao" />
-                <div class="ovd-esc-info">
-                  <span class="ovd-esc-nome">{p.nome}</span>
-                  <span class="ovd-esc-meta">
-                    <span>Esconder-se DT {p.dtEsconderSe}</span>
-                  </span>
-                </div>
-                <IconeSombra tamanho={20} />
-              </div>
+              <RetratoParticipante participante={p} retratos={retratos} tamanho="pequeno" />
+              <span class="ovd-esc-nome">{p.nome}</span>
+              <IconeSombra tamanho={15} />
 
               <div class="ovd-esc-dados">
                 {p.encontrado ? (
                   <span class="ovd-selo-encontrado">ENCONTRADO</span>
                 ) : p.dados.length === 0 ? (
-                  <span class="ovd-esc-vazio">Sem dados de esconderijo</span>
+                  <span class="ovd-esc-vazio">—</span>
                 ) : (
                   p.dados.map((d) => (
                     <DadoPoligono
@@ -1063,7 +1086,7 @@ function OverlayEsconderijo({
                       lados={d.lados}
                       valor={d.valor === 0 ? '?' : d.valor}
                       variante="sombra"
-                      tamanho={38}
+                      tamanho={30}
                     />
                   ))
                 )}
@@ -1073,15 +1096,15 @@ function OverlayEsconderijo({
                 <>
                   <button
                     type="button"
-                    class="ovd-btn ovd-btn-pequeno"
+                    class="ovd-btn ovd-btn-pequeno ovd-esc-btn-acoes"
                     aria-expanded={expandido}
                     onClick={() => setAbertoId(expandido ? null : p.id)}
                   >
-                    {expandido ? 'Fechar Ações' : 'Ações de Furtividade'}
+                    {expandido ? 'Ações ▴' : 'Ações ▾'}
                   </button>
 
                   {expandido && (
-                    <div class="ovd-esc-acoes-painel">
+                    <div class="ovd-esc-popover">
                       {/* Rolar Esconderijo */}
                       <div class="ovd-esc-bloco">
                         <span class="ovd-esc-bloco-titulo">Rolar Esconderijo</span>
@@ -1225,7 +1248,7 @@ function OverlayEsconderijo({
                       {/* Chamar Atenção */}
                       {aliados.length > 0 && p.dados.length >= 2 && (
                         <div class="ovd-esc-bloco">
-                          <span class="ovd-esc-bloco-titulo">Chamar Atenção (transfere 1 + descarta 1)</span>
+                          <span class="ovd-esc-bloco-titulo">Chamar Atenção (dá 1 + descarta 1)</span>
                           <div class="ovd-esc-linha">
                             <select
                               class="ovd-select"
@@ -1322,7 +1345,7 @@ function OverlayEsconderijo({
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   4. PERSEGUIÇÃO (FÔLEGO + AVANÇO)
+   4. PERSEGUIÇÃO (FÔLEGO + AVANÇO FLUTUANTES)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function OverlayPerseguicao({
@@ -1348,33 +1371,27 @@ function OverlayPerseguicao({
   return (
     <div class="ovd-hud-topo" data-testid="overlay-perseguicao">
       <header class="ovd-hud-barra">
-        <IconeCorrendo tamanho={18} />
+        <IconeCorrendo tamanho={15} />
         <span class="ovd-hud-barra-titulo">
-          {desafio.titulo} • Rodada {desafio.rodada} / {desafio.totalRodadas}
+          Rodada {desafio.rodada}/{desafio.totalRodadas}
         </span>
         {mostrarPa && limiarAtual !== undefined && (
           <span class="ovd-hud-chip" data-tom="ouro">
-            Limiar R{desafio.rodada}: {limiarAtual} PA
+            Limiar {limiarAtual}
           </span>
         )}
-        {mostrarPa && <span class="ovd-hud-chip">Meta: {desafio.metaPa} PA</span>}
         <button type="button" class="ovd-btn-recolher" onClick={aoRecolher}>
           Recolher
         </button>
       </header>
 
-      <div class="ovd-faixa-cards">
+      <div class="ovd-pers-faixa">
         {desafio.participantes.map((p) => {
           const souEu = ehMeuParticipante(p, meuDiscordId, minhaFichaId);
           const podeGastarFolego =
             modo === 'jogador' && Boolean(aoAgir) && souEu && p.folegoRestante > 0 && p.status === 'correndo';
           const alvoNumero =
             limiarAtual !== undefined && p.pa < limiarAtual ? limiarAtual : desafio.metaPa;
-          const pct = Math.min(100, Math.round((p.pa / Math.max(1, desafio.metaPa)) * 100));
-          const pctLimiar =
-            limiarAtual !== undefined
-              ? Math.min(100, Math.round((limiarAtual / Math.max(1, desafio.metaPa)) * 100))
-              : null;
 
           const usarFolego = () => {
             if (!podeGastarFolego || !aoAgir) return;
@@ -1389,27 +1406,19 @@ function OverlayPerseguicao({
               data-meu={souEu ? '1' : '0'}
               data-status={p.status}
             >
-              <div class="ovd-esc-topo">
+              <div class="ovd-pers-topo">
                 <RetratoParticipante participante={p} retratos={retratos} tamanho="pequeno" />
-                <div class="ovd-esc-info">
-                  <span class="ovd-esc-nome">{p.nome}</span>
-                </div>
-                <span
-                  class="ovd-hud-chip"
-                  data-tom={
-                    p.status === 'seguro'
-                      ? 'esmeralda'
-                      : p.status === 'derrubado'
-                        ? 'carmesim'
-                        : undefined
-                  }
-                >
-                  {p.status === 'seguro'
-                    ? 'SEGURO'
-                    : p.status === 'derrubado'
-                      ? 'DERRUBADO'
-                      : 'CORRENDO'}
-                </span>
+                <span class="ovd-pers-nome">{p.nome}</span>
+                {p.status !== 'correndo' && (
+                  <span class="ovd-hud-chip" data-tom={p.status === 'seguro' ? 'esmeralda' : 'carmesim'}>
+                    {p.status === 'seguro' ? 'SEGURO' : 'DERRUBADO'}
+                  </span>
+                )}
+                {p.esforcoExtraUsos > 0 && (
+                  <span class="ovd-hud-chip" data-tom="ouro">
+                    ×{p.esforcoExtraUsos}
+                  </span>
+                )}
               </div>
 
               <div class="ovd-pers-corpo">
@@ -1420,40 +1429,15 @@ function OverlayPerseguicao({
                   aoUsar={usarFolego}
                 />
 
-                <div class="ovd-avanco-box">
-                  {mostrarPa && (
-                    <>
-                      <div class="ovd-avanco-topo">
-                        <IconeCorrendo tamanho={20} />
-                        <span class="ovd-avanco-numero">{p.pa}</span>
-                        <span class="ovd-avanco-meta">/ {alvoNumero}</span>
-                      </div>
-                      <div class="ovd-barra-trilha" aria-hidden="true">
-                        <div class="ovd-barra-preenchimento" style={{ width: `${pct}%` }} />
-                        {pctLimiar !== null && (
-                          <span class="ovd-barra-limiar" style={{ left: `${pctLimiar}%` }} />
-                        )}
-                      </div>
-                    </>
-                  )}
-
-                  <div class="ovd-pers-badges">
-                    {p.esforcoExtraUsos > 0 && (
-                      <span class="ovd-hud-chip" data-tom="ouro">
-                        Esforço Extra ×{p.esforcoExtraUsos}
-                      </span>
-                    )}
-                    {podeGastarFolego && (
-                      <button
-                        type="button"
-                        class="ovd-btn ovd-btn-pequeno ovd-btn-primario"
-                        onClick={usarFolego}
-                      >
-                        Usar Fôlego
-                      </button>
-                    )}
+                {mostrarPa && (
+                  <div class="ovd-avanco-box">
+                    <div class="ovd-avanco-topo">
+                      <IconeCorrendo tamanho={20} classe="ovd-avanco-icone" />
+                      <span class="ovd-avanco-numero">{p.pa}</span>
+                      <span class="ovd-avanco-meta">/ {alvoNumero}</span>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </article>
           );
@@ -1464,14 +1448,13 @@ function OverlayPerseguicao({
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   5. ESCALAR (ESCALADA)
+   5. ESCALAR (ESCALADA — TIRA VERTICAL FINA NA BORDA)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function OverlayEscalada({
   desafio,
   meuDiscordId,
   minhaFichaId,
-  retratos,
   aoRecolher,
 }: {
   desafio: DesafioEscalada;
@@ -1484,14 +1467,11 @@ function OverlayEscalada({
     <div class="ovd-escalada-wrap" data-testid="overlay-escalada">
       <section class="ovd-escalada-card" aria-label={desafio.titulo}>
         <header class="ovd-escalada-topo">
-          <div>
-            <span class="ovd-eyebrow">Escalada</span>
-            <h2 class="ovd-titulo" style={{ fontSize: '18px' }}>
-              {desafio.titulo}
-            </h2>
-          </div>
-          <button type="button" class="ovd-btn-recolher" onClick={aoRecolher}>
-            Recolher
+          <h2 class="ovd-escalada-titulo" title={desafio.titulo}>
+            {desafio.titulo}
+          </h2>
+          <button type="button" class="ovd-btn-recolher" onClick={aoRecolher} title="Recolher escalada">
+            ×
           </button>
         </header>
 
@@ -1510,38 +1490,33 @@ function OverlayEscalada({
               >
                 <div class="ovd-altimetro" aria-label={`Altura ${p.pontos} de ${desafio.metaPontos}`}>
                   <div class="ovd-altimetro-fill" style={{ height: `${pct}%` }} />
-                  <span class="ovd-altimetro-marcador" style={{ bottom: `${Math.min(88, Math.max(12, pct))}%` }}>
-                    {p.pontos}
-                  </span>
+                  <span
+                    class="ovd-altimetro-marcador"
+                    style={{ bottom: `${Math.min(92, Math.max(8, pct))}%` }}
+                  />
                 </div>
 
                 <div class="ovd-escalada-info">
-                  <div class="ovd-esc-topo">
-                    <RetratoParticipante participante={p} retratos={retratos} tamanho="pequeno" />
-                    <div class="ovd-esc-info">
-                      <span class="ovd-esc-nome">{p.nome}</span>
-                      <span class="ovd-esc-meta">
-                        Altura {p.pontos} / {desafio.metaPontos}
-                      </span>
-                    </div>
-                    <span
-                      class="ovd-hud-chip"
-                      data-tom={
-                        p.status === 'topo'
-                          ? 'esmeralda'
-                          : p.status === 'caiu'
-                            ? 'carmesim'
-                            : undefined
-                      }
-                    >
-                      {p.status === 'topo' ? 'TOPO' : p.status === 'caiu' ? 'CAIU' : 'ESCALANDO'}
+                  <div class="ovd-escalada-cab">
+                    <span class="ovd-escalada-nome" title={p.nome}>
+                      {p.nome}
+                    </span>
+                    <span class="ovd-escalada-altura">
+                      {p.pontos}/{desafio.metaPontos}
                     </span>
                   </div>
 
+                  {p.status !== 'escalando' && (
+                    <span
+                      class="ovd-hud-chip"
+                      data-tom={p.status === 'topo' ? 'esmeralda' : 'carmesim'}
+                    >
+                      {p.status === 'topo' ? 'TOPO' : 'CAIU'}
+                    </span>
+                  )}
+
                   <div class="ovd-escalada-alerta">
-                    {p.status === 'caiu'
-                      ? `Sofreu ${danoQueda} de dano na queda`
-                      : `${danoQueda} de dano se cair`}
+                    {p.status === 'caiu' ? `Queda: ${danoQueda} dano` : `Se cair: ${danoQueda} dano`}
                   </div>
                 </div>
               </article>
@@ -1550,7 +1525,7 @@ function OverlayEscalada({
         </div>
 
         <footer class="ovd-escalada-lembrete">
-          Rápida (DT {desafio.dtRapida} → RA) • Cautelosa (DT {desafio.dtCautelosa} → RB)
+          RA DT {desafio.dtRapida} • RB DT {desafio.dtCautelosa}
         </footer>
       </section>
     </div>
