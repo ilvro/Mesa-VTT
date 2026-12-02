@@ -18,6 +18,7 @@ import {
   type ResultadoDiscord,
 } from './discord.ts';
 import type { DesafioAtivo } from '../dominio/desafios.ts';
+import { extrairSugestoesDaFicha } from '../dominio/desafios-ficha.ts';
 import { FeedDeRolagens } from './FeedDeRolagens.tsx';
 import { OverlayDesafio } from './OverlayDesafio.tsx';
 import {
@@ -744,6 +745,7 @@ function Sala({
             modo={espectador ? 'mestre' : 'jogador'}
             meuDiscordId={eu?.discordId ?? null}
             minhaFichaId={meuPersonagemId}
+            minhaFicha={fichaDoJogador ? extrairSugestoesDaFicha(fichaDoJogador) : null}
             meuNome={eu?.nome ?? nome}
             retratos={retratos}
             aoAgir={acao => { clienteSala?.enviar({ tipo: 'desafio.acao', acao }); }}

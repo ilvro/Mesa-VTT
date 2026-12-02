@@ -532,6 +532,7 @@ describe('dominio/desafios — Escalada', () => {
     ) as DesafioEscalada;
     assert.equal(d.participantes[0]!.status, 'caiu');
     assert.equal(d.participantes[0]!.ultimoDanoQueda, 3);
+    assert.equal(d.participantes[0]!.pontos, 0);
 
     d = aplicarAcaoDesafio(
       d,
@@ -547,6 +548,7 @@ describe('dominio/desafios-ficha — extrairSugestoesDaFicha', () => {
     const sug = extrairSugestoesDaFicha({
       name: 'Arthur Cervero',
       tokenImage: 'https://exemplo/arthur.png',
+      attributes: { Físico: 10 },
       skills: [
         { name: 'Acrobácia', skillDie: 8 },
         { name: 'vigor', skillDie: 10 },
@@ -559,6 +561,7 @@ describe('dominio/desafios-ficha — extrairSugestoesDaFicha', () => {
     assert.deepEqual(sug, {
       nome: 'Arthur Cervero',
       retrato: 'https://exemplo/arthur.png',
+      fisicoDado: 10,
       acrobaciaDado: 8,
       dadosEquilibrio: 4,
       vigorDado: 10,
@@ -574,6 +577,7 @@ describe('dominio/desafios-ficha — extrairSugestoesDaFicha', () => {
     const sug = extrairSugestoesDaFicha(null);
     assert.deepEqual(sug, {
       nome: 'Personagem',
+      fisicoDado: 6,
       acrobaciaDado: 4,
       dadosEquilibrio: 2,
       vigorDado: 4,

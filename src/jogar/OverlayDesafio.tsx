@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import {
   LADOS_VALIDOS,
+  rolarDado,
   totaisEquilibrio,
   type AcaoDesafio,
   type DadoEquilibrioJogado,
@@ -19,6 +20,7 @@ import {
   type ParticipanteDesafio,
   type ResultadoPino,
 } from '../dominio/desafios.ts';
+import type { SugestoesDaFicha } from '../dominio/desafios-ficha.ts';
 import { tocarEfeitoDesafio, type EfeitoDesafio } from './som-desafios.ts';
 import './overlay-desafio.css';
 
@@ -30,6 +32,8 @@ export interface OverlayDesafioProps {
   meuDiscordId?: string | null;
   /** ID da ficha ativa do jogador atual (para destacar seu cartão e autorizar ações). */
   minhaFichaId?: string | null;
+  /** Sugestões extraídas da ficha ativa do jogador (dados de Físico, Atletismo, etc.). */
+  minhaFicha?: SugestoesDaFicha | null;
   /** Nome do autor para registrar em tentativas de lockpick. */
   meuNome?: string;
   /** Mapa opcional `fichaId -> dataUrl/url` de retratos já carregados na Casca. */
@@ -39,6 +43,20 @@ export interface OverlayDesafioProps {
 }
 
 type VarianteDado = 'osso' | 'sombra' | 'acerto' | 'alto' | 'baixo' | 'perigo' | 'trancado';
+
+function normalizarLados(n: number): LadosDado {
+  if (!Number.isFinite(n) || n <= 4) return 4;
+  for (const l of LADOS_VALIDOS) {
+    if (n <= l) return l;
+  }
+  return 20;
+}
+
+function subirPassoDado(lados: LadosDado): LadosDado {
+  const idx = LADOS_VALIDOS.indexOf(lados);
+  if (idx < 0 || idx >= LADOS_VALIDOS.length - 1) return 20;
+  return LADOS_VALIDOS[idx + 1]!;
+}
 
 function prefereMovimentoReduzido(): boolean {
   return (
@@ -1952,6 +1970,7 @@ function OverlayPerseguicao({
   modo,
   meuDiscordId,
   minhaFichaId,
+  minhaFicha,
   aoAgir,
   aoRecolher,
 }: {
@@ -1959,12 +1978,141 @@ function OverlayPerseguicao({
   modo: OverlayDesafioProps['modo'];
   meuDiscordId?: string | null;
   minhaFichaId?: string | null;
+  minhaFicha?: SugestoesDaFicha | null;
   retratos?: Record<string, string>;
   aoAgir?: (acao: AcaoDesafio) => void;
   aoRecolher: () => void;
 }) {
   const mostrarPa = desafio.mostrarPaJogadores || modo === 'mestre';
   const limiarAtual = desafio.limiaresPorRodada[desafio.rodada];
+
+  const [usarFolegoToggle, setUsarFolegoToggle] = useState(false);
+  const [usarEsforcoToggle, setUsarEsforcoToggle] = useState(false);
+  const [rolandoPers, setRolandoPers] = useState<{
+    participanteId: string;
+    dados: Array<{ lados: LadosDado; valor: number; folego?: boolean }>;
+  } | null>(null);
+  const [resumoPers, setResumoPers] = useState<{
+    participanteId: string;
+    tom: 'acerto' | 'ouro';
+    texto: string;
+  } | null>(null);
+
+  const intervaloRef = useRef<number | null>(null);
+  const timeoutRef = useRef<number | null>(null);
+  const resumoTimerRef = useRef<number | null>(null);
+
+  const limparRolagem = () => {
+    if (intervaloRef.current !== null) {
+      window.clearInterval(intervaloRef.current);
+      intervaloRef.current = null;
+    }
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  };
+
+  const limparResumo = () => {
+    if (resumoTimerRef.current !== null) {
+      window.clearTimeout(resumoTimerRef.current);
+      resumoTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      limparRolagem();
+      limparResumo();
+    };
+  }, []);
+
+  useEffect(() => {
+    limparRolagem();
+    limparResumo();
+    setRolandoPers(null);
+    setResumoPers(null);
+    setUsarFolegoToggle(false);
+    setUsarEsforcoToggle(false);
+  }, [desafio.id]);
+
+  const dFisicoBase = normalizarLados(minhaFicha?.fisicoDado ?? 6);
+  const dAtletismoBase = normalizarLados(minhaFicha?.atletismoDado ?? 4);
+
+  const calcularDadosTeste = (comEsforco: boolean): [LadosDado, LadosDado] => {
+    let dado1 = dFisicoBase;
+    let dado2 = dAtletismoBase;
+    if (comEsforco) {
+      if (dado2 <= dado1) {
+        dado2 = subirPassoDado(dado2);
+      } else {
+        dado1 = subirPassoDado(dado1);
+      }
+    }
+    return [dado1, dado2];
+  };
+
+  const mostrarResumo = (participanteId: string, tom: 'acerto' | 'ouro', texto: string) => {
+    limparResumo();
+    setResumoPers({ participanteId, tom, texto });
+    resumoTimerRef.current = window.setTimeout(() => {
+      resumoTimerRef.current = null;
+      setResumoPers(null);
+    }, 4000);
+  };
+
+  const iniciarAvanco = (participanteId: string, folegoDisponivel: number) => {
+    if (!aoAgir || rolandoPers !== null) return;
+    const comFolego = usarFolegoToggle && folegoDisponivel > 0;
+    const comEsforco = usarEsforcoToggle;
+    const [l1, l2] = calcularDadosTeste(comEsforco);
+
+    const finalizar = () => {
+      const v1 = rolarDado(l1);
+      const v2 = rolarDado(l2);
+      const vFolego = comFolego ? rolarDado(6) : null;
+      const todos = vFolego !== null ? [v1, v2, vFolego] : [v1, v2];
+      const soma = todos.reduce((a, b) => a + b, 0);
+      const pontos = soma >= 10 ? Math.max(...todos) : Math.min(...todos);
+
+      if (comFolego) {
+        aoAgir({ tipo: 'perseguicao.gastar-folego', participanteId, quantidade: 1 });
+        setUsarFolegoToggle(false);
+      }
+      aoAgir({ tipo: 'perseguicao.avancar', participanteId, pontos, esforcoExtra: comEsforco });
+      setUsarEsforcoToggle(false);
+      mostrarResumo(
+        participanteId,
+        soma >= 10 ? 'acerto' : 'ouro',
+        `${todos.join(' + ')} = ${soma} (DT 10) → +${pontos} PA`,
+      );
+    };
+
+    if (prefereMovimentoReduzido()) {
+      finalizar();
+      return;
+    }
+
+    limparRolagem();
+    const sortear = () => {
+      const dados: Array<{ lados: LadosDado; valor: number; folego?: boolean }> = [
+        { lados: l1, valor: rolarDado(l1) },
+        { lados: l2, valor: rolarDado(l2) },
+      ];
+      if (comFolego) {
+        dados.push({ lados: 6, valor: rolarDado(6), folego: true });
+      }
+      setRolandoPers({ participanteId, dados });
+      tocarEfeitoDesafio('pino-girar');
+    };
+    sortear();
+    intervaloRef.current = window.setInterval(sortear, 75);
+    timeoutRef.current = window.setTimeout(() => {
+      limparRolagem();
+      setRolandoPers(null);
+      finalizar();
+    }, 620);
+  };
 
   // Destaca o próprio personagem primeiro no canto superior esquerdo
   const ordenados = [...desafio.participantes].sort((a, b) => {
@@ -1990,10 +2138,14 @@ function OverlayPerseguicao({
         {ordenados.map((p, idx) => {
           const souEu = ehMeuParticipante(p, meuDiscordId, minhaFichaId);
           const secundario = ordenados.length > 1 && (temMeu ? !souEu : idx > 0);
-          const podeGastarFolego =
-            modo === 'jogador' && Boolean(aoAgir) && souEu && p.folegoRestante > 0 && p.status === 'correndo';
+          const podeAgir = modo === 'jogador' && Boolean(aoAgir) && souEu && p.status === 'correndo';
+          const podeGastarFolego = podeAgir && p.folegoRestante > 0;
           const alvoNumero =
             limiarAtual !== undefined && p.pa < limiarAtual ? limiarAtual : desafio.metaPa;
+          const folegoAtivo = usarFolegoToggle && p.folegoRestante > 0;
+          const [dado1, dado2] = calcularDadosTeste(usarEsforcoToggle);
+          const estaRolandoEste = rolandoPers?.participanteId === p.id;
+          const resumoEste = resumoPers?.participanteId === p.id ? resumoPers : null;
 
           const usarFolego = () => {
             if (!podeGastarFolego || !aoAgir) return;
@@ -2042,6 +2194,73 @@ function OverlayPerseguicao({
                   </div>
                 )}
               </div>
+
+              {podeAgir && (
+                <div class="ovd-roll-acoes">
+                  {estaRolandoEste && rolandoPers ? (
+                    <div class="ovd-eq-rolando ovd-roll-anim" aria-live="polite">
+                      {rolandoPers.dados.map((d, i) => (
+                        <DadoPoligono
+                          key={i}
+                          lados={d.lados}
+                          valor={d.valor}
+                          variante={d.folego ? 'alto' : 'osso'}
+                          tamanho={30}
+                          classe={`ovd-dado-rolando${i % 2 === 1 ? ' ovd-dado-rolando-atraso' : ''}`}
+                        />
+                      ))}
+                      <span class="ovd-eq-rolando-texto">Rolando…</span>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        class="ovd-eq-btn ovd-roll-btn"
+                        disabled={rolandoPers !== null}
+                        title={`Rolar d${dado1} + d${dado2}${folegoAtivo ? ' + d6' : ''} contra DT 10`}
+                        onClick={() => iniciarAvanco(p.id, p.folegoRestante)}
+                      >
+                        <span>🎲 Avançar (DT 10)</span>
+                        <span class="ovd-roll-sub">
+                          d{dado1}+d{dado2}
+                          {folegoAtivo ? '+d6' : ''}
+                        </span>
+                      </button>
+
+                      <div class="ovd-roll-toggles">
+                        {p.folegoRestante > 0 && (
+                          <button
+                            type="button"
+                            class="ovd-roll-toggle"
+                            aria-pressed={folegoAtivo}
+                            data-ativo={folegoAtivo ? '1' : '0'}
+                            disabled={rolandoPers !== null}
+                            onClick={() => setUsarFolegoToggle((v) => !v)}
+                          >
+                            +d6 Fôlego
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          class="ovd-roll-toggle"
+                          aria-pressed={usarEsforcoToggle}
+                          data-ativo={usarEsforcoToggle ? '1' : '0'}
+                          disabled={rolandoPers !== null}
+                          onClick={() => setUsarEsforcoToggle((v) => !v)}
+                        >
+                          Esforço Extra (+passo, −{p.esforcoExtraUsos + 1}d4 PV)
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {resumoEste && (
+                <div class="ovd-roll-resumo" data-tom={resumoEste.tom} role="status" aria-live="polite">
+                  {resumoEste.texto}
+                </div>
+              )}
             </div>
           );
         })}
@@ -2056,16 +2275,132 @@ function OverlayPerseguicao({
 
 function OverlayEscalada({
   desafio,
+  modo,
   meuDiscordId,
   minhaFichaId,
+  minhaFicha,
+  aoAgir,
   aoRecolher,
 }: {
   desafio: DesafioEscalada;
+  modo: OverlayDesafioProps['modo'];
   meuDiscordId?: string | null;
   minhaFichaId?: string | null;
+  minhaFicha?: SugestoesDaFicha | null;
   retratos?: Record<string, string>;
+  aoAgir?: (acao: AcaoDesafio) => void;
   aoRecolher: () => void;
 }) {
+  const [rolandoEsc, setRolandoEsc] = useState<{
+    participanteId: string;
+    estilo: 'rapida' | 'cautelosa';
+    faces: [number, number];
+  } | null>(null);
+  const [resumoEsc, setResumoEsc] = useState<{
+    participanteId: string;
+    tom: 'acerto' | 'perigo';
+    texto: string;
+  } | null>(null);
+
+  const intervaloRef = useRef<number | null>(null);
+  const timeoutRef = useRef<number | null>(null);
+  const resumoTimerRef = useRef<number | null>(null);
+
+  const limparRolagem = () => {
+    if (intervaloRef.current !== null) {
+      window.clearInterval(intervaloRef.current);
+      intervaloRef.current = null;
+    }
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  };
+
+  const limparResumo = () => {
+    if (resumoTimerRef.current !== null) {
+      window.clearTimeout(resumoTimerRef.current);
+      resumoTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      limparRolagem();
+      limparResumo();
+    };
+  }, []);
+
+  useEffect(() => {
+    limparRolagem();
+    limparResumo();
+    setRolandoEsc(null);
+    setResumoEsc(null);
+  }, [desafio.id]);
+
+  const dFisico = normalizarLados(minhaFicha?.fisicoDado ?? 6);
+  const dAtletismo = normalizarLados(minhaFicha?.atletismoDado ?? 4);
+
+  const mostrarResumo = (participanteId: string, tom: 'acerto' | 'perigo', texto: string) => {
+    limparResumo();
+    setResumoEsc({ participanteId, tom, texto });
+    resumoTimerRef.current = window.setTimeout(() => {
+      resumoTimerRef.current = null;
+      setResumoEsc(null);
+    }, 4000);
+  };
+
+  const iniciarEscalada = (participanteId: string, estilo: 'rapida' | 'cautelosa') => {
+    if (!aoAgir || rolandoEsc !== null) return;
+    const dt = estilo === 'rapida' ? desafio.dtRapida : desafio.dtCautelosa;
+
+    const finalizar = () => {
+      const v1 = rolarDado(dFisico);
+      const v2 = rolarDado(dAtletismo);
+      const soma = v1 + v2;
+      const ra = Math.max(v1, v2);
+      const rb = Math.min(v1, v2);
+      if (soma >= dt) {
+        const pontos = estilo === 'rapida' ? ra : rb;
+        aoAgir({ tipo: 'escalada.registrar', participanteId, passou: true, pontos });
+        mostrarResumo(
+          participanteId,
+          'acerto',
+          `${v1} + ${v2} = ${soma} (DT ${dt}) → +${pontos} pts!`,
+        );
+      } else {
+        aoAgir({ tipo: 'escalada.registrar', participanteId, passou: false });
+        mostrarResumo(
+          participanteId,
+          'perigo',
+          `${v1} + ${v2} = ${soma} (DT ${dt}) → Caiu!`,
+        );
+      }
+    };
+
+    if (prefereMovimentoReduzido()) {
+      finalizar();
+      return;
+    }
+
+    limparRolagem();
+    const sortear = () => {
+      setRolandoEsc({
+        participanteId,
+        estilo,
+        faces: [rolarDado(dFisico), rolarDado(dAtletismo)],
+      });
+      tocarEfeitoDesafio('pino-girar');
+    };
+    sortear();
+    intervaloRef.current = window.setInterval(sortear, 75);
+    timeoutRef.current = window.setTimeout(() => {
+      limparRolagem();
+      setRolandoEsc(null);
+      finalizar();
+    }, 620);
+  };
+
   const ordenados = [...desafio.participantes].sort((a, b) => {
     const aMeu = ehMeuParticipante(a, meuDiscordId, minhaFichaId) ? 0 : 1;
     const bMeu = ehMeuParticipante(b, meuDiscordId, minhaFichaId) ? 0 : 1;
@@ -2088,6 +2423,9 @@ function OverlayEscalada({
           const souEu = ehMeuParticipante(p, meuDiscordId, minhaFichaId);
           const secundario = ordenados.length > 1 && (temMeu ? !souEu : idx > 0);
           const danoQueda = p.status === 'caiu' ? (p.ultimoDanoQueda ?? p.pontos) : p.pontos;
+          const podeAgir = modo === 'jogador' && Boolean(aoAgir) && souEu && p.status !== 'topo';
+          const estaRolandoEste = rolandoEsc?.participanteId === p.id;
+          const resumoEste = resumoEsc?.participanteId === p.id ? resumoEsc : null;
 
           return (
             <div
@@ -2096,42 +2434,99 @@ function OverlayEscalada({
               data-meu={souEu ? '1' : '0'}
               data-status={p.status}
             >
-              <EscaladaSvg
-                pontos={p.pontos}
-                metaPontos={desafio.metaPontos}
-                status={p.status}
-                compacto={secundario}
-              />
+              <div class="ovd-escalada-linha">
+                <EscaladaSvg
+                  pontos={p.pontos}
+                  metaPontos={desafio.metaPontos}
+                  status={p.status}
+                  compacto={secundario}
+                />
 
-              <div class="ovd-escalada-info">
-                {(ordenados.length > 1 || p.status !== 'escalando') && (
-                  <div class="ovd-escalada-cab">
-                    {ordenados.length > 1 && (
-                      <span class="ovd-escalada-nome" title={p.nome}>
-                        {primeiroNome(p.nome)}
-                      </span>
-                    )}
-                    {p.status !== 'escalando' && (
-                      <span
-                        class="ovd-hud-chip"
-                        data-tom={p.status === 'topo' ? 'esmeralda' : 'carmesim'}
-                      >
-                        {p.status === 'topo' ? 'TOPO' : 'CAIU'}
-                      </span>
-                    )}
+                <div class="ovd-escalada-info">
+                  {(ordenados.length > 1 || p.status !== 'escalando') && (
+                    <div class="ovd-escalada-cab">
+                      {ordenados.length > 1 && (
+                        <span class="ovd-escalada-nome" title={p.nome}>
+                          {primeiroNome(p.nome)}
+                        </span>
+                      )}
+                      {p.status !== 'escalando' && (
+                        <span
+                          class="ovd-hud-chip"
+                          data-tom={p.status === 'topo' ? 'esmeralda' : 'carmesim'}
+                        >
+                          {p.status === 'topo' ? 'TOPO' : 'CAIU'}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <div class="ovd-escalada-placar">
+                    <span class="ovd-escalada-num">{p.pontos}</span>
+                    <span class="ovd-escalada-meta">/ {desafio.metaPontos}</span>
                   </div>
-                )}
 
-                <div class="ovd-escalada-placar">
-                  <span class="ovd-escalada-num">{p.pontos}</span>
-                  <span class="ovd-escalada-meta">/ {desafio.metaPontos}</span>
-                </div>
-
-                <div class="ovd-escalada-queda">
-                  <IconeQueda tamanho={13} />
-                  <span>QUEDA: {danoQueda}</span>
+                  <div class="ovd-escalada-queda">
+                    <IconeQueda tamanho={13} />
+                    <span>QUEDA: {danoQueda}</span>
+                  </div>
                 </div>
               </div>
+
+              {podeAgir && (
+                <div class="ovd-roll-acoes">
+                  {estaRolandoEste && rolandoEsc ? (
+                    <div class="ovd-eq-rolando ovd-roll-anim" aria-live="polite">
+                      <DadoPoligono
+                        lados={dFisico}
+                        valor={rolandoEsc.faces[0]}
+                        variante="osso"
+                        tamanho={30}
+                        classe="ovd-dado-rolando"
+                      />
+                      <DadoPoligono
+                        lados={dAtletismo}
+                        valor={rolandoEsc.faces[1]}
+                        variante="osso"
+                        tamanho={30}
+                        classe="ovd-dado-rolando ovd-dado-rolando-atraso"
+                      />
+                      <span class="ovd-eq-rolando-texto">
+                        {rolandoEsc.estilo === 'rapida' ? 'Rápida…' : 'Cautelosa…'}
+                      </span>
+                    </div>
+                  ) : (
+                    <div class="ovd-roll-botoes">
+                      <button
+                        type="button"
+                        class="ovd-eq-btn ovd-roll-btn"
+                        disabled={rolandoEsc !== null}
+                        title={`d${dFisico} + d${dAtletismo} → +RA`}
+                        onClick={() => iniciarEscalada(p.id, 'rapida')}
+                      >
+                        <span>🎲 Rápida (DT {desafio.dtRapida})</span>
+                        <span class="ovd-roll-sub">d{dFisico}+d{dAtletismo} → +RA</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="ovd-eq-btn ovd-roll-btn"
+                        disabled={rolandoEsc !== null}
+                        title={`d${dFisico} + d${dAtletismo} → +RB`}
+                        onClick={() => iniciarEscalada(p.id, 'cautelosa')}
+                      >
+                        <span>🎲 Cautelosa (DT {desafio.dtCautelosa})</span>
+                        <span class="ovd-roll-sub">d{dFisico}+d{dAtletismo} → +RB</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {resumoEste && (
+                <div class="ovd-roll-resumo" data-tom={resumoEste.tom} role="status" aria-live="polite">
+                  {resumoEste.texto}
+                </div>
+              )}
             </div>
           );
         })}
@@ -2310,6 +2705,7 @@ export function OverlayDesafio({
   modo,
   meuDiscordId,
   minhaFichaId,
+  minhaFicha,
   meuNome,
   retratos,
   aoAgir,
@@ -2424,6 +2820,7 @@ export function OverlayDesafio({
           modo={modo}
           meuDiscordId={meuDiscordId}
           minhaFichaId={minhaFichaId}
+          minhaFicha={minhaFicha}
           retratos={retratos}
           aoAgir={aoAgir}
           aoRecolher={recolher}
@@ -2432,9 +2829,12 @@ export function OverlayDesafio({
       {desafio.tipo === 'escalada' && (
         <OverlayEscalada
           desafio={desafio}
+          modo={modo}
           meuDiscordId={meuDiscordId}
           minhaFichaId={minhaFichaId}
+          minhaFicha={minhaFicha}
           retratos={retratos}
+          aoAgir={aoAgir}
           aoRecolher={recolher}
         />
       )}

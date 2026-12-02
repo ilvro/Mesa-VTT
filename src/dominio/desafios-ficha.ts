@@ -1,6 +1,7 @@
 export interface SugestoesDaFicha {
   nome: string;
   retrato?: string;
+  fisicoDado: number;
   acrobaciaDado: number;
   dadosEquilibrio: number;
   vigorDado: number;
@@ -12,6 +13,21 @@ export interface SugestoesDaFicha {
 }
 
 const DADO_PADRAO = 4;
+const ATRIBUTO_PADRAO = 6;
+
+function lerDadoAtributo(attributes: unknown, alvoNormalizado: string): number {
+  if (!attributes || typeof attributes !== 'object' || Array.isArray(attributes)) {
+    return ATRIBUTO_PADRAO;
+  }
+  for (const [chave, valor] of Object.entries(attributes as Record<string, unknown>)) {
+    if (normalizarNomePericia(chave) !== alvoNormalizado) continue;
+    if (typeof valor === 'number' && Number.isFinite(valor) && valor > 0) {
+      return Math.floor(valor);
+    }
+    return ATRIBUTO_PADRAO;
+  }
+  return ATRIBUTO_PADRAO;
+}
 
 function normalizarNomePericia(texto: string): string {
   return texto
@@ -53,6 +69,7 @@ export function extrairSugestoesDaFicha(
   const retrato = textoNaoVazio(ficha?.tokenImage);
   const skills = ficha?.skills;
 
+  const fisicoDado = lerDadoAtributo(ficha?.attributes, 'FISICO');
   const acrobaciaDado = lerDadoPericia(skills, 'ACROBACIA');
   const vigorDado = lerDadoPericia(skills, 'VIGOR');
   const crimeDado = lerDadoPericia(skills, 'CRIME');
@@ -61,6 +78,7 @@ export function extrairSugestoesDaFicha(
 
   const sugestoes: SugestoesDaFicha = {
     nome,
+    fisicoDado,
     acrobaciaDado,
     dadosEquilibrio: Math.max(1, Math.floor(acrobaciaDado / 2)),
     vigorDado,

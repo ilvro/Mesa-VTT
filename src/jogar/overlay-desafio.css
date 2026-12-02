@@ -1442,11 +1442,18 @@
 .ovd-escalada-item {
   pointer-events: auto;
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   background: transparent;
   border: 0;
   padding: 0;
+}
+
+.ovd-escalada-linha {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .ovd-escalada-item-sec {
@@ -1546,6 +1553,118 @@
   text-transform: uppercase;
   color: rgba(244, 241, 234, 0.66);
   text-shadow: var(--ovd-sombra-texto);
+}
+
+/* ── Prompts de rolagem flutuantes (Perseguição e Escalada) ───────────── */
+.ovd-roll-acoes {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.ovd-roll-botoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ovd-roll-btn {
+  padding: 5px 11px;
+  font-size: 10.5px;
+  gap: 6px;
+}
+
+.ovd-roll-sub {
+  font: 600 9.5px var(--ovd-fonte-corpo);
+  letter-spacing: 0.04em;
+  text-transform: none;
+  opacity: 0.76;
+}
+
+.ovd-roll-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.ovd-roll-toggle {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(12, 10, 20, 0.56);
+  border: 1px solid var(--linha, rgba(255, 255, 255, 0.16));
+  color: rgba(233, 230, 223, 0.82);
+  font: 700 9.5px var(--ovd-fonte-corpo);
+  letter-spacing: 0.05em;
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease, transform 0.14s ease;
+}
+
+.ovd-roll-toggle:hover:not(:disabled),
+.ovd-roll-toggle:focus-visible:not(:disabled) {
+  border-color: var(--acento, var(--ovd-ouro));
+  color: #fff;
+  background: rgba(18, 15, 28, 0.84);
+}
+
+.ovd-roll-toggle[data-ativo='1'] {
+  background: color-mix(in srgb, var(--acento, #e8b95a), rgba(12, 10, 20, 0.82) 76%);
+  border-color: var(--acento, var(--ovd-ouro));
+  color: #fff5dc;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--acento, #e8b95a), transparent 72%);
+}
+
+.ovd-roll-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ovd-roll-anim {
+  padding: 4px 11px;
+  gap: 7px;
+}
+
+.ovd-roll-resumo {
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(12, 10, 20, 0.74);
+  border: 1px solid var(--linha, rgba(255, 255, 255, 0.18));
+  backdrop-filter: blur(6px);
+  font: 700 10.5px var(--ovd-fonte-corpo);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--texto, #f0edf5);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.48);
+  animation: ovd-harpa-entra 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ovd-roll-resumo[data-tom='acerto'] {
+  border-color: rgba(83, 226, 161, 0.58);
+  color: #dcffef;
+}
+
+.ovd-roll-resumo[data-tom='ouro'] {
+  border-color: var(--acento, rgba(232, 185, 90, 0.6));
+  color: #ffefc8;
+}
+
+.ovd-roll-resumo[data-tom='perigo'] {
+  background: rgba(58, 12, 20, 0.8);
+  border-color: rgba(255, 92, 108, 0.68);
+  color: #ffdce0;
 }
 
 /* ── Modo telão: tipografia ampliada para leitura à distância ─────────── */
@@ -1704,7 +1823,8 @@
   .ovd-pino-aguardando .ovd-dado,
   .ovd-pino-revelado .ovd-dado,
   .ovd-lock-harpa-linha,
-  .ovd-lock-banner {
+  .ovd-lock-banner,
+  .ovd-roll-resumo {
     animation: none !important;
   }
   .ovd-raiz-aberta,
@@ -1717,6 +1837,7 @@
   .ovd-dado,
   .ovd-pilula,
   .ovd-eq-btn,
+  .ovd-roll-toggle,
   .ovd-btn {
     transition: none !important;
   }
