@@ -16,6 +16,8 @@ import { extrairPacoteDeCena, type PacoteDeCena } from '../dominio/cenas.ts';
 import { carregarFatos } from '../app/prontidao.ts';
 import { pendenciasDaSessao } from '../dominio/prontidao.ts';
 import { DialogoChecagemSessao } from './DialogoChecagemSessao.tsx';
+import { PainelDesafios } from './PainelDesafios.tsx';
+import { desafioAtivo } from '../app/desafios.ts';
 import { abrirQuadro, carregarQuadros, criarQuadro, quadroAberto, quadros } from '../app/quadros.ts';
 import { modoFocoSessao, type ModoFocoSessao } from '../app/foco-do-quadro.ts';
 import { Quadro } from './quadro/Quadro.tsx';
@@ -306,6 +308,7 @@ function MenuDePaineis({ l, preset }: { l: Layout; preset: PresetId | null }) {
 export function ModoSessao() {
   const c = campanhaAtiva.value, area = useRef<HTMLDivElement>(null);
   const [arrastando, setArrastando] = useState(false);
+  const [desafiosAberto, setDesafiosAberto] = useState(false);
   useEffect(() => { carregarEscolhas(c?.id ?? null); void sondarAplicativos(); void carregarSessoes(); }, [c?.id]);
 
   if (!c) return <section class="pagina"><div class="vazio"><h2>Escolha uma campanha</h2><p>O modo sessão junta o mapa, as fichas e a música da campanha ativa.</p></div></section>;
@@ -427,6 +430,16 @@ export function ModoSessao() {
           )}
           <button
             type="button"
+            class={cx('botao-pilula', desafioAtivo.value !== null && 'botao-desafios-ativo')}
+            title="Abrir painel de Desafios de Cena (Fechadura, Equilíbrio, Furtividade, Perseguição, Escalar)"
+            data-testid="sessao-abrir-desafios"
+            onClick={() => setDesafiosAberto(true)}
+          >
+            ⚔ Desafios
+            {desafioAtivo.value !== null && <span class="botao-desafios-selo" aria-label="Desafio ativo" />}
+          </button>
+          <button
+            type="button"
             class="botao-pilula"
             title="Abrir visão do projetor para os jogadores na TV ou 2º monitor"
             data-testid="sessao-abrir-projetor"
@@ -456,6 +469,7 @@ export function ModoSessao() {
       {checandoProntidaoSessao.value && (
         <DialogoChecagemSessao aoFechar={() => { checandoProntidaoSessao.value = false; }} />
       )}
+      <PainelDesafios aberto={desafiosAberto} aoFechar={() => setDesafiosAberto(false)} />
     </section>
   );
 }

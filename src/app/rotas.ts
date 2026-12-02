@@ -10,6 +10,9 @@ const PROJECAO = /^#\/projecao\/([^/]+)$/;
 /** `#/jogar/<salaId>`: a casca do jogador (tela cheia, sem a navegação da Mesa). */
 export const jogarSalaId = signal<string | null>(null);
 const JOGAR = /^#\/jogar\/([A-Za-z0-9_-]{1,64})$/;
+/** `#/telao` ou `#/telao?mapa=<id>` ou `#/telao/<id>`: telão local presencial (TV / 2º monitor). */
+export const telaoLocal = signal<{ ativo: boolean; mapaId: string | null }>({ ativo: false, mapaId: null });
+const TELAO = /^#\/telao(?:\/([^/?#]+))?(?:\?([^#]*))?$/;
 
 /** `#/entidade/<id>` é o link profundo do manifesto (`mesa.json`). */
 const ENTIDADE = /^#\/entidade\/(.+)$/;
@@ -20,7 +23,21 @@ export function lerHash(): void {
   const hash = location.hash;
   const jg = JOGAR.exec(hash);
   jogarSalaId.value = jg ? jg[1]! : null;
-  if (jg) return;
+  if (jg) {
+    telaoLocal.value = { ativo: false, mapaId: null };
+    projecaoQuadroId.value = null;
+    return;
+  }
+  const tl = TELAO.exec(hash);
+  if (tl) {
+    const params = tl[2] ? new URLSearchParams(tl[2]) : null;
+    const mapaParam = params?.get('mapa')?.trim() || null;
+    const mapaSeg = tl[1] ? decodeURIComponent(tl[1]) : null;
+    telaoLocal.value = { ativo: true, mapaId: mapaParam ?? mapaSeg };
+    projecaoQuadroId.value = null;
+    return;
+  }
+  telaoLocal.value = { ativo: false, mapaId: null };
   const pj = PROJECAO.exec(hash);
   projecaoQuadroId.value = pj ? decodeURIComponent(pj[1]!) : null;
   if (pj) return;

@@ -5,11 +5,14 @@ import { docParaHtml } from '../../dominio/doc-rico.ts';
 import { areaUtil, caminhoDaForma } from '../../dominio/formas.ts';
 import { familiaCss } from '../../dominio/fontes.ts';
 import { PALETA_PADRAO, fundoEfetivo } from '../../dominio/paleta.ts';
+import type { DesafioAtivo } from '../../dominio/desafios.ts';
 import type { ItemParaJogadores } from '../../dominio/projecao.ts';
 import { ROTULO_DO_TIPO } from '../../dominio/entidades.ts';
 import { entidades } from '../../app/campanha.ts';
+import { iniciarOuvinteDesafioLocal } from '../../app/desafios.ts';
 import { iniciarJanelaDeProjecao, vistaDaProjecao } from '../../app/projecao.ts';
 import { projecaoQuadroId } from '../../app/rotas.ts';
+import { OverlayDesafio } from '../../jogar/OverlayDesafio.tsx';
 import { ItemImagem } from './ItemImagem.tsx';
 import { ItemSeta } from './ItemSeta.tsx';
 import { ItemTraco } from './ItemTraco.tsx';
@@ -146,8 +149,10 @@ function Desenho({ item, todos }: { item: ItemParaJogadores; todos: ReadonlyMap<
 
 export function ProjecaoDoQuadro() {
   const [tela, setTela] = useState({ largura: window.innerWidth, altura: window.innerHeight });
+  const [desafio, setDesafio] = useState<DesafioAtivo | null>(null);
 
   useEffect(() => iniciarJanelaDeProjecao(() => projecaoQuadroId.peek()), []);
+  useEffect(() => iniciarOuvinteDesafioLocal(setDesafio), []);
   useEffect(() => {
     const aoRedimensionar = () => setTela({ largura: window.innerWidth, altura: window.innerHeight });
     window.addEventListener('resize', aoRedimensionar);
@@ -155,7 +160,13 @@ export function ProjecaoDoQuadro() {
   }, []);
 
   const vista = vistaDaProjecao.value;
-  if (!vista) return <div class="projecao projecao-preta" data-testid="projecao" data-estado="parada" />;
+  if (!vista) {
+    return (
+      <div class="projecao projecao-preta" data-testid="projecao" data-estado="parada">
+        <OverlayDesafio desafio={desafio} modo="telao" />
+      </div>
+    );
+  }
 
   const raiz = vista.itens.find((i) => i.id === vista.molduraId)!;
   const camera = enquadrar({ x: raiz.x, y: raiz.y, largura: raiz.largura, altura: raiz.altura }, tela, 24, ZOOM_MIN, 8);
@@ -174,6 +185,7 @@ export function ProjecaoDoQuadro() {
           <Desenho key={item.id} item={item} todos={todos} />
         ))}
       </div>
+      <OverlayDesafio desafio={desafio} modo="telao" />
     </div>
   );
 }

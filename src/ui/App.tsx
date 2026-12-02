@@ -2,7 +2,7 @@ import type { ComponentType } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { repositorio } from '../app/campanha.ts';
 import { avisar } from '../app/toasts.ts';
-import { jogarSalaId, projecaoQuadroId, tela } from '../app/rotas.ts';
+import { jogarSalaId, projecaoQuadroId, tela, telaoLocal } from '../app/rotas.ts';
 import { Aprender } from './Aprender.tsx';
 import { Tutor } from './Tutor.tsx';
 import { Aplicativos } from './Aplicativos.tsx';
@@ -20,10 +20,12 @@ import { quadroAberto } from '../app/quadros.ts';
 import { Quadro } from './quadro/Quadro.tsx';
 import { Quadros } from './quadro/Quadros.tsx';
 import { ProjecaoDoQuadro } from './quadro/ProjecaoDoQuadro.tsx';
+import { TelaoLocal } from './TelaoLocal.tsx';
 
 /** A janela de projeção é a própria Mesa numa rota: sem cabeçalho, avisos nem atalhos do mestre. */
 export function App() {
   if (jogarSalaId.value) return <CascaSobDemanda salaId={jogarSalaId.value} />;
+  if (telaoLocal.value.ativo) return <TelaoLocal mapaId={telaoLocal.value.mapaId} />;
   return projecaoQuadroId.value ? <ProjecaoDoQuadro /> : <AppDoMestre />;
 }
 
