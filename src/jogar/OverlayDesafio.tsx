@@ -85,13 +85,21 @@ function DadoPoligono({
 }) {
   const texto = String(valor);
   const tamanhoFonte =
-    texto.length >= 2
-      ? lados === 4
-        ? 21
-        : 24
-      : lados === 4
-        ? 26
-        : 31;
+    variante === 'sombra'
+      ? texto.length >= 2
+        ? lados === 4
+          ? 23
+          : 26
+        : lados === 4
+          ? 28
+          : 30
+      : texto.length >= 2
+        ? lados === 4
+          ? 21
+          : 24
+        : lados === 4
+          ? 26
+          : 31;
   const textoY = lados === 4 ? 41 : 33;
 
   let forma: string | null = null;
@@ -158,8 +166,8 @@ function DadoPoligono({
   );
 }
 
-/** Ícone SVG de figura encapuzada branca com rosto sombreado (Furtividade — fiel às prints 4 e 5). */
-function IconeSombra({ tamanho = 22 }: { tamanho?: number }) {
+/** Ícone SVG de figura encapuzada branca pura com capuz pontudo, manto estreito e rosto sombreado (Furtividade — prints 4 e 5). */
+function IconeSombra({ tamanho = 28 }: { tamanho?: number }) {
   return (
     <svg
       class="ovd-esc-sombra-icone"
@@ -169,30 +177,36 @@ function IconeSombra({ tamanho = 22 }: { tamanho?: number }) {
       fill="none"
       aria-hidden="true"
     >
-      {/* Capuz pontudo e manto branco sólido */}
+      {/* Capuz pontudo e manto estreito em branco puro */}
       <path
-        d="M14 2L7.2 10.6C6.1 12.1 5.4 14 5.1 16L3.6 24.4C3.5 25.1 4 25.7 4.7 25.7H23.3C24 25.7 24.5 25.1 24.4 24.4L22.9 16C22.6 14 21.9 12.1 20.8 10.6L14 2Z"
+        d="M14 1.4L8.6 9.2C7.4 10.9 6.8 13.1 6.5 15.6L5.6 25.4C5.5 26.1 6.1 26.6 6.8 26.6H21.2C21.9 26.6 22.5 26.1 22.4 25.4L21.5 15.6C21.2 13.1 20.6 10.9 19.4 9.2L14 1.4Z"
         fill="currentColor"
       />
-      {/* Cavidade sombreada do rosto */}
+      {/* Rosto sombreado em preto com recorte vertical contrastante */}
       <path
-        d="M14 7.6C11.3 8.9 9.7 11.4 9.7 14.2C9.7 16.9 11.5 19.1 14 19.8C16.5 19.1 18.3 16.9 18.3 14.2C18.3 11.4 16.7 8.9 14 7.6Z"
-        fill="#0d0e12"
+        d="M14 6.6C11.5 8 10.3 10.4 10.3 13.3C10.3 16 11.8 18 14 18.8C16.2 18 17.7 16 17.7 13.3C17.7 10.4 16.5 8 14 6.6Z"
+        fill="#08090d"
       />
-      {/* Dobras sutis do manto */}
+      {/* Recorte vertical central no manto */}
       <path
-        d="M8.5 25.7L11.2 19.6M19.5 25.7L16.8 19.6"
-        stroke="#0d0e12"
-        stroke-opacity="0.45"
-        stroke-width="1.2"
+        d="M14 18.4V26.6"
+        stroke="#08090d"
+        stroke-width="1.8"
+        stroke-linecap="round"
+      />
+      <path
+        d="M10.2 26.6L11.8 19.6M17.8 26.6L16.2 19.6"
+        stroke="#08090d"
+        stroke-opacity="0.55"
+        stroke-width="1.15"
         stroke-linecap="round"
       />
     </svg>
   );
 }
 
-/** Silhueta sólida branca de pessoa correndo (Perseguição — fiel à print 7). */
-function IconeCorrendo({ tamanho = 28, classe }: { tamanho?: number; classe?: string }) {
+/** Silhueta sólida branca de pessoa correndo para a direita (Perseguição — fiel à print 7). */
+function IconeCorrendo({ tamanho = 42, classe }: { tamanho?: number; classe?: string }) {
   return (
     <svg
       class={classe}
@@ -211,7 +225,9 @@ function IconeCorrendo({ tamanho = 28, classe }: { tamanho?: number; classe?: st
   );
 }
 
-/** SVG de pulmão estilizado desenhado à mão em contorno branco com ramificações brônquicas e dados d6 osso (print 6). */
+const ROTACOES_FOLEGO = [-10, 5, -4, 7, -6, 4];
+
+/** UM único pulmão orgânico grande desenhado em contorno branco à mão com traqueia no topo direito e dados d6 marfim inclinados dentro (print 6). */
 function PulmaoFolego({
   restante,
   total,
@@ -227,9 +243,9 @@ function PulmaoFolego({
 }) {
   const slots = Math.max(total, restante, 0);
   const itens = Array.from({ length: slots }, (_, idx) => idx < restante);
-  const largura = compacto ? 76 : 104;
-  const altura = compacto ? 60 : 82;
-  const tamDado = compacto ? 16 : slots > 4 ? 18 : 22;
+  const largura = compacto ? 86 : 118;
+  const altura = compacto ? 76 : 104;
+  const tamDado = compacto ? 17 : slots > 4 ? 19 : 24;
 
   return (
     <div class="ovd-pulmao-wrap">
@@ -243,50 +259,130 @@ function PulmaoFolego({
         title={interativo && restante > 0 ? 'Clique para gastar 1 dado de Fôlego (d6)' : `Fôlego: ${restante}/${total}`}
         aria-label={`Fôlego: ${restante} de ${total} dados d6`}
       >
-        <svg width={largura} height={altura} viewBox="0 0 132 104" fill="none" aria-hidden="true">
-          {/* Traqueia com anéis sutis e ramificações brônquicas */}
+        <svg width={largura} height={altura} viewBox="0 0 128 112" fill="none" aria-hidden="true">
+          {/* Traqueia saindo no topo direito */}
           <path
-            d="M66 5V33M62.5 11H69.5M62.5 17H69.5M62.5 23H69.5"
-            stroke="rgba(246, 248, 252, 0.92)"
-            stroke-width="2"
+            d="M84 36C89 24 96 14 104 7M94 40C99 29 105 21 113 14"
+            stroke="#ffffff"
+            stroke-width="2.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          {/* Anéis sutis da traqueia */}
+          <path
+            d="M90 22L97 26M95 15L102 19"
+            stroke="rgba(255, 255, 255, 0.72)"
+            stroke-width="1.5"
             stroke-linecap="round"
           />
+          {/* Ramificações brônquicas internas finas */}
           <path
-            d="M66 31L49 42M49 42L37 38M49 42L40 53M49 42L46 61M66 31L83 42M83 42L95 38M83 42L92 53M83 42L86 61"
-            stroke="rgba(246, 248, 252, 0.55)"
+            d="M86 38C76 47 64 56 50 64M68 52C58 49 48 51 39 56M62 56C59 67 54 76 46 84M74 47C76 59 75 71 70 82M50 64C40 67 32 73 27 81"
+            stroke="rgba(255, 255, 255, 0.5)"
             stroke-width="1.4"
             stroke-linecap="round"
             stroke-linejoin="round"
           />
-          {/* Lobo esquerdo — contorno orgânico à mão */}
+          {/* Contorno único orgânico desenhado à mão do pulmão (sem preenchimento) */}
           <path
-            d="M57 25C44 21 24 31 16 53C10 69 13 86 24 91C34 96 48 90 55 81C59 75 60 62 60 47C60 36 59 28 57 25Z"
-            fill="rgba(8, 9, 14, 0.24)"
-            stroke="rgba(248, 249, 255, 0.95)"
-            stroke-width="2.1"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          {/* Lobo direito — contorno orgânico à mão */}
-          <path
-            d="M75 25C88 21 108 31 116 53C122 69 119 86 108 91C98 96 84 90 77 81C73 75 72 62 72 47C72 36 73 28 75 25Z"
-            fill="rgba(8, 9, 14, 0.24)"
-            stroke="rgba(248, 249, 255, 0.95)"
-            stroke-width="2.1"
+            d="M84 34C71 24 51 24 35 37C19 50 10 71 15 88C19 101 34 106 52 103C72 100 92 89 100 72C106 59 102 45 94 38"
+            fill="none"
+            stroke="#ffffff"
+            stroke-width="2.8"
             stroke-linecap="round"
             stroke-linejoin="round"
           />
         </svg>
         <div class="ovd-pulmao-dados">
-          {itens.map((ativo, i) => (
-            <span key={i} class={ativo ? undefined : 'ovd-pulmao-gasto'}>
-              <DadoPoligono lados={6} valor={6} variante={ativo ? 'osso' : 'sombra'} tamanho={tamDado} />
-            </span>
-          ))}
+          {itens.map((ativo, i) => {
+            const rot = ROTACOES_FOLEGO[i % ROTACOES_FOLEGO.length] ?? 0;
+            return (
+              <span
+                key={i}
+                class={`ovd-pulmao-dado-slot${ativo ? '' : ' ovd-pulmao-gasto'}`}
+                style={{ transform: `rotate(${rot}deg)` }}
+              >
+                <DadoPoligono
+                  lados={6}
+                  valor={6}
+                  variante={ativo ? 'osso' : 'sombra'}
+                  tamanho={tamDado}
+                  classe="ovd-pulmao-dado"
+                />
+              </span>
+            );
+          })}
         </div>
       </button>
     </div>
   );
+}
+
+interface PontoConstelacao {
+  cx: number;
+  cy: number;
+  xPct: number;
+  yPct: number;
+  raioEncaixe: number;
+  tamDado: number;
+}
+
+/**
+ * Calcula coordenadas (viewBox 400x400 e percentuais) para constelações geométricas do Lockpick:
+ * - 1..3 dados: null (usa linha horizontal limpa)
+ * - 4 dados: medalhão trevo/diamante fiel à print de A Vigília (pino 2 central maior: 88px)
+ * - 5 dados: pentágono regular ao redor do selo
+ * - 6 dados: hexágono regular ao redor do selo
+ * - 7+ dados: anel circular uniforme ao redor do selo
+ */
+function posicoesConstelacao(qtd: number): PontoConstelacao[] | null {
+  if (qtd < 4) return null;
+
+  if (qtd === 4) {
+    return [
+      { cx: 88, cy: 112, xPct: 22, yPct: 28, raioEncaixe: 44, tamDado: 68 },
+      { cx: 200, cy: 162, xPct: 50, yPct: 40.5, raioEncaixe: 54, tamDado: 88 },
+      { cx: 312, cy: 112, xPct: 78, yPct: 28, raioEncaixe: 44, tamDado: 68 },
+      { cx: 200, cy: 304, xPct: 50, yPct: 76, raioEncaixe: 44, tamDado: 68 },
+    ];
+  }
+
+  const centro = 200;
+  let angulos: number[];
+  let raio: number;
+  let raioEncaixe: number;
+  let tamDado: number;
+
+  if (qtd === 5) {
+    angulos = [-90, -18, 54, 126, 198];
+    raio = 118;
+    raioEncaixe = 42;
+    tamDado = 64;
+  } else if (qtd === 6) {
+    angulos = [-90, -30, 30, 90, 150, 210];
+    raio = 124;
+    raioEncaixe = 40;
+    tamDado = 60;
+  } else {
+    angulos = Array.from({ length: qtd }, (_, i) => -90 + (i * 360) / qtd);
+    raio = qtd >= 8 ? 136 : 132;
+    raioEncaixe = qtd >= 9 ? 32 : 36;
+    tamDado = qtd >= 9 ? 50 : 56;
+  }
+
+  return angulos.map((deg) => {
+    const rad = (deg * Math.PI) / 180;
+    const cx = Number((centro + raio * Math.cos(rad)).toFixed(1));
+    const cy = Number((centro + raio * Math.sin(rad)).toFixed(1));
+    return {
+      cx,
+      cy,
+      xPct: Number(((cx / 400) * 100).toFixed(2)),
+      yPct: Number(((cy / 400) * 100).toFixed(2)),
+      raioEncaixe,
+      tamDado,
+    };
+  });
 }
 
 /** Medalhão circular de pedra/ferro gótico esculpido com encaixes circulares atrás dos dados (print 1). */
@@ -306,12 +402,13 @@ function SeloPedraSvg({
         ? 'rgba(255, 92, 108, 0.78)'
         : 'rgba(233, 230, 223, 0.42)';
   const marcas = Array.from({ length: 32 }, (_, i) => i * 11.25);
-  const encaixes4 = [
-    { cx: 88, cy: 112 },
-    { cx: 200, cy: 156 },
-    { cx: 312, cy: 112 },
-    { cx: 200, cy: 300 },
-  ];
+  const encaixes = posicoesConstelacao(qtdDados);
+  const caminhoCanais =
+    encaixes && encaixes.length === 4
+      ? `M${encaixes[0]!.cx} ${encaixes[0]!.cy} L${encaixes[1]!.cx} ${encaixes[1]!.cy} L${encaixes[2]!.cx} ${encaixes[2]!.cy} M${encaixes[1]!.cx} ${encaixes[1]!.cy} L${encaixes[3]!.cx} ${encaixes[3]!.cy}`
+      : encaixes && encaixes.length >= 5
+        ? `${encaixes.map((e, i) => `${i === 0 ? 'M' : 'L'}${e.cx} ${e.cy}`).join(' ')} Z`
+        : null;
 
   return (
     <svg class="ovd-lock-selo-svg" viewBox="0 0 400 400" fill="none" aria-hidden="true">
@@ -390,21 +487,18 @@ function SeloPedraSvg({
         />
       </g>
 
-      {/* Encaixes circulares esculpidos atrás dos 4 dados no layout diamante/trevo */}
-      {qtdDados === 4 && (
+      {/* Encaixes circulares esculpidos exatamente atrás das constelações de 4, 5, 6+ dados */}
+      {encaixes && (
         <g class="ovd-selo-encaixes">
-          {/* Canais conectando os encaixes */}
-          <path
-            d="M88 112 L200 156 L312 112 M200 156 L200 300"
-            stroke="rgba(233, 230, 223, 0.2)"
-            stroke-width="2"
-          />
-          {encaixes4.map((e, i) => (
+          {caminhoCanais && (
+            <path d={caminhoCanais} stroke="rgba(233, 230, 223, 0.2)" stroke-width="2" />
+          )}
+          {encaixes.map((e, i) => (
             <g key={i}>
               <circle
                 cx={e.cx}
                 cy={e.cy}
-                r="44"
+                r={e.raioEncaixe}
                 fill="url(#ovd-encaixe-grad)"
                 stroke="rgba(233, 230, 223, 0.34)"
                 stroke-width="1.8"
@@ -412,7 +506,7 @@ function SeloPedraSvg({
               <circle
                 cx={e.cx}
                 cy={e.cy}
-                r="38"
+                r={Math.max(12, e.raioEncaixe - 6)}
                 stroke="rgba(10, 9, 14, 0.8)"
                 stroke-width="2"
               />
@@ -947,7 +1041,7 @@ function OverlayLockpick({
     setBannerPronto(false);
     setAnimandoSequencia(true);
 
-    const passoMs = desafio.modoDica === 'posicional' ? 460 : 480;
+    const passoMs = desafio.modoDica === 'posicional' ? 660 : 650;
     for (let i = 0; i < total; i++) {
       const id = window.setTimeout(() => {
         setRevelandoAte(i + 1);
@@ -970,7 +1064,7 @@ function OverlayLockpick({
       } else if (desafio.status === 'travado') {
         tocarEfeitoDesafio('lockpick-travado');
       }
-    }, total * passoMs + 320);
+    }, total * passoMs + 380);
     timersRef.current.push(idFinal);
   }, [desafio]);
 
@@ -1005,6 +1099,7 @@ function OverlayLockpick({
   const tentativasUsadas = desafio.tentativas.length;
   const restantes = Math.max(0, desafio.maxTentativas - tentativasUsadas);
   const anguloSelo = tentativasUsadas * 28 + (bannerPronto && desafio.status === 'aberto' ? 90 : 0);
+  const constelacao = posicoesConstelacao(desafio.dados.length);
 
   return (
     <div class="ovd-palco-backdrop" data-testid="overlay-lockpick">
@@ -1029,7 +1124,11 @@ function OverlayLockpick({
           </div>
         </header>
 
-        <div class="ovd-lock-arena" data-qtd={desafio.dados.length}>
+        <div
+          class="ovd-lock-arena"
+          data-qtd={desafio.dados.length}
+          data-constelacao={constelacao ? '1' : '0'}
+        >
           <div class="ovd-lock-selo-bg">
             <SeloPedraSvg
               angulo={anguloSelo}
@@ -1038,8 +1137,13 @@ function OverlayLockpick({
             />
           </div>
 
-          <div class="ovd-lock-pinos" data-qtd={desafio.dados.length}>
+          <div
+            class="ovd-lock-pinos"
+            data-qtd={desafio.dados.length}
+            data-constelacao={constelacao ? '1' : '0'}
+          >
             {desafio.dados.map((lados, idx) => {
+              const ponto = constelacao?.[idx];
               const valorExibido =
                 bannerPronto && desafio.status === 'aberto' && desafio.senha?.[idx] !== undefined
                   ? desafio.senha[idx]!
@@ -1085,6 +1189,11 @@ function OverlayLockpick({
                   key={idx}
                   class={`ovd-lock-pino${classeAnimacao ? ` ${classeAnimacao}` : ''}`}
                   data-slot={idx + 1}
+                  style={
+                    ponto
+                      ? { left: `${ponto.xPct}%`, top: `${ponto.yPct}%` }
+                      : undefined
+                  }
                   onWheel={(e) => {
                     if (!podeAgir || revelando) return;
                     e.preventDefault();
@@ -1113,7 +1222,7 @@ function OverlayLockpick({
                     lados={lados}
                     valor={valorExibido}
                     variante={variante}
-                    tamanho={desafio.dados.length === 4 ? 68 : 74}
+                    tamanho={ponto ? ponto.tamDado : 74}
                     interativo={podeAgir && !revelando}
                     rotulo={`Pino ${idx + 1} (d${lados}): ${valorExibido}`}
                   />
@@ -1252,41 +1361,130 @@ function OverlayEquilibrio({
   const dadosDir = desafio.dadosUsados.filter((d) => d.lado === 'dir');
   const statusTexto = textoStatusEquilibrio(desafio.status, diferenca);
 
+  const [rolando, setRolando] = useState<'inicial' | 'd4' | null>(null);
+  const [facesAnimadas, setFacesAnimadas] = useState<[number, number]>([5, 6]);
+  const intervaloRolagemRef = useRef<number | null>(null);
+  const timeoutRolagemRef = useRef<number | null>(null);
+
+  const limparRolagem = () => {
+    if (intervaloRolagemRef.current !== null) {
+      window.clearInterval(intervaloRolagemRef.current);
+      intervaloRolagemRef.current = null;
+    }
+    if (timeoutRolagemRef.current !== null) {
+      window.clearTimeout(timeoutRolagemRef.current);
+      timeoutRolagemRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => limparRolagem();
+  }, []);
+
+  useEffect(() => {
+    limparRolagem();
+    setRolando(null);
+  }, [desafio.id]);
+
+  const iniciarRolagem = (tipo: 'inicial' | 'd4') => {
+    if (!aoAgir || rolando !== null) return;
+    const acao: AcaoDesafio =
+      tipo === 'inicial' ? { tipo: 'equilibrio.rolar-inicial' } : { tipo: 'equilibrio.rolar-d4' };
+
+    if (prefereMovimentoReduzido()) {
+      aoAgir(acao);
+      return;
+    }
+
+    limparRolagem();
+    setRolando(tipo);
+    const sortear = () => {
+      if (tipo === 'inicial') {
+        setFacesAnimadas([
+          Math.floor(Math.random() * 10) + 1,
+          Math.floor(Math.random() * 10) + 1,
+        ]);
+      } else {
+        setFacesAnimadas([Math.floor(Math.random() * 4) + 1, 1]);
+      }
+      tocarEfeitoDesafio('pino-girar');
+    };
+    sortear();
+    intervaloRolagemRef.current = window.setInterval(sortear, 75);
+    timeoutRolagemRef.current = window.setTimeout(() => {
+      limparRolagem();
+      setRolando(null);
+      aoAgir(acao);
+    }, 620);
+  };
+
+  const ehCompacto = desafio.exibicao === 'compacto';
   const acoes = podeAgir && aoAgir && (
     <div class="ovd-eq-acoes">
-      {desafio.dadoEsq === null || desafio.dadoDir === null ? (
+      {rolando === 'inicial' ? (
+        <div class="ovd-eq-rolando" aria-live="polite">
+          <DadoPoligono
+            lados={10}
+            valor={facesAnimadas[0]}
+            variante="osso"
+            tamanho={ehCompacto ? 32 : 40}
+            classe="ovd-dado-rolando"
+          />
+          <DadoPoligono
+            lados={10}
+            valor={facesAnimadas[1]}
+            variante="osso"
+            tamanho={ehCompacto ? 32 : 40}
+            classe="ovd-dado-rolando ovd-dado-rolando-atraso"
+          />
+          <span class="ovd-eq-rolando-texto">Rolando 2d10…</span>
+        </div>
+      ) : rolando === 'd4' ? (
+        <div class="ovd-eq-rolando" aria-live="polite">
+          <DadoPoligono
+            lados={4}
+            valor={facesAnimadas[0]}
+            variante="alto"
+            tamanho={ehCompacto ? 34 : 42}
+            classe="ovd-dado-rolando"
+          />
+          <span class="ovd-eq-rolando-texto">Rolando d4…</span>
+        </div>
+      ) : desafio.dadoEsq === null || desafio.dadoDir === null ? (
         <button
           type="button"
-          class="ovd-btn ovd-btn-primario ovd-btn-pequeno"
-          onClick={() => aoAgir({ tipo: 'equilibrio.rolar-inicial' })}
+          class="ovd-eq-btn"
+          onClick={() => iniciarRolagem('inicial')}
         >
-          Rolar 2d10
+          🎲 Rolar 2d10
         </button>
       ) : desafio.d4Pendente !== null ? (
         <div class="ovd-eq-pendente">
-          <DadoPoligono lados={4} valor={desafio.d4Pendente} variante="alto" tamanho={30} />
+          <DadoPoligono lados={4} valor={desafio.d4Pendente} variante="alto" tamanho={32} />
           <button
             type="button"
-            class="ovd-btn ovd-btn-primario ovd-btn-pequeno"
+            class="ovd-eq-btn ovd-eq-btn-lado"
             onClick={() => aoAgir({ tipo: 'equilibrio.aplicar-d4', lado: 'esq' })}
           >
-            ← Esq
+            ← Esquerda
           </button>
           <button
             type="button"
-            class="ovd-btn ovd-btn-primario ovd-btn-pequeno"
+            class="ovd-eq-btn ovd-eq-btn-lado"
             onClick={() => aoAgir({ tipo: 'equilibrio.aplicar-d4', lado: 'dir' })}
           >
-            Dir →
+            Direita →
           </button>
         </div>
       ) : desafio.status === 'desequilibrado' && restantes > 0 ? (
         <button
           type="button"
-          class="ovd-btn ovd-btn-primario ovd-btn-pequeno"
-          onClick={() => aoAgir({ tipo: 'equilibrio.rolar-d4' })}
+          class="ovd-eq-btn"
+          onClick={() => iniciarRolagem('d4')}
         >
-          Rolar d4 ({restantes})
+          {ehCompacto
+            ? `🎲 Rolar d4 (${restantes} ${restantes === 1 ? 'restante' : 'restantes'})`
+            : `🎲 Rolar d4 de Equilíbrio (${restantes} ${restantes === 1 ? 'restante' : 'restantes'})`}
         </button>
       ) : null}
     </div>
@@ -1715,24 +1913,26 @@ function OverlayEsconderijo({
                 )}
 
                 <span class="ovd-esc-nome">{primeiroNome(p.nome)}</span>
-                <IconeSombra tamanho={22} />
+                <div class="ovd-esc-par">
+                  <IconeSombra tamanho={28} />
 
-                <div class="ovd-esc-dados">
-                  {p.encontrado ? (
-                    <span class="ovd-selo-encontrado">ENCONTRADO</span>
-                  ) : p.dados.length === 0 ? (
-                    <span class="ovd-esc-vazio">—</span>
-                  ) : (
-                    p.dados.map((d) => (
-                      <DadoPoligono
-                        key={d.id}
-                        lados={d.lados}
-                        valor={d.valor === 0 ? '?' : d.valor}
-                        variante="sombra"
-                        tamanho={28}
-                      />
-                    ))
-                  )}
+                  <div class="ovd-esc-dados">
+                    {p.encontrado ? (
+                      <span class="ovd-selo-encontrado">ENCONTRADO</span>
+                    ) : p.dados.length === 0 ? (
+                      <span class="ovd-esc-vazio">—</span>
+                    ) : (
+                      p.dados.map((d) => (
+                        <DadoPoligono
+                          key={d.id}
+                          lados={d.lados}
+                          valor={d.valor === 0 ? '?' : d.valor}
+                          variante="sombra"
+                          tamanho={30}
+                        />
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -1778,7 +1978,7 @@ function OverlayPerseguicao({
   return (
     <aside class="ovd-pers-canto" data-testid="overlay-perseguicao" aria-label={desafio.titulo}>
       <div class="ovd-canto-meta">
-        <span class="ovd-canto-rotulo">
+        <span class="ovd-pers-rodada-pilula">
           Rodada {desafio.rodada}/{desafio.totalRodadas}
         </span>
         <button type="button" class="ovd-btn-recolher ovd-btn-x" onClick={aoRecolher} title="Recolher perseguição">
@@ -1835,9 +2035,10 @@ function OverlayPerseguicao({
 
                 {mostrarPa && (
                   <div class="ovd-avanco-topo">
-                    <IconeCorrendo tamanho={secundario ? 22 : 30} classe="ovd-avanco-icone" />
-                    <span class="ovd-avanco-numero">{p.pa}</span>
-                    <span class="ovd-avanco-meta">/ {alvoNumero}</span>
+                    <IconeCorrendo tamanho={secundario ? 28 : 42} classe="ovd-avanco-icone" />
+                    <span class="ovd-avanco-numero">
+                      {p.pa} <span class="ovd-avanco-barra">/</span> {alvoNumero}
+                    </span>
                   </div>
                 )}
               </div>
@@ -2113,26 +2314,57 @@ export function OverlayDesafio({
   retratos,
   aoAgir,
 }: OverlayDesafioProps) {
-  const [recolhido, setRecolhido] = useState(false);
+  const [faseVisivel, setFaseVisivel] = useState<'aberto' | 'saindo' | 'recolhido'>('aberto');
+  const timerFadeRef = useRef<number | null>(null);
+
+  const limparTimerFade = () => {
+    if (timerFadeRef.current !== null) {
+      window.clearTimeout(timerFadeRef.current);
+      timerFadeRef.current = null;
+    }
+  };
+
+  useEffect(() => () => limparTimerFade(), []);
 
   useEffect(() => {
-    setRecolhido(false);
+    limparTimerFade();
+    setFaseVisivel('aberto');
   }, [desafio?.id]);
 
+  const recolhido = faseVisivel === 'recolhido';
   useSonsDeDesafio(desafio, recolhido);
 
   if (!desafio) return null;
 
-  if (recolhido) {
+  const recolher = () => {
+    if (faseVisivel !== 'aberto') return;
+    limparTimerFade();
+    if (prefereMovimentoReduzido()) {
+      setFaseVisivel('recolhido');
+      return;
+    }
+    setFaseVisivel('saindo');
+    timerFadeRef.current = window.setTimeout(() => {
+      timerFadeRef.current = null;
+      setFaseVisivel('recolhido');
+    }, 240);
+  };
+
+  const reabrir = () => {
+    limparTimerFade();
+    setFaseVisivel('aberto');
+  };
+
+  if (faseVisivel === 'recolhido') {
     const { icone, titulo, detalhe } = resumoPilula(desafio);
     return (
-      <div class="ovd-raiz" data-modo={modo} data-recolhido="1">
+      <div key="pilula" class="ovd-raiz" data-modo={modo} data-recolhido="1">
         <div class="ovd-pilula-wrap">
           <button
             type="button"
             class="ovd-pilula"
             data-testid="overlay-desafio-pilula"
-            onClick={() => setRecolhido(false)}
+            onClick={reabrir}
           >
             <span class="ovd-pilula-icone" aria-hidden="true">
               {icone}
@@ -2145,10 +2377,14 @@ export function OverlayDesafio({
     );
   }
 
-  const recolher = () => setRecolhido(true);
-
   return (
-    <div class="ovd-raiz" data-modo={modo} data-tipo={desafio.tipo}>
+    <div
+      key="aberto"
+      class="ovd-raiz ovd-raiz-aberta"
+      data-modo={modo}
+      data-tipo={desafio.tipo}
+      data-saindo={faseVisivel === 'saindo' ? '1' : '0'}
+    >
       {desafio.tipo === 'lockpick' && (
         <OverlayLockpick
           desafio={desafio}
