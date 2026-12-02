@@ -1,7 +1,7 @@
 // Inserção do assistente no estilo do mestre (Q9d). Puro: monta itens soltos (x = y = 0) copiando o estilo
 // de itens de referência; a posição é da Q9e e a medição de altura é injetada.
 import { caixaEnvolventeDeItem, type Caixa } from './camera.ts';
-import { estiloDoQuadro } from './estilo-do-quadro.ts';
+import { ESTILO_PADRAO_DO_MESTRE, estiloDoQuadro, usaEstiloPadrao } from './estilo-do-quadro.ts';
 import { legendaDoQuadro, type Legenda } from './legenda-do-quadro.ts';
 import { caixaDaSeta } from './setas.ts';
 import { blocosDaSecao, itensDaSecao } from './estrutura-da-secao.ts';
@@ -179,6 +179,11 @@ function marcasDoPapel(legenda: Legenda, papel: unknown, onde: string): Marca[] 
   return marcas;
 }
 
+/** O negrito da legenda é do rótulo `[…]`: texto corrido (narração, regra) leva só o destaque, como o do mestre. */
+function soNoRotulo(marcas: Marca[], texto: string): Marca[] {
+  return texto.trimStart().startsWith('[') ? marcas : marcas.filter((m) => m.type !== 'bold');
+}
+
 const copiarMarcas = (marcas: readonly Marca[]): Marca[] => marcas.map((m) => (m.attrs ? { type: m.type, attrs: { ...m.attrs } } : { type: m.type }));
 
 /** Nós de texto de um trecho; `\n` vira quebra de linha dentro do parágrafo. */
@@ -220,7 +225,7 @@ function docDeParagrafos(itens: readonly Item[], pedidos: readonly ParagrafoPedi
         const texto = typeof r?.texto === 'string' ? r.texto : '';
         if (texto === '') throw new Error(`${quem} está vazio.`);
         if (r.papel !== undefined && r.como !== undefined) throw new Error(`${quem}: use "papel" ou "como", não os dois.`);
-        const marcas = r.papel !== undefined ? resolver(r.papel, quem) : r.como ? marcasPredominantes(itemDeTexto(itens, r.como, `como (${quem.toLowerCase()})`).doc) : [];
+        const marcas = r.papel !== undefined ? soNoRotulo(resolver(r.papel, quem), texto) : r.como ? marcasPredominantes(itemDeTexto(itens, r.como, `como (${quem.toLowerCase()})`).doc) : [];
         nos.push(...nosDeTexto(texto, marcas));
       });
       if (nos.every((x) => x.type === 'hardBreak')) throw new Error(`${onde} está vazio.`);
@@ -231,7 +236,7 @@ function docDeParagrafos(itens: readonly Item[], pedidos: readonly ParagrafoPedi
     if (texto.trim() === '') throw new Error(`${onde} está vazio.`);
     if (p.papel !== undefined && p.como !== undefined) throw new Error(`${onde}: use "papel" ou "como", não os dois.`);
     const papel = p.papel ?? (p.como ? undefined : papelDoItem);
-    const marcas = papel !== undefined ? resolver(papel, onde) : p.como ? marcasPredominantes(itemDeTexto(itens, p.como, `como (${rotulo})`).doc) : [];
+    const marcas = papel !== undefined ? soNoRotulo(resolver(papel, onde), texto) : p.como ? marcasPredominantes(itemDeTexto(itens, p.como, `como (${rotulo})`).doc) : [];
     for (const linha of texto.split('\n')) {
       if (linha === '') {
         content.push({ type: 'paragraph' });
@@ -266,6 +271,7 @@ export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaI
   let detectado: ReturnType<typeof estiloDoQuadro> | undefined;
   const estiloDetectado = (papel: 'titulo' | 'corpo'): ItemTexto | null => {
     if (detectado === undefined) detectado = estiloDoQuadro(itens, secao);
+    if (usaEstiloPadrao(detectado)) return modeloPadrao(papel, quadroId, agora);
     const id = papel === 'titulo' ? detectado?.exemploTitulo : detectado?.exemploCorpo;
     const item = id ? itens.find((i) => i.id === id) : undefined;
     return item && item.tipo === 'texto' ? item : null;
@@ -308,7 +314,10 @@ export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaI
         if (fonte.tipo !== 'imagem') throw new Error(`Item ${n}: #${fonte.id.slice(0, 6)} é ${fonte.tipo === 'forma' ? 'uma' : 'um'} ${fonte.tipo}, não uma imagem. Use o #id de uma imagem ou entidade:<nome>.`);
         origem = fonte;
       }
-      if (larguraPadraoDaImagem === undefined) larguraPadraoDaImagem = (secao ? estiloDoQuadro(itens, secao)?.imagens?.largura : undefined) || LARGURA_PADRAO_DA_IMAGEM;
+      if (larguraPadraoDaImagem === undefined) {
+        const e = secao ? estiloDoQuadro(itens, secao) : null;
+        larguraPadraoDaImagem = usaEstiloPadrao(e) ? ESTILO_PADRAO_DO_MESTRE.larguraDaImagem : e?.imagens?.largura || LARGURA_PADRAO_DA_IMAGEM;
+      }
       const lo = origem.larguraOriginal > 0 ? origem.larguraOriginal : 1;
       const ao = origem.alturaOriginal > 0 ? origem.alturaOriginal : 1;
       const larguraDaImagem = pi.largura ?? larguraPadraoDaImagem;
@@ -389,6 +398,8 @@ export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaI
       item = novoTexto({ quadroId, x: 0, y: 0, largura: largura ?? LARGURA_PADRAO, doc, semantica: tipo }, agora, id);
       if (formato === 'titulo') item.texto = { ...item.texto, tamanho: TAMANHO_DO_TITULO_PADRAO };
     }
+    // No estilo fixo, o título do mestre é negrito no texto (como os do Pântano).
+    if (formato === 'titulo' && !pedido.estilo_como && ref?.id === ID_DO_MODELO) item.doc = negritar(item.doc);
     item.molduraId = molduraId;
     if (item.tipo === 'texto') item.doc = garantirContraste(item.doc, item.texto.cor);
     const revisao: Revisao = { origem: 'assistente', tipoSugerido: tipo, motivos: [MOTIVO_DO_ASSISTENTE] };
@@ -412,6 +423,30 @@ export function montarInsercao(pedidos: readonly ItemPedido[], opcoes: OpcoesDaI
 // Q9e: posição em coluna.
 
 export const ESPACO_VERTICAL_PADRAO = 24;
+
+const ID_DO_MODELO = 'modelo-do-mestre';
+
+/** Item de referência no estilo fixo do mestre (não entra no quadro: só se copiam texto, caixa e largura). */
+function modeloPadrao(papel: 'titulo' | 'corpo', quadroId: string, agora: number): ItemTexto {
+  const f = ESTILO_PADRAO_DO_MESTRE;
+  const base = novoTexto({ quadroId, x: 0, y: 0, largura: f.largura, doc: docDeTexto('.') }, agora, ID_DO_MODELO);
+  return {
+    ...base,
+    texto: { ...base.texto, ...f.texto, ...(papel === 'titulo' ? { tamanho: f.tituloTamanho } : {}) },
+    caixa: { ...base.caixa, ...f.caixa },
+  };
+}
+
+function negritar(doc: DocRico): DocRico {
+  const passar = (no: NoRico): NoRico => {
+    if (no.type === 'text') {
+      const marks = no.marks ?? [];
+      return marks.some((m) => m.type === 'bold') ? no : { ...no, marks: [...marks, { type: 'bold' }] };
+    }
+    return no.content ? { ...no, content: no.content.map(passar) } : no;
+  };
+  return passar(doc as unknown as NoRico) as unknown as DocRico;
+}
 const TOLERANCIA_DA_COLUNA = 24;
 
 /** Onde empilhar: abaixo de um item (ou do bloco que ele abre), abaixo da coluna principal de uma seção, ou numa coluna nova ao lado. */

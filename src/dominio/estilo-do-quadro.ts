@@ -69,6 +69,27 @@ export interface EstiloDetectado {
   legenda: Legenda;
 }
 
+/**
+ * Estilo do mestre fixo na Mesa (o do quadro do Pântano, vindo do Miro): vale quando a seção ainda não tem texto do mestre
+ * bastante para copiar (um quadro novo, só com o título). Com material do mestre, vale o que for detectado.
+ */
+export const ESTILO_PADRAO_DO_MESTRE = {
+  texto: { fonte: 'pt-serif', tamanho: 14, cor: '#1a1a1a' },
+  caixa: { fundo: '#ffffff', padding: 0, sombra: false },
+  largura: 412,
+  tituloTamanho: 45.3,
+  espacoVertical: 8,
+  alinhar: 'centro',
+  larguraDaImagem: 360,
+} as const;
+/** Abaixo disto (itens de texto do mestre na seção), o assistente escreve no estilo fixo. */
+export const MIN_TEXTOS_PARA_DETECTAR = 3;
+
+/** O quadro ainda não tem texto do mestre bastante para copiar o estilo: use `ESTILO_PADRAO_DO_MESTRE`. */
+export function usaEstiloPadrao(e: EstiloDetectado | null | undefined): boolean {
+  return !e || e.grupos.reduce((n, g) => n + g.contagem, 0) < MIN_TEXTOS_PARA_DETECTAR;
+}
+
 const TOLERANCIA_X = 24;
 const LIMITE_COLUNA = 0.6;
 const LIMITE_SEMANTICA = 0.2;
@@ -384,6 +405,10 @@ export function textoDoEstilo(e: EstiloDetectado | null): string {
     l.push(`${rotulo[g.papel]} (${g.contagem}): ${g.formato} ${g.fonte} ${numeroCurto(g.tamanho)} ${g.cor}${g.fundo !== null ? `, caixa ${g.fundo}` : ''}, largura ~${g.larguraMediana} (exemplo #${g.exemploCurto}).`);
   }
   if (e.grupos.length > MAX_GRUPOS) l.push(`(+${e.grupos.length - MAX_GRUPOS} estilos menores)`);
+  if (usaEstiloPadrao(e)) {
+    const f = ESTILO_PADRAO_DO_MESTRE;
+    l.push(`Pouco texto do mestre nesta seção: quadro_inserir usa o estilo fixo do mestre (${f.texto.fonte} ${f.texto.tamanho} ${f.texto.cor} em caixa ${f.caixa.fundo}, largura ~${f.largura}; títulos ${f.tituloTamanho} negrito; coluna centrada, ${f.espacoVertical} px entre itens; imagens ~${f.larguraDaImagem} px).`);
+  }
   const corpo = e.grupos.find((g) => g.papel === 'corpo')?.cor;
   const cobertas = new Set(e.legenda.entradas.map((x) => x.marcas.fundo));
   const destaques = e.destaques.filter((d) => !cobertas.has(d.cor));

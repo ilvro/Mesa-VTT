@@ -314,7 +314,7 @@ test('quadro_inserir: retrato de entidade vira imagem; sem retrato ou sem suport
 test('quadro_inserir: obstáculo recusa; abrir_espaco empurra no mesmo passo de criação', async () => {
   const { f, criados } = montar();
   // n1 (20,40) e a imagem (20,200) estão na mesma coluna; abaixo de n1 a imagem é obstáculo.
-  const pedido = { quadro: 'Reino', abaixo_de: '#n1xxxx', itens: [{ formato: 'texto', texto: 'Um parágrafo novo.' }] };
+  const pedido = { quadro: 'Reino', abaixo_de: '#n1xxxx', alinhar: 'esquerda', itens: [{ formato: 'texto', texto: 'Um parágrafo novo, longo o bastante para bater na imagem logo abaixo. '.repeat(6) }] };
   await assert.rejects(f.quadro_inserir!.executar(pedido), /Não há espaço livre.*abrir_espaco: true/);
   assert.equal(criados.length, 0);
   const r = await lerJson(f.quadro_inserir!.executar({ ...pedido, abrir_espaco: true }));

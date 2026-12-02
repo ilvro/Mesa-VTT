@@ -82,9 +82,11 @@ test('papel no item: vale para parágrafos sem como nem papel próprio', () => {
     comLegenda(),
   );
   const [p1, p2, p3] = paragrafos(t!);
-  assert.equal((marcasDe(p1!.content![0]!)[1]!.attrs as { backgroundColor: string }).backgroundColor, AZUL);
-  assert.equal((marcasDe(p2!.content![0]!)[1]!.attrs as { backgroundColor: string }).backgroundColor, 'rgb(232,196,48)');
+  assert.equal((marcasDe(p1!.content![0]!).find((m) => m.type === 'textStyle')!.attrs as { backgroundColor: string }).backgroundColor, AZUL);
+  assert.equal((marcasDe(p2!.content![0]!).find((m) => m.type === 'textStyle')!.attrs as { backgroundColor: string }).backgroundColor, 'rgb(232,196,48)');
   assert.deepEqual(marcasDe(p3!.content![0]!), []);
+  // Texto corrido leva só o destaque; o negrito da legenda é do rótulo [..].
+  assert.ok(!marcasDe(p1!.content![0]!).some((m) => m.type === 'bold'));
   // Texto simples com papel: o parágrafo inteiro.
   const { itens: [u] } = montar([{ formato: 'texto', papel: 'ponto', texto: '[ARBUSTO]' }], comLegenda());
   assert.deepEqual(marcasDe(paragrafos(u!)[0]!.content![0]!), [{ type: 'bold' }, { type: 'textStyle', attrs: { backgroundColor: VERDE, color: '#1a1a1a' } }]);
@@ -92,9 +94,9 @@ test('papel no item: vale para parágrafos sem como nem papel próprio', () => {
 
 test('papel aceita o rótulo da legenda sem colchetes nem acento', () => {
   const { itens: [t] } = montar([{ formato: 'texto', papel: 'Ponto de Interacao', texto: 'x' }], comLegenda());
-  assert.equal((marcasDe(paragrafos(t!)[0]!.content![0]!)[1]!.attrs as { backgroundColor: string }).backgroundColor, VERDE);
+  assert.equal((marcasDe(paragrafos(t!)[0]!.content![0]!).find((m) => m.type === 'textStyle')!.attrs as { backgroundColor: string }).backgroundColor, VERDE);
   const { itens: [u] } = montar([{ formato: 'texto', papel: '[TESTE E DT]', texto: 'x' }], comLegenda());
-  assert.equal((marcasDe(paragrafos(u!)[0]!.content![0]!)[1]!.attrs as { backgroundColor: string }).backgroundColor, AZUL);
+  assert.equal((marcasDe(paragrafos(u!)[0]!.content![0]!).find((m) => m.type === 'textStyle')!.attrs as { backgroundColor: string }).backgroundColor, AZUL);
 });
 
 test('rótulo: estilo do corpo, marcas do papel e largura medida', () => {
@@ -149,7 +151,7 @@ test('papel dentro de células de grupo (Q9l)', () => {
   const { itens } = montarInsercao(pedidos, opcoes(comLegenda(), { medirLargura: () => 100 }));
   assert.equal(itens.length, 3);
   assert.deepEqual(itens.map((i) => i.largura), [200, 200, 200]);
-  assert.equal((marcasDe(ehTexto(itens[2]!).doc.content[0]!.content![0]!)[1]!.attrs as { backgroundColor: string }).backgroundColor, 'rgb(232,196,48)');
+  assert.equal((marcasDe(ehTexto(itens[2]!).doc.content[0]!.content![0]!).find((m) => m.type === 'textStyle')!.attrs as { backgroundColor: string }).backgroundColor, 'rgb(232,196,48)');
   assert.equal(marcasDe(ehTexto(itens[1]!).doc.content[0]!.content![1]!).length, 0);
 });
 

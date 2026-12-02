@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { estiloDoQuadro, textoDoEstilo } from '../../src/dominio/estilo-do-quadro.ts';
+import { estiloDoQuadro, textoDoEstilo, usaEstiloPadrao } from '../../src/dominio/estilo-do-quadro.ts';
 import type { DocRico, Item, NoRico } from '../../src/dominio/quadro.ts';
 import { estiloDeCaixaPadrao, estiloDeTextoPadrao, novaImagem, novaNotaAdesiva } from '../../src/dominio/quadro.ts';
 import { estimarTokens } from '../../src/dominio/texto-da-secao.ts';
@@ -115,4 +115,11 @@ test('quadro só de post-its tipados', () => {
 test('sem texto do mestre', () => {
   assert.equal(estiloDoQuadro([]), null);
   assert.match(textoDoEstilo(null), /Não há seção/);
+});
+
+test('quadro novo, só com o título: quadro_estilo avisa que vale o estilo fixo do mestre', () => {
+  const e = estiloDoQuadro(colunaDoMestre().slice(0, 1))!;
+  assert.ok(usaEstiloPadrao(e));
+  assert.match(textoDoEstilo(e), /estilo fixo do mestre \(pt-serif 14 #1a1a1a em caixa #ffffff, largura ~412; títulos 45\.3 negrito; coluna centrada, 8 px/);
+  assert.ok(!usaEstiloPadrao(estiloDoQuadro(colunaDoMestre())));
 });

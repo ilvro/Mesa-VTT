@@ -17,7 +17,7 @@ import {
   type RegistroResumo,
 } from '../dominio/resumos-do-quadro.ts';
 import { assinaturaDaSecao, secoesDoQuadro, type Secao } from '../dominio/secoes-do-quadro.ts';
-import { estiloDoQuadro, textoDoEstilo } from '../dominio/estilo-do-quadro.ts';
+import { estiloDoQuadro, ESTILO_PADRAO_DO_MESTRE, textoDoEstilo, usaEstiloPadrao } from '../dominio/estilo-do-quadro.ts';
 import { estruturaDaSecao } from '../dominio/estrutura-da-secao.ts';
 import { LIMITE_TOKENS_PADRAO, textoDaSecao } from '../dominio/texto-da-secao.ts';
 import type { Caixa } from '../dominio/camera.ts';
@@ -482,10 +482,11 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
           ...(paleta ? { paleta } : {}),
         });
         const estilo = secao ? estiloDoQuadro(c.itens, secao) : null;
-        const espaco = estilo?.espacoVertical || ESPACO_VERTICAL_PADRAO;
+        const fixo = usaEstiloPadrao(estilo);
+        const espaco = fixo ? ESTILO_PADRAO_DO_MESTRE.espacoVertical : estilo?.espacoVertical || ESPACO_VERTICAL_PADRAO;
         const pedidoAlinhar = textoDe(args.alinhar);
         if (pedidoAlinhar && pedidoAlinhar !== 'esquerda' && pedidoAlinhar !== 'centro') throw new Error('alinhar deve ser "esquerda" ou "centro".');
-        const alinhar = pedidoAlinhar ? (pedidoAlinhar as 'esquerda' | 'centro') : estilo?.fluxo === 'centrado' ? 'centro' : 'esquerda';
+        const alinhar = pedidoAlinhar ? (pedidoAlinhar as 'esquerda' | 'centro') : fixo ? ESTILO_PADRAO_DO_MESTRE.alinhar : estilo?.fluxo === 'centrado' ? 'centro' : 'esquerda';
         // As imagens com `lado` não entram na coluna: ficam ao lado do texto anterior, sem ocupar altura.
         const blocos = estrutura.filter(sg => sg.tipo === 'grupo' || insercao.lados[sg.indice] === null);
         if (blocos.length === 0) throw new Error('A imagem com lado precisa de um item de texto antes dela na mesma chamada.');
