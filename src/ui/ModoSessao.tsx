@@ -21,10 +21,13 @@ import { desafioAtivo, iniciarCanalDesafiosMestre, pedidoLockpickObjeto } from '
 import { abrirQuadro, carregarQuadros, criarQuadro, quadroAberto, quadros } from '../app/quadros.ts';
 import { modoFocoSessao, type ModoFocoSessao } from '../app/foco-do-quadro.ts';
 import { Quadro } from './quadro/Quadro.tsx';
+import { registrarAcessoLru, removerDaLru } from '../dominio/lru.ts';
+import { modoLeve } from '../app/desempenho.ts';
 
 export const buscaPersonagemSessao = signal('');
 const checandoProntidaoSessao = signal(false);
 const pendenciasAtivasCount = signal<number | null>(null);
+const painelEmTelaCheia = signal<PainelId | null>(null);
 
 const LARGURA_DO_DIVISOR = 8;
 
@@ -59,8 +62,27 @@ function PainelDoAtlas() {
 
 function PainelDasFichas() {
   const abas = fichasEmAbas.value, ativa = fichaDaAba.value;
-  const [abertas, setAbertas] = useState<string[]>([]);
-  useEffect(() => { if (ativa && !abertas.includes(ativa.fichaId)) setAbertas(a => [...a, ativa.fichaId]); }, [ativa?.fichaId]);
+  const limiteIframes = modoLeve.value ? 1 : 2;
+  const [vivasLru, setVivasLru] = useState<string[]>(() => (ativa ? [ativa.fichaId] : []));
+
+  useEffect(() => {
+    if (!ativa) return;
+    setVivasLru((atual) => registrarAcessoLru(atual, ativa.fichaId, limiteIframes).ordem);
+  }, [ativa?.fichaId, limiteIframes]);
+
+  useEffect(() => {
+    const idsAbas = new Set(abas.map((a) => a.fichaId));
+    setVivasLru((atual) => {
+      const filtrada = atual.filter((id) => idsAbas.has(id));
+      return filtrada.length === atual.length ? atual : filtrada;
+    });
+  }, [abas]);
+
+  const fecharFicha = (fichaId: string) => {
+    setVivasLru((atual) => removerDaLru(atual, fichaId));
+    alternarFicha(fichaId);
+  };
+
   if (foraDoAr('ficha')) return <SemApp nome="O Dossiê" />;
   if (!personagens.value.length) return <div class="painel-vazio" data-testid="fichas-vazio"><p>Nenhuma personagem com ficha nesta campanha.</p><p class="meta">Abra o Dossiê com esta campanha ativa: ela publica as personagens aqui.</p></div>;
 
@@ -80,17 +102,28 @@ function PainelDasFichas() {
           onInput={ev => { buscaPersonagemSessao.value = (ev.currentTarget as HTMLInputElement).value; }}
         />
         {abasFiltradas.map(f => (
-          <button
-            key={f.fichaId}
-            type="button"
-            role="tab"
-            aria-selected={ativa?.fichaId === f.fichaId}
-            class={cx('chip', ativa?.fichaId === f.fichaId && 'ativa')}
-            data-testid={`ficha-aba-${f.fichaId}`}
-            onClick={() => mudarEscolhas({ ativa: f.fichaId })}
-          >
-            {f.nome}
-          </button>
+          <span key={f.fichaId} class={cx('ficha-aba-grupo', ativa?.fichaId === f.fichaId && 'ativa')}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={ativa?.fichaId === f.fichaId}
+              class={cx('chip', ativa?.fichaId === f.fichaId && 'ativa')}
+              data-testid={`ficha-aba-${f.fichaId}`}
+              onClick={() => mudarEscolhas({ ativa: f.fichaId })}
+            >
+              {f.nome}
+            </button>
+            <button
+              type="button"
+              class="ficha-aba-fechar"
+              title={`Fechar ficha de ${f.nome}`}
+              aria-label={`Fechar ficha de ${f.nome}`}
+              data-testid={`ficha-aba-fechar-${f.fichaId}`}
+              onClick={() => fecharFicha(f.fichaId)}
+            >
+              ×
+            </button>
+          </span>
         ))}
         <details class="escolher-fichas">
           <summary class="chip" data-testid="escolher-fichas">Personagens…</summary>
@@ -117,7 +150,7 @@ function PainelDasFichas() {
       </div>
       <div class="painel-corpo-abas">
         {abas.length === 0 && <div class="painel-vazio"><p>Nenhuma ficha em abas. Escolha em “Personagens…”.</p></div>}
-        {abas.filter(f => abertas.includes(f.fichaId)).map(f => {
+        {abas.filter(f => vivasLru.includes(f.fichaId)).map(f => {
           const rota = enderecoDe(f.ref), src = rota ?? enderecoDaFicha(baseDoApp('ficha'), f.fichaId);
           return <iframe key={f.fichaId} class="quadro" data-testid={`iframe-ficha-${f.fichaId}`} title={`Ficha de ${f.nome}`} src={src} hidden={ativa?.fichaId !== f.fichaId} allow="fullscreen; autoplay; clipboard-write" />;
         })}
@@ -332,34 +365,71 @@ export function ModoSessao() {
     ev.preventDefault(); const caixa = area.current; if (!caixa) return;
     mudarLayout(redimensionar(layout.value, indice, (ev.key === 'ArrowRight' ? 1 : -1) * 32, caixa.clientWidth - (v.length - 1) * LARGURA_DO_DIVISOR));
   };
+  const ultimaAssinaturaFatosRef = useRef<string | null>(null);
   useEffect(() => {
     const c = campanhaAtiva.value;
     const s = sessaoAtiva.value;
     if (!c || !s) {
+      ultimaAssinaturaFatosRef.current = null;
       pendenciasAtivasCount.value = null;
       return;
     }
+    const ents = entidades.value;
+    const ligs = ligacoes.value;
+    const assinatura = [
+      c.id,
+      s.id,
+      s.roteiro.map(r => `${r.app}:${r.tipo}:${r.id}`).join(','),
+      ents.map(e => `${e.id}:${e.atualizadaEm ?? ''}`).join(','),
+      ligs.map(l => l.id).join(','),
+    ].join('|');
+    if (ultimaAssinaturaFatosRef.current === assinatura) return;
+
     let cancelado = false;
-    void (async () => {
-      const ents = entidades.value;
-      const ligs = ligacoes.value;
-      const pacotes: PacoteDeCena[] = [];
-      for (const item of s.roteiro) {
-        const ent = ents.find(e => (item.app === 'mesa' && item.tipo === 'entidade' ? e.id === item.id : e.refs.some(r => mesmaRef(r, item))));
-        if (ent && ent.tipo === 'cena') {
-          pacotes.push(extrairPacoteDeCena(ent, ents, ligs));
+    const atraso = ultimaAssinaturaFatosRef.current === null ? 0 : 500;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const pacotes: PacoteDeCena[] = [];
+        for (const item of s.roteiro) {
+          const ent = ents.find(e => (item.app === 'mesa' && item.tipo === 'entidade' ? e.id === item.id : e.refs.some(r => mesmaRef(r, item))));
+          if (ent && ent.tipo === 'cena') {
+            pacotes.push(extrairPacoteDeCena(ent, ents, ligs));
+          }
         }
-      }
-      const fatos = await carregarFatos(c, pacotes);
-      if (!cancelado) {
-        const pends = pendenciasDaSessao(pacotes, fatos);
-        pendenciasAtivasCount.value = pends.length;
-      }
-    })();
-    return () => { cancelado = true; };
+        const fatos = await carregarFatos(c, pacotes);
+        if (!cancelado) {
+          ultimaAssinaturaFatosRef.current = assinatura;
+          const pends = pendenciasDaSessao(pacotes, fatos);
+          pendenciasAtivasCount.value = pends.length;
+        }
+      })();
+    }, atraso);
+    return () => {
+      cancelado = true;
+      window.clearTimeout(timer);
+    };
   }, [sessaoAtiva.value?.id, sessaoAtiva.value?.roteiro, entidades.value, ligacoes.value]);
 
-  const telaCheia = (id: PainelId) => { const el = area.current?.querySelector<HTMLElement>(`[data-painel="${id}"]`); void el?.requestFullscreen?.().catch(() => undefined); };
+  useEffect(() => {
+    const atualizarTelaCheia = () => {
+      const atual = document.fullscreenElement?.getAttribute('data-painel') as PainelId | null;
+      painelEmTelaCheia.value = atual ?? null;
+    };
+    document.addEventListener('fullscreenchange', atualizarTelaCheia);
+    atualizarTelaCheia();
+    return () => document.removeEventListener('fullscreenchange', atualizarTelaCheia);
+  }, []);
+
+  const alternarTelaCheia = async (id: PainelId) => {
+    const el = area.current?.querySelector<HTMLElement>(`[data-painel="${id}"]`);
+    const fs = document.fullscreenElement;
+    if (fs) {
+      const pertenceAoPainel = el ? (fs === el || el.contains(fs)) : false;
+      await document.exitFullscreen?.().catch(() => undefined);
+      if (pertenceAoPainel) return;
+    }
+    await el?.requestFullscreen?.().catch(() => undefined);
+  };
 
   return (
     <section class="sessao" data-testid="tela-sessao">
@@ -459,10 +529,25 @@ export function ModoSessao() {
       <div class={cx('sessao-paineis', arrastando && 'arrastando')} ref={area} data-testid="sessao-paineis">
         {v.map((p, i) => {
           const Corpo = CORPO[p.id];
+          const emTelaCheia = painelEmTelaCheia.value === p.id;
           return (
             <Fragment key={p.id}>
               <section class="painel" data-painel={p.id} data-testid={`painel-corpo-${p.id}`} style={{ flex: `${p.peso} 1 0` }}>
-                <header class="painel-topo"><h3>{ROTULO_DO_PAINEL[p.id]}</h3><span class="espaco" /><button type="button" class="botao-icone-texto" title="Tela cheia (Esc volta)" data-testid={`tela-cheia-${p.id}`} onClick={() => telaCheia(p.id)}>⛶</button></header>
+                <header class="painel-topo">
+                  <h3>{ROTULO_DO_PAINEL[p.id]}</h3>
+                  <span class="espaco" />
+                  <button
+                    type="button"
+                    class="botao-icone-texto"
+                    title={emTelaCheia ? 'Sair da tela cheia' : 'Tela cheia (Esc volta)'}
+                    aria-label={emTelaCheia ? 'Sair da tela cheia' : 'Tela cheia'}
+                    aria-pressed={emTelaCheia}
+                    data-testid={`tela-cheia-${p.id}`}
+                    onClick={() => { void alternarTelaCheia(p.id); }}
+                  >
+                    {emTelaCheia ? '✕' : '⛶'}
+                  </button>
+                </header>
                 <div class="painel-corpo"><Corpo /></div>
               </section>
               {i < v.length - 1 && <div class="divisor" role="separator" aria-orientation="vertical" aria-label={`Largura: ${ROTULO_DO_PAINEL[p.id]} e ${ROTULO_DO_PAINEL[v[i + 1]!.id]}`} tabIndex={0} data-testid={`divisor-${i}`} onPointerDown={arrastar(i)} onKeyDown={teclar(i)} />}

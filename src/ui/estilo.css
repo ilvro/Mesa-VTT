@@ -319,6 +319,9 @@ textarea { resize: vertical; width: 100%; line-height: 1.5; }
 .divisor::after { content: ''; position: absolute; inset: 40% 2px; border-left: 1px solid var(--apagado); border-right: 1px solid var(--apagado); opacity: 0.6; }
 .divisor:hover, .divisor:focus-visible, .sessao-paineis.arrastando .divisor { background: var(--acento); }
 .abas-fichas { display: flex; gap: 6px; flex-wrap: wrap; padding: 6px 8px; border-bottom: 1px solid var(--linha); background: var(--superficie); align-items: center; flex: none; }
+.ficha-aba-grupo { display: inline-flex; align-items: center; gap: 1px; }
+.ficha-aba-fechar { width: 18px; height: 22px; border-radius: 4px; color: var(--apagado); font-size: 13px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+.ficha-aba-fechar:hover { background: var(--superficie-2); color: var(--texto); }
 .escolher-fichas { position: relative; margin-left: auto; }
 .escolher-fichas summary { list-style: none; cursor: pointer; }
 .menu-fichas { position: absolute; right: 0; top: 100%; z-index: 20; margin: 4px 0 0; padding: 8px 10px; list-style: none; min-width: 200px; max-height: 50vh; overflow: auto; background: var(--superficie-2); border: 1px solid var(--acento); border-radius: 8px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55); }
