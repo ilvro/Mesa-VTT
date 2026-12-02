@@ -55,7 +55,9 @@ export function permitido(msg: MensagemParaSala, autor: Eu, ctx: ContextoPermiss
     case 'sala.modo':
     case 'sala.limpar-sessao':
     case 'construcao.abrir':
-    case 'construcao.fechar': return mestre;
+    case 'construcao.fechar':
+    case 'desafio.definir': return mestre;
+    case 'desafio.acao': return true;
     case 'blob':
     case 'blob.tem':
       return mestre || (ctx.modo() === 'construcao' && msg.id.startsWith(PREFIXO_BLOB_CONSTRUCAO));

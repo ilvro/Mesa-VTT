@@ -3,6 +3,8 @@
  * (`sala/`) e o cliente (`cliente.ts`) importam o mesmo arquivo. Plano em `Atlas/docs/plano/mesa-online.md`.
  */
 
+import { ehDesafioAtivo, type AcaoDesafio, type DesafioAtivo } from '../dominio/desafios.ts';
+
 export type Papel = 'mestre' | 'jogador';
 export type ModoDaSala = 'sessao' | 'construcao';
 
@@ -118,6 +120,11 @@ export type MsgConstrucaoRessincronizar = { tipo: 'construcao.ressincronizar' };
 /** Qualquer membro (em modo `'construcao'`): publica uma nota rápida no painel de construção. */
 export type MsgConstrucaoNota = { tipo: 'construcao.nota'; id: string; texto: string };
 
+/** Só o mestre: define ou encerra (`null`) o desafio ativo na sala. */
+export type MsgDesafioDefinir = { tipo: 'desafio.definir'; desafio: DesafioAtivo | null };
+/** Mestre ou jogador: aplica uma ação no desafio ativo na sala. */
+export type MsgDesafioAcao = { tipo: 'desafio.acao'; acao: AcaoDesafio };
+
 /** Anúncio de um blob; os pedaços seguem em quadros binários (ver `codificarPedaco`). */
 export interface MsgBlob { tipo: 'blob'; id: string; tipoMime: string }
 
@@ -155,7 +162,9 @@ export type MensagemParaSala =
   | MsgConstrucaoSnapshot
   | MsgConstrucaoCursor
   | MsgConstrucaoRessincronizar
-  | MsgConstrucaoNota;
+  | MsgConstrucaoNota
+  | MsgDesafioDefinir
+  | MsgDesafioAcao;
 
 /** Nome, capa, dono e modo da sala, guardados no `config` dela. */
 export interface ConfigSala {
@@ -187,6 +196,8 @@ export interface MsgBemVindo {
   agora?: number;
   /** Resumo do mapa em construção colaborativa, se houver. */
   construcao?: ResumoConstrucao;
+  /** Desafio ativo na sessão (já sanitizado para o papel de `eu`), ou `null`. */
+  desafio?: DesafioAtivo | null;
 }
 
 /** Quantas rolagens o `bem-vindo` traz. */
@@ -231,6 +242,8 @@ export type MsgConstrucaoNotaDaSala = {
 
 export type MsgConstrucaoFechada = { tipo: 'construcao.fechada' };
 
+export type MsgDesafioEstado = { tipo: 'desafio.estado'; desafio: DesafioAtivo | null };
+
 export type MensagemDaSala =
   | MsgBemVindo
   | { tipo: 'pong'; em: number; agora: number }
@@ -249,6 +262,7 @@ export type MensagemDaSala =
   | MsgConstrucaoCursorDaSala
   | MsgConstrucaoNotaDaSala
   | MsgConstrucaoFechada
+  | MsgDesafioEstado
   | MsgBlob
   | MsgBlobTemResposta
   | MsgPedirRetrato
@@ -388,6 +402,12 @@ export function lerMensagemParaSala(texto: string): MensagemParaSala | null {
     case 'construcao.nota':
       if (!txt(m.id) || !m.id || !txt(m.texto) || !m.texto.trim()) return null;
       return { tipo: 'construcao.nota', id: m.id, texto: m.texto };
+    case 'desafio.definir':
+      if (m.desafio !== null && !ehDesafioAtivo(m.desafio)) return null;
+      return { tipo: 'desafio.definir', desafio: m.desafio };
+    case 'desafio.acao':
+      if (!ehObj(m.acao) || !txt(m.acao.tipo) || !m.acao.tipo) return null;
+      return { tipo: 'desafio.acao', acao: m.acao as AcaoDesafio };
     default: return null;
   }
 }
@@ -405,6 +425,7 @@ export function lerMensagemDaSala(texto: string): MensagemDaSala | null {
       if (m.rolagens !== undefined && !listaDe(m.rolagens, ehEnvelope)) return null;
       if (m.agora !== undefined && !num(m.agora)) return null;
       if (m.construcao !== undefined && !ehResumoConstrucao(m.construcao)) return null;
+      if (m.desafio !== undefined && m.desafio !== null && !ehDesafioAtivo(m.desafio)) return null;
       return {
         tipo: 'bem-vindo', eu: m.eu, membros: m.membros, fichas: m.fichas, ultimoEstado: m.ultimoEstado,
         ...(m.config !== undefined ? { config: m.config } : {}),
@@ -413,6 +434,7 @@ export function lerMensagemDaSala(texto: string): MensagemDaSala | null {
         ...(m.rolagens !== undefined ? { rolagens: m.rolagens } : {}),
         ...(m.agora !== undefined ? { agora: m.agora } : {}),
         ...(m.construcao !== undefined ? { construcao: m.construcao } : {}),
+        ...(m.desafio !== undefined ? { desafio: m.desafio } : {}),
       };
     case 'pong': return num(m.em) && num(m.agora) ? { tipo: 'pong', em: m.em, agora: m.agora } : null;
     case 'membros': return listaDe(m.membros, ehMembro) ? { tipo: 'membros', membros: m.membros } : null;
@@ -475,6 +497,9 @@ export function lerMensagemDaSala(texto: string): MensagemDaSala | null {
       if (!txt(m.id) || !m.id || !ehAutor(m.autor) || !txt(m.texto) || !num(m.em)) return null;
       return { tipo: 'construcao.nota', id: m.id, autor: m.autor, texto: m.texto, em: m.em };
     case 'construcao.fechada': return { tipo: 'construcao.fechada' };
+    case 'desafio.estado':
+      if (m.desafio !== null && !ehDesafioAtivo(m.desafio)) return null;
+      return { tipo: 'desafio.estado', desafio: m.desafio };
     case 'blob': return txt(m.id) && m.id && txt(m.tipoMime) ? { tipo: 'blob', id: m.id, tipoMime: m.tipoMime } : null;
     case 'blob.tem':
       if (!txt(m.id) || !m.id || typeof m.tem !== 'boolean' || (m.tamanho !== undefined && !num(m.tamanho))) return null;

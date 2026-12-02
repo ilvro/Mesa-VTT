@@ -5,7 +5,8 @@
 import { signal } from '@preact/signals';
 import { conectarSala, type ClienteDaSala, type EstadoDaSala } from '../online/cliente.ts';
 import { urlDoWebSocket } from '../online/config.ts';
-import { EVENTOS_DO_MESTRE, type Envelope, type Eu, type FichaDaSala, type Membro } from '../online/protocolo.ts';
+import { EVENTOS_DO_MESTRE, type Envelope, type Eu, type FichaDaSala, type Membro, type MensagemParaSala } from '../online/protocolo.ts';
+import type { DesafioAtivo } from '../dominio/desafios.ts';
 import { LIMITE_ESTADO_BYTES, blobIdDoEstado, comprimirEstado, type EstadoComprimidoRef } from '../online/estado-comprimido.ts';
 import { CANAL_EVENTOS, CONTRATO, criarBarramento, validarEvento, type Entidade } from '#mesa';
 import { barramentoDaMesa } from './barramento.ts';
@@ -702,8 +703,14 @@ export type ConexaoOnline = 'desconectada' | EstadoDaSala;
 export const conexaoOnline = signal<ConexaoOnline>('desconectada');
 export const estadoDaPonte = signal<EstadoDaPonte>({ membros: [], fichas: [], semNevoa: [], publicando: false, sons: SONS_VAZIOS });
 export const salaConectadaId = signal<string | null>(null);
+export const desafioDaSala = signal<DesafioAtivo | null>(null);
 
 let atual: { cliente: ClienteDaSala; ponte: Ponte } | null = null;
+
+/** Envia uma mensagem para a sala ativa, se conectada. */
+export function enviarParaSala(msg: MensagemParaSala): boolean {
+  return atual ? atual.cliente.enviar(msg) : false;
+}
 
 /** `jukebox.ouvir` e `jukebox.arquivo` pelo barramento da Mesa (o Jukebox, em outra aba, atende). */
 async function pedirAoJukeboxPeloBarramento(tipo: 'jukebox.ouvir' | 'jukebox.arquivo', dados: unknown, prazoMs: number): Promise<RespostaDoJukebox> {
@@ -726,6 +733,8 @@ export function abrirMesaOnline(sessao: string, salaId: string, nome?: string): 
     ...(nome !== undefined ? { nomeDaSala: nome } : {}),
     aoMudar: e => { estadoDaPonte.value = e; },
   });
+  cliente.ouvir('bem-vindo', m => { desafioDaSala.value = m.desafio ?? null; });
+  cliente.ouvir('desafio.estado', m => { desafioDaSala.value = m.desafio; });
   cliente.aoMudarEstado(e => { conexaoOnline.value = e; });
   atual = { cliente, ponte };
   salaConectadaId.value = salaId;
@@ -746,5 +755,6 @@ export function fecharMesaOnline(): void {
   atual = null;
   salaConectadaId.value = null;
   conexaoOnline.value = 'desconectada';
+  desafioDaSala.value = null;
   estadoDaPonte.value = { membros: [], fichas: [], semNevoa: [], publicando: false, sons: SONS_VAZIOS };
 }

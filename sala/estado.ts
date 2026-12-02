@@ -3,6 +3,7 @@
  * `ctx.storage.sql` e nos testes é um `node:sqlite` em memória.
  */
 
+import type { DesafioAtivo } from '../src/dominio/desafios.ts';
 import type {
   Autor, ComandoConstrucao, ConfigSala, Envelope, FichaDaSala, Membro, ModoDaSala, NotaConstrucao,
   OpConstrucao, ResumoConstrucao, Eu,
@@ -118,7 +119,10 @@ export interface Estado {
 
   personagem(discordId: string): string | null;
   escolherPersonagem(discordId: string, fichaId: string | null): void;
-  /** Limpa o estado projetado (`ultimo`), citações de blobs da projeção e escolhas de personagem da sessão; mantém fichas, blobs, config, construção e rolagens. */
+  /** Desafio ativo na sessão atual (com estado completo, antes da sanitização por papel). */
+  desafio(): DesafioAtivo | null;
+  definirDesafio(desafio: DesafioAtivo | null): void;
+  /** Limpa o estado projetado (`ultimo`), citações de blobs da projeção, desafio ativo e escolhas de personagem da sessão; mantém fichas, blobs, config, construção e rolagens. */
   limparSessao(): void;
 
   /** Há algum mapa em construção aberto na sala? */
@@ -165,6 +169,7 @@ export function criarEstado(sql: Sql): Estado {
   rodar('CREATE TABLE IF NOT EXISTS construcao_mapa (id INTEGER PRIMARY KEY, rev INTEGER NOT NULL, snapshot_json TEXT, snapshot_blob_id TEXT, mapa_nome TEXT)');
   rodar('CREATE TABLE IF NOT EXISTS construcao_ops (rev INTEGER PRIMARY KEY, autor_json TEXT NOT NULL, op_id TEXT NOT NULL, comandos_json TEXT NOT NULL, rotulo TEXT, em INTEGER NOT NULL)');
   rodar('CREATE TABLE IF NOT EXISTS construcao_notas (id TEXT PRIMARY KEY, autor_json TEXT NOT NULL, texto TEXT NOT NULL, em INTEGER NOT NULL)');
+  rodar('CREATE TABLE IF NOT EXISTS desafio_ativo (id INTEGER PRIMARY KEY, json TEXT NOT NULL)');
 
   const lerChave = (chave: string): string | undefined => {
     const r = um('SELECT valor FROM config WHERE chave = ?', chave);
@@ -357,10 +362,19 @@ export function criarEstado(sql: Sql): Estado {
       if (fichaId === null) rodar('DELETE FROM personagens WHERE discord_id = ?', discordId);
       else rodar('INSERT OR REPLACE INTO personagens (discord_id, ficha_id) VALUES (?, ?)', discordId, fichaId);
     },
+    desafio() {
+      const r = um('SELECT json FROM desafio_ativo WHERE id = 1');
+      return r ? JSON.parse(String(r.json)) as DesafioAtivo : null;
+    },
+    definirDesafio(desafio) {
+      if (desafio === null) rodar('DELETE FROM desafio_ativo WHERE id = 1');
+      else rodar('INSERT OR REPLACE INTO desafio_ativo (id, json) VALUES (1, ?)', JSON.stringify(desafio));
+    },
     limparSessao() {
       rodar('DELETE FROM ultimo');
       rodar('DELETE FROM citados');
       rodar('DELETE FROM personagens');
+      rodar('DELETE FROM desafio_ativo');
     },
 
     temMapaConstrucao() {

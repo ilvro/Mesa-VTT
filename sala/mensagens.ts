@@ -3,6 +3,7 @@
  * permissões, grava no estado e devolve as saídas (a quem mandar o quê). `sala.ts` só liga isto às conexões.
  */
 
+import { aplicarAcaoDesafio, sanitizarDesafioPara } from '../src/dominio/desafios.ts';
 import {
   PREFIXO_BLOB_CONSTRUCAO, ROLAGENS_NO_BEM_VINDO, codificarPedaco, decodificarPedaco, lerMensagemParaSala,
   type Eu, type MensagemDaSala, type MsgBemVindo, type MsgBlob, type MsgConstrucaoEstado,
@@ -12,10 +13,11 @@ import { autorCarimbado, carimbar, criarLimitador, envelopeInvalido, permitido }
 
 /**
  * Destino de uma saída:
- * `remetente` (quem mandou), `outros` (todos menos o remetente), `todos`, `{ ficha: dono }`
- * (o mestre e o dono da ficha, inclusive o remetente) ou `{ para: discordId }` (só as conexões dessa pessoa).
+ * `remetente` (quem mandou), `outros` (todos menos o remetente), `todos`, `mestre` (só conexões do mestre),
+ * `jogadores` (só conexões de jogadores), `{ ficha: dono }` (o mestre e o dono da ficha, inclusive o remetente)
+ * ou `{ para: discordId }` (só as conexões dessa pessoa).
  */
-export type Destino = 'remetente' | 'outros' | 'todos' | { ficha: string } | { para: string };
+export type Destino = 'remetente' | 'outros' | 'todos' | 'mestre' | 'jogadores' | { ficha: string } | { para: string };
 
 export interface Saida {
   destino: Destino;
@@ -159,6 +161,7 @@ export function bemVindo(estado: Estado, eu: Eu, conectados: readonly Eu[], agor
       if (f) ultimoEstado[canal] = { ...valor, ficha: f };
     }
   }
+  const desafioAtual = estado.desafio();
   return {
     tipo: 'bem-vindo',
     eu,
@@ -170,6 +173,7 @@ export function bemVindo(estado: Estado, eu: Eu, conectados: readonly Eu[], agor
     donos,
     rolagens: estado.rolagens(ROLAGENS_NO_BEM_VINDO),
     construcao: estado.resumoConstrucao(),
+    desafio: desafioAtual ? sanitizarDesafioPara(desafioAtual, eu.papel) : null,
     ...(agora !== undefined ? { agora } : {}),
   };
 }
@@ -412,6 +416,40 @@ export function tratar(estado: Estado, eu: Eu, texto: string, agora: number, con
     }
     case 'alternar-porta':
       return [{ destino: 'outros', msg: { tipo: 'alternar-porta', id: msg.id } }];
+    case 'desafio.definir':
+      estado.definirDesafio(msg.desafio);
+      return [
+        { destino: 'mestre', msg: { tipo: 'desafio.estado', desafio: msg.desafio ? sanitizarDesafioPara(msg.desafio, 'mestre') : null } },
+        { destino: 'jogadores', msg: { tipo: 'desafio.estado', desafio: msg.desafio ? sanitizarDesafioPara(msg.desafio, 'jogador') : null } },
+      ];
+    case 'desafio.acao': {
+      const atual = estado.desafio();
+      if (!atual) return [];
+      if (eu.papel === 'jogador') {
+        if (
+          msg.acao.tipo === 'esconderijo.buscar-criatura'
+          || msg.acao.tipo === 'esconderijo.proxima-fase'
+          || msg.acao.tipo === 'perseguicao.encerrar-rodada'
+        ) {
+          return [erro('permissao', 'desafio.acao')];
+        }
+        if (
+          msg.acao.tipo === 'lockpick.tentar'
+          && atual.tipo === 'lockpick'
+          && atual.jogadorAutorizadoId
+          && atual.jogadorAutorizadoId !== eu.discordId
+          && !estado.idsDoDono(eu.discordId).includes(atual.jogadorAutorizadoId)
+        ) {
+          return [erro('permissao', 'desafio.acao')];
+        }
+      }
+      const proximo = aplicarAcaoDesafio(atual, msg.acao, { agora });
+      estado.definirDesafio(proximo);
+      return [
+        { destino: 'mestre', msg: { tipo: 'desafio.estado', desafio: sanitizarDesafioPara(proximo, 'mestre') } },
+        { destino: 'jogadores', msg: { tipo: 'desafio.estado', desafio: sanitizarDesafioPara(proximo, 'jogador') } },
+      ];
+    }
     case 'blob':
       // `estado:<mapa>:<versao>` pode voltar com outro conteúdo (a versão recomeça numa sessão nova): o novo substitui
       if (msg.id.startsWith(PREFIXO_ESTADO)) estado.apagarBlob(msg.id);
