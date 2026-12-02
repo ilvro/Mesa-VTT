@@ -16,6 +16,7 @@ import {
   type LadosDado,
   type ModoDicaLockpick,
   type ModoExibicaoHud,
+  type ObjetoAlvoLockpick,
   type ParticipanteDesafio,
 } from '../dominio/desafios.ts';
 import { extrairSugestoesDaFicha, type SugestoesDaFicha } from '../dominio/desafios-ficha.ts';
@@ -25,6 +26,8 @@ import {
   desafioAtivo,
   despacharAcaoDesafio,
   encerrarDesafioAtivo,
+  limparPedidoLockpickObjeto,
+  pedidoLockpickObjeto,
 } from '../app/desafios.ts';
 import { estadoBrutoDoAtlas, iniciarCombateCanal } from '../app/combate.ts';
 import { conexaoOnline, estadoDaPonte } from '../app/online.ts';
@@ -230,12 +233,18 @@ function AdicionarParticipanteManual({
 function ConfigLockpick({
   pool,
   rotuloPool,
+  pedido,
+  aoDesvincular,
 }: {
   pool: PersonagemDisponivel[];
   rotuloPool: string;
+  pedido: ObjetoAlvoLockpick | null;
+  aoDesvincular: () => void;
 }) {
   const [presetId, setPresetId] = useState<string>('simples');
-  const [titulo, setTitulo] = useState('Fechadura Simples');
+  const [titulo, setTitulo] = useState(
+    pedido ? `Fechadura — ${pedido.nome}` : 'Fechadura Simples',
+  );
   const [dados, setDados] = useState<LadosDado[]>([6, 6, 6]);
   const [dependencias, setDependencias] = useState<Array<number | null>>([null, null, null]);
   const [modoDica, setModoDica] = useState<ModoDicaLockpick>('posicional');
@@ -245,9 +254,15 @@ function ConfigLockpick({
   const [senhaManualAtiva, setSenhaManualAtiva] = useState(false);
   const [senhaManual, setSenhaManual] = useState<number[]>([1, 1, 1]);
 
+  useEffect(() => {
+    if (pedido) {
+      setTitulo(`Fechadura — ${pedido.nome}`);
+    }
+  }, [pedido?.mapaId, pedido?.colecao, pedido?.id, pedido?.nome]);
+
   const aplicarPreset = (p: PresetLockpick) => {
     setPresetId(p.id);
-    setTitulo(p.titulo);
+    setTitulo(pedido ? `Fechadura — ${pedido.nome}` : p.titulo);
     setDados([...p.dados]);
     setDependencias(p.dados.map((_, i) => p.dependencias?.[i] ?? null));
     setModoDica(p.modoDica);
@@ -308,11 +323,32 @@ function ConfigLockpick({
         return Math.min(lados, Math.max(1, v));
       });
     }
+    if (pedido) {
+      opts.objetoAlvo = pedido;
+    }
     definirDesafioAtivo(criarLockpick(opts));
+    if (pedido) {
+      limparPedidoLockpickObjeto();
+    }
   };
 
   return (
     <div class="desafios-bloco">
+      {pedido && (
+        <div class="desafios-linha" data-testid="lockpick-objeto-vinculado">
+          <span class="desafios-dado-chip">
+            🔒 Vinculado a: {pedido.nome}
+            <button
+              type="button"
+              aria-label="Desvincular objeto do mapa"
+              title="Desvincular objeto do mapa"
+              onClick={aoDesvincular}
+            >
+              ×
+            </button>
+          </span>
+        </div>
+      )}
       <h4 class="desafios-subtitulo">Presets rápidos</h4>
       <div class="desafios-presets">
         {PRESETS_LOCKPICK.map((p) => (
@@ -1076,6 +1112,9 @@ function VivoLockpick({ desafio }: { desafio: DesafioLockpick }) {
     if (desafio.jogadorAutorizadoNome !== undefined) {
       opts.jogadorAutorizadoNome = desafio.jogadorAutorizadoNome;
     }
+    if (desafio.objetoAlvo) {
+      opts.objetoAlvo = desafio.objetoAlvo;
+    }
     definirDesafioAtivo(criarLockpick(opts));
   };
 
@@ -1095,6 +1134,7 @@ function VivoLockpick({ desafio }: { desafio: DesafioLockpick }) {
               {desafio.modoDica === 'posicional' ? 'Posicional' : 'Embaralhado'} •{' '}
               {desafio.tentativas.length}/{desafio.maxTentativas} tentativas
               {desafio.jogadorAutorizadoNome ? ` • ${desafio.jogadorAutorizadoNome}` : ''}
+              {desafio.objetoAlvo ? ` • Vinculado a: ${desafio.objetoAlvo.nome}` : ''}
             </div>
           </div>
           <span class={cx('desafios-status-pill', statusClasse)}>{statusTexto}</span>
@@ -1959,6 +1999,13 @@ export function PainelDesafios({
 }) {
   const [aba, setAba] = useState<AbaDesafio>('lockpick');
   const [manuais, setManuais] = useState<PersonagemDisponivel[]>([]);
+  const pedidoLockpick = pedidoLockpickObjeto.value;
+
+  useEffect(() => {
+    if (pedidoLockpick) {
+      setAba('lockpick');
+    }
+  }, [pedidoLockpick]);
 
   useEffect(() => {
     if (!aberto) return;
@@ -2217,7 +2264,14 @@ export function PainelDesafios({
                 ))}
               </div>
 
-              {aba === 'lockpick' && <ConfigLockpick pool={pool} rotuloPool={rotuloPool} />}
+              {aba === 'lockpick' && (
+                <ConfigLockpick
+                  pool={pool}
+                  rotuloPool={rotuloPool}
+                  pedido={pedidoLockpick}
+                  aoDesvincular={limparPedidoLockpickObjeto}
+                />
+              )}
               {aba === 'equilibrio' && (
                 <ConfigEquilibrio
                   pool={pool}
@@ -2252,6 +2306,41 @@ export function PainelDesafios({
             </>
           ) : (
             <>
+              {pedidoLockpick && (
+                <div
+                  class="desafios-bloco desafios-bloco-destaque"
+                  data-testid="lockpick-aviso-substituir"
+                >
+                  <div class="desafios-linha" style={{ justifyContent: 'space-between' }}>
+                    <span>
+                      🔒 Pedido de fechadura recebido do Atlas para{' '}
+                      <strong>{pedidoLockpick.nome}</strong>.
+                    </span>
+                    <button
+                      type="button"
+                      class="desafios-fechar"
+                      style={{ width: '24px', height: '24px', fontSize: '12px' }}
+                      aria-label="Ignorar pedido de fechadura"
+                      onClick={limparPedidoLockpickObjeto}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div class="desafios-linha">
+                    <button
+                      type="button"
+                      class="botao-pilula destaque"
+                      data-testid="lockpick-substituir-btn"
+                      onClick={() => {
+                        encerrarDesafioAtivo();
+                        setAba('lockpick');
+                      }}
+                    >
+                      Substituir por fechadura de {pedidoLockpick.nome}
+                    </button>
+                  </div>
+                </div>
+              )}
               {ativo.tipo === 'lockpick' && <VivoLockpick desafio={ativo} />}
               {ativo.tipo === 'equilibrio' && <VivoEquilibrio desafio={ativo} />}
               {ativo.tipo === 'esconderijo' && <VivoEsconderijo desafio={ativo} />}

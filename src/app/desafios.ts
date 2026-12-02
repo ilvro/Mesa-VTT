@@ -5,6 +5,7 @@ import {
   sanitizarDesafioPara,
   type AcaoDesafio,
   type DesafioAtivo,
+  type ObjetoAlvoLockpick,
 } from '../dominio/desafios.ts';
 import {
   CANAL_PROJETOR_REMOTO,
@@ -19,14 +20,76 @@ export const CANAL_DESAFIOS_LOCAL = 'mesa:desafios';
 export const CHAVE_DESAFIO_LOCAL = 'mesa:desafio-ativo';
 
 export const desafioAtivo = signal<DesafioAtivo | null>(null);
+export const pedidoLockpickObjeto = signal<ObjetoAlvoLockpick | null>(null);
+
+export function limparPedidoLockpickObjeto(): void {
+  pedidoLockpickObjeto.value = null;
+}
 
 let canalLocal: BroadcastChannel | null = null;
+let canalMestreIniciado = false;
+const portasDestrancadasPorDesafio = new Set<string>();
+
+function ehObjetoAlvoLockpick(v: unknown): v is ObjetoAlvoLockpick {
+  if (!v || typeof v !== 'object') return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o.mapaId === 'string' &&
+    o.mapaId.length > 0 &&
+    (o.colecao === 'openings' || o.colecao === 'props') &&
+    typeof o.id === 'string' &&
+    o.id.length > 0 &&
+    typeof o.nome === 'string' &&
+    o.nome.length > 0
+  );
+}
 
 function obterCanalLocal(): BroadcastChannel | null {
   if (typeof BroadcastChannel === 'undefined') return null;
   if (!canalLocal) canalLocal = new BroadcastChannel(CANAL_DESAFIOS_LOCAL);
   return canalLocal;
 }
+
+export function iniciarCanalDesafiosMestre(): void {
+  if (canalMestreIniciado) return;
+  const canal = obterCanalLocal();
+  if (!canal) return;
+  canalMestreIniciado = true;
+  canal.onmessage = (ev: MessageEvent) => {
+    const data = ev.data as { tipo?: unknown; objeto?: unknown } | null;
+    if (!data || typeof data !== 'object') return;
+    if (data.tipo === 'desafio.abrir-lockpick' && ehObjetoAlvoLockpick(data.objeto)) {
+      pedidoLockpickObjeto.value = { ...data.objeto };
+    }
+  };
+}
+
+function notificarDestrancarPortaSeAberto(d: DesafioAtivo | null): void {
+  if (
+    !d ||
+    d.tipo !== 'lockpick' ||
+    d.status !== 'aberto' ||
+    !d.objetoAlvo ||
+    d.objetoAlvo.colecao !== 'openings'
+  ) {
+    return;
+  }
+  if (portasDestrancadasPorDesafio.has(d.id)) return;
+  portasDestrancadasPorDesafio.add(d.id);
+  try {
+    obterCanalLocal()?.postMessage({
+      tipo: 'atlas.destrancar-porta',
+      mapaId: d.objetoAlvo.mapaId,
+      id: d.objetoAlvo.id,
+    });
+  } catch {
+    // sem BroadcastChannel
+  }
+}
+
+effect(() => {
+  notificarDestrancarPortaSeAberto(desafioAtivo.value);
+});
 
 function propagarDesafioLocal(d: DesafioAtivo | null): void {
   const sanitizadoJogador = d ? sanitizarDesafioPara(d, 'jogador') : null;

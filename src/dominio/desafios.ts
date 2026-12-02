@@ -23,6 +23,13 @@ export interface TentativaLockpick {
   em: number;
 }
 
+export interface ObjetoAlvoLockpick {
+  mapaId: string;
+  colecao: 'openings' | 'props';
+  id: string;
+  nome: string;
+}
+
 export interface DesafioLockpick {
   tipo: 'lockpick';
   id: string;
@@ -36,6 +43,7 @@ export interface DesafioLockpick {
   tentativasPorRodada?: number;
   jogadorAutorizadoId?: string | null;
   jogadorAutorizadoNome?: string;
+  objetoAlvo?: ObjetoAlvoLockpick;
   tentativas: TentativaLockpick[];
   status: 'ativo' | 'aberto' | 'travado';
   atualizadoEm: number;
@@ -242,6 +250,7 @@ export function criarLockpick(opts: {
   tentativasPorRodada?: number;
   jogadorAutorizadoId?: string | null;
   jogadorAutorizadoNome?: string;
+  objetoAlvo?: ObjetoAlvoLockpick;
   agora?: number;
   rng?: () => number;
 } = {}): DesafioLockpick {
@@ -275,6 +284,9 @@ export function criarLockpick(opts: {
   }
   if (opts.jogadorAutorizadoNome !== undefined) {
     desafio.jogadorAutorizadoNome = opts.jogadorAutorizadoNome;
+  }
+  if (opts.objetoAlvo !== undefined) {
+    desafio.objetoAlvo = { ...opts.objetoAlvo };
   }
   return desafio;
 }

@@ -17,7 +17,7 @@ import { carregarFatos } from '../app/prontidao.ts';
 import { pendenciasDaSessao } from '../dominio/prontidao.ts';
 import { DialogoChecagemSessao } from './DialogoChecagemSessao.tsx';
 import { PainelDesafios } from './PainelDesafios.tsx';
-import { desafioAtivo } from '../app/desafios.ts';
+import { desafioAtivo, iniciarCanalDesafiosMestre, pedidoLockpickObjeto } from '../app/desafios.ts';
 import { abrirQuadro, carregarQuadros, criarQuadro, quadroAberto, quadros } from '../app/quadros.ts';
 import { modoFocoSessao, type ModoFocoSessao } from '../app/foco-do-quadro.ts';
 import { Quadro } from './quadro/Quadro.tsx';
@@ -310,6 +310,10 @@ export function ModoSessao() {
   const [arrastando, setArrastando] = useState(false);
   const [desafiosAberto, setDesafiosAberto] = useState(false);
   useEffect(() => { carregarEscolhas(c?.id ?? null); void sondarAplicativos(); void carregarSessoes(); }, [c?.id]);
+  useEffect(() => { iniciarCanalDesafiosMestre(); }, []);
+  useEffect(() => {
+    if (pedidoLockpickObjeto.value) setDesafiosAberto(true);
+  }, [pedidoLockpickObjeto.value]);
 
   if (!c) return <section class="pagina"><div class="vazio"><h2>Escolha uma campanha</h2><p>O modo sessão junta o mapa, as fichas e a música da campanha ativa.</p></div></section>;
   const l = layout.value, v = visiveis(l), preset = presetDe(l);
