@@ -19,19 +19,23 @@ import {
   type ParticipanteDesafio,
 } from '../dominio/desafios.ts';
 import { extrairSugestoesDaFicha, type SugestoesDaFicha } from '../dominio/desafios-ficha.ts';
+import { semAcento } from '../dominio/entidades.ts';
 import {
   definirDesafioAtivo,
   desafioAtivo,
   despacharAcaoDesafio,
   encerrarDesafioAtivo,
 } from '../app/desafios.ts';
+import { estadoBrutoDoAtlas, iniciarCombateCanal } from '../app/combate.ts';
 import { conexaoOnline, estadoDaPonte } from '../app/online.ts';
-import { mapaAtual, personagens } from '../app/sessao.ts';
+import { mapaAtual } from '../app/sessao.ts';
 import { abrirJanelaNoSegundoMonitor } from '../app/desktop.ts';
 import { cx } from './cx.ts';
 import './desafios.css';
 
 type AbaDesafio = DesafioAtivo['tipo'];
+
+const normalizarNome = (nome: string): string => semAcento(nome.trim().toLowerCase());
 
 interface PersonagemDisponivel {
   id: string;
@@ -39,7 +43,7 @@ interface PersonagemDisponivel {
   fichaId?: string;
   donoDiscordId?: string;
   retrato?: string;
-  origem: 'online' | 'campanha' | 'manual';
+  origem: 'mapa' | 'online' | 'manual';
   sugestoes: SugestoesDaFicha;
 }
 
@@ -225,8 +229,10 @@ function AdicionarParticipanteManual({
 
 function ConfigLockpick({
   pool,
+  rotuloPool,
 }: {
   pool: PersonagemDisponivel[];
+  rotuloPool: string;
 }) {
   const [presetId, setPresetId] = useState<string>('simples');
   const [titulo, setTitulo] = useState('Fechadura Simples');
@@ -416,7 +422,9 @@ function ConfigLockpick({
           <Stepper valor={maxTentativas} min={1} max={20} aoMudar={setMaxTentativas} rotulo="Limite de tentativas" />
         </div>
         <label class="desafios-campo">
-          Quem pode destrancar
+          <span>
+            Quem pode destrancar <span class="meta">({rotuloPool})</span>
+          </span>
           <select
             value={autorizadoId}
             onChange={(ev) => aoEscolherAutorizado(ev.currentTarget.value)}
@@ -492,9 +500,11 @@ function ConfigLockpick({
 
 function ConfigEquilibrio({
   pool,
+  rotuloPool,
   aoAdicionarManual,
 }: {
   pool: PersonagemDisponivel[];
+  rotuloPool: string;
   aoAdicionarManual: (nome: string) => void;
 }) {
   const [selecionadoId, setSelecionadoId] = useState<string>(pool[0]?.id ?? '');
@@ -502,13 +512,17 @@ function ConfigEquilibrio({
   const [dadosEquilibrio, setDadosEquilibrio] = useState<number>(
     pool[0]?.sugestoes.dadosEquilibrio ?? 2,
   );
-  const [exibicao, setExibicao] = useState<ModoExibicaoHud>('destaque');
+  const [exibicao, setExibicao] = useState<ModoExibicaoHud>('compacto');
 
   useEffect(() => {
-    if (!selecionadoId && pool[0]) {
-      setSelecionadoId(pool[0].id);
-      setDadosEquilibrio(pool[0].sugestoes.dadosEquilibrio);
+    if (selecionadoId && pool.some((p) => p.id === selecionadoId)) return;
+    const primeiro = pool[0];
+    if (!primeiro) {
+      if (selecionadoId !== '') setSelecionadoId('');
+      return;
     }
+    setSelecionadoId(primeiro.id);
+    setDadosEquilibrio(primeiro.sugestoes.dadosEquilibrio);
   }, [pool, selecionadoId]);
 
   const escolhido = pool.find((p) => p.id === selecionadoId) ?? pool[0] ?? null;
@@ -560,7 +574,9 @@ function ConfigEquilibrio({
       </div>
 
       <label class="desafios-campo">
-        Personagem em equilíbrio
+        <span>
+          Personagem em equilíbrio <span class="meta">({rotuloPool})</span>
+        </span>
         <select
           value={escolhido?.id ?? ''}
           onChange={(ev) => trocarPersonagem(ev.currentTarget.value)}
@@ -612,10 +628,12 @@ function ConfigEquilibrio({
 
 function ConfigEsconderijo({
   pool,
+  rotuloPool,
   aoAdicionarManual,
   aoRemoverManual,
 }: {
   pool: PersonagemDisponivel[];
+  rotuloPool: string;
   aoAdicionarManual: (nome: string) => void;
   aoRemoverManual: (id: string) => void;
 }) {
@@ -663,6 +681,7 @@ function ConfigEsconderijo({
 
       <h4 class="desafios-subtitulo">
         <span>Participantes ({selecionados.length})</span>
+        <span class="meta">{rotuloPool}</span>
       </h4>
 
       <div class="desafios-participantes">
@@ -719,10 +738,12 @@ function ConfigEsconderijo({
 
 function ConfigPerseguicao({
   pool,
+  rotuloPool,
   aoAdicionarManual,
   aoRemoverManual,
 }: {
   pool: PersonagemDisponivel[];
+  rotuloPool: string;
   aoAdicionarManual: (nome: string) => void;
   aoRemoverManual: (id: string) => void;
 }) {
@@ -837,6 +858,7 @@ function ConfigPerseguicao({
 
       <h4 class="desafios-subtitulo">
         <span>Participantes ({selecionados.length}) — Fôlego (d6)</span>
+        <span class="meta">{rotuloPool}</span>
       </h4>
 
       <div class="desafios-participantes">
@@ -898,10 +920,12 @@ function ConfigPerseguicao({
 
 function ConfigEscalada({
   pool,
+  rotuloPool,
   aoAdicionarManual,
   aoRemoverManual,
 }: {
   pool: PersonagemDisponivel[];
+  rotuloPool: string;
   aoAdicionarManual: (nome: string) => void;
   aoRemoverManual: (id: string) => void;
 }) {
@@ -953,6 +977,7 @@ function ConfigEscalada({
 
       <h4 class="desafios-subtitulo">
         <span>Escaladores ({selecionados.length})</span>
+        <span class="meta">{rotuloPool}</span>
       </h4>
 
       <div class="desafios-participantes">
@@ -1944,41 +1969,136 @@ export function PainelDesafios({
     return () => window.removeEventListener('keydown', aoTeclar);
   }, [aberto, aoFechar]);
 
+  useEffect(() => {
+    if (!aberto) return;
+    return iniciarCombateCanal();
+  }, [aberto]);
+
+  const estadoAtlas = estadoBrutoDoAtlas.value;
   const fichasOnline = estadoDaPonte.value.fichas;
   const membrosOnline = estadoDaPonte.value.membros;
-  const personagensCampanha = personagens.value;
 
-  const pool = useMemo<PersonagemDisponivel[]>(() => {
-    const porFicha = new Map<string, PersonagemDisponivel>();
+  const { pool, rotuloPool } = useMemo<{
+    pool: PersonagemDisponivel[];
+    rotuloPool: string;
+  }>(() => {
+    const automaticos: PersonagemDisponivel[] = [];
+    const vistosFichaId = new Set<string>();
+    const vistosNome = new Set<string>();
 
-    for (const ficha of fichasOnline) {
-      const sugestoes = extrairSugestoesDaFicha(ficha);
-      const membro = membrosOnline.find((m) => m.personagem === ficha.id);
+    const buscarFichaPorNome = (nomeNorm: string) => {
+      if (!nomeNorm) return undefined;
+      for (let i = fichasOnline.length - 1; i >= 0; i--) {
+        const f = fichasOnline[i];
+        if (!f) continue;
+        if (normalizarNome(extrairSugestoesDaFicha(f).nome) === nomeNorm) {
+          return f;
+        }
+      }
+      return undefined;
+    };
+
+    const buscarDono = (fichaId: string | undefined, nomeNorm: string): string | undefined => {
+      if (fichaId) {
+        const porId = membrosOnline.find((m) => m.personagem === fichaId);
+        if (porId?.discordId) return porId.discordId;
+      }
+      if (nomeNorm) {
+        for (const m of membrosOnline) {
+          if (!m.personagem) continue;
+          const f = fichasOnline.find((x) => x.id === m.personagem);
+          if (f && normalizarNome(extrairSugestoesDaFicha(f).nome) === nomeNorm) {
+            return m.discordId;
+          }
+        }
+      }
+      return undefined;
+    };
+
+    const adicionarUnico = (item: PersonagemDisponivel, idsExtras?: readonly (string | undefined)[]) => {
+      const chaveNome = normalizarNome(item.nome);
+      if (item.fichaId && vistosFichaId.has(item.fichaId)) return;
+      if (idsExtras?.some((id) => id && vistosFichaId.has(id))) return;
+      if (chaveNome && vistosNome.has(chaveNome)) return;
+
+      if (item.fichaId) vistosFichaId.add(item.fichaId);
+      if (idsExtras) {
+        for (const id of idsExtras) {
+          if (id) vistosFichaId.add(id);
+        }
+      }
+      if (chaveNome) vistosNome.add(chaveNome);
+      automaticos.push(item);
+    };
+
+    const tokensJogadores = estadoAtlas?.combatentes.filter((c) => c.jogador) ?? [];
+    if (tokensJogadores.length > 0) {
+      for (const c of tokensJogadores) {
+        const refFichaId = c.refs.find((r) => r.app === 'ficha' && r.tipo === 'ficha')?.id;
+        const nomeToken = c.nome.trim();
+        const nomeNorm = normalizarNome(nomeToken);
+        const ficha =
+          (refFichaId ? fichasOnline.find((f) => f.id === refFichaId) : undefined)
+          ?? buscarFichaPorNome(nomeNorm);
+        const sugestoes = ficha
+          ? extrairSugestoesDaFicha(ficha)
+          : extrairSugestoesDaFicha({ name: nomeToken || 'Personagem' });
+        const nomeFinal = nomeToken || sugestoes.nome;
+        const fichaIdFinal = ficha?.id ?? refFichaId;
+        const donoDiscordId =
+          buscarDono(fichaIdFinal, normalizarNome(nomeFinal))
+          ?? (refFichaId && refFichaId !== fichaIdFinal ? buscarDono(refFichaId, '') : undefined);
+
+        const item: PersonagemDisponivel = {
+          id: fichaIdFinal ?? c.tokenId,
+          nome: nomeFinal,
+          origem: 'mapa',
+          sugestoes,
+        };
+        if (fichaIdFinal !== undefined) item.fichaId = fichaIdFinal;
+        if (donoDiscordId !== undefined) item.donoDiscordId = donoDiscordId;
+        if (sugestoes.retrato !== undefined) item.retrato = sugestoes.retrato;
+
+        adicionarUnico(item, [refFichaId]);
+      }
+
+      return {
+        pool: [...automaticos, ...manuais],
+        rotuloPool: `No mapa atual (${automaticos.length})`,
+      };
+    }
+
+    const jogadoresConectados = membrosOnline.filter(
+      (m) => m.papel === 'jogador' && m.personagem,
+    );
+    for (const m of jogadoresConectados) {
+      const fichaId = m.personagem!;
+      const ficha = fichasOnline.find((f) => f.id === fichaId);
+      const sugestoes = ficha
+        ? extrairSugestoesDaFicha(ficha)
+        : extrairSugestoesDaFicha({ name: m.nome });
+      const nomeFinal = ficha ? sugestoes.nome : m.nome;
+
       const item: PersonagemDisponivel = {
-        id: ficha.id,
-        nome: sugestoes.nome,
-        fichaId: ficha.id,
+        id: fichaId,
+        nome: nomeFinal,
+        fichaId,
+        donoDiscordId: m.discordId,
         origem: 'online',
         sugestoes,
       };
-      if (membro?.discordId) item.donoDiscordId = membro.discordId;
       if (sugestoes.retrato !== undefined) item.retrato = sugestoes.retrato;
-      porFicha.set(ficha.id, item);
+      adicionarUnico(item);
     }
 
-    for (const p of personagensCampanha) {
-      if (porFicha.has(p.fichaId)) continue;
-      porFicha.set(p.fichaId, {
-        id: p.fichaId,
-        nome: p.nome,
-        fichaId: p.fichaId,
-        origem: 'campanha',
-        sugestoes: extrairSugestoesDaFicha({ name: p.nome }),
-      });
-    }
-
-    return [...porFicha.values(), ...manuais];
-  }, [fichasOnline, membrosOnline, personagensCampanha, manuais]);
+    return {
+      pool: [...automaticos, ...manuais],
+      rotuloPool:
+        automaticos.length > 0
+          ? `Conectados na sala (${automaticos.length})`
+          : 'No mapa atual (0)',
+    };
+  }, [estadoAtlas, fichasOnline, membrosOnline, manuais]);
 
   if (!aberto) return null;
 
@@ -2097,13 +2217,18 @@ export function PainelDesafios({
                 ))}
               </div>
 
-              {aba === 'lockpick' && <ConfigLockpick pool={pool} />}
+              {aba === 'lockpick' && <ConfigLockpick pool={pool} rotuloPool={rotuloPool} />}
               {aba === 'equilibrio' && (
-                <ConfigEquilibrio pool={pool} aoAdicionarManual={adicionarManual} />
+                <ConfigEquilibrio
+                  pool={pool}
+                  rotuloPool={rotuloPool}
+                  aoAdicionarManual={adicionarManual}
+                />
               )}
               {aba === 'esconderijo' && (
                 <ConfigEsconderijo
                   pool={pool}
+                  rotuloPool={rotuloPool}
                   aoAdicionarManual={adicionarManual}
                   aoRemoverManual={removerManual}
                 />
@@ -2111,6 +2236,7 @@ export function PainelDesafios({
               {aba === 'perseguicao' && (
                 <ConfigPerseguicao
                   pool={pool}
+                  rotuloPool={rotuloPool}
                   aoAdicionarManual={adicionarManual}
                   aoRemoverManual={removerManual}
                 />
@@ -2118,6 +2244,7 @@ export function PainelDesafios({
               {aba === 'escalada' && (
                 <ConfigEscalada
                   pool={pool}
+                  rotuloPool={rotuloPool}
                   aoAdicionarManual={adicionarManual}
                   aoRemoverManual={removerManual}
                 />
