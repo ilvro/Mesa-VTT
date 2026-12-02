@@ -1,5 +1,6 @@
 // Só em desenvolvimento: carregado por `main.tsx` dentro de `if (import.meta.env.DEV)`; o Vite elimina o chunk do build.
 import { conectarPonte, type FerramentaDaPonte } from '#mesa/ponte';
+import { FONTES } from '../dominio/fontes.ts';
 import { capturadorDoQuadro, estadoDaPonte, medidorDeLargura, medidorDeTexto } from './assistente-slot.ts';
 import { abrirAplicativo } from './aplicativos.ts';
 import { alternarEncontroDaCena, alterarEntidade, atualizar, campanhaAtiva, campanhas, criarCampanha, criarEntidade, definirMomentoDaCena, ligarRefs, obterRepositorio, salvarElencoDaCampanha, vincularMapaNaCena, vincularParticipanteNaCena, vincularPistaNaCena, vincularTrilhaNaCena } from './campanha.ts';
@@ -166,10 +167,16 @@ const ferramentas = ferramentasDaMesa({
         await gravarItens([...novos, ...movidos], []);
       }
     },
+    prepararFontes: async () => {
+      // As fontes só baixam no primeiro uso; medir antes disso usa a reserva, mais larga (sobrava ~15% de caixa).
+      if (typeof document === 'undefined' || !document.fonts) return;
+      const pesos = ['400 14px', '700 14px', 'italic 400 14px'];
+      await Promise.all(Object.values(FONTES).flatMap(f => pesos.map(p => document.fonts.load(`${p} ${f.familia}`).catch(() => []))));
+    },
     medirTexto: item => {
       const medida = medidorDeTexto.value?.({ doc: item.doc, largura: item.largura, padding: item.caixa.padding, tamanhoFonte: item.texto.tamanho, fonte: item.texto.fonte, corPadrao: item.texto.cor, alinhamento: item.texto.alinhamento });
-      // Folga de 6% para a fonte que ainda não carregou (como ao colar do Miro); texto vazio ou sem medidor: a altura atual.
-      return medida == null ? item.altura : Math.ceil(medida * 1.06);
+      // Fontes já carregadas (prepararFontes): folga de 2% para arredondamentos; texto vazio ou sem medidor: a altura atual.
+      return medida == null ? item.altura : Math.ceil(medida * 1.02);
     },
     medirLarguraDoTexto: item => {
       const medida = medidorDeLargura.value?.({ doc: item.doc, padding: item.caixa.padding, tamanhoFonte: item.texto.tamanho, fonte: item.texto.fonte, corPadrao: item.texto.cor, alinhamento: item.texto.alinhamento });

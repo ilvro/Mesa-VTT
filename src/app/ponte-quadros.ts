@@ -40,6 +40,8 @@ export interface ContextoDeQuadros {
   /** Cria os itens no quadro: no aberto, num único passo de desfazer; nos outros, direto no banco. Com `mover`, desce (dy px) itens existentes no mesmo passo. */
   criarItens(quadroId: string, itens: Item[], rotulo: string, mover?: { id: string; dy: number }[]): Promise<void>;
   /** Altura (px) que o texto do item precisa, com as regras do render; sem isto, `quadro_inserir` estima pelo tamanho do texto. */
+  /** Carrega as fontes do quadro antes de medir: sem isso, a medida usa a fonte reserva (mais larga) e as caixas sobram. */
+  prepararFontes?(): Promise<void>;
   medirTexto?(item: Extract<Item, { tipo: 'texto' }>): number;
   /** Largura (px) que o texto precisa numa linha só (com padding e folga), ou null se não dá para medir; sem isto, títulos mantêm a largura copiada. */
   medirLarguraDoTexto?(item: Extract<Item, { tipo: 'texto' }>): number | null;
@@ -446,6 +448,7 @@ export function ferramentasDeQuadros(ctx: ContextoDeQuadros): FerramentaDaPonte[
           alvo = { abaixoDeSecao: secao };
         }
         const paleta = ctx.paleta?.();
+        await ctx.prepararFontes?.();
         const medir = ctx.medirTexto ?? estimarAltura;
         const { itens: pedidos, estrutura } = achatarPedidos((Array.isArray(args.itens) ? args.itens : []) as EntradaPedida[]);
         // Retratos de entidade: resolvidos aqui (assíncrono) e entregues ao domínio já guardados no banco de imagens.
