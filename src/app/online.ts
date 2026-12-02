@@ -11,6 +11,7 @@ import { LIMITE_ESTADO_BYTES, blobIdDoEstado, comprimirEstado, type EstadoCompri
 import { CANAL_EVENTOS, CONTRATO, criarBarramento, validarEvento, type Entidade } from '#mesa';
 import { barramentoDaMesa } from './barramento.ts';
 import { campanhaAtiva, entidades } from './campanha.ts';
+import { avisar } from './toasts.ts';
 
 /** No máximo isto de mensagens de gesto (`emGesto`, `peca-gesto`) por segundo; a última sempre sai. */
 export const GESTOS_POR_SEGUNDO = 60;
@@ -704,6 +705,8 @@ export const conexaoOnline = signal<ConexaoOnline>('desconectada');
 export const estadoDaPonte = signal<EstadoDaPonte>({ membros: [], fichas: [], semNevoa: [], publicando: false, sons: SONS_VAZIOS });
 export const salaConectadaId = signal<string | null>(null);
 export const desafioDaSala = signal<DesafioAtivo | null>(null);
+export const desafioDaSalaVersao = signal(0);
+export const salaSemSuporteDesafios = signal(false);
 
 let atual: { cliente: ClienteDaSala; ponte: Ponte } | null = null;
 
@@ -733,8 +736,34 @@ export function abrirMesaOnline(sessao: string, salaId: string, nome?: string): 
     ...(nome !== undefined ? { nomeDaSala: nome } : {}),
     aoMudar: e => { estadoDaPonte.value = e; },
   });
-  cliente.ouvir('bem-vindo', m => { desafioDaSala.value = m.desafio ?? null; });
-  cliente.ouvir('desafio.estado', m => { desafioDaSala.value = m.desafio; });
+  let avisouDesafioDesatualizado = false;
+  salaSemSuporteDesafios.value = false;
+  cliente.ouvir('bem-vindo', m => {
+    if (m.desafio != null) {
+      desafioDaSala.value = m.desafio;
+      desafioDaSalaVersao.value += 1;
+    }
+  });
+  cliente.ouvir('desafio.estado', m => {
+    desafioDaSala.value = m.desafio;
+    desafioDaSalaVersao.value += 1;
+  });
+  cliente.ouvir('erro', m => {
+    if (
+      m.motivo === 'formato'
+      || m.recusado === 'desafio.definir'
+      || m.recusado === 'desafio.acao'
+    ) {
+      salaSemSuporteDesafios.value = true;
+      if (!avisouDesafioDesatualizado) {
+        avisouDesafioDesatualizado = true;
+        avisar(
+          'Servidor da sala online ainda não foi atualizado com Desafios (rode sala:deploy ou sala:dev). Usando espelhamento visual.',
+          true,
+        );
+      }
+    }
+  });
   cliente.aoMudarEstado(e => { conexaoOnline.value = e; });
   atual = { cliente, ponte };
   salaConectadaId.value = salaId;
@@ -756,5 +785,6 @@ export function fecharMesaOnline(): void {
   salaConectadaId.value = null;
   conexaoOnline.value = 'desconectada';
   desafioDaSala.value = null;
+  salaSemSuporteDesafios.value = false;
   estadoDaPonte.value = { membros: [], fichas: [], semNevoa: [], publicando: false, sons: SONS_VAZIOS };
 }

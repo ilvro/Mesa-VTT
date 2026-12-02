@@ -373,6 +373,12 @@ function Sala({
     const sairMembros = cliente.ouvir('membros', m => setMembros(m.membros));
     const sairConfig = cliente.ouvir('config', m => aplicarConfig(m.config));
     const sairDesafio = cliente.ouvir('desafio.estado', m => setDesafio(m.desafio));
+    const sairCanalDesafio = cliente.ouvir('canal', m => {
+      if (!m.msg || typeof m.msg !== 'object' || Array.isArray(m.msg)) return;
+      const dentro = m.msg as { tipo?: unknown; desafio?: unknown };
+      if (dentro.tipo !== 'desafio-estado') return;
+      setDesafio((dentro.desafio as DesafioAtivo | null) ?? null);
+    });
     const sairConstrucaoEstado = cliente.ouvir('construcao.estado', m => {
       const rev = m.ops.reduce((acc, op) => Math.max(acc, op.rev), m.rev);
       const nomeMapa = m.nome ?? (typeof m.mapa?.name === 'string' && m.mapa.name ? m.mapa.name : undefined);
@@ -421,7 +427,7 @@ function Sala({
     const sairSom = som.aoMudar(setEstadoSom);
     return () => {
       sairSom(); som.fechar(); somRef.current = null;
-      sairEstado(); sairBemVindo(); sairMembros(); sairConfig(); sairDesafio(); sairConstrucaoEstado(); sairConstrucaoAplicada(); sairConstrucaoFechada(); sairAtualizada(); sairRemovida(); sairBlob();
+      sairEstado(); sairBemVindo(); sairMembros(); sairConfig(); sairDesafio(); sairCanalDesafio(); sairConstrucaoEstado(); sairConstrucaoAplicada(); sairConstrucaoFechada(); sairAtualizada(); sairRemovida(); sairBlob();
       if (capaUrlRef.current) { URL.revokeObjectURL(capaUrlRef.current); capaUrlRef.current = null; }
       capaBlobIdRef.current = null;
       ponte.fechar(); cliente?.fechar();

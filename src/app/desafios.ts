@@ -6,7 +6,14 @@ import {
   type AcaoDesafio,
   type DesafioAtivo,
 } from '../dominio/desafios.ts';
-import { conexaoOnline, desafioDaSala, enviarParaSala } from './online.ts';
+import {
+  CANAL_PROJETOR_REMOTO,
+  conexaoOnline,
+  desafioDaSala,
+  desafioDaSalaVersao,
+  enviarParaSala,
+  salaSemSuporteDesafios,
+} from './online.ts';
 
 export const CANAL_DESAFIOS_LOCAL = 'mesa:desafios';
 export const CHAVE_DESAFIO_LOCAL = 'mesa:desafio-ativo';
@@ -48,11 +55,29 @@ function lerDesafioDoTexto(texto: string | null): DesafioAtivo | null {
   }
 }
 
-// Sincroniza atualizações vindas da sala online para o estado local e para o telão local.
+function enviarFallbackCanalRemoto(d: DesafioAtivo | null): void {
+  enviarParaSala({
+    tipo: 'canal',
+    nome: CANAL_PROJETOR_REMOTO,
+    msg: {
+      tipo: 'desafio-estado',
+      desafio: d ? sanitizarDesafioPara(d, 'jogador') : null,
+    },
+  });
+}
+
+let ultimaVersaoAplicada = 0;
+let ultimoDaSala: DesafioAtivo | null = desafioDaSala.peek();
+
+// Sincroniza atualizações reais vindas da sala online para o estado local e para o telão local.
 effect(() => {
   const conectado = conexaoOnline.value === 'aberta';
   const daSala = desafioDaSala.value;
+  const versao = desafioDaSalaVersao.value;
   if (!conectado) return;
+  if (versao === ultimaVersaoAplicada && daSala === ultimoDaSala) return;
+  ultimaVersaoAplicada = versao;
+  ultimoDaSala = daSala;
   desafioAtivo.value = daSala;
   propagarDesafioLocal(daSala);
 });
@@ -61,15 +86,19 @@ export function definirDesafioAtivo(d: DesafioAtivo | null): void {
   desafioAtivo.value = d;
   propagarDesafioLocal(d);
   enviarParaSala({ tipo: 'desafio.definir', desafio: d });
+  enviarFallbackCanalRemoto(d);
 }
 
 export function despacharAcaoDesafio(acao: AcaoDesafio): void {
-  if (enviarParaSala({ tipo: 'desafio.acao', acao })) return;
+  if (!salaSemSuporteDesafios.peek() && enviarParaSala({ tipo: 'desafio.acao', acao })) return;
   const atual = desafioAtivo.value;
   if (!atual) return;
   const proximo = aplicarAcaoDesafio(atual, acao);
   desafioAtivo.value = proximo;
   propagarDesafioLocal(proximo);
+  if (salaSemSuporteDesafios.peek()) {
+    enviarFallbackCanalRemoto(proximo);
+  }
 }
 
 export function encerrarDesafioAtivo(): void {
