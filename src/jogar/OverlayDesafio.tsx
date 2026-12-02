@@ -8,6 +8,7 @@ import {
   LADOS_VALIDOS,
   totaisEquilibrio,
   type AcaoDesafio,
+  type DadoEquilibrioJogado,
   type DesafioAtivo,
   type DesafioEquilibrio,
   type DesafioEscalada,
@@ -18,7 +19,7 @@ import {
   type ParticipanteDesafio,
   type ResultadoPino,
 } from '../dominio/desafios.ts';
-import { tocarEfeitoDesafio } from './som-desafios.ts';
+import { tocarEfeitoDesafio, type EfeitoDesafio } from './som-desafios.ts';
 import './overlay-desafio.css';
 
 export interface OverlayDesafioProps {
@@ -39,21 +40,12 @@ export interface OverlayDesafioProps {
 
 type VarianteDado = 'osso' | 'sombra' | 'acerto' | 'alto' | 'baixo' | 'perigo' | 'trancado';
 
-function iniciaisNome(nome: string): string {
-  const partes = nome.trim().split(/\s+/).filter(Boolean);
-  if (partes.length === 0) return '?';
-  const primeira = partes[0]?.[0] ?? '?';
-  const segunda = partes.length > 1 ? (partes[partes.length - 1]?.[0] ?? '') : (partes[0]?.[1] ?? '');
-  return (primeira + segunda).toUpperCase();
-}
-
-function obterRetrato(
-  p: ParticipanteDesafio,
-  retratos?: Record<string, string>,
-): string | null {
-  if (p.fichaId && retratos?.[p.fichaId]) return retratos[p.fichaId] ?? null;
-  if (p.retrato) return p.retrato;
-  return null;
+function prefereMovimentoReduzido(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
 }
 
 function ehMeuParticipante(
@@ -66,39 +58,14 @@ function ehMeuParticipante(
   return false;
 }
 
-function RetratoParticipante({
-  participante,
-  retratos,
-  tamanho = 'padrao',
-}: {
-  participante: ParticipanteDesafio;
-  retratos?: Record<string, string>;
-  tamanho?: 'pequeno' | 'padrao' | 'grande';
-}) {
-  const url = obterRetrato(participante, retratos);
-  const [falhou, setFalhou] = useState(false);
-  useEffect(() => {
-    setFalhou(false);
-  }, [url]);
-
-  const cls =
-    tamanho === 'grande'
-      ? 'ovd-retrato ovd-retrato-grande'
-      : tamanho === 'pequeno'
-        ? 'ovd-retrato ovd-retrato-pequeno'
-        : 'ovd-retrato';
-
-  if (url && !falhou) {
-    return <img class={cls} src={url} alt={participante.nome} onError={() => setFalhou(true)} />;
-  }
-  return (
-    <span class={cls} aria-hidden="true">
-      {iniciaisNome(participante.nome)}
-    </span>
-  );
+function primeiroNome(nome: string): string {
+  const limpo = nome.trim();
+  if (!limpo) return '?';
+  const partes = limpo.split(/\s+/);
+  return partes[0] ?? limpo;
 }
 
-/** Polígonos SVG reais de dados: d4, d6, d8, d10, d12, d20. */
+/** Polígonos SVG reais de dados: d4, d6, d8, d10, d12, d20 — estética limpa de A Vigília. */
 function DadoPoligono({
   lados,
   valor,
@@ -120,46 +87,35 @@ function DadoPoligono({
   const tamanhoFonte =
     texto.length >= 2
       ? lados === 4
-        ? 19
-        : 22
+        ? 21
+        : 24
       : lados === 4
-        ? 23
-        : 26;
-  const textoY = lados === 4 ? 42 : 34;
+        ? 26
+        : 31;
+  const textoY = lados === 4 ? 41 : 33;
 
-  let forma: string;
-  let faceta: string;
+  let forma: string | null = null;
   switch (lados) {
     case 4:
-      // Triângulo chanfrado
-      forma = '30,6 34,6 59,50 56,56 8,56 5,50';
-      faceta = '32,14 52,50 12,50';
+      forma = '32,5 59,54 5,54';
       break;
     case 6:
-      // Quadrado com cantos levemente biselados
-      forma = '14,7 50,7 57,14 57,50 50,57 14,57 7,50 7,14';
-      faceta = '17,13 47,13 51,17 51,47 47,51 17,51 13,47 13,17';
+      forma = null; // quadrado arredondado fiel às prints
       break;
     case 8:
-      // Losango / diamante
-      forma = '32,4 58,32 32,60 6,32';
-      faceta = '32,12 50,32 32,52 14,32';
+      forma = '32,3 59,32 32,61 5,32';
       break;
     case 10:
     case 12:
-      // Pentágono gótico
-      forma = '32,5 58,24 48,56 16,56 6,24';
-      faceta = '32,12 50,26 43,50 21,50 14,26';
+      forma = '32,4 59,24 49,57 15,57 5,24';
       break;
     case 20:
-      // Hexágono robusto
-      forma = '32,4 56,18 56,46 32,60 8,46 8,18';
-      faceta = '32,12 49,22 49,42 32,52 15,42 15,22';
+      forma = '32,3 57,17 57,47 32,61 7,47 7,17';
       break;
   }
 
   const seta = variante === 'alto' ? '▲' : variante === 'baixo' ? '▼' : null;
-  const setaY = variante === 'alto' ? 16 : 53;
+  const setaY = variante === 'alto' ? 14 : 55;
 
   return (
     <span
@@ -170,8 +126,25 @@ function DadoPoligono({
       aria-label={rotulo ?? `d${lados}: ${texto}`}
     >
       <svg viewBox="0 0 64 64" aria-hidden="true">
-        <polygon class="ovd-dado-forma" points={forma} stroke-width="2.4" stroke-linejoin="round" />
-        <polygon class="ovd-dado-faceta" points={faceta} stroke-width="1.2" stroke-linejoin="round" />
+        {forma === null ? (
+          <rect
+            class="ovd-dado-forma"
+            x="6"
+            y="6"
+            width="52"
+            height="52"
+            rx="11"
+            ry="11"
+            stroke-width="2"
+          />
+        ) : (
+          <polygon
+            class="ovd-dado-forma"
+            points={forma}
+            stroke-width="2"
+            stroke-linejoin="round"
+          />
+        )}
         {seta && lados !== 4 && (
           <text class="ovd-dado-seta" x="32" y={setaY} font-size="9">
             {seta}
@@ -185,44 +158,607 @@ function DadoPoligono({
   );
 }
 
-/** Ícone SVG de figura encapuzada/sombra para Furtividade. */
-function IconeSombra({ tamanho = 18 }: { tamanho?: number }) {
+/** Ícone SVG de figura encapuzada branca com rosto sombreado (Furtividade — fiel às prints 4 e 5). */
+function IconeSombra({ tamanho = 22 }: { tamanho?: number }) {
   return (
     <svg
       class="ovd-esc-sombra-icone"
       width={tamanho}
       height={tamanho}
-      viewBox="0 0 24 24"
+      viewBox="0 0 28 28"
       fill="none"
       aria-hidden="true"
     >
+      {/* Capuz pontudo e manto branco sólido */}
       <path
-        d="M12 2.5C8.5 2.5 6 5.4 5.5 9.2L4.2 18.8C4 20.1 5 21.2 6.3 21.2H17.7C19 21.2 20 20.1 19.8 18.8L18.5 9.2C18 5.4 15.5 2.5 12 2.5Z"
+        d="M14 2L7.2 10.6C6.1 12.1 5.4 14 5.1 16L3.6 24.4C3.5 25.1 4 25.7 4.7 25.7H23.3C24 25.7 24.5 25.1 24.4 24.4L22.9 16C22.6 14 21.9 12.1 20.8 10.6L14 2Z"
         fill="currentColor"
-        fill-opacity="0.16"
-        stroke="currentColor"
-        stroke-width="1.6"
-        stroke-linejoin="round"
       />
+      {/* Cavidade sombreada do rosto */}
       <path
-        d="M8.6 9.5C9.4 7.5 10.6 6.5 12 6.5C13.4 6.5 14.6 7.5 15.4 9.5C14.8 12.2 13.5 13.6 12 13.6C10.5 13.6 9.2 12.2 8.6 9.5Z"
-        fill="#0b0912"
-        stroke="currentColor"
-        stroke-width="1.3"
+        d="M14 7.6C11.3 8.9 9.7 11.4 9.7 14.2C9.7 16.9 11.5 19.1 14 19.8C16.5 19.1 18.3 16.9 18.3 14.2C18.3 11.4 16.7 8.9 14 7.6Z"
+        fill="#0d0e12"
       />
-      <circle cx="10.6" cy="10.2" r="0.8" fill="currentColor" />
-      <circle cx="13.4" cy="10.2" r="0.8" fill="currentColor" />
+      {/* Dobras sutis do manto */}
+      <path
+        d="M8.5 25.7L11.2 19.6M19.5 25.7L16.8 19.6"
+        stroke="#0d0e12"
+        stroke-opacity="0.45"
+        stroke-width="1.2"
+        stroke-linecap="round"
+      />
     </svg>
   );
 }
 
-/** Ícone SVG de silhueta correndo para Perseguição. */
-function IconeCorrendo({ tamanho = 24, classe }: { tamanho?: number; classe?: string }) {
+/** Silhueta sólida branca de pessoa correndo (Perseguição — fiel à print 7). */
+function IconeCorrendo({ tamanho = 28, classe }: { tamanho?: number; classe?: string }) {
   return (
-    <svg class={classe} width={tamanho} height={tamanho} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle cx="15.5" cy="4.5" r="2" fill="currentColor" />
+    <svg
+      class={classe}
+      width={tamanho}
+      height={tamanho}
+      viewBox="0 0 32 32"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle cx="20.5" cy="6.2" r="3" fill="currentColor" />
       <path
-        d="M9.5 9.5L12.6 8.2L15.4 10.6L18.6 9.8M12.6 8.2L10.8 13.4L14.6 15.6L13.8 20.2M10.8 13.4L7.2 16.4L4.5 16"
+        d="M16.8 10.2L12.6 11.2L9.2 14.4C8.5 15 8.5 16.1 9.1 16.8C9.8 17.4 10.8 17.4 11.5 16.8L14 14.5L15.4 14.2L13.1 19.2L8.4 21.2L5.5 20.6C4.6 20.4 3.7 21 3.5 21.9C3.3 22.8 3.9 23.7 4.8 23.9L8.9 24.8C9.3 24.9 9.7 24.8 10.1 24.7L15.4 22.4L18.4 24.4L17.4 28.4C17.2 29.3 17.7 30.2 18.6 30.4C19.5 30.6 20.4 30.1 20.6 29.2L22 23.8C22.2 23 21.9 22.1 21.2 21.6L18.3 19.5L20.1 15.6L22.3 17.2C22.7 17.5 23.2 17.6 23.7 17.5L27.4 16.6C28.3 16.4 28.8 15.5 28.6 14.6C28.4 13.7 27.5 13.2 26.6 13.4L23.8 14.1L20.6 11.2C19.6 10.2 18.2 9.8 16.8 10.2Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/** SVG de pulmão estilizado desenhado à mão em contorno branco com ramificações brônquicas e dados d6 osso (print 6). */
+function PulmaoFolego({
+  restante,
+  total,
+  interativo,
+  compacto = false,
+  aoUsar,
+}: {
+  restante: number;
+  total: number;
+  interativo: boolean;
+  compacto?: boolean;
+  aoUsar: () => void;
+}) {
+  const slots = Math.max(total, restante, 0);
+  const itens = Array.from({ length: slots }, (_, idx) => idx < restante);
+  const largura = compacto ? 76 : 104;
+  const altura = compacto ? 60 : 82;
+  const tamDado = compacto ? 16 : slots > 4 ? 18 : 22;
+
+  return (
+    <div class="ovd-pulmao-wrap">
+      <button
+        type="button"
+        class={compacto ? 'ovd-pulmao-btn ovd-pulmao-btn-compacto' : 'ovd-pulmao-btn'}
+        style={{ width: `${largura}px`, height: `${altura}px` }}
+        data-interativo={interativo && restante > 0 ? '1' : '0'}
+        disabled={!interativo || restante <= 0}
+        onClick={aoUsar}
+        title={interativo && restante > 0 ? 'Clique para gastar 1 dado de Fôlego (d6)' : `Fôlego: ${restante}/${total}`}
+        aria-label={`Fôlego: ${restante} de ${total} dados d6`}
+      >
+        <svg width={largura} height={altura} viewBox="0 0 132 104" fill="none" aria-hidden="true">
+          {/* Traqueia com anéis sutis e ramificações brônquicas */}
+          <path
+            d="M66 5V33M62.5 11H69.5M62.5 17H69.5M62.5 23H69.5"
+            stroke="rgba(246, 248, 252, 0.92)"
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+          <path
+            d="M66 31L49 42M49 42L37 38M49 42L40 53M49 42L46 61M66 31L83 42M83 42L95 38M83 42L92 53M83 42L86 61"
+            stroke="rgba(246, 248, 252, 0.55)"
+            stroke-width="1.4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          {/* Lobo esquerdo — contorno orgânico à mão */}
+          <path
+            d="M57 25C44 21 24 31 16 53C10 69 13 86 24 91C34 96 48 90 55 81C59 75 60 62 60 47C60 36 59 28 57 25Z"
+            fill="rgba(8, 9, 14, 0.24)"
+            stroke="rgba(248, 249, 255, 0.95)"
+            stroke-width="2.1"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          {/* Lobo direito — contorno orgânico à mão */}
+          <path
+            d="M75 25C88 21 108 31 116 53C122 69 119 86 108 91C98 96 84 90 77 81C73 75 72 62 72 47C72 36 73 28 75 25Z"
+            fill="rgba(8, 9, 14, 0.24)"
+            stroke="rgba(248, 249, 255, 0.95)"
+            stroke-width="2.1"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <div class="ovd-pulmao-dados">
+          {itens.map((ativo, i) => (
+            <span key={i} class={ativo ? undefined : 'ovd-pulmao-gasto'}>
+              <DadoPoligono lados={6} valor={6} variante={ativo ? 'osso' : 'sombra'} tamanho={tamDado} />
+            </span>
+          ))}
+        </div>
+      </button>
+    </div>
+  );
+}
+
+/** Medalhão circular de pedra/ferro gótico esculpido com encaixes circulares atrás dos dados (print 1). */
+function SeloPedraSvg({
+  angulo,
+  status,
+  qtdDados,
+}: {
+  angulo: number;
+  status: DesafioLockpick['status'];
+  qtdDados: number;
+}) {
+  const corAcento =
+    status === 'aberto'
+      ? 'rgba(232, 185, 90, 0.85)'
+      : status === 'travado'
+        ? 'rgba(255, 92, 108, 0.78)'
+        : 'rgba(233, 230, 223, 0.42)';
+  const marcas = Array.from({ length: 32 }, (_, i) => i * 11.25);
+  const encaixes4 = [
+    { cx: 88, cy: 112 },
+    { cx: 200, cy: 156 },
+    { cx: 312, cy: 112 },
+    { cx: 200, cy: 300 },
+  ];
+
+  return (
+    <svg class="ovd-lock-selo-svg" viewBox="0 0 400 400" fill="none" aria-hidden="true">
+      <defs>
+        <radialGradient id="ovd-pedra-corpo" cx="46%" cy="42%" r="56%">
+          <stop offset="0%" stop-color="#2c2934" stop-opacity="0.72" />
+          <stop offset="58%" stop-color="#19171f" stop-opacity="0.62" />
+          <stop offset="86%" stop-color="#0f0e14" stop-opacity="0.46" />
+          <stop offset="100%" stop-color="#08070b" stop-opacity="0" />
+        </radialGradient>
+        <radialGradient id="ovd-encaixe-grad" cx="50%" cy="45%" r="50%">
+          <stop offset="0%" stop-color="#08070c" stop-opacity="0.78" />
+          <stop offset="78%" stop-color="#12101a" stop-opacity="0.62" />
+          <stop offset="100%" stop-color="#2a2733" stop-opacity="0.4" />
+        </radialGradient>
+      </defs>
+
+      {/* Corpo esculpido de pedra */}
+      <circle cx="200" cy="200" r="190" fill="url(#ovd-pedra-corpo)" />
+      <circle cx="200" cy="200" r="184" stroke="rgba(233, 230, 223, 0.24)" stroke-width="2.2" />
+      <circle cx="200" cy="200" r="176" stroke="rgba(10, 9, 14, 0.72)" stroke-width="4" />
+
+      {/* Anel externo rotativo de ferro/pedra gótica */}
+      <g class="ovd-selo-anel-ext" style={{ transform: `rotate(${angulo}deg)` }}>
+        <circle cx="200" cy="200" r="170" stroke={corAcento} stroke-width="2" stroke-dasharray="22 7 5 7" />
+        <circle cx="200" cy="200" r="154" stroke="rgba(233, 230, 223, 0.16)" stroke-width="1.3" />
+        {marcas.map((deg) => (
+          <line
+            key={deg}
+            x1="200"
+            y1="26"
+            x2="200"
+            y2={deg % 45 === 0 ? '44' : '35'}
+            stroke={deg % 90 === 0 ? corAcento : 'rgba(233, 230, 223, 0.2)'}
+            stroke-width={deg % 90 === 0 ? '2.2' : '1'}
+            transform={`rotate(${deg} 200 200)`}
+          />
+        ))}
+        {/* Pontas góticas cardeais */}
+        {[0, 90, 180, 270].map((deg) => (
+          <polygon
+            key={deg}
+            points="200,8 207,22 200,32 193,22"
+            fill={corAcento}
+            transform={`rotate(${deg} 200 200)`}
+          />
+        ))}
+        {/* Rebites diagonais */}
+        {[45, 135, 225, 315].map((deg) => (
+          <circle
+            key={deg}
+            cx="200"
+            cy="24"
+            r="3"
+            fill="rgba(233, 230, 223, 0.45)"
+            transform={`rotate(${deg} 200 200)`}
+          />
+        ))}
+      </g>
+
+      {/* Anel interno contra-rotativo */}
+      <g class="ovd-selo-anel-int" style={{ transform: `rotate(${-angulo * 1.35}deg)` }}>
+        <circle cx="200" cy="200" r="126" stroke={corAcento} stroke-width="1.4" stroke-dasharray="7 6" />
+        <circle cx="200" cy="200" r="82" stroke="rgba(233, 230, 223, 0.14)" stroke-width="1.1" />
+        <polygon
+          points="200,78 306,262 94,262"
+          stroke="rgba(233, 230, 223, 0.14)"
+          stroke-width="1.2"
+          fill="none"
+        />
+        <polygon
+          points="200,322 306,138 94,138"
+          stroke="rgba(233, 230, 223, 0.12)"
+          stroke-width="1.1"
+          fill="none"
+        />
+      </g>
+
+      {/* Encaixes circulares esculpidos atrás dos 4 dados no layout diamante/trevo */}
+      {qtdDados === 4 && (
+        <g class="ovd-selo-encaixes">
+          {/* Canais conectando os encaixes */}
+          <path
+            d="M88 112 L200 156 L312 112 M200 156 L200 300"
+            stroke="rgba(233, 230, 223, 0.2)"
+            stroke-width="2"
+          />
+          {encaixes4.map((e, i) => (
+            <g key={i}>
+              <circle
+                cx={e.cx}
+                cy={e.cy}
+                r="44"
+                fill="url(#ovd-encaixe-grad)"
+                stroke="rgba(233, 230, 223, 0.34)"
+                stroke-width="1.8"
+              />
+              <circle
+                cx={e.cx}
+                cy={e.cy}
+                r="38"
+                stroke="rgba(10, 9, 14, 0.8)"
+                stroke-width="2"
+              />
+            </g>
+          ))}
+        </g>
+      )}
+    </svg>
+  );
+}
+
+/** Pequeno dado polígono SVG posicionado diretamente dentro do prato da balança (print 2). */
+function DadoNoPratoSvg({
+  lados,
+  valor,
+  cx,
+  cy,
+  tamanho,
+  perigo,
+}: {
+  lados: 4 | 10;
+  valor: number;
+  cx: number;
+  cy: number;
+  tamanho: number;
+  perigo: boolean;
+}) {
+  const half = tamanho / 2;
+  const fill = perigo ? '#ff99a4' : '#e9e6df';
+  const stroke = perigo ? '#5c111a' : '#2c2924';
+  const textoCor = '#141416';
+  const fonte = String(valor).length >= 2 ? tamanho * 0.44 : tamanho * 0.52;
+
+  if (lados === 4) {
+    const pts = `${cx},${cy - half} ${cx + half * 0.96},${cy + half * 0.82} ${cx - half * 0.96},${cy + half * 0.82}`;
+    return (
+      <g>
+        <polygon points={pts} fill={fill} stroke={stroke} stroke-width="1.6" stroke-linejoin="round" />
+        <text
+          x={cx}
+          y={cy + half * 0.36}
+          text-anchor="middle"
+          dominant-baseline="central"
+          fill={textoCor}
+          font-size={fonte}
+          font-weight="900"
+          font-family="var(--ovd-fonte-titulo)"
+        >
+          {valor}
+        </text>
+      </g>
+    );
+  }
+
+  // d10 pentágono limpo
+  const pts = [
+    `${cx},${cy - half}`,
+    `${cx + half * 0.95},${cy - half * 0.22}`,
+    `${cx + half * 0.6},${cy + half * 0.88}`,
+    `${cx - half * 0.6},${cy + half * 0.88}`,
+    `${cx - half * 0.95},${cy - half * 0.22}`,
+  ].join(' ');
+
+  return (
+    <g>
+      <polygon points={pts} fill={fill} stroke={stroke} stroke-width="1.6" stroke-linejoin="round" />
+      <text
+        x={cx}
+        y={cy + 1}
+        text-anchor="middle"
+        dominant-baseline="central"
+        fill={textoCor}
+        font-size={fonte}
+        font-weight="900"
+        font-family="var(--ovd-fonte-titulo)"
+      >
+        {valor}
+      </text>
+    </g>
+  );
+}
+
+function renderizarDadosNoPrato(
+  cx: number,
+  pratoY: number,
+  dadoInicial: number | null,
+  dadosD4: DadoEquilibrioJogado[],
+  perigo: boolean,
+) {
+  const lista: Array<{ key: string; lados: 4 | 10; valor: number }> = [];
+  if (dadoInicial !== null) {
+    lista.push({ key: 'd10', lados: 10, valor: dadoInicial });
+  }
+  for (const d of dadosD4) {
+    lista.push({ key: d.id, lados: 4, valor: d.valor });
+  }
+  if (lista.length === 0) return null;
+
+  const posicoes: Array<{ x: number; y: number; tam: number }> = [];
+  if (lista.length === 1) {
+    posicoes.push({ x: cx, y: pratoY - 21, tam: 38 });
+  } else if (lista.length === 2) {
+    posicoes.push({ x: cx - 19, y: pratoY - 20, tam: 36 });
+    posicoes.push({ x: cx + 19, y: pratoY - 17, tam: 32 });
+  } else if (lista.length === 3) {
+    // Empilhamento piramidal fiel à print 2 (dois na base + um no topo)
+    posicoes.push({ x: cx - 19, y: pratoY - 19, tam: 35 });
+    posicoes.push({ x: cx + 19, y: pratoY - 17, tam: 31 });
+    posicoes.push({ x: cx, y: pratoY - 45, tam: 31 });
+  } else {
+    // Base com até 3 dados + segunda camada empilhada acima
+    const base = Math.min(3, lista.length);
+    const passo = 28;
+    const inicioBase = cx - ((base - 1) * passo) / 2;
+    for (let i = 0; i < base; i++) {
+      posicoes.push({ x: inicioBase + i * passo, y: pratoY - 17, tam: i === 0 ? 33 : 29 });
+    }
+    const topo = lista.length - base;
+    const inicioTopo = cx - ((topo - 1) * 26) / 2;
+    for (let i = 0; i < topo; i++) {
+      posicoes.push({ x: inicioTopo + i * 26, y: pratoY - 43, tam: 28 });
+    }
+  }
+
+  return lista.map((item, idx) => {
+    const pos = posicoes[idx] ?? { x: cx, y: pratoY - 46, tam: 26 };
+    return (
+      <DadoNoPratoSvg
+        key={item.key}
+        lados={item.lados}
+        valor={item.valor}
+        cx={pos.x}
+        cy={pos.y}
+        tamanho={pos.tam}
+        perigo={perigo}
+      />
+    );
+  });
+}
+
+/** Balança ilustrada em branco/osso puro com dados polígonos reais apoiados nos pratos (print 2). */
+function BalancaSvg({
+  dadoEsq,
+  dadoDir,
+  dadosEsq,
+  dadosDir,
+  esq,
+  dir,
+  status,
+  compacto = false,
+}: {
+  dadoEsq: number | null;
+  dadoDir: number | null;
+  dadosEsq: DadoEquilibrioJogado[];
+  dadosDir: DadoEquilibrioJogado[];
+  esq: number;
+  dir: number;
+  status: DesafioEquilibrio['status'];
+  compacto?: boolean;
+}) {
+  const angulo = Math.max(-20, Math.min(20, (dir - esq) * 4.2));
+  const corTraco =
+    status === 'equilibrado'
+      ? '#6df0b4'
+      : status === 'caiu'
+        ? '#ff6b7a'
+        : '#f4f1ea';
+  const perigo = status === 'caiu';
+
+  return (
+    <svg
+      class={compacto ? 'ovd-balanca-svg ovd-eq-compacto-svg' : 'ovd-balanca-svg'}
+      viewBox="0 0 440 218"
+      fill="none"
+      aria-label={`Balança: esquerda ${esq}, direita ${dir}`}
+    >
+      {/* Base limpa + coluna central */}
+      <path
+        d="M168 206H272M186 198H254L244 206H196L186 198Z"
+        stroke={corTraco}
+        stroke-width="2.4"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+      <line x1="220" y1="52" x2="220" y2="198" stroke={corTraco} stroke-width="3.2" stroke-linecap="round" />
+      <polygon
+        points="220,26 227,40 220,52 213,40"
+        fill="none"
+        stroke={corTraco}
+        stroke-width="2.2"
+        stroke-linejoin="round"
+      />
+
+      {/* Haste inclinável */}
+      <g class="ovd-balanca-haste" style={{ transform: `rotate(${angulo}deg)` }}>
+        <path
+          d="M78 58C124 52 174 56 220 58C266 56 316 52 362 58"
+          stroke={corTraco}
+          stroke-width="3.2"
+          stroke-linecap="round"
+        />
+        <circle cx="88" cy="58" r="3.6" fill={corTraco} />
+        <circle cx="352" cy="58" r="3.6" fill={corTraco} />
+
+        {/* Prato esquerdo (contra-rotacionado) com dados reais apoiados */}
+        <g class="ovd-balanca-prato-esq" style={{ transform: `rotate(${-angulo}deg)` }}>
+          <line x1="88" y1="61" x2="46" y2="148" stroke={corTraco} stroke-opacity="0.78" stroke-width="1.6" />
+          <line x1="88" y1="61" x2="130" y2="148" stroke={corTraco} stroke-opacity="0.78" stroke-width="1.6" />
+          <line x1="88" y1="61" x2="88" y2="148" stroke={corTraco} stroke-opacity="0.32" stroke-width="1.2" />
+          {renderizarDadosNoPrato(88, 148, dadoEsq, dadosEsq, perigo)}
+          <line x1="36" y1="148" x2="140" y2="148" stroke={corTraco} stroke-width="2.8" stroke-linecap="round" />
+          <path
+            d="M44 148C50 158 68 162 88 162C108 162 126 158 132 148"
+            stroke={corTraco}
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+        </g>
+
+        {/* Prato direito (contra-rotacionado) com dados reais apoiados */}
+        <g class="ovd-balanca-prato-dir" style={{ transform: `rotate(${-angulo}deg)` }}>
+          <line x1="352" y1="61" x2="310" y2="148" stroke={corTraco} stroke-opacity="0.78" stroke-width="1.6" />
+          <line x1="352" y1="61" x2="394" y2="148" stroke={corTraco} stroke-opacity="0.78" stroke-width="1.6" />
+          <line x1="352" y1="61" x2="352" y2="148" stroke={corTraco} stroke-opacity="0.32" stroke-width="1.2" />
+          {renderizarDadosNoPrato(352, 148, dadoDir, dadosDir, perigo)}
+          <line x1="300" y1="148" x2="404" y2="148" stroke={corTraco} stroke-width="2.8" stroke-linecap="round" />
+          <path
+            d="M308 148C314 158 332 162 352 162C372 162 390 158 396 148"
+            stroke={corTraco}
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+        </g>
+      </g>
+
+      {/* Pivô central */}
+      <circle cx="220" cy="58" r="5" fill="#121118" stroke={corTraco} stroke-width="2.2" />
+    </svg>
+  );
+}
+
+/** SVG de paredão de pedra recortado + corda de escalada + silhueta branca subindo (Escalada). */
+function EscaladaSvg({
+  pontos,
+  metaPontos,
+  status,
+  compacto = false,
+}: {
+  pontos: number;
+  metaPontos: number;
+  status: 'escalando' | 'topo' | 'caiu';
+  compacto?: boolean;
+}) {
+  const progresso = Math.max(0, Math.min(1, pontos / Math.max(1, metaPontos)));
+  const yBase = 104;
+  const yTopo = 18;
+  const yEscalador = yBase - progresso * (yBase - yTopo);
+  const corEscalador =
+    status === 'caiu' ? '#ff6b7a' : status === 'topo' ? '#6df0b4' : '#ffffff';
+
+  const degraus = Math.min(Math.max(metaPontos, 2), 12);
+  const marcas = Array.from({ length: degraus + 1 }, (_, i) => {
+    const frac = i / degraus;
+    return yBase - frac * (yBase - yTopo);
+  });
+
+  const w = compacto ? 44 : 58;
+  const h = compacto ? 86 : 114;
+
+  return (
+    <svg
+      class="ovd-escalada-svg"
+      width={w}
+      height={h}
+      viewBox="0 0 64 122"
+      fill="none"
+      aria-label={`Altura ${pontos} de ${metaPontos}`}
+    >
+      {/* Paredão de pedra recortado à esquerda */}
+      <path
+        d="M4 116L6 96L15 84L10 68L19 52L13 36L21 20L17 8H4V116Z"
+        fill="rgba(14, 13, 20, 0.42)"
+        stroke="rgba(244, 241, 234, 0.85)"
+        stroke-width="1.8"
+        stroke-linejoin="round"
+      />
+      {/* Fissuras sutis na rocha */}
+      <path
+        d="M8 28L13 32M7 60L12 63M8 92L12 90"
+        stroke="rgba(244, 241, 234, 0.3)"
+        stroke-width="1.1"
+        stroke-linecap="round"
+      />
+      {/* Marcas de degraus (0 até metaPontos) */}
+      {marcas.map((y, idx) => (
+        <line
+          key={idx}
+          x1="21"
+          y1={y}
+          x2={idx === 0 || idx === degraus ? '29' : '25'}
+          y2={y}
+          stroke={idx === degraus ? '#6df0b4' : 'rgba(244, 241, 234, 0.42)'}
+          stroke-width={idx === 0 || idx === degraus ? '1.6' : '1.1'}
+          stroke-linecap="round"
+        />
+      ))}
+
+      {/* Pitão e corda de escalada */}
+      <circle cx="38" cy="11" r="2.6" stroke="rgba(244, 241, 234, 0.9)" stroke-width="1.6" />
+      <line
+        x1="38"
+        y1="14"
+        x2="38"
+        y2="114"
+        stroke="rgba(244, 241, 234, 0.58)"
+        stroke-width="1.5"
+        stroke-dasharray="4 3"
+        stroke-linecap="round"
+      />
+
+      {/* Silhueta branca de escalador subindo ao longo do paredão */}
+      <g
+        class="ovd-escalador-silhueta"
+        style={{
+          transform: `translate(36px, ${yEscalador}px)${status === 'caiu' ? ' rotate(28deg)' : ''}`,
+        }}
+      >
+        <circle cx="2" cy="-9" r="3" fill={corEscalador} />
+        <path
+          d="M2 -5L-5 -9M2 -5L5 -12M2 -5L1 2M1 2L-5 5L-4 10M1 2L6 6L4 11"
+          stroke={corEscalador}
+          stroke-width="2.4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </g>
+    </svg>
+  );
+}
+
+/** Ícone de queda/impacto para Escalada. */
+function IconeQueda({ tamanho = 14 }: { tamanho?: number }) {
+  return (
+    <svg width={tamanho} height={tamanho} viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path
+        d="M9 2.5V12.5M9 12.5L5.2 8.7M9 12.5L12.8 8.7M3 15.5H15"
         stroke="currentColor"
         stroke-width="2"
         stroke-linecap="round"
@@ -232,290 +768,16 @@ function IconeCorrendo({ tamanho = 24, classe }: { tamanho?: number; classe?: st
   );
 }
 
-/** SVG de contorno anatômico fino branco de pulmão com dados d6 de fôlego no interior. */
-function PulmaoFolego({
-  restante,
-  total,
-  interativo,
-  aoUsar,
-}: {
-  restante: number;
-  total: number;
-  interativo: boolean;
-  aoUsar: () => void;
-}) {
-  const slots = Math.max(total, restante, 0);
-  const itens = Array.from({ length: slots }, (_, idx) => idx < restante);
-
-  return (
-    <div class="ovd-pulmao-wrap">
-      <button
-        type="button"
-        class="ovd-pulmao-btn"
-        data-interativo={interativo && restante > 0 ? '1' : '0'}
-        disabled={!interativo || restante <= 0}
-        onClick={aoUsar}
-        title={interativo && restante > 0 ? 'Clique para gastar 1 dado de Fôlego (d6)' : `Fôlego: ${restante}/${total}`}
-        aria-label={`Fôlego: ${restante} de ${total} dados d6`}
-      >
-        <svg width="82" height="64" viewBox="0 0 120 96" fill="none" aria-hidden="true">
-          {/* Traqueia e brônquios */}
-          <path
-            d="M60 6V30M60 28L47 38M60 28L73 38"
-            stroke="rgba(246, 248, 255, 0.88)"
-            stroke-width="1.8"
-            stroke-linecap="round"
-          />
-          {/* Pulmão esquerdo */}
-          <path
-            d="M52 24C40 20 22 30 16 50C12 64 14 78 24 83C34 88 47 82 52 74C54 70 55 58 55 44C55 34 54 27 52 24Z"
-            fill="rgba(10, 10, 16, 0.22)"
-            stroke="rgba(246, 248, 255, 0.9)"
-            stroke-width="1.7"
-            stroke-linejoin="round"
-          />
-          {/* Pulmão direito */}
-          <path
-            d="M68 24C80 20 98 30 104 50C108 64 106 78 96 83C86 88 73 82 68 74C66 70 65 58 65 44C65 34 66 27 68 24Z"
-            fill="rgba(10, 10, 16, 0.22)"
-            stroke="rgba(246, 248, 255, 0.9)"
-            stroke-width="1.7"
-            stroke-linejoin="round"
-          />
-        </svg>
-        <div class="ovd-pulmao-dados">
-          {itens.map((ativo, i) => (
-            <span key={i} class={ativo ? undefined : 'ovd-pulmao-gasto'}>
-              <DadoPoligono lados={6} valor="d6" variante={ativo ? 'osso' : 'sombra'} tamanho={19} />
-            </span>
-          ))}
-        </div>
-      </button>
-    </div>
-  );
-}
-
-/** Selo circular de pedra escura entalhada em SVG (flutuante sobre a cena). */
-function SeloPedraSvg({ angulo, status }: { angulo: number; status: DesafioLockpick['status'] }) {
-  const corAcento =
-    status === 'aberto'
-      ? 'rgba(232, 185, 90, 0.78)'
-      : status === 'travado'
-        ? 'rgba(255, 92, 108, 0.7)'
-        : 'rgba(240, 236, 227, 0.34)';
-  const marcas = Array.from({ length: 24 }, (_, i) => i * 15);
-
-  return (
-    <svg class="ovd-lock-selo-svg" viewBox="0 0 400 400" fill="none" aria-hidden="true">
-      <defs>
-        <radialGradient id="ovd-pedra-grad" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#191624" stop-opacity="0.54" />
-          <stop offset="68%" stop-color="#0d0b14" stop-opacity="0.34" />
-          <stop offset="100%" stop-color="#07060b" stop-opacity="0" />
-        </radialGradient>
-      </defs>
-      <circle cx="200" cy="200" r="186" fill="url(#ovd-pedra-grad)" />
-      {/* Anel externo rotativo */}
-      <g class="ovd-selo-anel-ext" style={{ transform: `rotate(${angulo}deg)` }}>
-        <circle cx="200" cy="200" r="174" stroke={corAcento} stroke-width="2" stroke-dasharray="18 8 4 8" />
-        <circle cx="200" cy="200" r="158" stroke="rgba(240, 236, 227, 0.18)" stroke-width="1.2" />
-        {marcas.map((deg) => (
-          <line
-            key={deg}
-            x1="200"
-            y1="28"
-            x2="200"
-            y2={deg % 45 === 0 ? '44' : '36'}
-            stroke={deg % 90 === 0 ? corAcento : 'rgba(240, 236, 227, 0.22)'}
-            stroke-width={deg % 90 === 0 ? '2' : '1'}
-            transform={`rotate(${deg} 200 200)`}
-          />
-        ))}
-        {/* Losangos cardeais */}
-        {[0, 90, 180, 270].map((deg) => (
-          <polygon
-            key={deg}
-            points="200,14 206,22 200,30 194,22"
-            fill={corAcento}
-            transform={`rotate(${deg} 200 200)`}
-          />
-        ))}
-      </g>
-      {/* Anel interno contra-rotativo */}
-      <g class="ovd-selo-anel-int" style={{ transform: `rotate(${-angulo * 1.4}deg)` }}>
-        <circle cx="200" cy="200" r="118" stroke={corAcento} stroke-width="1.5" stroke-dasharray="6 6" />
-        <polygon
-          points="200,92 293,254 107,254"
-          stroke="rgba(240, 236, 227, 0.14)"
-          stroke-width="1.2"
-          fill="none"
-        />
-        <polygon
-          points="200,308 293,146 107,146"
-          stroke="rgba(240, 236, 227, 0.14)"
-          stroke-width="1.2"
-          fill="none"
-        />
-      </g>
-    </svg>
-  );
-}
-
-/** Balança SVG animada para o desafio de Equilíbrio (flutuante sem cartão). */
-function BalancaSvg({
-  esq,
-  dir,
-  status,
-  compacto = false,
-}: {
-  esq: number;
-  dir: number;
-  status: DesafioEquilibrio['status'];
-  compacto?: boolean;
-}) {
-  const angulo = Math.max(-22, Math.min(22, (dir - esq) * 4.5));
-  const corMetal =
-    status === 'equilibrado'
-      ? '#53e2a1'
-      : status === 'caiu'
-        ? '#ff5c6c'
-        : '#f0ece3';
-
-  return (
-    <svg
-      class={compacto ? 'ovd-balanca-svg ovd-eq-compacto-svg' : 'ovd-balanca-svg'}
-      viewBox="0 0 440 220"
-      fill="none"
-      aria-label={`Balança: esquerda ${esq}, direita ${dir}`}
-    >
-      {/* Pedestal e pilar delicado */}
-      <path
-        d="M172 208H268L257 195H183L172 208Z"
-        fill="rgba(12, 10, 18, 0.45)"
-        stroke={corMetal}
-        stroke-width="2"
-        stroke-linejoin="round"
-      />
-      <rect
-        x="216"
-        y="64"
-        width="8"
-        height="131"
-        rx="4"
-        fill="rgba(12, 10, 18, 0.45)"
-        stroke={corMetal}
-        stroke-width="1.8"
-      />
-      {/* Ornamento central */}
-      <polygon
-        points="220,30 230,47 220,64 210,47"
-        fill="rgba(12, 10, 18, 0.72)"
-        stroke={corMetal}
-        stroke-width="2"
-      />
-      <circle cx="220" cy="47" r="3" fill={corMetal} />
-
-      {/* Haste inclinável */}
-      <g class="ovd-balanca-haste" style={{ transform: `rotate(${angulo}deg)` }}>
-        <path
-          d="M84 64C128 54 176 58 220 64C264 58 312 54 356 64"
-          stroke={corMetal}
-          stroke-width="4"
-          stroke-linecap="round"
-        />
-        <circle cx="96" cy="64" r="4.5" fill={corMetal} />
-        <circle cx="344" cy="64" r="4.5" fill={corMetal} />
-
-        {/* Prato esquerdo (contra-rotação para manter nivelado) */}
-        <g class="ovd-balanca-prato-esq" style={{ transform: `rotate(${-angulo}deg)` }}>
-          <line x1="96" y1="68" x2="64" y2="144" stroke="rgba(240, 236, 227, 0.7)" stroke-width="1.6" />
-          <line x1="96" y1="68" x2="128" y2="144" stroke="rgba(240, 236, 227, 0.7)" stroke-width="1.6" />
-          <path
-            d="M48 144H144C140 160 122 168 96 168C70 168 52 160 48 144Z"
-            fill="rgba(12, 10, 18, 0.62)"
-            stroke={corMetal}
-            stroke-width="2"
-            stroke-linejoin="round"
-          />
-          <text
-            x="96"
-            y="132"
-            text-anchor="middle"
-            fill="#ffffff"
-            stroke="rgba(0, 0, 0, 0.65)"
-            stroke-width="3"
-            paint-order="stroke"
-            font-size={compacto ? '34' : '30'}
-            font-weight="800"
-            font-family="var(--ovd-fonte-titulo)"
-          >
-            {esq}
-          </text>
-          {!compacto && (
-            <text
-              x="96"
-              y="186"
-              text-anchor="middle"
-              fill="rgba(240, 236, 227, 0.78)"
-              font-size="10.5"
-              font-weight="700"
-              letter-spacing="2"
-            >
-              ESQUERDA
-            </text>
-          )}
-        </g>
-
-        {/* Prato direito (contra-rotação para manter nivelado) */}
-        <g class="ovd-balanca-prato-dir" style={{ transform: `rotate(${-angulo}deg)` }}>
-          <line x1="344" y1="68" x2="312" y2="144" stroke="rgba(240, 236, 227, 0.7)" stroke-width="1.6" />
-          <line x1="344" y1="68" x2="376" y2="144" stroke="rgba(240, 236, 227, 0.7)" stroke-width="1.6" />
-          <path
-            d="M296 144H392C388 160 370 168 344 168C318 168 300 160 296 144Z"
-            fill="rgba(12, 10, 18, 0.62)"
-            stroke={corMetal}
-            stroke-width="2"
-            stroke-linejoin="round"
-          />
-          <text
-            x="344"
-            y="132"
-            text-anchor="middle"
-            fill="#ffffff"
-            stroke="rgba(0, 0, 0, 0.65)"
-            stroke-width="3"
-            paint-order="stroke"
-            font-size={compacto ? '34' : '30'}
-            font-weight="800"
-            font-family="var(--ovd-fonte-titulo)"
-          >
-            {dir}
-          </text>
-          {!compacto && (
-            <text
-              x="344"
-              y="186"
-              text-anchor="middle"
-              fill="rgba(240, 236, 227, 0.78)"
-              font-size="10.5"
-              font-weight="700"
-              letter-spacing="2"
-            >
-              DIREITA
-            </text>
-          )}
-        </g>
-      </g>
-
-      {/* Pivô central sobre a haste */}
-      <circle cx="220" cy="64" r="6.5" fill="#120f1a" stroke={corMetal} stroke-width="2.2" />
-    </svg>
-  );
-}
-
 /* ═══════════════════════════════════════════════════════════════════════════
    1. ABRIR FECHADURAS (LOCKPICK)
    ═══════════════════════════════════════════════════════════════════════════ */
+
+interface LinhaHarpa {
+  chave: string;
+  tom: 'acerto' | 'alto' | 'baixo' | 'trancado';
+  texto: string;
+  som: EfeitoDesafio;
+}
 
 function fraseEmbaralhada(tipo: 'corretos' | 'altos' | 'baixos' | 'trancados', qtd: number): string {
   if (tipo === 'corretos') return qtd === 1 ? 'ALGUM ESTÁ CORRETO' : `${qtd} ESTÃO CORRETOS`;
@@ -524,10 +786,56 @@ function fraseEmbaralhada(tipo: 'corretos' | 'altos' | 'baixos' | 'trancados', q
   return qtd === 1 ? 'ALGUM ESTÁ TRANCADO' : `${qtd} ESTÃO TRANCADOS`;
 }
 
+function montarLinhasHarpa(
+  fb: { corretos: number; altos: number; baixos: number; trancados?: number } | undefined,
+): LinhaHarpa[] {
+  if (!fb) return [];
+  const linhas: LinhaHarpa[] = [];
+  if (fb.corretos > 0) {
+    linhas.push({
+      chave: 'corretos',
+      tom: 'acerto',
+      texto: fraseEmbaralhada('corretos', fb.corretos),
+      som: 'pino-exato',
+    });
+  }
+  if (fb.altos > 0) {
+    linhas.push({
+      chave: 'altos',
+      tom: 'alto',
+      texto: fraseEmbaralhada('altos', fb.altos),
+      som: 'pino-erro',
+    });
+  }
+  if (fb.baixos > 0) {
+    linhas.push({
+      chave: 'baixos',
+      tom: 'baixo',
+      texto: fraseEmbaralhada('baixos', fb.baixos),
+      som: 'pino-erro',
+    });
+  }
+  if ((fb.trancados ?? 0) > 0) {
+    linhas.push({
+      chave: 'trancados',
+      tom: 'trancado',
+      texto: fraseEmbaralhada('trancados', fb.trancados ?? 0),
+      som: 'pino-trancado',
+    });
+  }
+  return linhas;
+}
+
+function somParaResultadoPino(res: ResultadoPino | undefined): EfeitoDesafio {
+  if (res === 'exato') return 'pino-exato';
+  if (res === 'trancado') return 'pino-trancado';
+  return 'pino-erro';
+}
+
 function rotuloPino(res: ResultadoPino): string {
   if (res === 'exato') return '✓ EXATO';
-  if (res === 'alto') return '▲ MAIS ALTO';
-  if (res === 'baixo') return '▼ MAIS BAIXO';
+  if (res === 'alto') return '▲ ALTO';
+  if (res === 'baixo') return '▼ BAIXO';
   return '🔒 TRANCADO';
 }
 
@@ -559,40 +867,134 @@ function OverlayLockpick({
   aoRecolher: () => void;
 }) {
   const ultimaTentativa = desafio.tentativas[desafio.tentativas.length - 1];
+  const linhasHarpa = montarLinhasHarpa(ultimaTentativa?.feedbackEmbaralhado);
+  const totalRevelar =
+    desafio.modoDica === 'posicional' ? desafio.dados.length : linhasHarpa.length;
+
   const [valores, setValores] = useState<number[]>(() =>
     desafio.dados.map((_, i) => ultimaTentativa?.valores[i] ?? 1),
   );
-  const idRef = useRef(desafio.id);
+  const [revelandoAte, setRevelandoAte] = useState<number>(totalRevelar);
+  const [bannerPronto, setBannerPronto] = useState<boolean>(true);
+  const [animandoSequencia, setAnimandoSequencia] = useState<boolean>(false);
 
+  const idRef = useRef(desafio.id);
+  const tentativasPrevRef = useRef(desafio.tentativas.length);
+  const timersRef = useRef<number[]>([]);
+
+  const limparTimers = () => {
+    for (const t of timersRef.current) {
+      window.clearTimeout(t);
+    }
+    timersRef.current = [];
+  };
+
+  useEffect(() => () => limparTimers(), []);
+
+  // Sincroniza quando troca de desafio ou tamanho de dados
   useEffect(() => {
     if (idRef.current !== desafio.id || valores.length !== desafio.dados.length) {
+      limparTimers();
       idRef.current = desafio.id;
+      tentativasPrevRef.current = desafio.tentativas.length;
       const ult = desafio.tentativas[desafio.tentativas.length - 1];
       setValores(desafio.dados.map((_, i) => ult?.valores[i] ?? 1));
+      const linhas = montarLinhasHarpa(ult?.feedbackEmbaralhado);
+      setRevelandoAte(desafio.modoDica === 'posicional' ? desafio.dados.length : linhas.length);
+      setBannerPronto(true);
+      setAnimandoSequencia(false);
     }
-  }, [desafio.id, desafio.dados, desafio.tentativas, valores.length]);
+  }, [desafio.id, desafio.dados, desafio.tentativas, desafio.modoDica, valores.length]);
+
+  // Revelação sequencial dramática quando chega uma nova tentativa
+  useEffect(() => {
+    const qtdAtual = desafio.tentativas.length;
+    const qtdPrev = tentativasPrevRef.current;
+    if (idRef.current !== desafio.id) return;
+
+    if (qtdAtual < qtdPrev) {
+      limparTimers();
+      tentativasPrevRef.current = qtdAtual;
+      setRevelandoAte(0);
+      setBannerPronto(true);
+      setAnimandoSequencia(false);
+      return;
+    }
+
+    if (qtdAtual <= qtdPrev) return;
+    tentativasPrevRef.current = qtdAtual;
+    limparTimers();
+
+    const ult = desafio.tentativas[qtdAtual - 1];
+    const linhas = montarLinhasHarpa(ult?.feedbackEmbaralhado);
+    const total = desafio.modoDica === 'posicional' ? desafio.dados.length : linhas.length;
+
+    if (prefereMovimentoReduzido() || total === 0) {
+      setRevelandoAte(total);
+      setBannerPronto(true);
+      setAnimandoSequencia(false);
+      if (desafio.status === 'aberto') {
+        tocarEfeitoDesafio('lockpick-aberto');
+      } else if (desafio.status === 'travado') {
+        tocarEfeitoDesafio('lockpick-travado');
+      } else {
+        tocarEfeitoDesafio('pino-tentar');
+      }
+      return;
+    }
+
+    setRevelandoAte(0);
+    setBannerPronto(false);
+    setAnimandoSequencia(true);
+
+    const passoMs = desafio.modoDica === 'posicional' ? 460 : 480;
+    for (let i = 0; i < total; i++) {
+      const id = window.setTimeout(() => {
+        setRevelandoAte(i + 1);
+        if (desafio.modoDica === 'posicional') {
+          const res = ult?.feedbackPosicional?.[i];
+          tocarEfeitoDesafio(somParaResultadoPino(res));
+        } else {
+          const linha = linhas[i];
+          tocarEfeitoDesafio(linha?.som ?? 'pino-erro');
+        }
+      }, (i + 1) * passoMs);
+      timersRef.current.push(id);
+    }
+
+    const idFinal = window.setTimeout(() => {
+      setBannerPronto(true);
+      setAnimandoSequencia(false);
+      if (desafio.status === 'aberto') {
+        tocarEfeitoDesafio('lockpick-aberto');
+      } else if (desafio.status === 'travado') {
+        tocarEfeitoDesafio('lockpick-travado');
+      }
+    }, total * passoMs + 320);
+    timersRef.current.push(idFinal);
+  }, [desafio]);
 
   const autorizado =
     !desafio.jogadorAutorizadoId ||
     desafio.jogadorAutorizadoId === meuDiscordId ||
     desafio.jogadorAutorizadoId === minhaFichaId;
   const podeAgir = modo === 'jogador' && Boolean(aoAgir) && desafio.status === 'ativo' && autorizado;
+  const revelando = animandoSequencia || !bannerPronto;
 
   const ajustar = (idx: number, delta: number) => {
-    if (!podeAgir) return;
+    if (!podeAgir || revelando) return;
     const lados = desafio.dados[idx] ?? 6;
     setValores((atual) =>
       atual.map((v, i) => {
         if (i !== idx) return v;
-        const proximo = ((v - 1 + delta) % lados + lados) % lados + 1;
-        return proximo;
+        return (((v - 1 + delta) % lados) + lados) % lados + 1;
       }),
     );
     tocarEfeitoDesafio('pino-girar');
   };
 
   const tentar = () => {
-    if (!podeAgir || !aoAgir) return;
+    if (!podeAgir || revelando || !aoAgir) return;
     aoAgir({
       tipo: 'lockpick.tentar',
       valores: desafio.dados.map((_, i) => valores[i] ?? 1),
@@ -602,7 +1004,7 @@ function OverlayLockpick({
 
   const tentativasUsadas = desafio.tentativas.length;
   const restantes = Math.max(0, desafio.maxTentativas - tentativasUsadas);
-  const anguloSelo = tentativasUsadas * 28 + (desafio.status === 'aberto' ? 90 : 0);
+  const anguloSelo = tentativasUsadas * 28 + (bannerPronto && desafio.status === 'aberto' ? 90 : 0);
 
   return (
     <div class="ovd-palco-backdrop" data-testid="overlay-lockpick">
@@ -610,7 +1012,11 @@ function OverlayLockpick({
         Espiar mapa
       </button>
 
-      <section class="ovd-palco ovd-palco-lockpick" data-status={desafio.status} aria-label={desafio.titulo}>
+      <section
+        class="ovd-palco ovd-palco-lockpick"
+        data-status={bannerPronto ? desafio.status : 'ativo'}
+        aria-label={desafio.titulo}
+      >
         <header class="ovd-palco-topo">
           <div class="ovd-palco-titulos">
             <span class="ovd-eyebrow">Abrir Fechaduras</span>
@@ -623,123 +1029,142 @@ function OverlayLockpick({
           </div>
         </header>
 
-        <div class="ovd-lock-arena">
+        <div class="ovd-lock-arena" data-qtd={desafio.dados.length}>
           <div class="ovd-lock-selo-bg">
-            <SeloPedraSvg angulo={anguloSelo} status={desafio.status} />
+            <SeloPedraSvg
+              angulo={anguloSelo}
+              status={bannerPronto ? desafio.status : 'ativo'}
+              qtdDados={desafio.dados.length}
+            />
           </div>
 
           <div class="ovd-lock-pinos" data-qtd={desafio.dados.length}>
             {desafio.dados.map((lados, idx) => {
               const valorExibido =
-                desafio.status === 'aberto' && desafio.senha?.[idx] !== undefined
+                bannerPronto && desafio.status === 'aberto' && desafio.senha?.[idx] !== undefined
                   ? desafio.senha[idx]!
                   : podeAgir
                     ? (valores[idx] ?? 1)
                     : (ultimaTentativa?.valores[idx] ?? valores[idx] ?? 1);
+
+              const estaAguardando =
+                desafio.modoDica === 'posicional' && revelando && idx >= revelandoAte;
+              const recemRevelado =
+                desafio.modoDica === 'posicional' &&
+                animandoSequencia &&
+                idx === revelandoAte - 1;
+
               const dicaPosicional =
-                desafio.modoDica === 'posicional' ? ultimaTentativa?.feedbackPosicional?.[idx] : undefined;
+                desafio.modoDica === 'posicional' && !estaAguardando
+                  ? ultimaTentativa?.feedbackPosicional?.[idx]
+                  : undefined;
+
               const dep = desafio.dependencias?.[idx] ?? null;
               const depDestrancada =
                 dep === null ||
-                desafio.status === 'aberto' ||
+                (bannerPronto && desafio.status === 'aberto') ||
                 (dicaPosicional !== undefined && dicaPosicional !== 'trancado');
-              const variante =
-                dicaPosicional === undefined && dep !== null && desafio.status === 'ativo'
-                  ? 'trancado'
-                  : variantePino(dicaPosicional, desafio.status);
+
+              let variante: VarianteDado;
+              if (estaAguardando) {
+                variante = 'osso';
+              } else if (dicaPosicional === undefined && dep !== null && desafio.status === 'ativo') {
+                variante = 'trancado';
+              } else {
+                variante = variantePino(dicaPosicional, bannerPronto ? desafio.status : 'ativo');
+              }
+
+              const classeAnimacao = estaAguardando
+                ? 'ovd-pino-aguardando'
+                : recemRevelado
+                  ? 'ovd-pino-revelado'
+                  : undefined;
 
               return (
                 <div
                   key={idx}
-                  class="ovd-lock-pino"
+                  class={`ovd-lock-pino${classeAnimacao ? ` ${classeAnimacao}` : ''}`}
+                  data-slot={idx + 1}
                   onWheel={(e) => {
-                    if (!podeAgir) return;
+                    if (!podeAgir || revelando) return;
                     e.preventDefault();
                     ajustar(idx, e.deltaY < 0 ? 1 : -1);
                   }}
                 >
-                  <span class="ovd-lock-pino-rotulo">
-                    Pino {idx + 1} • d{lados}
-                  </span>
                   {dep !== null && (
                     <span class="ovd-lock-pino-dep" data-aberto={depDestrancada ? '1' : '0'}>
-                      {depDestrancada ? `🔓 Pino ${dep + 1}` : `🔒 Requer Pino ${dep + 1}`}
+                      {depDestrancada ? `🔓 Pino ${dep + 1}` : `🔒 Pino ${dep + 1}`}
                     </span>
                   )}
+
                   {podeAgir && (
                     <button
                       type="button"
                       class="ovd-lock-controle"
+                      disabled={revelando}
                       aria-label={`Aumentar pino ${idx + 1}`}
                       onClick={() => ajustar(idx, 1)}
                     >
                       +
                     </button>
                   )}
+
                   <DadoPoligono
                     lados={lados}
                     valor={valorExibido}
                     variante={variante}
-                    tamanho={72}
-                    interativo={podeAgir}
+                    tamanho={desafio.dados.length === 4 ? 68 : 74}
+                    interativo={podeAgir && !revelando}
                     rotulo={`Pino ${idx + 1} (d${lados}): ${valorExibido}`}
                   />
+
                   {podeAgir && (
                     <button
                       type="button"
                       class="ovd-lock-controle"
+                      disabled={revelando}
                       aria-label={`Diminuir pino ${idx + 1}`}
                       onClick={() => ajustar(idx, -1)}
                     >
                       −
                     </button>
                   )}
-                  {desafio.modoDica === 'posicional' && dicaPosicional && desafio.status === 'ativo' && (
+
+                  {desafio.modoDica === 'posicional' && dicaPosicional && (
                     <span class="ovd-lock-dica-pino" data-res={dicaPosicional}>
                       {rotuloPino(dicaPosicional)}
                     </span>
                   )}
+
+                  <span class="ovd-lock-pino-tipo" aria-hidden="true">
+                    d{lados}
+                  </span>
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* Feedback embaralhado (estética da harpa) */}
+        {/* Feedback embaralhado (Harpa — tipografia branca serifada grande sem caixa, revelada linha por linha) */}
         {desafio.modoDica === 'embaralhado' &&
-          desafio.status === 'ativo' &&
-          ultimaTentativa?.feedbackEmbaralhado && (
+          ultimaTentativa?.feedbackEmbaralhado &&
+          linhasHarpa.length > 0 && (
             <div class="ovd-lock-harpa" aria-live="polite">
-              {ultimaTentativa.feedbackEmbaralhado.corretos > 0 && (
-                <p class="ovd-lock-harpa-linha" data-tom="acerto">
-                  {fraseEmbaralhada('corretos', ultimaTentativa.feedbackEmbaralhado.corretos)}
+              {linhasHarpa.slice(0, revelandoAte).map((linha) => (
+                <p key={linha.chave} class="ovd-lock-harpa-linha" data-tom={linha.tom}>
+                  {linha.texto}
                 </p>
-              )}
-              {ultimaTentativa.feedbackEmbaralhado.altos > 0 && (
-                <p class="ovd-lock-harpa-linha" data-tom="alto">
-                  {fraseEmbaralhada('altos', ultimaTentativa.feedbackEmbaralhado.altos)}
-                </p>
-              )}
-              {ultimaTentativa.feedbackEmbaralhado.baixos > 0 && (
-                <p class="ovd-lock-harpa-linha" data-tom="baixo">
-                  {fraseEmbaralhada('baixos', ultimaTentativa.feedbackEmbaralhado.baixos)}
-                </p>
-              )}
-              {(ultimaTentativa.feedbackEmbaralhado.trancados ?? 0) > 0 && (
-                <p class="ovd-lock-harpa-linha" data-tom="trancado">
-                  {fraseEmbaralhada('trancados', ultimaTentativa.feedbackEmbaralhado.trancados ?? 0)}
-                </p>
-              )}
+              ))}
             </div>
           )}
 
-        {/* Banners finais flutuantes */}
-        {desafio.status === 'aberto' && (
+        {/* Banners finais flutuantes (só após revelar o último pino/linha + 320ms) */}
+        {bannerPronto && desafio.status === 'aberto' && (
           <div class="ovd-lock-banner" data-status="aberto" role="status">
             FECHADURA DESTRANCADA
           </div>
         )}
-        {desafio.status === 'travado' && (
+        {bannerPronto && desafio.status === 'travado' && (
           <div class="ovd-lock-banner" data-status="travado" role="status">
             FECHADURA DANIFICADA
           </div>
@@ -747,8 +1172,13 @@ function OverlayLockpick({
 
         <footer class="ovd-lock-rodape">
           {podeAgir && (
-            <button type="button" class="ovd-btn ovd-btn-primario" onClick={tentar}>
-              Testar Combinação
+            <button
+              type="button"
+              class="ovd-btn ovd-btn-primario"
+              disabled={revelando}
+              onClick={tentar}
+            >
+              {revelando ? 'Testando…' : 'Testar Combinação'}
             </button>
           )}
 
@@ -781,7 +1211,7 @@ function OverlayLockpick({
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   2. EQUILÍBRIO (BALANÇA)
+   2. EQUILÍBRIO (BALANÇA — CANTO INFERIOR DIREITO, PRINT 2)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function textoStatusEquilibrio(status: DesafioEquilibrio['status'], diferenca: number): string {
@@ -802,7 +1232,6 @@ function OverlayEquilibrio({
   modo,
   meuDiscordId,
   minhaFichaId,
-  retratos,
   aoAgir,
   aoRecolher,
 }: {
@@ -835,7 +1264,7 @@ function OverlayEquilibrio({
         </button>
       ) : desafio.d4Pendente !== null ? (
         <div class="ovd-eq-pendente">
-          <DadoPoligono lados={4} valor={desafio.d4Pendente} variante="alto" tamanho={34} />
+          <DadoPoligono lados={4} valor={desafio.d4Pendente} variante="alto" tamanho={30} />
           <button
             type="button"
             class="ovd-btn ovd-btn-primario ovd-btn-pequeno"
@@ -864,35 +1293,32 @@ function OverlayEquilibrio({
   );
 
   if (desafio.exibicao === 'compacto') {
-    const totalD4 = Math.max(desafio.dadosEquilibrioTotal, restantes);
     return (
       <div class="ovd-eq-compacto-wrap" data-testid="overlay-equilibrio-compacto">
         <section class="ovd-eq-compacto-card" data-status={desafio.status} aria-label={desafio.titulo}>
-          <header class="ovd-eq-compacto-topo">
-            <div class="ovd-eq-personagem">
-              <RetratoParticipante participante={desafio.personagem} retratos={retratos} tamanho="pequeno" />
-              <span class="ovd-eq-compacto-nome">{desafio.personagem.nome}</span>
-            </div>
-            <button type="button" class="ovd-btn-recolher" onClick={aoRecolher} title="Recolher balança">
+          <div class="ovd-eq-compacto-topo">
+            <span class="ovd-eq-compacto-nome">{desafio.personagem.nome}</span>
+            <button type="button" class="ovd-btn-recolher ovd-btn-x" onClick={aoRecolher} title="Recolher balança">
               ×
             </button>
-          </header>
+          </div>
 
-          <BalancaSvg esq={esq} dir={dir} status={desafio.status} compacto />
+          <BalancaSvg
+            dadoEsq={desafio.dadoEsq}
+            dadoDir={desafio.dadoDir}
+            dadosEsq={dadosEsq}
+            dadosDir={dadosDir}
+            esq={esq}
+            dir={dir}
+            status={desafio.status}
+            compacto
+          />
 
-          {totalD4 > 0 && (
-            <div class="ovd-eq-compacto-d4s" aria-label={`Dados d4 restantes: ${restantes} de ${totalD4}`}>
-              {Array.from({ length: totalD4 }, (_, idx) => (
-                <span key={idx} class={idx < restantes ? undefined : 'ovd-eq-compacto-d4-gasto'}>
-                  <DadoPoligono lados={4} valor="4" variante={idx < restantes ? 'osso' : 'sombra'} tamanho={18} />
-                </span>
-              ))}
-            </div>
+          {(desafio.status === 'equilibrado' || desafio.status === 'caiu') && (
+            <span class="ovd-eq-status ovd-eq-compacto-status" data-status={desafio.status}>
+              {statusTexto}
+            </span>
           )}
-
-          <span class="ovd-eq-status ovd-eq-compacto-status" data-status={desafio.status}>
-            {statusTexto}
-          </span>
 
           {acoes}
         </section>
@@ -908,56 +1334,29 @@ function OverlayEquilibrio({
 
       <section class="ovd-palco" aria-label={desafio.titulo}>
         <header class="ovd-palco-topo">
-          <div class="ovd-eq-personagem">
-            <RetratoParticipante participante={desafio.personagem} retratos={retratos} tamanho="grande" />
-            <div class="ovd-palco-titulos">
-              <span class="ovd-eyebrow">Desafio de Equilíbrio</span>
-              <h2 class="ovd-titulo">{desafio.titulo}</h2>
-              <p class="ovd-subtitulo">
-                {desafio.personagem.nome} • d4 restantes: <strong>{restantes}</strong>/{desafio.dadosEquilibrioTotal}
-              </p>
-            </div>
+          <div class="ovd-palco-titulos">
+            <span class="ovd-eyebrow">Desafio de Equilíbrio</span>
+            <h2 class="ovd-titulo">{desafio.titulo}</h2>
+            <p class="ovd-subtitulo">
+              {desafio.personagem.nome} • d4 restantes: <strong>{restantes}</strong>/{desafio.dadosEquilibrioTotal}
+            </p>
           </div>
         </header>
 
         <div class="ovd-balanca-wrap">
-          <BalancaSvg esq={esq} dir={dir} status={desafio.status} />
+          <BalancaSvg
+            dadoEsq={desafio.dadoEsq}
+            dadoDir={desafio.dadoDir}
+            dadosEsq={dadosEsq}
+            dadosDir={dadosDir}
+            esq={esq}
+            dir={dir}
+            status={desafio.status}
+          />
 
           <span class="ovd-eq-status" data-status={desafio.status} role="status">
             {statusTexto}
           </span>
-
-          <div class="ovd-eq-dados-linha">
-            <div class="ovd-eq-lado-box">
-              <span class="ovd-eq-lado-titulo">Esquerda ({esq})</span>
-              <div class="ovd-eq-lado-dados">
-                <DadoPoligono
-                  lados={10}
-                  valor={desafio.dadoEsq ?? '—'}
-                  variante={desafio.status === 'caiu' ? 'perigo' : 'osso'}
-                  tamanho={42}
-                />
-                {dadosEsq.map((d) => (
-                  <DadoPoligono key={d.id} lados={4} valor={d.valor} variante="alto" tamanho={30} />
-                ))}
-              </div>
-            </div>
-
-            <div class="ovd-eq-lado-box">
-              <span class="ovd-eq-lado-titulo">Direita ({dir})</span>
-              <div class="ovd-eq-lado-dados">
-                <DadoPoligono
-                  lados={10}
-                  valor={desafio.dadoDir ?? '—'}
-                  variante={desafio.status === 'caiu' ? 'perigo' : 'osso'}
-                  tamanho={42}
-                />
-                {dadosDir.map((d) => (
-                  <DadoPoligono key={d.id} lados={4} valor={d.valor} variante="alto" tamanho={30} />
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
 
         {acoes}
@@ -967,7 +1366,7 @@ function OverlayEquilibrio({
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   3. CENA DE FURTIVIDADE (ESCONDERIJO)
+   3. CENA DE FURTIVIDADE (ESCONDERIJO — CANTO SUPERIOR DIREITO, PRINTS 4 e 5)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function OverlayEsconderijo({
@@ -975,7 +1374,6 @@ function OverlayEsconderijo({
   modo,
   meuDiscordId,
   minhaFichaId,
-  retratos,
   aoAgir,
   aoRecolher,
 }: {
@@ -1000,27 +1398,15 @@ function OverlayEsconderijo({
   const mostrarBusca = Boolean(desafio.ultimaBusca && desafio.ultimaBusca.id !== buscaOcultaId);
 
   return (
-    <div class="ovd-hud-topo" data-testid="overlay-esconderijo">
-      <header class="ovd-hud-barra">
-        <IconeSombra tamanho={15} />
-        <span class="ovd-hud-barra-titulo">{desafio.titulo}</span>
-        <span class="ovd-hud-chip">R{desafio.rodada}</span>
-        <span class="ovd-hud-chip" data-tom={desafio.fase === 'criaturas' ? 'carmesim' : 'ouro'}>
-          {desafio.fase === 'criaturas' ? 'Criaturas' : 'Personagens'}
-        </span>
-        <span class="ovd-hud-chip">Distrair DT {desafio.dtDistrair}</span>
-        <button type="button" class="ovd-btn-recolher" onClick={aoRecolher}>
-          Recolher
-        </button>
-      </header>
-
+    <div class="ovd-esc-raiz" data-testid="overlay-esconderijo">
+      {/* Banner discreto de Busca da Criatura no canto superior esquerdo */}
       {mostrarBusca && desafio.ultimaBusca && (
         <div class="ovd-busca-banner" role="alert">
           <div class="ovd-busca-esquerda">
             <span class="ovd-busca-rotulo">Busca da Criatura</span>
             <div class="ovd-busca-dados">
               {desafio.ultimaBusca.dados.map((d, i) => (
-                <DadoPoligono key={i} lados={d.lados} valor={d.valor} variante="perigo" tamanho={28} />
+                <DadoPoligono key={i} lados={d.lados} valor={d.valor} variante="perigo" tamanho={26} />
               ))}
             </div>
             <span class="ovd-busca-atingidos">
@@ -1037,174 +1423,106 @@ function OverlayEsconderijo({
           </div>
           <button
             type="button"
-            class="ovd-btn-recolher"
+            class="ovd-btn-recolher ovd-btn-x"
             onClick={() => setBuscaOcultaId(desafio.ultimaBusca?.id ?? null)}
+            title="Dispensar alerta"
           >
             ×
           </button>
         </div>
       )}
 
-      <div class="ovd-faixa-cards">
-        {desafio.participantes.map((p) => {
-          const souEu = ehMeuParticipante(p, meuDiscordId, minhaFichaId);
-          const podeAgir = modo === 'jogador' && Boolean(aoAgir) && souEu;
-          const expandido = podeAgir && abertoId === p.id;
-          const aliados = desafio.participantes.filter((outro) => outro.id !== p.id);
-          const alvoDistrair =
-            aliados.some((a) => a.id === aliadoDistrairId) ? aliadoDistrairId : (aliados[0]?.id ?? '');
-          const alvoChamar =
-            aliados.some((a) => a.id === aliadoChamarId) ? aliadoChamarId : (aliados[0]?.id ?? '');
-          const transferirAtual =
-            p.dados.some((d) => d.id === dadoTransferirId) ? dadoTransferirId : (p.dados[0]?.id ?? '');
-          const descartarAtual =
-            p.dados.some((d) => d.id === dadoDescartarId && d.id !== transferirAtual)
-              ? dadoDescartarId
-              : (p.dados.find((d) => d.id !== transferirAtual)?.id ?? '');
+      {/* Lista minimalista empilhada no CANTO SUPERIOR DIREITO */}
+      <aside class="ovd-esc-canto" aria-label={desafio.titulo}>
+        <div class="ovd-canto-meta ovd-canto-meta-dir">
+          <span class="ovd-canto-rotulo">
+            R{desafio.rodada} • {desafio.fase === 'criaturas' ? 'Criaturas' : 'Furtividade'}
+          </span>
+          <button type="button" class="ovd-btn-recolher ovd-btn-x" onClick={aoRecolher} title="Recolher furtividade">
+            ×
+          </button>
+        </div>
 
-          return (
-            <article
-              key={p.id}
-              class="ovd-esc-card"
-              data-meu={souEu ? '1' : '0'}
-              data-encontrado={p.encontrado ? '1' : '0'}
-              title={`${p.nome} • Esconder-se DT ${p.dtEsconderSe}`}
-            >
-              <RetratoParticipante participante={p} retratos={retratos} tamanho="pequeno" />
-              <span class="ovd-esc-nome">{p.nome}</span>
-              <IconeSombra tamanho={15} />
+        <div class="ovd-esc-lista">
+          {desafio.participantes.map((p) => {
+            const souEu = ehMeuParticipante(p, meuDiscordId, minhaFichaId);
+            const podeAgir = modo === 'jogador' && Boolean(aoAgir) && souEu;
+            const expandido = podeAgir && abertoId === p.id;
+            const aliados = desafio.participantes.filter((outro) => outro.id !== p.id);
+            const alvoDistrair =
+              aliados.some((a) => a.id === aliadoDistrairId) ? aliadoDistrairId : (aliados[0]?.id ?? '');
+            const alvoChamar =
+              aliados.some((a) => a.id === aliadoChamarId) ? aliadoChamarId : (aliados[0]?.id ?? '');
+            const transferirAtual =
+              p.dados.some((d) => d.id === dadoTransferirId) ? dadoTransferirId : (p.dados[0]?.id ?? '');
+            const descartarAtual =
+              p.dados.some((d) => d.id === dadoDescartarId && d.id !== transferirAtual)
+                ? dadoDescartarId
+                : (p.dados.find((d) => d.id !== transferirAtual)?.id ?? '');
 
-              <div class="ovd-esc-dados">
-                {p.encontrado ? (
-                  <span class="ovd-selo-encontrado">ENCONTRADO</span>
-                ) : p.dados.length === 0 ? (
-                  <span class="ovd-esc-vazio">—</span>
-                ) : (
-                  p.dados.map((d) => (
-                    <DadoPoligono
-                      key={d.id}
-                      lados={d.lados}
-                      valor={d.valor === 0 ? '?' : d.valor}
-                      variante="sombra"
-                      tamanho={30}
-                    />
-                  ))
-                )}
-              </div>
+            return (
+              <div
+                key={p.id}
+                class="ovd-esc-item"
+                data-meu={souEu ? '1' : '0'}
+                data-encontrado={p.encontrado ? '1' : '0'}
+                title={`${p.nome} • Esconder-se DT ${p.dtEsconderSe}`}
+              >
+                {podeAgir && aoAgir && (
+                  <>
+                    <button
+                      type="button"
+                      class="ovd-esc-btn-mais"
+                      aria-expanded={expandido}
+                      title="Ações de furtividade"
+                      onClick={() => setAbertoId(expandido ? null : p.id)}
+                    >
+                      {expandido ? '×' : '+'}
+                    </button>
 
-              {podeAgir && aoAgir && (
-                <>
-                  <button
-                    type="button"
-                    class="ovd-btn ovd-btn-pequeno ovd-esc-btn-acoes"
-                    aria-expanded={expandido}
-                    onClick={() => setAbertoId(expandido ? null : p.id)}
-                  >
-                    {expandido ? 'Ações ▴' : 'Ações ▾'}
-                  </button>
-
-                  {expandido && (
-                    <div class="ovd-esc-popover">
-                      {/* Rolar Esconderijo */}
-                      <div class="ovd-esc-bloco">
-                        <span class="ovd-esc-bloco-titulo">Rolar Esconderijo</span>
-                        <div class="ovd-esc-linha">
-                          <select
-                            class="ovd-select"
-                            aria-label="Lados do dado de esconderijo"
-                            value={ladosRolar}
-                            onChange={(e) => setLadosRolar(Number(e.currentTarget.value) as LadosDado)}
-                          >
-                            {LADOS_VALIDOS.map((l) => (
-                              <option key={l} value={l}>
-                                d{l}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            class="ovd-btn ovd-btn-pequeno ovd-btn-primario"
-                            onClick={() =>
-                              aoAgir({
-                                tipo: 'esconderijo.adicionar-dado',
-                                participanteId: p.id,
-                                lados: ladosRolar,
-                              })
-                            }
-                          >
-                            + Rolar d{ladosRolar}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Esconder-se */}
-                      <div class="ovd-esc-bloco">
-                        <span class="ovd-esc-bloco-titulo">Esconder-se (DT {p.dtEsconderSe})</span>
-                        <div class="ovd-esc-linha">
-                          <select
-                            class="ovd-select"
-                            aria-label="Dado de Esconder-se"
-                            value={ladosEsconder}
-                            onChange={(e) => setLadosEsconder(Number(e.currentTarget.value) as LadosDado)}
-                          >
-                            {LADOS_VALIDOS.map((l) => (
-                              <option key={l} value={l}>
-                                d{l}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            class="ovd-btn ovd-btn-pequeno ovd-btn-esmeralda"
-                            onClick={() =>
-                              aoAgir({
-                                tipo: 'esconderijo.esconder-se',
-                                participanteId: p.id,
-                                passou: true,
-                                lados: ladosEsconder,
-                              })
-                            }
-                          >
-                            Passou
-                          </button>
-                          <button
-                            type="button"
-                            class="ovd-btn ovd-btn-pequeno ovd-btn-carmesim"
-                            onClick={() =>
-                              aoAgir({
-                                tipo: 'esconderijo.esconder-se',
-                                participanteId: p.id,
-                                passou: false,
-                              })
-                            }
-                          >
-                            Falhou
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Distrair */}
-                      {aliados.length > 0 && (
+                    {expandido && (
+                      <div class="ovd-esc-popover">
+                        {/* Rolar Esconderijo */}
                         <div class="ovd-esc-bloco">
-                          <span class="ovd-esc-bloco-titulo">Distrair (DT {desafio.dtDistrair})</span>
+                          <span class="ovd-esc-bloco-titulo">Rolar Esconderijo</span>
                           <div class="ovd-esc-linha">
                             <select
                               class="ovd-select"
-                              aria-label="Aliado para Distrair"
-                              value={alvoDistrair}
-                              onChange={(e) => setAliadoDistrairId(e.currentTarget.value)}
+                              aria-label="Lados do dado de esconderijo"
+                              value={ladosRolar}
+                              onChange={(e) => setLadosRolar(Number(e.currentTarget.value) as LadosDado)}
                             >
-                              {aliados.map((a) => (
-                                <option key={a.id} value={a.id}>
-                                  {a.nome}
+                              {LADOS_VALIDOS.map((l) => (
+                                <option key={l} value={l}>
+                                  d{l}
                                 </option>
                               ))}
                             </select>
+                            <button
+                              type="button"
+                              class="ovd-btn ovd-btn-pequeno ovd-btn-primario"
+                              onClick={() =>
+                                aoAgir({
+                                  tipo: 'esconderijo.adicionar-dado',
+                                  participanteId: p.id,
+                                  lados: ladosRolar,
+                                })
+                              }
+                            >
+                              + Rolar d{ladosRolar}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Esconder-se */}
+                        <div class="ovd-esc-bloco">
+                          <span class="ovd-esc-bloco-titulo">Esconder-se (DT {p.dtEsconderSe})</span>
+                          <div class="ovd-esc-linha">
                             <select
                               class="ovd-select"
-                              aria-label="Dado de Distrair"
-                              value={ladosDistrair}
-                              onChange={(e) => setLadosDistrair(Number(e.currentTarget.value) as LadosDado)}
+                              aria-label="Dado de Esconder-se"
+                              value={ladosEsconder}
+                              onChange={(e) => setLadosEsconder(Number(e.currentTarget.value) as LadosDado)}
                             >
                               {LADOS_VALIDOS.map((l) => (
                                 <option key={l} value={l}>
@@ -1215,13 +1533,12 @@ function OverlayEsconderijo({
                             <button
                               type="button"
                               class="ovd-btn ovd-btn-pequeno ovd-btn-esmeralda"
-                              disabled={!alvoDistrair}
                               onClick={() =>
                                 aoAgir({
-                                  tipo: 'esconderijo.distrair',
-                                  alvoParticipanteId: alvoDistrair,
+                                  tipo: 'esconderijo.esconder-se',
+                                  participanteId: p.id,
                                   passou: true,
-                                  lados: ladosDistrair,
+                                  lados: ladosEsconder,
                                 })
                               }
                             >
@@ -1230,11 +1547,10 @@ function OverlayEsconderijo({
                             <button
                               type="button"
                               class="ovd-btn ovd-btn-pequeno ovd-btn-carmesim"
-                              disabled={!alvoDistrair}
                               onClick={() =>
                                 aoAgir({
-                                  tipo: 'esconderijo.distrair',
-                                  alvoParticipanteId: alvoDistrair,
+                                  tipo: 'esconderijo.esconder-se',
+                                  participanteId: p.id,
                                   passou: false,
                                 })
                               }
@@ -1243,109 +1559,192 @@ function OverlayEsconderijo({
                             </button>
                           </div>
                         </div>
-                      )}
 
-                      {/* Chamar Atenção */}
-                      {aliados.length > 0 && p.dados.length >= 2 && (
-                        <div class="ovd-esc-bloco">
-                          <span class="ovd-esc-bloco-titulo">Chamar Atenção (dá 1 + descarta 1)</span>
-                          <div class="ovd-esc-linha">
-                            <select
-                              class="ovd-select"
-                              aria-label="Aliado destino"
-                              value={alvoChamar}
-                              onChange={(e) => setAliadoChamarId(e.currentTarget.value)}
-                            >
-                              {aliados.map((a) => (
-                                <option key={a.id} value={a.id}>
-                                  {a.nome}
-                                </option>
-                              ))}
-                            </select>
-                            <select
-                              class="ovd-select"
-                              aria-label="Dado a transferir"
-                              value={transferirAtual}
-                              onChange={(e) => setDadoTransferirId(e.currentTarget.value)}
-                            >
-                              {p.dados.map((d) => (
-                                <option key={d.id} value={d.id}>
-                                  Dar d{d.lados} ({d.valor || '?'})
-                                </option>
-                              ))}
-                            </select>
-                            <select
-                              class="ovd-select"
-                              aria-label="Dado a descartar"
-                              value={descartarAtual}
-                              onChange={(e) => setDadoDescartarId(e.currentTarget.value)}
-                            >
-                              {p.dados
-                                .filter((d) => d.id !== transferirAtual)
-                                .map((d) => (
-                                  <option key={d.id} value={d.id}>
-                                    Desc. d{d.lados} ({d.valor || '?'})
+                        {/* Distrair */}
+                        {aliados.length > 0 && (
+                          <div class="ovd-esc-bloco">
+                            <span class="ovd-esc-bloco-titulo">Distrair (DT {desafio.dtDistrair})</span>
+                            <div class="ovd-esc-linha">
+                              <select
+                                class="ovd-select"
+                                aria-label="Aliado para Distrair"
+                                value={alvoDistrair}
+                                onChange={(e) => setAliadoDistrairId(e.currentTarget.value)}
+                              >
+                                {aliados.map((a) => (
+                                  <option key={a.id} value={a.id}>
+                                    {a.nome}
                                   </option>
                                 ))}
-                            </select>
-                            <button
-                              type="button"
-                              class="ovd-btn ovd-btn-pequeno"
-                              disabled={!alvoChamar || !transferirAtual || !descartarAtual}
-                              onClick={() =>
-                                aoAgir({
-                                  tipo: 'esconderijo.chamar-atencao',
-                                  origemId: p.id,
-                                  destinoId: alvoChamar,
-                                  dadoTransferirId: transferirAtual,
-                                  dadoDescartarId: descartarAtual,
-                                })
-                              }
-                            >
-                              Executar
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Ação Chamativa */}
-                      {p.dados.length > 0 && (
-                        <div class="ovd-esc-bloco">
-                          <span class="ovd-esc-bloco-titulo">Ação Chamativa (descartar 1 dado)</span>
-                          <div class="ovd-esc-linha">
-                            {p.dados.map((d) => (
+                              </select>
+                              <select
+                                class="ovd-select"
+                                aria-label="Dado de Distrair"
+                                value={ladosDistrair}
+                                onChange={(e) => setLadosDistrair(Number(e.currentTarget.value) as LadosDado)}
+                              >
+                                {LADOS_VALIDOS.map((l) => (
+                                  <option key={l} value={l}>
+                                    d{l}
+                                  </option>
+                                ))}
+                              </select>
                               <button
-                                key={d.id}
                                 type="button"
-                                class="ovd-btn ovd-btn-pequeno ovd-btn-carmesim"
+                                class="ovd-btn ovd-btn-pequeno ovd-btn-esmeralda"
+                                disabled={!alvoDistrair}
                                 onClick={() =>
                                   aoAgir({
-                                    tipo: 'esconderijo.descartar-dado',
-                                    participanteId: p.id,
-                                    dadoId: d.id,
+                                    tipo: 'esconderijo.distrair',
+                                    alvoParticipanteId: alvoDistrair,
+                                    passou: true,
+                                    lados: ladosDistrair,
                                   })
                                 }
                               >
-                                × d{d.lados} ({d.valor || '?'})
+                                Passou
                               </button>
-                            ))}
+                              <button
+                                type="button"
+                                class="ovd-btn ovd-btn-pequeno ovd-btn-carmesim"
+                                disabled={!alvoDistrair}
+                                onClick={() =>
+                                  aoAgir({
+                                    tipo: 'esconderijo.distrair',
+                                    alvoParticipanteId: alvoDistrair,
+                                    passou: false,
+                                  })
+                                }
+                              >
+                                Falhou
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
+                        )}
+
+                        {/* Chamar Atenção */}
+                        {aliados.length > 0 && p.dados.length >= 2 && (
+                          <div class="ovd-esc-bloco">
+                            <span class="ovd-esc-bloco-titulo">Chamar Atenção (dá 1 + descarta 1)</span>
+                            <div class="ovd-esc-linha">
+                              <select
+                                class="ovd-select"
+                                aria-label="Aliado destino"
+                                value={alvoChamar}
+                                onChange={(e) => setAliadoChamarId(e.currentTarget.value)}
+                              >
+                                {aliados.map((a) => (
+                                  <option key={a.id} value={a.id}>
+                                    {a.nome}
+                                  </option>
+                                ))}
+                              </select>
+                              <select
+                                class="ovd-select"
+                                aria-label="Dado a transferir"
+                                value={transferirAtual}
+                                onChange={(e) => setDadoTransferirId(e.currentTarget.value)}
+                              >
+                                {p.dados.map((d) => (
+                                  <option key={d.id} value={d.id}>
+                                    Dar d{d.lados} ({d.valor || '?'})
+                                  </option>
+                                ))}
+                              </select>
+                              <select
+                                class="ovd-select"
+                                aria-label="Dado a descartar"
+                                value={descartarAtual}
+                                onChange={(e) => setDadoDescartarId(e.currentTarget.value)}
+                              >
+                                {p.dados
+                                  .filter((d) => d.id !== transferirAtual)
+                                  .map((d) => (
+                                    <option key={d.id} value={d.id}>
+                                      Desc. d{d.lados} ({d.valor || '?'})
+                                    </option>
+                                  ))}
+                              </select>
+                              <button
+                                type="button"
+                                class="ovd-btn ovd-btn-pequeno"
+                                disabled={!alvoChamar || !transferirAtual || !descartarAtual}
+                                onClick={() =>
+                                  aoAgir({
+                                    tipo: 'esconderijo.chamar-atencao',
+                                    origemId: p.id,
+                                    destinoId: alvoChamar,
+                                    dadoTransferirId: transferirAtual,
+                                    dadoDescartarId: descartarAtual,
+                                  })
+                                }
+                              >
+                                Executar
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Ação Chamativa */}
+                        {p.dados.length > 0 && (
+                          <div class="ovd-esc-bloco">
+                            <span class="ovd-esc-bloco-titulo">Ação Chamativa (descartar 1 dado)</span>
+                            <div class="ovd-esc-linha">
+                              {p.dados.map((d) => (
+                                <button
+                                  key={d.id}
+                                  type="button"
+                                  class="ovd-btn ovd-btn-pequeno ovd-btn-carmesim"
+                                  onClick={() =>
+                                    aoAgir({
+                                      tipo: 'esconderijo.descartar-dado',
+                                      participanteId: p.id,
+                                      dadoId: d.id,
+                                    })
+                                  }
+                                >
+                                  × d{d.lados} ({d.valor || '?'})
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <span class="ovd-esc-nome">{primeiroNome(p.nome)}</span>
+                <IconeSombra tamanho={22} />
+
+                <div class="ovd-esc-dados">
+                  {p.encontrado ? (
+                    <span class="ovd-selo-encontrado">ENCONTRADO</span>
+                  ) : p.dados.length === 0 ? (
+                    <span class="ovd-esc-vazio">—</span>
+                  ) : (
+                    p.dados.map((d) => (
+                      <DadoPoligono
+                        key={d.id}
+                        lados={d.lados}
+                        valor={d.valor === 0 ? '?' : d.valor}
+                        variante="sombra"
+                        tamanho={28}
+                      />
+                    ))
                   )}
-                </>
-              )}
-            </article>
-          );
-        })}
-      </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </aside>
     </div>
   );
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   4. PERSEGUIÇÃO (FÔLEGO + AVANÇO FLUTUANTES)
+   4. PERSEGUIÇÃO (CANTO SUPERIOR ESQUERDO — PRINTS 6 e 7)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function OverlayPerseguicao({
@@ -1353,7 +1752,6 @@ function OverlayPerseguicao({
   modo,
   meuDiscordId,
   minhaFichaId,
-  retratos,
   aoAgir,
   aoRecolher,
 }: {
@@ -1368,26 +1766,30 @@ function OverlayPerseguicao({
   const mostrarPa = desafio.mostrarPaJogadores || modo === 'mestre';
   const limiarAtual = desafio.limiaresPorRodada[desafio.rodada];
 
+  // Destaca o próprio personagem primeiro no canto superior esquerdo
+  const ordenados = [...desafio.participantes].sort((a, b) => {
+    const aMeu = ehMeuParticipante(a, meuDiscordId, minhaFichaId) ? 0 : 1;
+    const bMeu = ehMeuParticipante(b, meuDiscordId, minhaFichaId) ? 0 : 1;
+    return aMeu - bMeu;
+  });
+
+  const temMeu = ordenados.some((p) => ehMeuParticipante(p, meuDiscordId, minhaFichaId));
+
   return (
-    <div class="ovd-hud-topo" data-testid="overlay-perseguicao">
-      <header class="ovd-hud-barra">
-        <IconeCorrendo tamanho={15} />
-        <span class="ovd-hud-barra-titulo">
+    <aside class="ovd-pers-canto" data-testid="overlay-perseguicao" aria-label={desafio.titulo}>
+      <div class="ovd-canto-meta">
+        <span class="ovd-canto-rotulo">
           Rodada {desafio.rodada}/{desafio.totalRodadas}
         </span>
-        {mostrarPa && limiarAtual !== undefined && (
-          <span class="ovd-hud-chip" data-tom="ouro">
-            Limiar {limiarAtual}
-          </span>
-        )}
-        <button type="button" class="ovd-btn-recolher" onClick={aoRecolher}>
-          Recolher
+        <button type="button" class="ovd-btn-recolher ovd-btn-x" onClick={aoRecolher} title="Recolher perseguição">
+          ×
         </button>
-      </header>
+      </div>
 
-      <div class="ovd-pers-faixa">
-        {desafio.participantes.map((p) => {
+      <div class="ovd-pers-lista">
+        {ordenados.map((p, idx) => {
           const souEu = ehMeuParticipante(p, meuDiscordId, minhaFichaId);
+          const secundario = ordenados.length > 1 && (temMeu ? !souEu : idx > 0);
           const podeGastarFolego =
             modo === 'jogador' && Boolean(aoAgir) && souEu && p.folegoRestante > 0 && p.status === 'correndo';
           const alvoNumero =
@@ -1400,55 +1802,55 @@ function OverlayPerseguicao({
           };
 
           return (
-            <article
+            <div
               key={p.id}
-              class="ovd-pers-card"
+              class={`ovd-pers-item${secundario ? ' ovd-pers-item-sec' : ''}`}
               data-meu={souEu ? '1' : '0'}
               data-status={p.status}
             >
-              <div class="ovd-pers-topo">
-                <RetratoParticipante participante={p} retratos={retratos} tamanho="pequeno" />
-                <span class="ovd-pers-nome">{p.nome}</span>
-                {p.status !== 'correndo' && (
-                  <span class="ovd-hud-chip" data-tom={p.status === 'seguro' ? 'esmeralda' : 'carmesim'}>
-                    {p.status === 'seguro' ? 'SEGURO' : 'DERRUBADO'}
-                  </span>
-                )}
-                {p.esforcoExtraUsos > 0 && (
-                  <span class="ovd-hud-chip" data-tom="ouro">
-                    ×{p.esforcoExtraUsos}
-                  </span>
-                )}
-              </div>
+              {(ordenados.length > 1 || p.status !== 'correndo' || p.esforcoExtraUsos > 0) && (
+                <div class="ovd-pers-cab">
+                  {ordenados.length > 1 && <span class="ovd-pers-nome">{primeiroNome(p.nome)}</span>}
+                  {p.status !== 'correndo' && (
+                    <span class="ovd-hud-chip" data-tom={p.status === 'seguro' ? 'esmeralda' : 'carmesim'}>
+                      {p.status === 'seguro' ? 'SEGURO' : 'DERRUBADO'}
+                    </span>
+                  )}
+                  {p.esforcoExtraUsos > 0 && (
+                    <span class="ovd-hud-chip" data-tom="ouro">
+                      ×{p.esforcoExtraUsos}
+                    </span>
+                  )}
+                </div>
+              )}
 
-              <div class="ovd-pers-corpo">
+              <div class="ovd-pers-linha">
                 <PulmaoFolego
                   restante={p.folegoRestante}
                   total={p.folegoTotal}
                   interativo={podeGastarFolego}
+                  compacto={secundario}
                   aoUsar={usarFolego}
                 />
 
                 {mostrarPa && (
-                  <div class="ovd-avanco-box">
-                    <div class="ovd-avanco-topo">
-                      <IconeCorrendo tamanho={20} classe="ovd-avanco-icone" />
-                      <span class="ovd-avanco-numero">{p.pa}</span>
-                      <span class="ovd-avanco-meta">/ {alvoNumero}</span>
-                    </div>
+                  <div class="ovd-avanco-topo">
+                    <IconeCorrendo tamanho={secundario ? 22 : 30} classe="ovd-avanco-icone" />
+                    <span class="ovd-avanco-numero">{p.pa}</span>
+                    <span class="ovd-avanco-meta">/ {alvoNumero}</span>
                   </div>
                 )}
               </div>
-            </article>
+            </div>
           );
         })}
       </div>
-    </div>
+    </aside>
   );
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   5. ESCALAR (ESCALADA — TIRA VERTICAL FINA NA BORDA)
+   5. ESCALAR (CANTO INFERIOR ESQUERDO — PAREDÃO + CORDA + SILHUETA)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function OverlayEscalada({
@@ -1463,72 +1865,81 @@ function OverlayEscalada({
   retratos?: Record<string, string>;
   aoRecolher: () => void;
 }) {
+  const ordenados = [...desafio.participantes].sort((a, b) => {
+    const aMeu = ehMeuParticipante(a, meuDiscordId, minhaFichaId) ? 0 : 1;
+    const bMeu = ehMeuParticipante(b, meuDiscordId, minhaFichaId) ? 0 : 1;
+    return aMeu - bMeu;
+  });
+
+  const temMeu = ordenados.some((p) => ehMeuParticipante(p, meuDiscordId, minhaFichaId));
+
   return (
-    <div class="ovd-escalada-wrap" data-testid="overlay-escalada">
-      <section class="ovd-escalada-card" aria-label={desafio.titulo}>
-        <header class="ovd-escalada-topo">
-          <h2 class="ovd-escalada-titulo" title={desafio.titulo}>
-            {desafio.titulo}
-          </h2>
-          <button type="button" class="ovd-btn-recolher" onClick={aoRecolher} title="Recolher escalada">
-            ×
-          </button>
-        </header>
+    <aside class="ovd-escalada-wrap" data-testid="overlay-escalada" aria-label={desafio.titulo}>
+      <div class="ovd-canto-meta">
+        <span class="ovd-canto-rotulo">{desafio.titulo}</span>
+        <button type="button" class="ovd-btn-recolher ovd-btn-x" onClick={aoRecolher} title="Recolher escalada">
+          ×
+        </button>
+      </div>
 
-        <div class="ovd-escalada-lista">
-          {desafio.participantes.map((p) => {
-            const souEu = ehMeuParticipante(p, meuDiscordId, minhaFichaId);
-            const pct = Math.min(100, Math.round((p.pontos / Math.max(1, desafio.metaPontos)) * 100));
-            const danoQueda = p.status === 'caiu' ? (p.ultimoDanoQueda ?? p.pontos) : p.pontos;
+      <div class="ovd-escalada-lista">
+        {ordenados.map((p, idx) => {
+          const souEu = ehMeuParticipante(p, meuDiscordId, minhaFichaId);
+          const secundario = ordenados.length > 1 && (temMeu ? !souEu : idx > 0);
+          const danoQueda = p.status === 'caiu' ? (p.ultimoDanoQueda ?? p.pontos) : p.pontos;
 
-            return (
-              <article
-                key={p.id}
-                class="ovd-escalada-item"
-                data-meu={souEu ? '1' : '0'}
-                data-status={p.status}
-              >
-                <div class="ovd-altimetro" aria-label={`Altura ${p.pontos} de ${desafio.metaPontos}`}>
-                  <div class="ovd-altimetro-fill" style={{ height: `${pct}%` }} />
-                  <span
-                    class="ovd-altimetro-marcador"
-                    style={{ bottom: `${Math.min(92, Math.max(8, pct))}%` }}
-                  />
-                </div>
+          return (
+            <div
+              key={p.id}
+              class={`ovd-escalada-item${secundario ? ' ovd-escalada-item-sec' : ''}`}
+              data-meu={souEu ? '1' : '0'}
+              data-status={p.status}
+            >
+              <EscaladaSvg
+                pontos={p.pontos}
+                metaPontos={desafio.metaPontos}
+                status={p.status}
+                compacto={secundario}
+              />
 
-                <div class="ovd-escalada-info">
+              <div class="ovd-escalada-info">
+                {(ordenados.length > 1 || p.status !== 'escalando') && (
                   <div class="ovd-escalada-cab">
-                    <span class="ovd-escalada-nome" title={p.nome}>
-                      {p.nome}
-                    </span>
-                    <span class="ovd-escalada-altura">
-                      {p.pontos}/{desafio.metaPontos}
-                    </span>
+                    {ordenados.length > 1 && (
+                      <span class="ovd-escalada-nome" title={p.nome}>
+                        {primeiroNome(p.nome)}
+                      </span>
+                    )}
+                    {p.status !== 'escalando' && (
+                      <span
+                        class="ovd-hud-chip"
+                        data-tom={p.status === 'topo' ? 'esmeralda' : 'carmesim'}
+                      >
+                        {p.status === 'topo' ? 'TOPO' : 'CAIU'}
+                      </span>
+                    )}
                   </div>
+                )}
 
-                  {p.status !== 'escalando' && (
-                    <span
-                      class="ovd-hud-chip"
-                      data-tom={p.status === 'topo' ? 'esmeralda' : 'carmesim'}
-                    >
-                      {p.status === 'topo' ? 'TOPO' : 'CAIU'}
-                    </span>
-                  )}
-
-                  <div class="ovd-escalada-alerta">
-                    {p.status === 'caiu' ? `Queda: ${danoQueda} dano` : `Se cair: ${danoQueda} dano`}
-                  </div>
+                <div class="ovd-escalada-placar">
+                  <span class="ovd-escalada-num">{p.pontos}</span>
+                  <span class="ovd-escalada-meta">/ {desafio.metaPontos}</span>
                 </div>
-              </article>
-            );
-          })}
-        </div>
 
-        <footer class="ovd-escalada-lembrete">
-          RA DT {desafio.dtRapida} • RB DT {desafio.dtCautelosa}
-        </footer>
-      </section>
-    </div>
+                <div class="ovd-escalada-queda">
+                  <IconeQueda tamanho={13} />
+                  <span>QUEDA: {danoQueda}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div class="ovd-escalada-dica">
+        DT {desafio.dtRapida} (RA) • DT {desafio.dtCautelosa} (RB)
+      </div>
+    </aside>
   );
 }
 
@@ -1573,7 +1984,7 @@ function resumoPilula(desafio: DesafioAtivo): { icone: string; titulo: string; d
   }
 }
 
-function useSonsDeDesafio(desafio: DesafioAtivo | null): void {
+function useSonsDeDesafio(desafio: DesafioAtivo | null, recolhido: boolean): void {
   const anteriorRef = useRef<DesafioAtivo | null>(null);
 
   useEffect(() => {
@@ -1585,6 +1996,8 @@ function useSonsDeDesafio(desafio: DesafioAtivo | null): void {
 
     switch (desafio.tipo) {
       case 'lockpick': {
+        // Quando visível, OverlayLockpick já dispara os sons pino-a-pino e o som final na revelação sequencial.
+        if (!recolhido) return;
         const p = prev as DesafioLockpick;
         if (p.status !== 'aberto' && desafio.status === 'aberto') {
           tocarEfeitoDesafio('lockpick-aberto');
@@ -1684,7 +2097,7 @@ function useSonsDeDesafio(desafio: DesafioAtivo | null): void {
         return;
       }
     }
-  }, [desafio]);
+  }, [desafio, recolhido]);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1706,7 +2119,7 @@ export function OverlayDesafio({
     setRecolhido(false);
   }, [desafio?.id]);
 
-  useSonsDeDesafio(desafio);
+  useSonsDeDesafio(desafio, recolhido);
 
   if (!desafio) return null;
 
