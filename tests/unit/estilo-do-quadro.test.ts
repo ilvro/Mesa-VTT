@@ -120,6 +120,6 @@ test('sem texto do mestre', () => {
 test('quadro novo, só com o título: quadro_estilo avisa que vale o estilo fixo do mestre', () => {
   const e = estiloDoQuadro(colunaDoMestre().slice(0, 1))!;
   assert.ok(usaEstiloPadrao(e));
-  assert.match(textoDoEstilo(e), /estilo fixo do mestre \(pt-serif 14 #1a1a1a em caixa #ffffff, largura ~412; títulos 45\.3 negrito; coluna centrada, 8 px/);
+  assert.match(textoDoEstilo(e), /estilo fixo do mestre \(pt-serif 14 #ffffff sem caixa, largura ~412; títulos 45\.3 negrito; coluna centrada, 8 px/);
   assert.ok(!usaEstiloPadrao(estiloDoQuadro(colunaDoMestre())));
 });

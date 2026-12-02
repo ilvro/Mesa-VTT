@@ -117,8 +117,8 @@ test('sem estilo_como usa o estilo de título e de corpo detectados', () => {
 test('sem texto do mestre para copiar: o estilo fixo do mestre (o do Pântano)', () => {
   const r = montarInsercao([{ formato: 'titulo', texto: 'T' }, { formato: 'texto', texto: 'c' }], opcoes([]));
   const [t, c] = r.itens.map(ehTexto);
-  assert.deepEqual([c!.texto.fonte, c!.texto.tamanho, c!.texto.cor], ['pt-serif', 14, '#1a1a1a']);
-  assert.equal(c!.caixa.fundo, '#ffffff');
+  assert.deepEqual([c!.texto.fonte, c!.texto.tamanho, c!.texto.cor], ['pt-serif', 14, '#ffffff']);
+  assert.equal(c!.caixa.fundo, null);
   assert.equal(c!.caixa.padding, 0);
   assert.equal(c!.largura, 412);
   assert.equal(t!.texto.tamanho, 45.3);

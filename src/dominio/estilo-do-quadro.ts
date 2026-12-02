@@ -74,8 +74,9 @@ export interface EstiloDetectado {
  * bastante para copiar (um quadro novo, só com o título). Com material do mestre, vale o que for detectado.
  */
 export const ESTILO_PADRAO_DO_MESTRE = {
-  texto: { fonte: 'pt-serif', tamanho: 14, cor: '#1a1a1a' },
-  caixa: { fundo: '#ffffff', padding: 0, sombra: false },
+  // Na Mesa (fundo escuro), o mestre escreve em branco sem caixa; o branco com letra escura era o fundo do Miro.
+  texto: { fonte: 'pt-serif', tamanho: 14, cor: '#ffffff' },
+  caixa: { fundo: null, padding: 0, sombra: false },
   largura: 412,
   tituloTamanho: 45.3,
   espacoVertical: 8,
@@ -407,7 +408,7 @@ export function textoDoEstilo(e: EstiloDetectado | null): string {
   if (e.grupos.length > MAX_GRUPOS) l.push(`(+${e.grupos.length - MAX_GRUPOS} estilos menores)`);
   if (usaEstiloPadrao(e)) {
     const f = ESTILO_PADRAO_DO_MESTRE;
-    l.push(`Pouco texto do mestre nesta seção: quadro_inserir usa o estilo fixo do mestre (${f.texto.fonte} ${f.texto.tamanho} ${f.texto.cor} em caixa ${f.caixa.fundo}, largura ~${f.largura}; títulos ${f.tituloTamanho} negrito; coluna centrada, ${f.espacoVertical} px entre itens; imagens ~${f.larguraDaImagem} px).`);
+    l.push(`Pouco texto do mestre nesta seção: quadro_inserir usa o estilo fixo do mestre (${f.texto.fonte} ${f.texto.tamanho} ${f.texto.cor} sem caixa, largura ~${f.largura}; títulos ${f.tituloTamanho} negrito; coluna centrada, ${f.espacoVertical} px entre itens; imagens ~${f.larguraDaImagem} px).`);
   }
   const corpo = e.grupos.find((g) => g.papel === 'corpo')?.cor;
   const cobertas = new Set(e.legenda.entradas.map((x) => x.marcas.fundo));
