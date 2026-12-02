@@ -17,7 +17,9 @@ import {
   type OpcoesDiscord,
   type ResultadoDiscord,
 } from './discord.ts';
+import type { DesafioAtivo } from '../dominio/desafios.ts';
 import { FeedDeRolagens } from './FeedDeRolagens.tsx';
+import { OverlayDesafio } from './OverlayDesafio.tsx';
 import {
   criarPonteConstrucao,
   enderecoDaConstrucaoRemota,
@@ -264,6 +266,7 @@ function Sala({
   const [membros, setMembros] = useState<Membro[]>([]);
   const [fichas, setFichas] = useState<FichaDaSala[]>([]);
   const [config, setConfig] = useState<ConfigSala | null>(null);
+  const [desafio, setDesafio] = useState<DesafioAtivo | null>(null);
   const [construcaoResumo, setConstrucaoResumo] = useState<ResumoConstrucao>({ temMapa: false, rev: 0 });
   const [atividadesConstrucao, setAtividadesConstrucao] = useState<AtividadeConstrucao[]>([]);
   const [notasConstrucao, setNotasConstrucao] = useState<NotaConstrucao[]>([]);
@@ -331,7 +334,7 @@ function Sala({
   const baseFicha = emDiscord ? baseDoAppNoDiscord('ficha') : baseDoApp('ficha');
 
   useEffect(() => {
-    setErro(null); setTemMapa(false); setFichaProjetada(null); setConstrucaoResumo({ temMapa: false, rev: 0 });
+    setErro(null); setTemMapa(false); setFichaProjetada(null); setDesafio(null); setConstrucaoResumo({ temMapa: false, rev: 0 });
     let cliente: ClienteDaSala | null = null;
     const wsUrl = emDiscord ? urlDoWebSocket(salaId, `${location.origin}${BASE_PROXY_DISCORD}`) : urlDoWebSocket(salaId);
     cliente = conectarSala({
@@ -358,6 +361,7 @@ function Sala({
       setMembros(m.membros);
       setFichas(m.fichas);
       aplicarConfig(m.config);
+      setDesafio(m.desafio ?? null);
       setConstrucaoResumo(m.construcao ?? { temMapa: false, rev: 0 });
       const por: Record<string, string> = {};
       for (const f of m.fichas) {
@@ -368,6 +372,7 @@ function Sala({
     });
     const sairMembros = cliente.ouvir('membros', m => setMembros(m.membros));
     const sairConfig = cliente.ouvir('config', m => aplicarConfig(m.config));
+    const sairDesafio = cliente.ouvir('desafio.estado', m => setDesafio(m.desafio));
     const sairConstrucaoEstado = cliente.ouvir('construcao.estado', m => {
       const rev = m.ops.reduce((acc, op) => Math.max(acc, op.rev), m.rev);
       const nomeMapa = m.nome ?? (typeof m.mapa?.name === 'string' && m.mapa.name ? m.mapa.name : undefined);
@@ -416,7 +421,7 @@ function Sala({
     const sairSom = som.aoMudar(setEstadoSom);
     return () => {
       sairSom(); som.fechar(); somRef.current = null;
-      sairEstado(); sairBemVindo(); sairMembros(); sairConfig(); sairConstrucaoEstado(); sairConstrucaoAplicada(); sairConstrucaoFechada(); sairAtualizada(); sairRemovida(); sairBlob();
+      sairEstado(); sairBemVindo(); sairMembros(); sairConfig(); sairDesafio(); sairConstrucaoEstado(); sairConstrucaoAplicada(); sairConstrucaoFechada(); sairAtualizada(); sairRemovida(); sairBlob();
       if (capaUrlRef.current) { URL.revokeObjectURL(capaUrlRef.current); capaUrlRef.current = null; }
       capaBlobIdRef.current = null;
       ponte.fechar(); cliente?.fechar();
@@ -726,6 +731,17 @@ function Sala({
         )}
         {modo === 'sessao' && (
           <FeedDeRolagens cliente={clienteSala} salaId={salaId} nome={nome} retratos={retratos} eu={eu} membros={membros} baseAvatar={baseAvatar} />
+        )}
+        {modo === 'sessao' && !mostrarSaguao && !projetandoFicha && erro !== 'sala' && desafio && (
+          <OverlayDesafio
+            desafio={desafio}
+            modo={espectador ? 'mestre' : 'jogador'}
+            meuDiscordId={eu?.discordId ?? null}
+            minhaFichaId={meuPersonagemId}
+            meuNome={eu?.nome ?? nome}
+            retratos={retratos}
+            aoAgir={acao => { clienteSala?.enviar({ tipo: 'desafio.acao', acao }); }}
+          />
         )}
         {modo === 'sessao' && !mostrarSaguao && !projetandoFicha && erro !== 'sala' && (
           <div class="casca-topo-direita">
